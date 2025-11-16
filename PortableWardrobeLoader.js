@@ -15,4 +15,14 @@
 // @grant        none
 // ==/UserScript==
 
-import(`https://vivianmoonlight.github.io/Vivians-Portable-Wardrobe/PortableWardrobe/init.js${Date.now()}`);
+(function() {
+    'use strict';
+    setTimeout(function(){
+        let n = document.createElement("script");
+        n.type = "module";
+        n.crossOrigin = "anonymous";
+        n.src = "https://vivianmoonlight.github.io/Vivians-Portable-Wardrobe/PortableWardrobe/init.js?" + Date.now();
+        n.onload = () => n.remove();
+        document.head.appendChild(n);
+    }, 1000);
+})();
