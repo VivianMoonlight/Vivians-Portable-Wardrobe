@@ -15,4 +15,4 @@
 // @grant        none
 // ==/UserScript==
 
-import(`https://VivianMoonlight.github.io/Vivians-Portable-Wardrobe/PortableWardrobe/init.js${Date.now()}`);
+import(`https://vivianmoonlight.github.io/Vivians-Portable-Wardrobe/PortableWardrobe/init.js${Date.now()}`);
