@@ -391,16 +391,16 @@ var bcModSdk = (function () {
 
 export function registerModWithSdk(VERSION_NUMBER) {
     if (!window.bcModSdk?.registerMod) {
-            console.error('BCOM: Mod SDK not available');
+            console.error('VPW: Mod SDK not available');
             return;
         }
 
         const modApi = bcModSdk.registerMod(
             {
-                name: "BC Outfit Manager (BCOM)",
-                fullName: "BC Outfit Manager (BCOM)",
+                name: "Portable Wardrobe (VPW)",
+                fullName: "Vivians Portable Wardrobe (VPW)",
                 version: VERSION_NUMBER,
-                repository: "https://github.com/Utsumi24/BCOM",
+                repository: "https://VivianMoonlight.github.io/Vivians-Portable-Wardrobe",
             },
             {
                 allowReplace: true
