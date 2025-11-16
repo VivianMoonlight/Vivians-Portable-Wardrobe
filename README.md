@@ -53,12 +53,12 @@ A BC script that adds a **portable wardrobe system** with a preview mirror and a
 ## 📥 Load Script / 加载脚本
 
 - **Direct Userscript / 直接用户脚本**:
-- https://vivianmoonlight.github.io/Vivians-Portable-Wardrobe/PortableWardrobeLoader.js
+- https://vivianmoonlight.github.io/Vivians-Portable-Wardrobe/PortableWardrobeLoader.user.js
 
 
 - **Bookmark / 书签栏**:
 ```javascript
-  javascript:(()=>{fetch('https://vivianmoonlight.github.io/Vivians-Portable-Wardrobe/PortableWardrobeLoader.js?'+Date.now()).then(r=>r.text()).then(r=>eval(r));})();
+  javascript:(()=>{fetch('https://vivianmoonlight.github.io/Vivians-Portable-Wardrobe/PortableWardrobeLoader.user.js?'+Date.now()).then(r=>r.text()).then(r=>eval(r));})();
 ```
 ---
 
