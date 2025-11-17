@@ -47,7 +47,7 @@ function waitForPlayerAndInit() {
     if (window.Player && typeof Player.MemberNumber !== "undefined") {
         initMod();
     } else {
-        setTimeout(waitForPlayerAndInit, 100);
+        setTimeout(waitForPlayerAndInit, 2000);
     }
 }
 

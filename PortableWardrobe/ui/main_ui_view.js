@@ -229,7 +229,7 @@ export async function createFloatingOutfitWidget(uiManager, VERSION_NUMBER) {
             let newY = e.clientY - offsetY;
 
             // 限制边界（不会拖出屏幕）
-           if (newY < 0) newY = 0;
+            if (newY < 0) newY = 0;
 
             containerEl.style.left = newX + "px";
             containerEl.style.top = newY + "px";
@@ -268,8 +268,10 @@ export async function createFloatingOutfitWidget(uiManager, VERSION_NUMBER) {
 
     // =============== 按钮逻辑保持原样 ===============
 
-    closeBtn.addEventListener('click', () => wrapper.classList.add('hidden'));
-
+    closeBtn.addEventListener('click', () => {
+        wrapper.classList.add('hidden')
+        uiManager.isOpen = false;
+    });
     importBtn.addEventListener('click', () => {
         const code = prompt("Enter BCX Outfit Code", "");
         uiManager.callback({ uiEvent: 'ImportOutfitFromBCX', args: { code: code } });
@@ -362,7 +364,7 @@ export async function createFloatingOutfitWidget(uiManager, VERSION_NUMBER) {
     }
 
 
-    function update() {}
+    function update() { }
 
     return {
         update,
