@@ -103,6 +103,16 @@ export function createDisplayCharacter(Character = null) {
 }
 
 
+export function drawThumb({ data = {}, ctx = {} } = {}) {
+        if (!data || !ctx) return;
+        const displayCharacter = createDisplayCharacter();
+        loadOutfitOnCharacter(displayCharacter, data, new Set());
+        CharacterRefresh(displayCharacter);
+        DrawCharacter(displayCharacter, 0, 0, 0.16, true, ctx);
+        CharacterDelete(displayCharacter);
+}
+
+
 
 
 
