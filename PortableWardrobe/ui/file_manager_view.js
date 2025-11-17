@@ -2,7 +2,7 @@
 
 
 export class FileManagerView {
-  constructor(container, { onEvent = () => {} } = {}) {
+  constructor(container, { onEvent = () => { } } = {}) {
     if (!container) throw new Error("Container required");
     this.container = container;
     this.onEvent = onEvent;
@@ -82,10 +82,10 @@ export class FileManagerView {
 
   _createContextMenu() {
     this.menu = this.root.getElementById("fm-context-menu");
-/*     this.menu.className = "fm-context-menu";
-    this.menu.style.position = "absolute";
-    this.menu.style.display = "none";
-    this.menu.style.zIndex = "9999"; */
+    /*     this.menu.className = "fm-context-menu";
+        this.menu.style.position = "absolute";
+        this.menu.style.display = "none";
+        this.menu.style.zIndex = "9999"; */
     this.root.appendChild(this.menu);
 
     this.menu.addEventListener("click", (e) => {
@@ -183,11 +183,13 @@ export class FileManagerView {
     this.filesDiv.innerHTML = "";
   }
 
-  truncateName(name = "", maxLength = 15) {
+  truncateName(name, maxLength = 15) {
+    name = name ?? ""; // null 或 undefined 会被替换
     return name.length <= maxLength ? name : name.slice(0, maxLength - 3) + "...";
   }
 
-  renderFiles(list, { viewMode = "details", attachItem = () => {} } = {}) {
+
+  renderFiles(list, { viewMode = "details", attachItem = () => { } } = {}) {
     this.clearFiles();
     this.statusDiv.textContent = `${list.length} items`;
     this.viewMode = viewMode;
@@ -224,9 +226,8 @@ export class FileManagerView {
     list.forEach((item) => {
       const tr = document.createElement("tr");
       tr.draggable = true;
-      tr.innerHTML = `<td>${this.truncateName(item.name)}</td><td>${item.type}</td><td>${item.size || "-"}</td><td>${
-        item.mtime ? new Date(item.mtime).toLocaleString() : "-"
-      }</td>`;
+      tr.innerHTML = `<td>${this.truncateName(item.name)}</td><td>${item.type}</td><td>${item.size || "-"}</td><td>${item.mtime ? new Date(item.mtime).toLocaleString() : "-"
+        }</td>`;
       attachItem(tr, item);
 
       tr.addEventListener("contextmenu", (e) => {
