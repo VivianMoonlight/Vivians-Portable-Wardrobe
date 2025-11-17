@@ -1,19 +1,20 @@
 
 const { registerModWithSdk } = await import(`./utils/register.js?${Date.now()}`);
-const { UIManager } = await import(`./ui/init_draw.js?${Date.now()}`);
+const { UIManager, createFloatingOutfitWidget } = await import(`./core/main_controller.js?${Date.now()}`);
 
-const VERSION_NUMBER = "0.7.7";
+
+const VERSION_NUMBER = "0.1";
 
 let modInitialized = false;
 
-function initMod() {
+async function initMod() {
     if (modInitialized) return;
     modInitialized = true;
 
-    console.info("BCOM: Successfully initialized.  Version: " + VERSION_NUMBER);
+    console.info("VPW: Successfully initialized.  Version: " + VERSION_NUMBER);
 
     //checkVersionUpdate();
-    let uiManager = new UIManager();
+    
     try {
         const modApi = registerModWithSdk(VERSION_NUMBER);
 
@@ -29,11 +30,16 @@ function initMod() {
             return next(args);
         });
 
+        let uiManager = new UIManager();
+        await uiManager.init();
+
         //uiManager.hookDrawMenu(modApi);
-        uiManager.createMainButton();
+        //uiManager._floatingOutfitWidget = await createFloatingOutfitWidget(uiManager);
+        //uiManager.createMainButton()
         uiManager.hookDrawCharacter(modApi);
+        uiManager.hookHistory(modApi);
     } catch (error) {
-        console.error('BCOM: failed:', error);
+        console.error('VPW: failed:', error);
     }
 }
 
