@@ -31,7 +31,7 @@ export class FileSystem {
   removeFile(parentPath, file) {
     const parent = this.getNode(parentPath);
     if (!parent || !parent.children) return false;
-    const idx = parent.children.findIndex(c => c === file || c.name === file.name);
+    const idx = parent.children.findIndex(c => c === file);
     if (idx === -1) return false;
     parent.children.splice(idx, 1);
     return true;
