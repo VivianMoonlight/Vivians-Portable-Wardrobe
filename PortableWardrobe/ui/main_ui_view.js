@@ -248,6 +248,15 @@ export async function createFloatingOutfitWidget(uiManager, VERSION_NUMBER) {
 
     let scale = 1.0;
 
+    function autoScaleForMobile() {
+        const screenWidth = window.innerWidth;
+        const targetScale = screenWidth / (baseWidth + 40);  // 40 给边距
+
+        scale = Math.min(1, targetScale); // 不会超过 1
+        wrapper.style.transform = `scale(${scale})`;
+        wrapper.style.transformOrigin = "top left";
+    }
+
 
     wrapper.style.transform = `scale(${scale})`;
 
@@ -272,6 +281,7 @@ export async function createFloatingOutfitWidget(uiManager, VERSION_NUMBER) {
         wrapper.classList.add('hidden')
         uiManager.isOpen = false;
     });
+
     importBtn.addEventListener('click', () => {
         const code = prompt("Enter BCX Outfit Code", "");
         uiManager.callback({ uiEvent: 'ImportOutfitFromBCX', args: { code: code } });
@@ -369,6 +379,7 @@ export async function createFloatingOutfitWidget(uiManager, VERSION_NUMBER) {
     return {
         update,
         open() {
+            autoScaleForMobile();
             wrapper.classList.remove('hidden');
             uiManager.isOpen = true;
         },
