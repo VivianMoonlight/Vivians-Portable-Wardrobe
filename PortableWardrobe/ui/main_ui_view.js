@@ -249,6 +249,7 @@ export async function createFloatingOutfitWidget(uiManager, VERSION_NUMBER) {
     let scale = 1.0;
 
     function autoScaleForMobile() {
+        const baseWidth = 820;
         const screenWidth = window.innerWidth;
         const targetScale = screenWidth / (baseWidth + 40);  // 40 给边距
 
