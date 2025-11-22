@@ -1,5 +1,9 @@
 # Vivian's Portable Wardrobe for Bondage Club / Vivian 的 BC 随身衣柜
 
+**本项目正在重构中 20251123**
+
+**This repo is undergoing code-refactoring 20251123**
+
 A BC script that adds a **portable wardrobe system** with a preview mirror and advanced outfit management.  
 本脚本为 BC 游戏提供 **随身衣柜**，内置预览镜和高级服装管理功能。
 
