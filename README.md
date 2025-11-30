@@ -1,5 +1,8 @@
 # Vivian's Portable Wardrobe for Bondage Club / Vivian 的 BC 随身衣柜
 
+**dev version available at https://raw.githubusercontent.com/VivianMoonlight/Vivians-Portable-Wardrobe/dev/VPW.user.js**
+
+
 **本项目正在重构中 20251123**
 
 **This repo is undergoing code-refactoring 20251123**
