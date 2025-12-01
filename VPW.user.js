@@ -34,7 +34,7 @@
     return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
   };
   var require_main_001 = __commonJS({
-    "main-4546347f.js"(exports) {
+    "main-9eeb8933.js"(exports) {
       /**
       * @vue/shared v3.5.24
       * (c) 2018-present Yuxi (Evan) You and Vue contributors
@@ -18340,6 +18340,16 @@
       };
       const FileThumbnail = /* @__PURE__ */ _export_sfc(_sfc_main$e, [["__scopeId", "data-v-c3630896"]]);
       function deepClone$1(v) {
+        if (v === null || v === void 0)
+          return v;
+        if (typeof v !== "object")
+          return v;
+        if (typeof structuredClone === "function") {
+          try {
+            return structuredClone(v);
+          } catch (e) {
+          }
+        }
         try {
           return JSON.parse(JSON.stringify(v));
         } catch (e) {
@@ -18350,73 +18360,29 @@
           return v;
         }
       }
-      function findTagForValue(paletteMap = {}, value) {
-        try {
-          const s2 = JSON.stringify(value);
-          for (const [k, v] of Object.entries(paletteMap || {})) {
-            if (JSON.stringify(v) === s2)
-              return k;
-          }
-        } catch (e) {
-        }
-        return null;
+      function shallowClone(v) {
+        if (v === null || v === void 0)
+          return v;
+        if (Array.isArray(v))
+          return v.slice();
+        if (typeof v === "object")
+          return Object.assign({}, v);
+        return v;
       }
-      function createTagForValue(paletteMap = {}, paletteCounter = 1, value) {
-        if (value === void 0 || value === null)
-          return { paletteMap: deepClone$1(paletteMap), paletteCounter, tag: null };
-        const existing = findTagForValue(paletteMap, value);
-        if (existing)
-          return { paletteMap: deepClone$1(paletteMap), paletteCounter, tag: existing };
-        const tag = "tag" + (paletteCounter || 1);
-        const newMap = deepClone$1(paletteMap);
+      function fastStringify(v) {
+        if (v === null)
+          return "null";
+        if (v === void 0)
+          return "undefined";
+        if (typeof v === "string")
+          return v;
+        if (typeof v === "number" || typeof v === "boolean")
+          return String(v);
         try {
-          newMap[tag] = deepClone$1(value);
+          return JSON.stringify(v);
         } catch (e) {
-          newMap[tag] = value;
+          return String(v);
         }
-        return { paletteMap: newMap, paletteCounter: (paletteCounter || 1) + 1, tag };
-      }
-      function replaceValueInPart(part, value, tag) {
-        if (!part)
-          return part;
-        let copy;
-        try {
-          copy = JSON.parse(JSON.stringify(part));
-        } catch (e) {
-          copy = Object.assign({}, part);
-        }
-        if (Array.isArray(copy.Color)) {
-          copy.Color = copy.Color.map((c) => {
-            try {
-              if (JSON.stringify(c) === JSON.stringify(value))
-                return tag;
-            } catch (e) {
-              if (c === value)
-                return tag;
-            }
-            return c;
-          });
-        } else {
-          try {
-            if (JSON.stringify(copy.Color) === JSON.stringify(value))
-              copy.Color = tag;
-          } catch (e) {
-            if (copy.Color === value)
-              copy.Color = tag;
-          }
-        }
-        return copy;
-      }
-      function replaceValueInStacks(stacks = [], value, tag) {
-        if (!Array.isArray(stacks))
-          return [];
-        return stacks.map((el) => {
-          if (!el || !Array.isArray(el.data))
-            return deepClone$1(el);
-          const newEl = deepClone$1(el);
-          newEl.data = newEl.data.map((p2) => replaceValueInPart(p2, value, tag));
-          return newEl;
-        });
       }
       function looksLikeCssColor$1(s2) {
         if (!s2 || typeof s2 !== "string")
@@ -18428,137 +18394,234 @@
           return true;
         if (str.startsWith("rgb") || str.startsWith("hsl"))
           return true;
-        const basic = ["red", "blue", "green", "black", "white", "gray", "grey", "yellow", "orange", "purple", "pink", "brown"];
-        if (basic.includes(str))
-          return true;
-        return false;
+        const basic = ["red", "blue", "green", "black", "white", "gray", "grey", "yellow", "orange", "purple", "pink", "brown", "transparent"];
+        return basic.includes(str);
+      }
+      function findTagForValue(paletteMap = {}, value) {
+        if (value === null || value === void 0)
+          return null;
+        try {
+          const targetStr = fastStringify(value);
+          const entries = Object.entries(paletteMap || {});
+          for (let i = 0; i < entries.length; i++) {
+            const [k, v] = entries[i];
+            if (fastStringify(v) === targetStr)
+              return k;
+          }
+        } catch (e) {
+          for (const [k, v] of Object.entries(paletteMap || {})) {
+            if (v === value)
+              return k;
+          }
+        }
+        return null;
+      }
+      function createTagForValue(paletteMap = {}, paletteCounter = 1, value) {
+        if (value === void 0 || value === null) {
+          return {
+            paletteMap: shallowClone(paletteMap),
+            paletteCounter,
+            tag: null
+          };
+        }
+        const existing = findTagForValue(paletteMap, value);
+        if (existing) {
+          return {
+            paletteMap: shallowClone(paletteMap),
+            paletteCounter,
+            tag: existing
+          };
+        }
+        const tag = "tag" + (paletteCounter || 1);
+        const newMap = shallowClone(paletteMap);
+        newMap[tag] = deepClone$1(value);
+        return {
+          paletteMap: newMap,
+          paletteCounter: (paletteCounter || 1) + 1,
+          tag
+        };
+      }
+      function replaceValueInPart(part, value, tag) {
+        if (!part)
+          return part;
+        const valueStr = fastStringify(value);
+        let hasChanges = false;
+        if (Array.isArray(part.Color)) {
+          for (const c of part.Color) {
+            if (fastStringify(c) === valueStr) {
+              hasChanges = true;
+              break;
+            }
+          }
+        } else if (part.Color !== void 0) {
+          if (fastStringify(part.Color) === valueStr) {
+            hasChanges = true;
+          }
+        }
+        if (!hasChanges) {
+          return shallowClone(part);
+        }
+        const copy = deepClone$1(part);
+        if (Array.isArray(copy.Color)) {
+          copy.Color = copy.Color.map((c) => {
+            if (fastStringify(c) === valueStr)
+              return tag;
+            return c;
+          });
+        } else if (copy.Color !== void 0) {
+          if (fastStringify(copy.Color) === valueStr) {
+            copy.Color = tag;
+          }
+        }
+        return copy;
+      }
+      function replaceValueInStacks(stacks = [], value, tag) {
+        if (!Array.isArray(stacks) || stacks.length === 0)
+          return [];
+        const valueStr = fastStringify(value);
+        return stacks.map((el) => {
+          if (!el || !Array.isArray(el.data)) {
+            return shallowClone(el);
+          }
+          let needsClone = false;
+          for (const p2 of el.data) {
+            if (!p2)
+              continue;
+            if (Array.isArray(p2.Color)) {
+              for (const c of p2.Color) {
+                if (fastStringify(c) === valueStr) {
+                  needsClone = true;
+                  break;
+                }
+              }
+            } else if (p2.Color !== void 0 && fastStringify(p2.Color) === valueStr) {
+              needsClone = true;
+            }
+            if (needsClone)
+              break;
+          }
+          if (!needsClone) {
+            return shallowClone(el);
+          }
+          const newEl = deepClone$1(el);
+          newEl.data = newEl.data.map((p2) => replaceValueInPart(p2, value, tag));
+          return newEl;
+        });
       }
       function applyPaletteToElement(element, paletteMap = {}, paletteCounter = 1) {
-        if (!element || !Array.isArray(element.data)) {
-          return { element: deepClone$1(element), paletteMap: deepClone$1(paletteMap), paletteCounter };
+        if (!element || !Array.isArray(element.data) || element.data.length === 0) {
+          return {
+            element: shallowClone(element),
+            paletteMap: shallowClone(paletteMap),
+            paletteCounter
+          };
         }
-        let pm = deepClone$1(paletteMap);
+        let pm = shallowClone(paletteMap);
         let pc = paletteCounter || 1;
-        const out = deepClone$1(element);
-        for (const p2 of out.data) {
-          if (!p2)
+        let hasChanges = false;
+        const colorCounts = /* @__PURE__ */ new Map();
+        for (const p2 of element.data) {
+          if (!p2 || !Array.isArray(p2.Color))
             continue;
-          if (!Array.isArray(p2.Color))
-            continue;
-          const normalized = p2.Color.map((c) => {
+          for (const c of p2.Color) {
             if (c === void 0 || c === null)
-              return null;
+              continue;
             const s2 = String(c).trim();
             const lower = s2.toLowerCase();
             if (!s2 || lower === "default" || looksLikeCssColor$1(s2))
-              return null;
-            return s2;
-          });
-          const counts = {};
-          for (const v of normalized) {
-            if (v === null)
               continue;
-            counts[v] = (counts[v] || 0) + 1;
+            colorCounts.set(s2, (colorCounts.get(s2) || 0) + 1);
           }
-          const tagsForValue = {};
-          for (const [val, cnt] of Object.entries(counts)) {
-            if (cnt > 1) {
-              const res = createTagForValue(pm, pc, val);
-              pm = res.paletteMap;
-              pc = res.paletteCounter;
-              if (res.tag)
-                tagsForValue[val] = res.tag;
+        }
+        const tagsForValue = /* @__PURE__ */ new Map();
+        for (const [val, cnt] of colorCounts) {
+          if (cnt > 1) {
+            const res = createTagForValue(pm, pc, val);
+            pm = res.paletteMap;
+            pc = res.paletteCounter;
+            if (res.tag) {
+              tagsForValue.set(val, res.tag);
+              hasChanges = true;
             }
           }
-          if (Object.keys(tagsForValue).length > 0) {
-            p2.Color = p2.Color.map((orig) => {
-              if (orig === void 0 || orig === null)
-                return orig;
-              const s2 = String(orig).trim();
-              if (!s2)
-                return orig;
-              const lower = s2.toLowerCase();
-              if (lower === "default")
-                return orig;
-              if (s2 in tagsForValue)
-                return tagsForValue[s2];
+        }
+        if (!hasChanges) {
+          return {
+            element: shallowClone(element),
+            paletteMap: pm,
+            paletteCounter: pc
+          };
+        }
+        const out = deepClone$1(element);
+        for (const p2 of out.data) {
+          if (!p2 || !Array.isArray(p2.Color))
+            continue;
+          p2.Color = p2.Color.map((orig) => {
+            if (orig === void 0 || orig === null)
               return orig;
-            });
-          }
+            const s2 = String(orig).trim();
+            if (!s2)
+              return orig;
+            const lower = s2.toLowerCase();
+            if (lower === "default")
+              return orig;
+            const tag = tagsForValue.get(s2);
+            return tag || orig;
+          });
         }
         return { element: out, paletteMap: pm, paletteCounter: pc };
       }
       function expandTagsInAppearance(apArr = [], paletteMap = {}) {
-        if (!Array.isArray(apArr))
+        if (!Array.isArray(apArr) || apArr.length === 0)
           return [];
-        try {
-          const copied = JSON.parse(JSON.stringify(apArr));
-          for (const p2 of copied) {
-            if (!p2)
-              continue;
-            if (typeof p2.Color === "string" && p2.Color in (paletteMap || {})) {
-              const v = paletteMap[p2.Color];
-              p2.Color = deepClone$1(v);
-              continue;
-            }
-            if (Array.isArray(p2.Color)) {
-              const out = [];
-              for (const el of p2.Color) {
-                if (typeof el === "string" && el in (paletteMap || {})) {
-                  const v = paletteMap[el];
-                  if (Array.isArray(v)) {
-                    for (const vv of v)
-                      out.push(deepClone$1(vv));
-                  } else {
-                    out.push(deepClone$1(v));
-                  }
-                } else
-                  out.push(el);
-              }
-              p2.Color = out;
-            }
-          }
-          return copied;
-        } catch (e) {
-          const out = [];
-          for (const p2 of apArr) {
-            const np = Object.assign({}, p2);
-            if (typeof np.Color === "string" && np.Color in (paletteMap || {})) {
-              const v = paletteMap[np.Color];
-              np.Color = deepClone$1(v);
-            } else if (Array.isArray(np.Color)) {
-              const arrOut = [];
-              for (const el of np.Color) {
-                if (typeof el === "string" && el in (paletteMap || {})) {
-                  const v = paletteMap[el];
-                  if (Array.isArray(v)) {
-                    for (const vv of v)
-                      arrOut.push(deepClone$1(vv));
-                  } else
-                    arrOut.push(deepClone$1(v));
-                } else
-                  arrOut.push(el);
-              }
-              np.Color = arrOut;
-            }
-            out.push(np);
-          }
-          return out;
+        if (!paletteMap || Object.keys(paletteMap).length === 0) {
+          return deepClone$1(apArr);
         }
+        const copied = deepClone$1(apArr);
+        for (const p2 of copied) {
+          if (!p2)
+            continue;
+          if (typeof p2.Color === "string" && p2.Color in paletteMap) {
+            p2.Color = deepClone$1(paletteMap[p2.Color]);
+            continue;
+          }
+          if (Array.isArray(p2.Color)) {
+            const out = [];
+            for (const el of p2.Color) {
+              if (typeof el === "string" && el in paletteMap) {
+                const v = paletteMap[el];
+                if (Array.isArray(v)) {
+                  for (const vv of v)
+                    out.push(deepClone$1(vv));
+                } else {
+                  out.push(deepClone$1(v));
+                }
+              } else {
+                out.push(el);
+              }
+            }
+            p2.Color = out;
+          }
+        }
+        return copied;
       }
       function expandedAppearanceForRendering(mergedObj = { data: [] }, paletteMap = {}) {
-        if (!mergedObj || !Array.isArray(mergedObj.data))
-          return mergedObj;
-        try {
-          const copy = JSON.parse(JSON.stringify(mergedObj));
-          copy.data = expandTagsInAppearance(copy.data, paletteMap);
-          return copy;
-        } catch (e) {
-          return { data: expandTagsInAppearance(mergedObj.data, paletteMap), type: mergedObj.type || "outfit" };
+        if (!mergedObj || !Array.isArray(mergedObj.data)) {
+          return { data: [], type: (mergedObj == null ? void 0 : mergedObj.type) || "outfit" };
         }
+        if (!paletteMap || Object.keys(paletteMap).length === 0) {
+          return {
+            data: deepClone$1(mergedObj.data),
+            type: mergedObj.type || "outfit"
+          };
+        }
+        return {
+          data: expandTagsInAppearance(mergedObj.data, paletteMap),
+          type: mergedObj.type || "outfit"
+        };
       }
       function deletePaletteTagFromStacks(stacks = [], paletteMap = {}, focusedPart = null, tag) {
-        const pm = deepClone$1(paletteMap || {});
+        const pm = shallowClone(paletteMap || {});
         if (!tag || !(tag in pm)) {
           return {
             stacks: deepClone$1(stacks || []),
@@ -18568,9 +18631,28 @@
           };
         }
         const value = pm[tag];
+        const isArrayValue = Array.isArray(value);
         const newStacks = (stacks || []).map((el) => {
-          if (!el || !Array.isArray(el.data))
-            return deepClone$1(el);
+          if (!el || !Array.isArray(el.data)) {
+            return shallowClone(el);
+          }
+          let needsClone = false;
+          for (const p2 of el.data) {
+            if (!p2)
+              continue;
+            if (Array.isArray(p2.Color)) {
+              if (p2.Color.includes(tag)) {
+                needsClone = true;
+                break;
+              }
+            } else if (p2.Color === tag) {
+              needsClone = true;
+              break;
+            }
+          }
+          if (!needsClone) {
+            return shallowClone(el);
+          }
           const newEl = deepClone$1(el);
           newEl.data = newEl.data.map((p2) => {
             if (!p2)
@@ -18579,76 +18661,93 @@
               const out = [];
               for (const elc of p2.Color) {
                 if (elc === tag) {
-                  if (Array.isArray(value)) {
+                  if (isArrayValue) {
                     for (const vv of value)
                       out.push(deepClone$1(vv));
-                  } else
+                  } else {
                     out.push(deepClone$1(value));
-                } else
+                  }
+                } else {
                   out.push(elc);
+                }
               }
               p2.Color = out;
             } else if (p2.Color === tag) {
-              try {
-                p2.Color = deepClone$1(value);
-              } catch (e) {
-                p2.Color = value;
-              }
+              p2.Color = deepClone$1(value);
             }
             return p2;
           });
           return newEl;
         });
-        let newFocusedPart = deepClone$1(focusedPart);
-        if (newFocusedPart) {
-          if (Array.isArray(newFocusedPart.Color)) {
-            const out = [];
-            for (const elc of newFocusedPart.Color) {
-              if (elc === tag) {
-                if (Array.isArray(value)) {
-                  for (const vv of value)
-                    out.push(deepClone$1(vv));
-                } else
-                  out.push(deepClone$1(value));
-              } else
-                out.push(elc);
-            }
-            newFocusedPart.Color = out;
-          } else if (newFocusedPart.Color === tag) {
-            try {
+        let newFocusedPart = null;
+        if (focusedPart) {
+          let needsFocusedClone = false;
+          if (Array.isArray(focusedPart.Color)) {
+            needsFocusedClone = focusedPart.Color.includes(tag);
+          } else {
+            needsFocusedClone = focusedPart.Color === tag;
+          }
+          if (needsFocusedClone) {
+            newFocusedPart = deepClone$1(focusedPart);
+            if (Array.isArray(newFocusedPart.Color)) {
+              const out = [];
+              for (const elc of newFocusedPart.Color) {
+                if (elc === tag) {
+                  if (isArrayValue) {
+                    for (const vv of value)
+                      out.push(deepClone$1(vv));
+                  } else {
+                    out.push(deepClone$1(value));
+                  }
+                } else {
+                  out.push(elc);
+                }
+              }
+              newFocusedPart.Color = out;
+            } else if (newFocusedPart.Color === tag) {
               newFocusedPart.Color = deepClone$1(value);
-            } catch (e) {
-              newFocusedPart.Color = value;
             }
+          } else {
+            newFocusedPart = shallowClone(focusedPart);
           }
         }
         delete pm[tag];
-        return { stacks: newStacks, focusedPart: newFocusedPart, paletteMap: pm, removed: true };
+        return {
+          stacks: newStacks,
+          focusedPart: newFocusedPart,
+          paletteMap: pm,
+          removed: true
+        };
       }
       function updatePaletteTag(paletteMap = {}, tag, newValue) {
-        if (!tag || !(tag in (paletteMap || {})))
-          return deepClone$1(paletteMap || {});
-        const pm = deepClone$1(paletteMap);
-        try {
-          pm[tag] = deepClone$1(newValue);
-        } catch (e) {
-          pm[tag] = newValue;
+        if (!tag || !(tag in (paletteMap || {}))) {
+          return shallowClone(paletteMap || {});
         }
+        const pm = shallowClone(paletteMap);
+        pm[tag] = deepClone$1(newValue);
         return pm;
       }
       function paletteSnapshot(paletteMap = {}) {
-        const out = {};
-        for (const k of Object.keys(paletteMap || {})) {
+        if (!paletteMap || Object.keys(paletteMap).length === 0) {
+          return {};
+        }
+        if (typeof structuredClone === "function") {
           try {
-            out[k] = deepClone$1(paletteMap[k]);
+            return structuredClone(paletteMap);
           } catch (e) {
-            out[k] = paletteMap[k];
           }
+        }
+        const out = {};
+        for (const k of Object.keys(paletteMap)) {
+          out[k] = deepClone$1(paletteMap[k]);
         }
         return out;
       }
+      let groupEntryCache = /* @__PURE__ */ new Map();
+      const resolvedAssetCache = /* @__PURE__ */ new WeakMap();
       function buildAssetIndexFromGroups(assetGroupsRaw = []) {
         const idx = {};
+        groupEntryCache = /* @__PURE__ */ new Map();
         for (const item of assetGroupsRaw || []) {
           let groupName = null;
           if (item && item.data) {
@@ -18658,20 +18757,28 @@
           }
           let assets = [];
           if (item && item.data) {
-            if (Array.isArray(item.data.Asset) && item.data.Asset.length)
+            if (Array.isArray(item.data.Asset) && item.data.Asset.length) {
               assets = item.data.Asset.slice();
-            else if (Array.isArray(item.data))
+            } else if (Array.isArray(item.data)) {
               assets = item.data.slice();
-            else if (Array.isArray(item.data.Items))
+            } else if (Array.isArray(item.data.Items)) {
               assets = item.data.Items.slice();
-            else {
+            } else {
               const cand = Object.values(item.data).find((v) => Array.isArray(v));
               if (Array.isArray(cand))
                 assets = cand.slice();
             }
           }
-          if (groupName)
+          if (groupName) {
             idx[groupName] = assets;
+            const normalizedName = String(groupName).toLowerCase();
+            groupEntryCache.set(normalizedName, item);
+            groupEntryCache.set(groupName, item);
+            if (item && item.data && item.data.Name && item.data.Name !== groupName) {
+              groupEntryCache.set(String(item.data.Name).toLowerCase(), item);
+              groupEntryCache.set(item.data.Name, item);
+            }
+          }
         }
         return idx;
       }
@@ -18686,23 +18793,37 @@
           return { assetGroupsRaw: [], assetIndex: {} };
         }
       }
+      function extractGroupNameFromPart(part) {
+        if (!part)
+          return null;
+        return part.Group || part.Asset && part.Asset.Group && (part.Asset.Group.Name || part.Asset.Group.name) || null;
+      }
       function findAssetGroupEntryForPart(assetGroupsRaw = [], assetIndex = {}, part) {
         var _a, _b;
         if (!part)
           return null;
-        const rawGroup = part.Group || part.Asset && part.Asset.Group && (part.Asset.Group.Name || part.Asset.Group.name) || null;
+        const rawGroup = extractGroupNameFromPart(part);
         if (!rawGroup)
           return null;
+        const cached = groupEntryCache.get(rawGroup) || groupEntryCache.get(String(rawGroup).toLowerCase());
+        if (cached)
+          return cached;
         for (const entry of assetGroupsRaw || []) {
           if (!entry)
             continue;
           const nameA = entry.key;
           const nameB = ((_a = entry.data) == null ? void 0 : _a.Name) || ((_b = entry.data) == null ? void 0 : _b.name);
-          if (String(nameA) === String(rawGroup) || String(nameB) === String(rawGroup))
+          if (String(nameA) === String(rawGroup) || String(nameB) === String(rawGroup)) {
+            groupEntryCache.set(rawGroup, entry);
+            groupEntryCache.set(String(rawGroup).toLowerCase(), entry);
             return entry;
+          }
         }
-        if (assetIndex && assetIndex[rawGroup])
-          return { key: rawGroup, data: { Name: rawGroup } };
+        if (assetIndex && assetIndex[rawGroup]) {
+          const fallbackEntry = { key: rawGroup, data: { Name: rawGroup } };
+          groupEntryCache.set(rawGroup, fallbackEntry);
+          return fallbackEntry;
+        }
         return null;
       }
       function normalizeAssetsFromGroupData(groupData) {
@@ -18731,11 +18852,11 @@
             return assets;
         }
         try {
-          const rawGroupName = part.Group || part.Asset && part.Asset.Group && (part.Asset.Group.Name || part.Asset.Group.name);
-          if (rawGroupName && assetIndex && Array.isArray(assetIndex[rawGroupName]))
+          const rawGroupName = extractGroupNameFromPart(part);
+          if (rawGroupName && assetIndex && Array.isArray(assetIndex[rawGroupName])) {
             return assetIndex[rawGroupName].slice();
-          else
-            return groupEntry ? normalizeAssetsFromGroupData(groupEntry.data) || [] : [];
+          }
+          return groupEntry ? normalizeAssetsFromGroupData(groupEntry.data) || [] : [];
         } catch (e) {
           return [];
         }
@@ -18744,28 +18865,37 @@
         var _a;
         if (!part)
           return null;
+        const cached = resolvedAssetCache.get(part);
+        if (cached !== void 0) {
+          return cached;
+        }
         const assets = getAssetCandidatesForPart(assetIndex, assetGroupsRaw, part);
         const partName = part.Name || ((_a = part.Asset) == null ? void 0 : _a.Name) || null;
-        if (!Array.isArray(assets) || assets.length === 0)
+        if (!Array.isArray(assets) || assets.length === 0 || !partName) {
+          resolvedAssetCache.set(part, null);
           return null;
-        if (!partName)
-          return null;
-        const match = assets.find((a) => {
+        }
+        let match = null;
+        for (const a of assets) {
           if (!a)
-            return false;
-          if (typeof a === "string")
-            return String(a) === String(partName);
-          return String(a.Name || a.name || a.key || "") === String(partName);
-        });
-        return match || null;
+            continue;
+          const assetName = typeof a === "string" ? a : a.Name || a.name || a.key || "";
+          if (String(assetName) === String(partName)) {
+            match = a;
+            break;
+          }
+        }
+        resolvedAssetCache.set(part, match);
+        return match;
       }
       function getGroupDescriptionForPart(assetGroupsRaw = [], assetIndex = {}, part) {
         var _a, _b;
         if (!part)
           return null;
         const groupEntry = findAssetGroupEntryForPart(assetGroupsRaw, assetIndex, part);
-        if (groupEntry && groupEntry.data)
+        if (groupEntry && groupEntry.data) {
           return groupEntry.data.Description || groupEntry.data.Desc || groupEntry.data.description || null;
+        }
         return ((_b = (_a = part.Asset) == null ? void 0 : _a.Group) == null ? void 0 : _b.Description) || null;
       }
       function matchesSearchForPart(assetIndex = {}, assetGroupsRaw = [], part, term) {
@@ -18781,6 +18911,16 @@
         return desc.includes(t) || groupDesc.includes(t) || propStr.includes(t);
       }
       function deepClone(v) {
+        if (v === null || v === void 0)
+          return v;
+        if (typeof v !== "object")
+          return v;
+        if (typeof structuredClone === "function") {
+          try {
+            return structuredClone(v);
+          } catch (e) {
+          }
+        }
         try {
           return JSON.parse(JSON.stringify(v));
         } catch (e) {
@@ -18845,6 +18985,49 @@
         }
         return val;
       }
+      const layerDisplayNameCache = /* @__PURE__ */ new Map();
+      let itemColorLayerNamesInitialized = false;
+      function ensureItemColorLayerNamesLoaded() {
+        if (itemColorLayerNamesInitialized)
+          return;
+        try {
+          if (typeof hostWindow.ItemColorLoad === "function") {
+            if (hostWindow.Player && Array.isArray(hostWindow.Player.Appearance) && hostWindow.Player.Appearance.length > 0) {
+              if (typeof ItemColorLayerNames === "undefined" || !ItemColorLayerNames || !ItemColorLayerNames.cache || Object.keys(ItemColorLayerNames.cache).length === 0) {
+                try {
+                  hostWindow.ItemColorLoad(hostWindow.Player, hostWindow.Player.Appearance[0], 1e4, 1e4, 0, 0, true);
+                } catch (e) {
+                }
+              }
+            }
+          }
+          itemColorLayerNamesInitialized = true;
+        } catch (e) {
+          itemColorLayerNamesInitialized = true;
+        }
+      }
+      function getLayerDisplayName(asset, layer) {
+        const layerName = layer.Name || layer.name || "";
+        if (!asset)
+          return layerName;
+        const cacheKey = `${asset.DynamicGroupName || ""}::${asset.Name || ""}::${layerName}`;
+        if (layerDisplayNameCache.has(cacheKey)) {
+          return layerDisplayNameCache.get(cacheKey);
+        }
+        ensureItemColorLayerNamesLoaded();
+        let displayName = layerName;
+        try {
+          const externalKey = (asset.DynamicGroupName || "") + (asset.Name || "") + layerName;
+          if (typeof ItemColorLayerNames !== "undefined" && ItemColorLayerNames && ItemColorLayerNames.cache) {
+            const v = ItemColorLayerNames.cache[externalKey];
+            if (v)
+              displayName = v;
+          }
+        } catch (e) {
+        }
+        layerDisplayNameCache.set(cacheKey, displayName);
+        return displayName;
+      }
       function getDrawingLTforLayer(layerIdx, layerName, part, assetLayers) {
         var _a;
         const LOs = getLayerOverridesArray((_a = part == null ? void 0 : part.Property) == null ? void 0 : _a.LayerOverrides);
@@ -18900,44 +19083,18 @@
         return { drawingLeft: left, drawingTop: top };
       }
       function buildLayerEntriesForPart(part, deps = {}) {
-        var _a, _b, _c, _d, _e, _f;
+        var _a, _b, _c, _d, _e, _f, _g;
         if (!part)
           return [];
-        try {
-          if (typeof hostWindow.ItemColorLoad === "function") {
-            if (hostWindow.Player && Array.isArray(hostWindow.Player.Appearance) && hostWindow.Player.Appearance.length > 0) {
-              if (!ItemColorLayerNames || !ItemColorLayerNames.cache || Object.keys(ItemColorLayerNames.cache).length === 0) {
-                try {
-                  hostWindow.ItemColorLoad(hostWindow.Player, hostWindow.Player.Appearance[0], 1e4, 1e4, 0, 0, true);
-                } catch (e) {
-                }
-              }
-            }
-          }
-        } catch (e) {
-        }
+        const paletteSnapshot2 = typeof deps.paletteSnapshot === "function" ? deps.paletteSnapshot() : {};
         const resolveTagColorIfAny = (text) => {
           if (!text || typeof text !== "string")
             return null;
-          const palette2 = typeof deps.paletteSnapshot === "function" ? deps.paletteSnapshot() : {};
-          if (text in palette2) {
-            const v = palette2[text];
+          if (text in paletteSnapshot2) {
+            const v = paletteSnapshot2[text];
             return extractPrimaryCssColor(v);
           }
           return null;
-        };
-        const resolveLayerDisplayName = (asset2, layer) => {
-          let displayName = layer.Name || layer.name || "";
-          try {
-            const key = (asset2.DynamicGroupName || "") + (asset2.Name || "") + (layer.Name || "");
-            if (typeof ItemColorLayerNames !== "undefined" && ItemColorLayerNames && ItemColorLayerNames.cache) {
-              const v = ItemColorLayerNames.cache[key];
-              if (v)
-                displayName = v;
-            }
-          } catch (e) {
-          }
-          return displayName;
         };
         let asset = null;
         try {
@@ -18950,56 +19107,78 @@
         if (!asset || !Array.isArray(asset.Layer)) {
           return [];
         }
-        const layers = asset.Layer.slice();
-        const mainLayers = layers.filter((l) => !l.CopyLayerColor);
-        const subLayers = layers.filter((l) => !!l.CopyLayerColor);
+        const layers = asset.Layer;
+        const layerCount = layers.length;
+        const layerIndexMap = /* @__PURE__ */ new Map();
+        for (let i = 0; i < layerCount; i++) {
+          layerIndexMap.set(layers[i], i);
+        }
+        const mainLayers = [];
+        const subLayers = [];
+        for (let i = 0; i < layerCount; i++) {
+          const l = layers[i];
+          if (l.CopyLayerColor) {
+            subLayers.push(l);
+          } else {
+            mainLayers.push(l);
+          }
+        }
         const colorableMainLayers = mainLayers.filter((l) => l.AllowColorize && !l.HideColoring);
-        const colorableMainLayerIndexes = /* @__PURE__ */ new Map();
-        colorableMainLayers.forEach((layer, idx) => {
-          colorableMainLayerIndexes.set(layer.Name || layer.name || "", idx);
-        });
         const mainMap = /* @__PURE__ */ new Map();
         for (const ml of mainLayers) {
           const name = ml.Name || ml.name || "";
-          mainMap.set(name, { layer: ml, name, displayName: ml.Name || ml.name || "", isColorable: !!(ml.AllowColorize && !ml.HideColoring), subLayers: [] });
+          mainMap.set(name, {
+            layer: ml,
+            name,
+            displayName: getLayerDisplayName(asset, ml),
+            isColorable: !!(ml.AllowColorize && !ml.HideColoring),
+            subLayers: [],
+            layerIndex: layerIndexMap.get(ml)
+          });
+        }
+        const mainMapLower = /* @__PURE__ */ new Map();
+        for (const [k, v] of mainMap.entries()) {
+          mainMapLower.set(k.toLowerCase(), v);
         }
         const orphanSubLayers = [];
         for (const sl of subLayers) {
           const parentNameRaw = String(sl.CopyLayerColor || "");
-          const entry = { layer: sl, name: sl.Name || sl.name || "", displayName: sl.Name || sl.name || "" };
+          const entry = {
+            layer: sl,
+            name: sl.Name || sl.name || "",
+            displayName: sl.Name || sl.name || "",
+            layerIndex: layerIndexMap.get(sl)
+          };
           if (mainMap.has(parentNameRaw)) {
             mainMap.get(parentNameRaw).subLayers.push(entry);
           } else {
-            let found = null;
-            for (const [k, v] of mainMap.entries()) {
-              if (String(k).toLowerCase() === parentNameRaw.toLowerCase()) {
-                found = v;
-                break;
-              }
-            }
-            if (found)
+            const found = mainMapLower.get(parentNameRaw.toLowerCase());
+            if (found) {
               found.subLayers.push(entry);
-            else
+            } else {
               orphanSubLayers.push(entry);
+            }
           }
         }
-        const partColors = Array.isArray(part.Color) ? part.Color.slice() : part.Color ? [part.Color] : [];
-        const rawOpacities = part.Property && Array.isArray(part.Property.Opacity) ? part.Property.Opacity.slice() : part.Property && part.Property.Opacity !== void 0 ? [part.Property.Opacity] : [];
-        const opacities = [];
+        const partColors = Array.isArray(part.Color) ? part.Color : part.Color ? [part.Color] : [];
+        const rawOpacities = part.Property && Array.isArray(part.Property.Opacity) ? part.Property.Opacity : part.Property && part.Property.Opacity !== void 0 ? [part.Property.Opacity] : [];
+        const opacities = new Array(layerCount);
         if (rawOpacities.length === 1) {
           const v = rawOpacities[0];
-          for (let i = 0; i < layers.length; i++)
-            opacities.push(v);
+          for (let i = 0; i < layerCount; i++)
+            opacities[i] = v;
         } else {
-          for (let i = 0; i < layers.length; i++) {
-            if (i < rawOpacities.length && rawOpacities[i] !== void 0 && rawOpacities[i] !== null)
-              opacities.push(rawOpacities[i]);
-            else
-              opacities.push(1);
+          for (let i = 0; i < layerCount; i++) {
+            if (i < rawOpacities.length && rawOpacities[i] !== void 0 && rawOpacities[i] !== null) {
+              opacities[i] = rawOpacities[i];
+            } else {
+              opacities[i] = 1;
+            }
           }
         }
         const rawOverride = (_a = part == null ? void 0 : part.Property) == null ? void 0 : _a.OverridePriority;
         const overrideMap = /* @__PURE__ */ new Map();
+        const overrideMapLower = /* @__PURE__ */ new Map();
         try {
           if (rawOverride !== void 0 && rawOverride !== null) {
             if (typeof rawOverride === "number" || typeof rawOverride === "string" && String(rawOverride).trim() !== "" && !isNaN(Number(rawOverride))) {
@@ -19007,20 +19186,21 @@
               if (mainLayers.length === 1) {
                 const name = mainLayers[0].Name || mainLayers[0].name || "";
                 overrideMap.set(name, num);
-              } else if (layers.length === 1) {
+                overrideMapLower.set(name.toLowerCase(), num);
+              } else if (layerCount === 1) {
                 const name = layers[0].Name || layers[0].name || "";
                 overrideMap.set(name, num);
+                overrideMapLower.set(name.toLowerCase(), num);
               }
             } else if (typeof rawOverride === "object") {
               for (const k of Object.keys(rawOverride)) {
-                try {
-                  const v = rawOverride[k];
-                  if (v === void 0 || v === null)
-                    continue;
-                  const num = Number(v);
-                  if (!Number.isNaN(num))
-                    overrideMap.set(String(k), num);
-                } catch (e) {
+                const v = rawOverride[k];
+                if (v === void 0 || v === null)
+                  continue;
+                const num = Number(v);
+                if (!Number.isNaN(num)) {
+                  overrideMap.set(String(k), num);
+                  overrideMapLower.set(String(k).toLowerCase(), num);
                 }
               }
             }
@@ -19032,11 +19212,9 @@
             return { has: false, value: null };
           if (overrideMap.has(name))
             return { has: true, value: overrideMap.get(name) };
-          const lname = String(name).toLowerCase();
-          for (const [k, v] of overrideMap.entries()) {
-            if (String(k).toLowerCase() === lname)
-              return { has: true, value: v };
-          }
+          const lname = name.toLowerCase();
+          if (overrideMapLower.has(lname))
+            return { has: true, value: overrideMapLower.get(lname) };
           return { has: false, value: null };
         }
         function getDefaultPriority(layer) {
@@ -19045,36 +19223,39 @@
           }
           return null;
         }
-        const layerColorByIndex = new Array(layers.length).fill(null);
+        const layerColorByIndex = new Array(layerCount).fill(null);
+        const colorableCount = colorableMainLayers.length;
         if (partColors.length > 0) {
-          if (partColors.length === layers.length) {
-            for (let i = 0; i < layers.length; i++)
+          if (partColors.length === layerCount) {
+            for (let i = 0; i < layerCount; i++)
               layerColorByIndex[i] = partColors[i];
-          } else if (partColors.length === colorableMainLayers.length) {
+          } else if (partColors.length === colorableCount) {
             let ci = 0;
             for (const ml of mainLayers) {
-              const li = layers.indexOf(ml);
+              const li = layerIndexMap.get(ml);
               if (ml.AllowColorize && !ml.HideColoring) {
                 layerColorByIndex[li] = partColors[ci++];
-              } else
-                layerColorByIndex[li] = null;
+              }
             }
           } else {
             let ci = 0;
             for (const ml of mainLayers) {
-              const li = layers.indexOf(ml);
+              const li = layerIndexMap.get(ml);
               if (ml.AllowColorize && !ml.HideColoring) {
                 layerColorByIndex[li] = ci < partColors.length ? partColors[ci++] : null;
-              } else
-                layerColorByIndex[li] = null;
+              }
             }
           }
         }
+        const colorableIndexMap = /* @__PURE__ */ new Map();
+        for (let i = 0; i < colorableMainLayers.length; i++) {
+          colorableIndexMap.set(colorableMainLayers[i], i);
+        }
         const entries = [];
         for (const ml of mainLayers) {
-          const miFlat = layers.indexOf(ml);
+          const miFlat = layerIndexMap.get(ml);
           const isColorable = !!(ml.AllowColorize && !ml.HideColoring);
-          let rawColor = layerColorByIndex[miFlat];
+          const rawColor = layerColorByIndex[miFlat];
           let colorText = null;
           let colorCss = null;
           if (isColorable && rawColor !== void 0 && rawColor !== null) {
@@ -19082,9 +19263,9 @@
               colorText = rawColor.map((c) => String(c)).join(", ");
               if (rawColor.length === 1) {
                 const single = String(rawColor[0]);
-                if (looksLikeCssColor(single))
+                if (looksLikeCssColor(single)) {
                   colorCss = single;
-                else {
+                } else {
                   const resolved = resolveTagColorIfAny(single);
                   if (resolved && looksLikeCssColor(resolved))
                     colorCss = resolved;
@@ -19092,16 +19273,17 @@
               }
             } else {
               colorText = String(rawColor);
-              if (looksLikeCssColor(colorText))
+              if (looksLikeCssColor(colorText)) {
                 colorCss = colorText;
-              else {
+              } else {
                 const resolved = resolveTagColorIfAny(colorText);
                 if (resolved && looksLikeCssColor(resolved))
                   colorCss = resolved;
               }
             }
           }
-          const ovInfo = getOverrideForLayerName(ml.Name || ml.name || "");
+          const layerName = ml.Name || ml.name || "";
+          const ovInfo = getOverrideForLayerName(layerName);
           const hasOverride = ovInfo.has;
           const ovValue = hasOverride ? ovInfo.value : null;
           const defaultPriority = getDefaultPriority(ml);
@@ -19114,21 +19296,21 @@
             usedPriority = defaultPriority;
             isOverridePriority = false;
           }
-          const { drawingLeft, drawingTop } = getDrawingLTforLayer(miFlat, ml.Name || ml.name, part, layers);
+          const { drawingLeft, drawingTop } = getDrawingLTforLayer(miFlat, layerName, part, layers);
           let colorableIndex = void 0;
           if (isColorable) {
-            colorableIndex = colorableMainLayers.indexOf(ml);
-            if (colorableIndex < 0)
+            colorableIndex = colorableIndexMap.get(ml);
+            if (colorableIndex === void 0 || colorableIndex < 0)
               colorableIndex = void 0;
           }
           const mainEntry = {
-            _key: "m_" + (ml.Name || ml.name || miFlat),
-            name: ml.Name || ml.name || "",
-            displayName: resolveLayerDisplayName(asset, ml),
+            _key: "m_" + (layerName || miFlat),
+            name: layerName,
+            displayName: ((_b = mainMap.get(layerName)) == null ? void 0 : _b.displayName) || layerName,
             isColorable,
             colorCss,
             colorText,
-            opacity: miFlat >= 0 && miFlat < opacities.length ? opacities[miFlat] : 1,
+            opacity: opacities[miFlat] !== void 0 ? opacities[miFlat] : 1,
             subLayers: [],
             isOverridePriority,
             overridePriority: hasOverride ? ovValue : defaultPriority,
@@ -19139,15 +19321,15 @@
             layerIndex: miFlat,
             colorableIndex
           };
-          const subs = ((_b = mainMap.get(mainEntry.name)) == null ? void 0 : _b.subLayers) || [];
+          const subs = ((_c = mainMap.get(layerName)) == null ? void 0 : _c.subLayers) || [];
           for (const sl of subs) {
-            const slFlatIdx = layers.indexOf(sl.layer);
+            const slFlatIdx = sl.layerIndex;
             const { drawingLeft: drawingLeft2, drawingTop: drawingTop2 } = getDrawingLTforLayer(slFlatIdx, sl.name, part, layers);
             mainEntry.subLayers.push({
               _key: "s_" + (sl.name || sl.displayName || slFlatIdx),
               name: sl.name,
-              displayName: sl.displayName || sl.name || (((_c = sl.layer) == null ? void 0 : _c.Name) || ((_d = sl.layer) == null ? void 0 : _d.name)) || "sub#" + slFlatIdx,
-              opacity: slFlatIdx >= 0 && slFlatIdx < opacities.length ? opacities[slFlatIdx] : 1,
+              displayName: sl.displayName || sl.name || (((_d = sl.layer) == null ? void 0 : _d.Name) || ((_e = sl.layer) == null ? void 0 : _e.name)) || "sub#" + slFlatIdx,
+              opacity: opacities[slFlatIdx] !== void 0 ? opacities[slFlatIdx] : 1,
               drawingLeft: drawingLeft2,
               drawingTop: drawingTop2,
               layerIndex: slFlatIdx
@@ -19156,13 +19338,13 @@
           entries.push(mainEntry);
         }
         for (const orphan of orphanSubLayers) {
-          const idxFlat = layers.indexOf(orphan.layer);
+          const idxFlat = orphan.layerIndex;
           const { drawingLeft, drawingTop } = getDrawingLTforLayer(idxFlat, orphan.name, part, layers);
           entries.push({
             _key: "orphan_" + (orphan.name || idxFlat),
             name: orphan.name,
-            displayName: orphan.displayName || orphan.name || (((_e = orphan.layer) == null ? void 0 : _e.Name) || ((_f = orphan.layer) == null ? void 0 : _f.name)) || "orphan#" + idxFlat,
-            opacity: idxFlat >= 0 && idxFlat < opacities.length ? opacities[idxFlat] : 1,
+            displayName: orphan.displayName || orphan.name || (((_f = orphan.layer) == null ? void 0 : _f.Name) || ((_g = orphan.layer) == null ? void 0 : _g.name)) || "orphan#" + idxFlat,
+            opacity: opacities[idxFlat] !== void 0 ? opacities[idxFlat] : 1,
             subLayers: [],
             drawingLeft,
             drawingTop,
@@ -19178,44 +19360,44 @@
         const asset = extra.originalAsset || (originalPart.Asset && originalPart.Asset.Layer ? originalPart.Asset : null);
         if (!asset || !Array.isArray(asset.Layer))
           return null;
-        const layers = asset.Layer.slice();
+        const layers = asset.Layer;
+        const layerCount = layers.length;
         const mainLayers = layers.filter((l) => !l.CopyLayerColor);
         const colorableMainLayers = mainLayers.filter((l) => l.AllowColorize && !l.HideColoring);
+        const entryByLayerIndex = /* @__PURE__ */ new Map();
+        for (const m of entries) {
+          if (m.layerIndex !== void 0) {
+            entryByLayerIndex.set(m.layerIndex, m);
+          }
+          for (const s2 of m.subLayers || []) {
+            if (s2.layerIndex !== void 0) {
+              entryByLayerIndex.set(s2.layerIndex, s2);
+            }
+          }
+        }
         const colors = [];
-        const opacities = [];
         for (let i = 0; i < colorableMainLayers.length; i++) {
           const ent = entries.find((e) => e.colorableIndex === i);
           if (ent && ent.colorText !== void 0) {
             colors.push(ent.colorText);
           } else {
-            if (Array.isArray(originalPart.Color) && i < originalPart.Color.length)
+            if (Array.isArray(originalPart.Color) && i < originalPart.Color.length) {
               colors.push(originalPart.Color[i]);
-            else
+            } else {
               colors.push(null);
+            }
           }
         }
-        for (let li = 0; li < layers.length; li++) {
-          let found = null;
-          for (const m of entries) {
-            if (m.layerIndex === li) {
-              found = m;
-              break;
-            }
-            for (const s2 of m.subLayers || []) {
-              if (s2.layerIndex === li) {
-                found = s2;
-                break;
-              }
-            }
-            if (found)
-              break;
-          }
-          if (found && found.opacity !== void 0)
+        const opacities = [];
+        for (let li = 0; li < layerCount; li++) {
+          const found = entryByLayerIndex.get(li);
+          if (found && found.opacity !== void 0) {
             opacities.push(found.opacity);
-          else if (((_a = originalPart == null ? void 0 : originalPart.Property) == null ? void 0 : _a.Opacity) && Array.isArray(originalPart.Property.Opacity) && li < originalPart.Property.Opacity.length)
+          } else if (((_a = originalPart == null ? void 0 : originalPart.Property) == null ? void 0 : _a.Opacity) && Array.isArray(originalPart.Property.Opacity) && li < originalPart.Property.Opacity.length) {
             opacities.push(originalPart.Property.Opacity[li]);
-          else
+          } else {
             opacities.push(1);
+          }
         }
         let overridePriority = void 0;
         for (const m of entries) {
@@ -19228,38 +19410,10 @@
         if (overridePriority && Object.keys(overridePriority).length === 1 && colorableMainLayers.length <= 1) {
           overridePriority = Object.values(overridePriority)[0];
         }
-        function getAssetLayerDefaults(li) {
-          const out2 = { drawingLeft: void 0, drawingTop: void 0 };
-          if (!Array.isArray(layers) || li < 0 || li >= layers.length)
-            return out2;
-          const layerObj = layers[li];
-          if (!layerObj || typeof layerObj !== "object")
-            return out2;
-          if ("DrawingLeft" in layerObj)
-            out2.drawingLeft = extractDrawingValue(layerObj.DrawingLeft, layerObj.Name || layerObj.name);
-          if ("DrawingTop" in layerObj)
-            out2.drawingTop = extractDrawingValue(layerObj.DrawingTop, layerObj.Name || layerObj.name);
-          return out2;
-        }
         const layerOverrides = [];
-        for (let li = 0; li < layers.length; li++) {
-          let found = null;
-          for (const m of entries) {
-            if (m.layerIndex === li) {
-              found = m;
-              break;
-            }
-            for (const s2 of m.subLayers || []) {
-              if (s2.layerIndex === li) {
-                found = s2;
-                break;
-              }
-            }
-            if (found)
-              break;
-          }
+        for (let li = 0; li < layerCount; li++) {
+          const found = entryByLayerIndex.get(li);
           const ly = {};
-          getAssetLayerDefaults(li);
           if (found && found.drawingLeft !== void 0 && found.drawingLeft !== null) {
             ly.DrawingLeft = { "": found.drawingLeft };
           }
@@ -19281,23 +19435,29 @@
         if (opacities.length && opacities.some((v) => v !== void 0 && v !== 1)) {
           propOut.Opacity = opacities;
         }
-        if (overridePriority !== void 0)
+        if (overridePriority !== void 0) {
           propOut.OverridePriority = overridePriority;
-        if (layerOverrides.length && layerOverrides.some((lo) => lo && Object.keys(lo).length > 0))
+        }
+        if (layerOverrides.length && layerOverrides.some((lo) => lo && Object.keys(lo).length > 0)) {
           propOut.LayerOverrides = layerOverrides;
-        if (originalPart.Property && originalPart.Property.TypeRecord)
+        }
+        if (originalPart.Property && originalPart.Property.TypeRecord) {
           propOut.TypeRecord = deepClone(originalPart.Property.TypeRecord);
+        }
         const out = {};
         for (const k of ["Name", "Group", "Asset", "Craft", "IsItem", "Description"]) {
           if (originalPart[k] !== void 0)
             out[k] = deepClone(originalPart[k]);
         }
-        if (colors.length && colors.some((v) => v !== void 0 && v !== null))
+        if (colors.length && colors.some((v) => v !== void 0 && v !== null)) {
           out.Color = colors;
-        if (Object.keys(propOut).length > 0)
+        }
+        if (Object.keys(propOut).length > 0) {
           out.Property = propOut;
-        if (originalPart.Craft)
+        }
+        if (originalPart.Craft) {
           out.Craft = deepClone(originalPart.Craft);
+        }
         return out;
       }
       function safeClone(v) {
@@ -19423,6 +19583,75 @@
         buildPriorityListForStackObject,
         applyPriorityUpdatesToStackObject
       };
+      function fastClone(v) {
+        if (v === null || v === void 0)
+          return v;
+        if (typeof v !== "object")
+          return v;
+        if (typeof structuredClone === "function") {
+          try {
+            return structuredClone(v);
+          } catch (e) {
+          }
+        }
+        try {
+          return JSON.parse(JSON.stringify(v));
+        } catch (e) {
+          if (Array.isArray(v))
+            return v.slice();
+          if (v && typeof v === "object")
+            return Object.assign({}, v);
+          return v;
+        }
+      }
+      function hashPartForCache(part) {
+        if (!part)
+          return "";
+        try {
+          const relevant = {
+            Name: part.Name,
+            Group: part.Group,
+            Color: part.Color,
+            Property: part.Property
+          };
+          return JSON.stringify(relevant);
+        } catch (e) {
+          return "";
+        }
+      }
+      class RefreshScheduler {
+        constructor() {
+          this._pendingRefresh = false;
+          this._pendingLayerRefresh = false;
+          this._rafId = null;
+          this._callbacks = [];
+        }
+        scheduleRefresh(callback) {
+          this._callbacks.push(callback);
+          if (!this._rafId) {
+            this._rafId = requestAnimationFrame(() => {
+              this._rafId = null;
+              const cbs = this._callbacks.slice();
+              this._callbacks = [];
+              for (const cb of cbs) {
+                try {
+                  cb();
+                } catch (e) {
+                  console.warn(e);
+                }
+              }
+            });
+          }
+        }
+        cancel() {
+          if (this._rafId) {
+            cancelAnimationFrame(this._rafId);
+            this._rafId = null;
+          }
+          this._callbacks = [];
+        }
+      }
+      const layerEntriesCache = /* @__PURE__ */ new WeakMap();
       const useStudioStore = /* @__PURE__ */ defineStore("studio", {
         state: () => ({
           stacks: [],
@@ -19436,16 +19665,6 @@
             partIndex: null
           },
           // NEW: focusedProperty keeps a single focused attribute within a part
-          // Example:
-          // {
-          //   uid: 'p7',            // unique id assigned to part object (if available)
-          //   partRef: <object>,    // actual part object reference (optional)
-          //   partIndex: 2,         // index in stack element data (optional)
-          //   stackIndex: 1,        // which stack element index (optional)
-          //   layerIndex: 0,        // which main layer index (if applicable)
-          //   subLayerIndex: null,  // which sub-layer index (if applicable)
-          //   property: 'color'|'opacity'|'drawing'|'priority' // property type
-          // }
           focusedProperty: null,
           assetGroupsRaw: [],
           assetIndex: {},
@@ -19458,19 +19677,24 @@
           // last translated layer entries
           translatedLayerEntries: [],
           // replaceTarget: used to indicate "replace mode" (mutually exclusive with simple focus)
-          // structure: { active: boolean, key: string|null, item: object|null, isEmpty: boolean }
           replaceTarget: { active: false, key: null, item: null, isEmpty: false },
           // internal per-part uid counter and mapping
           _partUidCounter: 1,
-          // Palette editing mode: when true, UI registers which layer entries are active targets
+          // Palette editing mode
           paletteModeActive: false,
-          // activePaletteTargets: array of { uid, stackIndex, partIndex, layerIndex } - layerIndex required
           activePaletteTargets: [],
           // NEW: central palette panel visibility (UI-level)
           palettePanelVisible: false,
           focusedPartUpdateFlag: 0,
           paletteWorkMode: "external",
-          paletteUpdateFlag: 0
+          paletteUpdateFlag: 0,
+          // Performance: refresh scheduler instance
+          _refreshScheduler: new RefreshScheduler(),
+          // Performance: track if refresh is pending
+          _pendingMergedRefresh: false,
+          _pendingLayerRefresh: false,
+          // Performance: palette map version for cache invalidation
+          _paletteVersion: 0
         }),
         getters: {
           selectedElement(state) {
@@ -19507,10 +19731,6 @@
           // -------------------------
           // Part UID utilities
           // -------------------------
-          /**
-           * Ensure the given part object has a stable _uid property and return it.
-           * Attaches _uid directly to the part object so identity is preserved.
-           */
           ensurePartUid(part) {
             if (!part || typeof part !== "object")
               return null;
@@ -19523,10 +19743,6 @@
             }
             return uid2;
           },
-          /**
-           * Given a part uid, try to find a matching part object in current stacks.
-           * Returns { partRef, stackIndex, partIndex } or null.
-           */
           findPartByUid(uid2) {
             if (!uid2)
               return null;
@@ -19545,17 +19761,11 @@
           // -------------------------
           // replace mode helpers
           // -------------------------
-          /**
-           * Enter replace mode for a given item/slot.
-           * item: the part-like object or slot object the user wants to replace
-           * key: stable key identifying the target (string)
-           * isEmpty: boolean indicating this is an empty slot
-           */
           setReplaceTarget(item, key, isEmpty = false) {
             this.replaceTarget = {
               active: true,
               key: key || null,
-              item: item ? typeof item === "object" ? JSON.parse(JSON.stringify(item)) : item : null,
+              item: item ? typeof item === "object" ? fastClone(item) : item : null,
               isEmpty: !!isEmpty
             };
             this.focusedPartIndex = { stackIndex: null, partIndex: null };
@@ -19567,13 +19777,6 @@
           // -------------------------
           // Focused property helpers
           // -------------------------
-          /**
-           * Set a focused property in the store.
-           * Accepts either a part object (preferred) or a uid string.  Other fields optional.
-           * Example:
-           *  setFocusedProperty({ part: <object>, stackIndex: 0, partIndex: 2, layerIndex: 1, property: 'color' })
-           *  setFocusedProperty({ uid: 'p3', property: 'opacity' })
-           */
           setFocusedProperty(payload = {}) {
             if (!payload)
               return;
@@ -19605,9 +19808,31 @@
             this.focusedProperty = null;
           },
           // -------------------------
-          // Rendering / preview
+          // Rendering / preview (OPTIMIZED)
           // -------------------------
+          /**
+           * Schedule a merged appearance refresh (batched via rAF)
+           */
+          _scheduleRefresh() {
+            if (this._pendingMergedRefresh)
+              return;
+            this._pendingMergedRefresh = true;
+            this._refreshScheduler.scheduleRefresh(() => {
+              this._pendingMergedRefresh = false;
+              this._doRefreshMergedAppearanceData();
+            });
+          },
+          /**
+           * Immediate refresh (for critical paths like initial load)
+           */
           refreshMergedAppearanceData() {
+            this._pendingMergedRefresh = false;
+            this._doRefreshMergedAppearanceData();
+          },
+          /**
+           * Internal: actual refresh logic
+           */
+          _doRefreshMergedAppearanceData() {
             try {
               this.renderer.removeCanvas(this.mergedAppearanceData);
             } catch (e) {
@@ -19625,11 +19850,7 @@
                   }
                 } catch (e) {
                 }
-                try {
-                  return JSON.parse(JSON.stringify(p2));
-                } catch (e) {
-                  return Object.assign({}, p2);
-                }
+                return fastClone(p2);
               });
               return { data: reconstructed, filterList: el.filterList };
             });
@@ -19648,16 +19869,13 @@
             if (!this.assetIndex || Object.keys(this.assetIndex).length === 0 || !this.assetGroupsRaw || this.assetGroupsRaw.length === 0) {
               await this.loadAssetData();
             }
-            try {
-              copy = JSON.parse(JSON.stringify(el));
-            } catch (e) {
-              copy = Object.assign({}, el);
-            }
+            copy = fastClone(el);
             try {
               const res = applyPaletteToElement(copy, this.paletteMap, this._paletteNextCounter);
               copy = res.element;
               this.paletteMap = res.paletteMap;
               this._paletteNextCounter = res.paletteCounter;
+              this._paletteVersion++;
             } catch (e) {
               console.warn("[studioStore] applyPaletteToElement failed", e);
             }
@@ -19673,24 +19891,10 @@
                       console.warn(e);
                     }
                     if (!Array.isArray(p2.layerEntries) || p2.layerEntries.length === 0) {
-                      const entries = this.buildLayerEntriesForPart(p2) || [];
-                      try {
-                        p2.layerEntries = JSON.parse(JSON.stringify(entries));
-                      } catch (e) {
-                        p2.layerEntries = entries.slice();
-                      }
+                      const entries = this._buildLayerEntriesWithCache(p2) || [];
+                      p2.layerEntries = fastClone(entries);
                     } else {
-                      try {
-                        for (const le of p2.layerEntries) {
-                          if (!le)
-                            continue;
-                          if (le.colorText !== void 0 && le.colorText !== null) {
-                            const resolved = this._resolveColorCssFromText(le.colorText);
-                            le.colorCss = resolved;
-                          }
-                        }
-                      } catch (e) {
-                      }
+                      this._updateLayerEntriesColorCss(p2.layerEntries);
                     }
                   } catch (e) {
                   }
@@ -19735,7 +19939,7 @@
             } else if (this.focusedPartIndex.stackIndex > idx) {
               this.focusedPartIndex.stackIndex--;
             }
-            this.refreshMergedAppearanceData();
+            this._scheduleRefresh();
           },
           moveElement(fromIdx, toIdx) {
             if (fromIdx === toIdx)
@@ -19760,7 +19964,7 @@
             } else if (fromIdx > this.focusedPartIndex.stackIndex && toIdx <= this.focusedPartIndex.stackIndex) {
               this.focusedPartIndex.stackIndex++;
             }
-            this.refreshMergedAppearanceData();
+            this._scheduleRefresh();
           },
           select(idx) {
             if (idx === -1) {
@@ -19875,6 +20079,7 @@
               const createRes = createTagForValue(this.paletteMap, this._paletteNextCounter, value);
               this.paletteMap = createRes.paletteMap;
               this._paletteNextCounter = createRes.paletteCounter;
+              this._paletteVersion++;
               let tag = createRes.tag;
               if (!tag) {
                 try {
@@ -19901,8 +20106,8 @@
                 const replaced = replaceValueInPart(fp, value, tag);
                 this._updateFocusedPartInPlace(replaced);
               }
-              this._refreshAllLayerEntriesFromPalette();
-              this.refreshMergedAppearanceData();
+              this._scheduleLayerRefresh();
+              this._scheduleRefresh();
               return tag;
             } catch (e) {
               console.warn("[studioStore] createTagAndReplaceInStacks failed", e);
@@ -19910,9 +20115,7 @@
             }
           },
           /**
-           * Set palette mode state and register active palette targets.
-           * targets: array of { uid, stackIndex, partIndex, layerIndex }
-           * When active === false we clear targets.
+           * Set palette mode state and register active palette targets. 
            */
           setPaletteMode(active = false, targets = []) {
             this.paletteModeActive = !!active;
@@ -19937,10 +20140,6 @@
             this.paletteModeActive = false;
             this.activePaletteTargets = [];
           },
-          /**
-           * Open the palette panel and register active targets (also enters palette mode).
-           * targets: array of { uid, stackIndex, partIndex, layerIndex }
-           */
           openPalettePanel(targets = []) {
             try {
               this.setPaletteMode(true, targets);
@@ -19953,9 +20152,6 @@
           setPaletteWorkMode(mode = "external") {
             this.paletteWorkMode = mode;
           },
-          /**
-           * Close the palette panel and clear palette mode/targets.
-           */
           closePalettePanel() {
             try {
               this.palettePanelVisible = false;
@@ -19968,7 +20164,7 @@
             }
           },
           // -------------------------
-          // apply/modify palette targets
+          // apply/modify palette targets (OPTIMIZED)
           // -------------------------
           applyColorToActivePaletteTargets(newColor) {
             if (!this.paletteModeActive)
@@ -19990,10 +20186,9 @@
                     found = s2.data[t.partIndex];
                   }
                 }
-                const isFocusedPart = this.focusedPartIndex.stackIndex === t.stackIndex && this.focusedPartIndex.partIndex === t.partIndex;
                 const layerIdx = t.layerIndex;
                 if (!found.layerEntries) {
-                  found.layerEntries = this.buildLayerEntriesForPart(found) || [];
+                  found.layerEntries = this._buildLayerEntriesWithCache(found) || [];
                 }
                 if (found && Array.isArray(found.layerEntries) && layerIdx !== null && layerIdx !== void 0 && layerIdx >= 0) {
                   const entry = found.layerEntries[layerIdx];
@@ -20017,22 +20212,16 @@
               }
             }
             if (changed) {
-              this._refreshAllLayerEntriesFromPalette();
-              this.UpdateAllStacksPartFromLayerEntries();
-              this.refreshMergedAppearanceData();
+              this._scheduleLayerRefresh();
+              this._schedulePartUpdate();
+              this._scheduleRefresh();
               this.triggerFocusedPartUpdate();
             }
             return changed;
           },
-          /**
-           * Apply an existing palette tag (string key) to all registered activePaletteTargets.
-           */
           applyTagToActivePaletteTargets(tag) {
             return this.applyColorToActivePaletteTargets(tag);
           },
-          /**
-           * Delete a palette tag: expand occurrences in stacks and focusedPart (pure).
-           */
           deletePaletteTag(tag) {
             this.UpdateAllStacksPartFromLayerEntries();
             if (!tag || !(tag in (this.paletteMap || {})))
@@ -20044,10 +20233,11 @@
               this._updateFocusedPartInPlace(res.focusedPart);
             }
             this.paletteMap = res.paletteMap;
+            this._paletteVersion++;
             if (res.removed) {
-              this._refreshAllLayerEntriesFromPalette();
+              this._scheduleLayerRefresh();
               this.RebuildAllStacksLayerEntriesFromParts();
-              this.refreshMergedAppearanceData();
+              this._scheduleRefresh();
             }
             return res.removed;
           },
@@ -20068,6 +20258,7 @@
             }
             this.paletteMap = {};
             this._paletteNextCounter = 1;
+            this._paletteVersion++;
             try {
               for (const stack2 of this.stacks) {
                 if (!stack2 || !Array.isArray(stack2.data))
@@ -20076,7 +20267,7 @@
                   if (!part)
                     continue;
                   try {
-                    part.layerEntries = this.buildLayerEntriesForPart(part) || [];
+                    part.layerEntries = this._buildLayerEntriesWithCache(part, true) || [];
                   } catch (e) {
                     console.warn(e);
                   }
@@ -20088,21 +20279,22 @@
             const focusedP = this.focusedPart;
             if (focusedP) {
               try {
-                const entries = this.buildLayerEntriesForPart(focusedP) || [];
+                const entries = this._buildLayerEntriesWithCache(focusedP, true) || [];
                 this._updateFocusedPartProperty("layerEntries", entries);
               } catch (e) {
                 console.warn(e);
               }
             }
-            this._refreshAllLayerEntriesFromPalette();
-            this.refreshMergedAppearanceData();
+            this._scheduleLayerRefresh();
+            this._scheduleRefresh();
           },
           updatePaletteTag(tag, newValue) {
             if (!tag || !(tag in (this.paletteMap || {})))
               return false;
             this.paletteMap = updatePaletteTag(this.paletteMap, tag, newValue);
-            this._refreshAllLayerEntriesFromPalette();
-            this.refreshMergedAppearanceData();
+            this._paletteVersion++;
+            this._scheduleLayerRefresh();
+            this._scheduleRefresh();
             return true;
           },
           // -------------------------
@@ -20110,7 +20302,7 @@
           // -------------------------
           addSavedColor(value) {
             try {
-              const v = value === void 0 || value === null ? "" : JSON.parse(JSON.stringify(value));
+              const v = value === void 0 || value === null ? "" : fastClone(value);
               this.savedColors = (this.savedColors || []).concat([v]);
               return true;
             } catch (e) {
@@ -20122,7 +20314,7 @@
             if (typeof idx !== "number" || idx < 0 || idx >= (this.savedColors || []).length)
               return false;
             try {
-              const v = newValue === void 0 || newValue === null ? "" : JSON.parse(JSON.stringify(newValue));
+              const v = newValue === void 0 || newValue === null ? "" : fastClone(newValue);
               const copy = (this.savedColors || []).slice();
               copy[idx] = v;
               this.savedColors = copy;
@@ -20143,9 +20335,23 @@
             return true;
           },
           // -------------------------
-          // Layer translation helpers (pure)
+          // Layer translation helpers (OPTIMIZED with caching)
           // -------------------------
-          buildLayerEntriesForPart(part) {
+          /**
+           * Build layer entries with caching support
+           */
+          _buildLayerEntriesWithCache(part, forceRebuild = false) {
+            if (!part)
+              return [];
+            if (!forceRebuild) {
+              const cached = layerEntriesCache.get(part);
+              if (cached && cached.paletteVersion === this._paletteVersion) {
+                const currentHash = hashPartForCache(part);
+                if (cached.hash === currentHash) {
+                  return cached.entries;
+                }
+              }
+            }
             const deps = {
               paletteSnapshot: () => this.paletteSnapshot,
               resolveAssetForPart: (p2) => this.resolveAssetForPart(p2),
@@ -20153,6 +20359,15 @@
               findAssetGroupEntryForPart: (p2) => this.findAssetGroupEntryForPart(p2)
             };
             const entries = buildLayerEntriesForPart(part, deps);
+            layerEntriesCache.set(part, {
+              entries,
+              hash: hashPartForCache(part),
+              paletteVersion: this._paletteVersion
+            });
+            return entries;
+          },
+          buildLayerEntriesForPart(part) {
+            const entries = this._buildLayerEntriesWithCache(part);
             this.translatedLayerEntries = entries;
             return entries;
           },
@@ -20165,7 +20380,7 @@
             return this.buildLayerEntriesForPart(fp);
           },
           /**
-           * Apply edited layer entries back to the focused part and to any matching parts in stacks.
+           * Apply edited layer entries back to the focused part and to any matching parts in stacks. 
            */
           updatePartFromLayerEntries(entries) {
             const fp = this.focusedPart;
@@ -20182,32 +20397,28 @@
               } catch (e) {
                 console.warn(e);
               }
-              const newPartClone = JSON.parse(JSON.stringify(newPart));
-              newPartClone.layerEntries = this.buildLayerEntriesForPart(newPartClone);
+              const newPartClone = fastClone(newPart);
+              newPartClone.layerEntries = this._buildLayerEntriesWithCache(newPartClone, true);
               const origJson = JSON.stringify(fp);
               const newStacks = this.stacks.map((el) => {
-                try {
-                  const copy = JSON.parse(JSON.stringify(el));
-                  if (Array.isArray(copy.data)) {
-                    copy.data = copy.data.map((p2) => {
-                      try {
-                        if (p2 && p2._uid && p2._uid === uid2)
-                          return JSON.parse(JSON.stringify(newPartClone));
-                        if (JSON.stringify(p2) === origJson)
-                          return JSON.parse(JSON.stringify(newPartClone));
-                      } catch (e) {
-                      }
-                      return p2;
-                    });
-                  }
-                  return copy;
-                } catch (e) {
-                  return el;
+                const copy = fastClone(el);
+                if (Array.isArray(copy.data)) {
+                  copy.data = copy.data.map((p2) => {
+                    try {
+                      if (p2 && p2._uid && p2._uid === uid2)
+                        return fastClone(newPartClone);
+                      if (JSON.stringify(p2) === origJson)
+                        return fastClone(newPartClone);
+                    } catch (e) {
+                    }
+                    return p2;
+                  });
                 }
+                return copy;
               });
               this.stacks = newStacks;
               this._updateFocusedPartInPlace(newPartClone);
-              this.refreshMergedAppearanceData();
+              this._scheduleRefresh();
               this.translateFocusedPartToLayers();
               return this.focusedPart;
             } catch (e) {
@@ -20228,7 +20439,7 @@
               if (!newPart)
                 return null;
               const uid2 = part._uid || this.ensurePartUid(part);
-              newPart.layerEntries = JSON.parse(JSON.stringify(entries));
+              newPart.layerEntries = fastClone(entries);
               try {
                 newPart._uid = uid2;
               } catch (e) {
@@ -20240,31 +20451,43 @@
               return null;
             }
           },
+          /**
+           * Schedule part update from layer entries (batched)
+           */
+          _schedulePartUpdate() {
+            if (this._pendingPartUpdate)
+              return;
+            this._pendingPartUpdate = true;
+            this._refreshScheduler.scheduleRefresh(() => {
+              this._pendingPartUpdate = false;
+              this._doUpdateAllStacksPartFromLayerEntries();
+            });
+          },
           UpdateAllStacksPartFromLayerEntries() {
+            this._pendingPartUpdate = false;
+            this._doUpdateAllStacksPartFromLayerEntries();
+          },
+          _doUpdateAllStacksPartFromLayerEntries() {
             try {
               const newStacks = this.stacks.map((el) => {
-                try {
-                  const copy = JSON.parse(JSON.stringify(el));
-                  if (Array.isArray(copy.data)) {
-                    copy.data = copy.data.map((p2) => {
-                      try {
-                        if (p2 && Array.isArray(p2.layerEntries)) {
-                          const updatedPart = this.UpdateSpecificPartFromLayerEntries(p2, p2.layerEntries);
-                          if (updatedPart)
-                            return updatedPart;
-                        }
-                      } catch (e) {
+                const copy = fastClone(el);
+                if (Array.isArray(copy.data)) {
+                  copy.data = copy.data.map((p2) => {
+                    try {
+                      if (p2 && Array.isArray(p2.layerEntries)) {
+                        const updatedPart = this.UpdateSpecificPartFromLayerEntries(p2, p2.layerEntries);
+                        if (updatedPart)
+                          return updatedPart;
                       }
-                      return p2;
-                    });
-                  }
-                  return copy;
-                } catch (e) {
-                  return el;
+                    } catch (e) {
+                    }
+                    return p2;
+                  });
                 }
+                return copy;
               });
               this.stacks = newStacks;
-              this.refreshMergedAppearanceData();
+              this._scheduleRefresh();
             } catch (e) {
               console.error("[studioStore] UpdateAllStacksPartFromLayerEntries failed", e);
             }
@@ -20283,33 +20506,29 @@
           RebuildAllStacksLayerEntriesFromParts() {
             try {
               const newStacks = this.stacks.map((el) => {
-                try {
-                  const copy = JSON.parse(JSON.stringify(el));
-                  if (Array.isArray(copy.data)) {
-                    copy.data = copy.data.map((p2) => {
-                      try {
-                        if (p2) {
-                          p2.layerEntries = this.buildLayerEntriesForPart(p2) || [];
-                        }
-                      } catch (e) {
+                const copy = fastClone(el);
+                if (Array.isArray(copy.data)) {
+                  copy.data = copy.data.map((p2) => {
+                    try {
+                      if (p2) {
+                        p2.layerEntries = this._buildLayerEntriesWithCache(p2, true) || [];
                       }
-                      return p2;
-                    });
-                  }
-                  return copy;
-                } catch (e) {
-                  return el;
+                    } catch (e) {
+                    }
+                    return p2;
+                  });
                 }
+                return copy;
               });
               this.stacks = newStacks;
-              this.refreshMergedAppearanceData();
+              this._scheduleRefresh();
             } catch (e) {
               console.error("[studioStore] RebuildAllStacksLayerEntriesFromParts failed", e);
             }
             const fp = this.focusedPart;
             if (fp) {
               try {
-                const entries = this.buildLayerEntriesForPart(fp) || [];
+                const entries = this._buildLayerEntriesWithCache(fp, true) || [];
                 this._updateFocusedPartProperty("layerEntries", entries);
               } catch (e) {
                 console.warn(e);
@@ -20334,7 +20553,7 @@
             if (idx.partIndex < 0 || idx.partIndex >= stack2.data.length)
               return false;
             try {
-              const copy = JSON.parse(JSON.stringify(newPartData));
+              const copy = fastClone(newPartData);
               stack2.data[idx.partIndex] = copy;
               this.triggerFocusedPartUpdate();
               return true;
@@ -20343,9 +20562,6 @@
               return false;
             }
           },
-          /**
-           * Update a single property of the focused part
-           */
           _updateFocusedPartProperty(propName, value) {
             const idx = this.focusedPartIndex;
             if (idx.stackIndex === null || idx.partIndex === null)
@@ -20369,7 +20585,7 @@
             }
           },
           // -------------------------
-          // PRIORITY ARRANGEMENT helpers (delegated to PriorityService)
+          // PRIORITY ARRANGEMENT helpers
           // -------------------------
           getPriorityListForSelected() {
             const el = this.selectedElement;
@@ -20384,14 +20600,10 @@
             try {
               const el = this.stacks[idx];
               const newEl = PriorityService.applyPriorityUpdatesToStackObject(el, updates);
-              try {
-                const copyStacks = JSON.parse(JSON.stringify(this.stacks));
-                copyStacks[idx] = newEl;
-                this.stacks = copyStacks;
-              } catch (e) {
-                this.stacks.splice(idx, 1, newEl);
-              }
-              this.refreshMergedAppearanceData();
+              const copyStacks = fastClone(this.stacks);
+              copyStacks[idx] = newEl;
+              this.stacks = copyStacks;
+              this._scheduleRefresh();
               return true;
             } catch (e) {
               console.error("[studioStore] updatePrioritiesForSelected failed", e);
@@ -20458,86 +20670,56 @@
             return String(v);
           },
           /**
-           * Refresh color fields for all colorable layer entries
+           * Update colorCss for layer entries in-place (efficient)
+           */
+          _updateLayerEntriesColorCss(layerEntries) {
+            if (!Array.isArray(layerEntries))
+              return;
+            for (const entry of layerEntries) {
+              if (!entry)
+                continue;
+              if (entry.colorText !== void 0 && entry.colorText !== null) {
+                entry.colorCss = this._resolveColorCssFromText(entry.colorText);
+              }
+            }
+          },
+          /**
+           * Schedule layer refresh (batched)
+           */
+          _scheduleLayerRefresh() {
+            if (this._pendingLayerRefresh)
+              return;
+            this._pendingLayerRefresh = true;
+            this._refreshScheduler.scheduleRefresh(() => {
+              this._pendingLayerRefresh = false;
+              this._doRefreshAllLayerEntriesFromPalette();
+            });
+          },
+          /**
+           * Refresh color fields for all colorable layer entries (OPTIMIZED)
            */
           _refreshAllLayerEntriesFromPalette() {
+            this._pendingLayerRefresh = false;
+            this._doRefreshAllLayerEntriesFromPalette();
+          },
+          _doRefreshAllLayerEntriesFromPalette() {
             try {
-              let newStacks;
-              try {
-                newStacks = JSON.parse(JSON.stringify(this.stacks));
-              } catch (e) {
-                newStacks = this.stacks.map((s2) => JSON.parse(JSON.stringify(s2)));
-              }
-              for (const stack2 of newStacks) {
+              for (const stack2 of this.stacks) {
                 if (!stack2 || !Array.isArray(stack2.data))
                   continue;
                 for (const part of stack2.data) {
                   if (!part)
                     continue;
                   if (!Array.isArray(part.layerEntries)) {
-                    part.layerEntries = this.buildLayerEntriesForPart(part) || [];
+                    part.layerEntries = this._buildLayerEntriesWithCache(part) || [];
+                  } else {
+                    this._updateLayerEntriesColorCss(part.layerEntries);
                   }
-                  for (const entry of part.layerEntries) {
-                    if (!entry)
-                      continue;
-                    try {
-                      if (entry.colorText !== void 0 && entry.colorText !== null) {
-                        const resolved = this._resolveColorCssFromText(entry.colorText);
-                        entry.colorCss = resolved;
-                      } else {
-                        entry.colorCss = entry.colorCss || null;
-                      }
-                    } catch (e) {
-                    }
-                  }
-                }
-              }
-              try {
-                this.stacks = newStacks;
-              } catch (e) {
-                try {
-                  for (let i = 0; i < newStacks.length; i++)
-                    this.stacks.splice(i, 1, newStacks[i]);
-                } catch (ee) {
-                  console.warn(e);
                 }
               }
               const fp = this.focusedPart;
               if (fp && Array.isArray(fp.layerEntries)) {
-                try {
-                  const fpClone = JSON.parse(JSON.stringify(fp));
-                  for (const entry of fpClone.layerEntries) {
-                    if (!entry)
-                      continue;
-                    try {
-                      if (entry.colorText !== void 0 && entry.colorText !== null) {
-                        entry.colorCss = this._resolveColorCssFromText(entry.colorText);
-                      } else {
-                        entry.colorCss = entry.colorCss || null;
-                      }
-                    } catch (e) {
-                      console.warn(e);
-                    }
-                  }
-                  this._updateFocusedPartInPlace(fpClone);
-                } catch (e) {
-                  try {
-                    for (const entry of fp.layerEntries) {
-                      if (!entry)
-                        continue;
-                      if (entry.colorText !== void 0 && entry.colorText !== null) {
-                        const resolved = this._resolveColorCssFromText(entry.colorText);
-                        this._updateFocusedPartProperty("layerEntries", fp.layerEntries.map(
-                          (e2, i) => i === fp.layerEntries.indexOf(entry) ? { ...e2, colorCss: resolved } : e2
-                        ));
-                      } else {
-                        entry.colorCss = entry.colorCss || null;
-                      }
-                    }
-                  } catch (ee) {
-                    console.warn(e);
-                  }
-                }
+                this._updateLayerEntriesColorCss(fp.layerEntries);
               }
             } catch (e) {
             }
@@ -20566,22 +20748,12 @@
               }
               let entries = [];
               try {
-                const res = typeof this.buildLayerEntriesForPart === "function" ? this.buildLayerEntriesForPart(newPart) : null;
-                entries = res || [];
+                entries = this._buildLayerEntriesWithCache(newPart) || [];
               } catch (e) {
                 entries = [];
               }
-              try {
-                newPart.layerEntries = JSON.parse(JSON.stringify(entries || []));
-              } catch (e) {
-                newPart.layerEntries = (entries || []).slice();
-              }
-              let newStacks;
-              try {
-                newStacks = JSON.parse(JSON.stringify(this.stacks));
-              } catch (e) {
-                newStacks = this.stacks.slice();
-              }
+              newPart.layerEntries = fastClone(entries);
+              let newStacks = fastClone(this.stacks);
               const sel = newStacks[sidx] || { data: [] };
               const parts = Array.isArray(sel.data) ? sel.data.slice() : [];
               let replaced = false;
@@ -20591,7 +20763,7 @@
                   for (let i = 0; i < parts.length; i++) {
                     try {
                       if (JSON.stringify(parts[i]) === origJson) {
-                        parts[i] = JSON.parse(JSON.stringify(newPart));
+                        parts[i] = fastClone(newPart);
                         replaced = true;
                         break;
                       }
@@ -20603,41 +20775,10 @@
                 }
               }
               if (!replaced) {
-                parts.push(JSON.parse(JSON.stringify(newPart)));
+                parts.push(fastClone(newPart));
               }
-              try {
-                const newSel = Object.assign({}, newStacks[sidx] || {}, { data: parts });
-                newStacks[sidx] = newSel;
-              } catch (e) {
-                try {
-                  this.stacks.splice(sidx, 1, Object.assign({}, this.stacks[sidx] || {}, { data: parts }));
-                } catch (ee) {
-                  console.warn("[studioStore] applyAssetToSelectedStack commit fallback failed", ee);
-                }
-                const newFocused2 = parts.find((p2) => p2.Name === newPart.Name && p2.Group === newPart.Group) || parts[parts.length - 1];
-                const partIdx2 = parts.indexOf(newFocused2);
-                if (partIdx2 >= 0) {
-                  this.focusedPartIndex = { stackIndex: sidx, partIndex: partIdx2 };
-                }
-                try {
-                  this.translateFocusedPartToLayers && this.translateFocusedPartToLayers();
-                } catch (e2) {
-                }
-                try {
-                  this.refreshMergedAppearanceData && this.refreshMergedAppearanceData();
-                } catch (e2) {
-                }
-                return this.focusedPart || null;
-              }
-              try {
-                this.stacks = newStacks;
-              } catch (e) {
-                try {
-                  this.stacks.splice(sidx, 1, newStacks[sidx]);
-                } catch (ee) {
-                  console.warn(e);
-                }
-              }
+              newStacks[sidx] = Object.assign({}, newStacks[sidx] || {}, { data: parts });
+              this.stacks = newStacks;
               const newFocused = parts.find((p2) => p2.Name === newPart.Name && p2.Group === newPart.Group) || parts[parts.length - 1];
               const partIdx = parts.indexOf(newFocused);
               if (partIdx >= 0) {
@@ -20647,10 +20788,7 @@
                 this.translateFocusedPartToLayers && this.translateFocusedPartToLayers();
               } catch (e) {
               }
-              try {
-                this.refreshMergedAppearanceData && this.refreshMergedAppearanceData();
-              } catch (e) {
-              }
+              this._scheduleRefresh();
               return this.focusedPart || null;
             } catch (err) {
               console.error("[studioStore] applyAssetToSelectedStack failed", err);
@@ -20658,16 +20796,14 @@
             }
           },
           // -------------------------
-          // PERSISTENCE helpers (localStorage + JSON file import/export)
+          // PERSISTENCE helpers
           // -------------------------
-          // LocalStorage keys
           _localStorageKeyForStacks() {
             return "studio_stacks_v1";
           },
           _localStorageKeyForPalette() {
             return "studio_palette_v1";
           },
-          // Persist stacks to localStorage (stringified)
           persistStacksToLocalStorage() {
             try {
               const payload = { stacks: this.stacks, _partUidCounter: this._partUidCounter };
@@ -20678,7 +20814,6 @@
               return false;
             }
           },
-          // Load stacks from localStorage
           loadStacksFromLocalStorage() {
             try {
               const raw = window.localStorage.getItem(this._localStorageKeyForStacks());
@@ -20700,7 +20835,6 @@
               return false;
             }
           },
-          // Persist paletteMap to localStorage
           persistPaletteToLocalStorage() {
             try {
               const payload = { paletteMap: this.paletteMap, _paletteNextCounter: this._paletteNextCounter };
@@ -20711,7 +20845,6 @@
               return false;
             }
           },
-          // Load paletteMap from localStorage
           loadPaletteFromLocalStorage() {
             try {
               const raw = window.localStorage.getItem(this._localStorageKeyForPalette());
@@ -20721,6 +20854,7 @@
               if (!parsed || !parsed.paletteMap)
                 return false;
               this.paletteMap = parsed.paletteMap || {};
+              this._paletteVersion++;
               if (parsed._paletteNextCounter && typeof parsed._paletteNextCounter === "number") {
                 this._paletteNextCounter = parsed._paletteNextCounter;
               }
@@ -20732,8 +20866,7 @@
               return false;
             }
           },
-          // Export stacks as downloadable JSON file
-          exportStacksToJsonFile(filename = "stacks.json") {
+          exportStacksToJsonFile(filename = "stacks. json") {
             try {
               const payload = { stacks: toRaw(this.stacks), _partUidCounter: this._partUidCounter };
               const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
@@ -20751,7 +20884,6 @@
               return false;
             }
           },
-          // Import stacks from a File object (JSON). Returns a Promise that resolves true/false.
           importStacksFromJsonFile(file) {
             return new Promise((resolve2) => {
               if (!file)
@@ -20784,7 +20916,6 @@
               reader.readAsText(file);
             });
           },
-          // Export paletteMap as downloadable JSON file
           exportPaletteToJsonFile(filename = "palette.json") {
             try {
               const payload = { paletteMap: toRaw(this.paletteMap), _paletteNextCounter: this._paletteNextCounter };
@@ -20803,7 +20934,6 @@
               return false;
             }
           },
-          // Import palette file (File object / JSON). Returns Promise<boolean>
           importPaletteFromJsonFile(file) {
             return new Promise((resolve2) => {
               if (!file)
@@ -20820,6 +20950,7 @@
                   if (!newMap)
                     return resolve2(false);
                   this.paletteMap = newMap;
+                  this._paletteVersion++;
                   if (parsed._paletteNextCounter && typeof parsed._paletteNextCounter === "number") {
                     this._paletteNextCounter = parsed._paletteNextCounter;
                   }
@@ -20835,7 +20966,6 @@
               reader.readAsText(file);
             });
           },
-          // Convenience: export combined studio snapshot (stacks + palette) as file
           exportStudioSnapshot(filename = "studio_snapshot.json") {
             try {
               const payload = {
@@ -20859,7 +20989,6 @@
               return false;
             }
           },
-          // Import combined snapshot file (useful to restore both stacks & palette)
           importStudioSnapshotFromFile(file) {
             return new Promise((resolve2) => {
               if (!file)
@@ -20875,6 +21004,7 @@
                   }
                   if (parsed.paletteMap && typeof parsed.paletteMap === "object") {
                     this.paletteMap = parsed.paletteMap;
+                    this._paletteVersion++;
                   }
                   if (parsed._paletteNextCounter && typeof parsed._paletteNextCounter === "number") {
                     this._paletteNextCounter = parsed._paletteNextCounter;
@@ -20895,12 +21025,9 @@
               reader.readAsText(file);
             });
           },
-          // -------------------------
-          // Expose merged appearance for export (useful for UI to add into file store)
-          // -------------------------
           getMergedAppearanceForExport() {
             try {
-              return JSON.parse(JSON.stringify(this.mergedAppearanceData || { data: [] }));
+              return fastClone(this.mergedAppearanceData || { data: [] });
             } catch (e) {
               try {
                 return toRaw(this.mergedAppearanceData || { data: [] });
