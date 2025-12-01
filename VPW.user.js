@@ -34,7 +34,7 @@
     return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
   };
   var require_main_001 = __commonJS({
-    "main-9eeb8933.js"(exports) {
+    "main-2a58ae84.js"(exports) {
       /**
       * @vue/shared v3.5.24
       * (c) 2018-present Yuxi (Evan) You and Vue contributors
@@ -21090,7 +21090,7 @@
         serverAppearanceBundle(appearance) {
           if (!appearance)
             return [];
-          if (typeof window.ServerAppearanceBundle !== "function") {
+          if (typeof hostWindow.ServerAppearanceBundle !== "function") {
             console.warn("[ExternalAdapter] ServerAppearanceBundle not available");
             return [];
           }
@@ -21114,7 +21114,7 @@
             console.warn("[ExternalAdapter] serverAppearanceLoad: Character is required");
             return false;
           }
-          if (typeof window.ServerAppearanceLoadFromBundle !== "function") {
+          if (typeof hostWindow.ServerAppearanceLoadFromBundle !== "function") {
             console.warn("[ExternalAdapter] ServerAppearanceLoadFromBundle not available");
             return false;
           }
@@ -21298,15 +21298,15 @@
             console.error("[ExternalAdapter] applyOutfitToCharacter: outfitBundle must be an array");
             return false;
           }
-          const success = hostWindow.serverAppearanceLoad(
+          const success = ExternalAdapter.serverAppearanceLoad(
             C,
             C.AssetFamily,
             outfitBundle,
             C.MemberNumber
           );
           if (success) {
-            hostWindow.refreshCharacter(C);
-            hostWindow.chatRoomUpdate(C);
+            ExternalAdapter.refreshCharacter(C);
+            ExternalAdapter.chatRoomUpdate(C);
           }
           return success;
         }
