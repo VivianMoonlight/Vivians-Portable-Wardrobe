@@ -34,7 +34,7 @@
     return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
   };
   var require_main_001 = __commonJS({
-    "main-2a58ae84.js"(exports) {
+    "main-62a2483b.js"(exports) {
       /**
       * @vue/shared v3.5.24
       * (c) 2018-present Yuxi (Evan) You and Vue contributors
@@ -21044,7 +21044,7 @@
          * @returns {boolean} True if core functions are available
          */
         isReady() {
-          return typeof window.DrawCharacter === "function" && typeof window.CharacterLoadSimple === "function";
+          return typeof hostWindow.DrawCharacter === "function" && typeof hostWindow.CharacterLoadSimple === "function";
         },
         /**
          * Generic safe wrapper for any game function
@@ -21071,7 +21071,7 @@
          * @returns {Character|null} Character object or null if failed
          */
         loadSimpleCharacter(id = "displayCharacter") {
-          if (typeof window.CharacterLoadSimple !== "function") {
+          if (typeof hostWindow.CharacterLoadSimple !== "function") {
             console.warn("[ExternalAdapter] CharacterLoadSimple not available");
             return null;
           }
@@ -21140,7 +21140,7 @@
             console.warn("[ExternalAdapter] drawCharacter: Character and context are required");
             return;
           }
-          if (typeof window.DrawCharacter !== "function") {
+          if (typeof hostWindow.DrawCharacter !== "function") {
             console.warn("[ExternalAdapter] DrawCharacter not available");
             return;
           }
@@ -21159,7 +21159,7 @@
             console.warn("[ExternalAdapter] refreshCharacter: Character is required");
             return;
           }
-          if (typeof window.CharacterRefresh !== "function") {
+          if (typeof hostWindow.CharacterRefresh !== "function") {
             console.warn("[ExternalAdapter] CharacterRefresh not available");
             return;
           }
@@ -21176,7 +21176,7 @@
         deleteCharacter(C) {
           if (!C)
             return;
-          if (typeof window.CharacterDelete !== "function") {
+          if (typeof hostWindow.CharacterDelete !== "function") {
             console.warn("[ExternalAdapter] CharacterDelete not available");
             return;
           }
@@ -21195,7 +21195,7 @@
         inventoryGet(C, groupName) {
           if (!C || !groupName)
             return null;
-          if (typeof window.InventoryGet !== "function") {
+          if (typeof hostWindow.InventoryGet !== "function") {
             console.warn("[ExternalAdapter] InventoryGet not available");
             return null;
           }
@@ -21215,7 +21215,7 @@
         inventoryItemHasEffect(item, effect2) {
           if (!item || !effect2)
             return false;
-          if (typeof window.InventoryItemHasEffect !== "function") {
+          if (typeof hostWindow.InventoryItemHasEffect !== "function") {
             console.warn("[ExternalAdapter] InventoryItemHasEffect not available");
             return false;
           }
@@ -21236,7 +21236,7 @@
         assetGet(family, group, name) {
           if (!family || !group || !name)
             return null;
-          if (typeof window.AssetGet !== "function") {
+          if (typeof hostWindow.AssetGet !== "function") {
             console.warn("[ExternalAdapter] AssetGet not available");
             return null;
           }
@@ -21255,7 +21255,7 @@
         assetPreviewPath(asset) {
           if (!asset)
             return "";
-          if (typeof window.AssetGetPreviewPath !== "function") {
+          if (typeof hostWindow.AssetGetPreviewPath !== "function") {
             console.warn("[ExternalAdapter] AssetGetPreviewPath not available");
             return "";
           }
@@ -21273,7 +21273,7 @@
         chatRoomUpdate(C) {
           if (!C)
             return;
-          if (typeof window.ChatRoomCharacterUpdate !== "function") {
+          if (typeof hostWindow.ChatRoomCharacterUpdate !== "function") {
             console.warn("[ExternalAdapter] ChatRoomCharacterUpdate not available");
             return;
           }
