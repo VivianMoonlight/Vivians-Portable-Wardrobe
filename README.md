@@ -82,7 +82,11 @@ A BC script that adds a **portable wardrobe system** with a preview mirror and a
 - Implement online storage limit  
   实现在线存储容量限制  
 - Cloud/local selective-save toggle  
-  云端/本地选择性保存  
+  云端/本地选择性保存
+- TextedItem Compatibility
+- CraftedItem Compatibility
+- Import from Current Wardrobe
+- ...
 
 ---
 
