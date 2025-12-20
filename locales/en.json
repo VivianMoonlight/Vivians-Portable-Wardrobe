@@ -243,6 +243,7 @@
     "importBackup": "Import Backup",
     "saveCharacter": "Save Character to Current Folder",
     "importBCX": "Import from BCX",
+    "importPlayerWardrobe": "Import Player Wardrobe",
     "toggleTheme": "Toggle Theme"
   },
   "historyViewer": {
