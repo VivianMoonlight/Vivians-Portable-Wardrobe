@@ -302,6 +302,10 @@ export const ExternalAdapter = {
             console.error("[ExternalAdapter] applyOutfitToCharacter: Cannot change clothes on this character");
             return false;
         }
+        if (C.IsPlayer() && !hostWindow.Player.CanChangeClothesOn(hostWindow.Player)) {
+            console.error("[ExternalAdapter] applyOutfitToCharacter: Player cannot change their own clothes right now");
+            return false;
+        }
 
         const success = ExternalAdapter.serverAppearanceLoad(
             C,

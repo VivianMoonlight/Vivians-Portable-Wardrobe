@@ -243,6 +243,7 @@
     "importBackup": "备份导入",
     "saveCharacter": "保存角色到当前文件夹",
     "importBCX": "从 BCX 导入",
+    "importPlayerWardrobe": "导入玩家衣柜",
     "toggleTheme": "切换主题"
   },
   "historyViewer": {

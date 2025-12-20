@@ -12,14 +12,20 @@
                 <header class="fm-panel-header" @mousedown.stop.prevent="startDrag">
                     <div class="fm-title">{{ t('fileManagerPanel.title') }}</div>
                     <div class="fm-header-actions">
-                        <button class="header-btn" :title="showHistory ? t('historyViewer.toggleToFileManager') : t('historyViewer.toggleToHistory')"
-                            @click.stop="toggleView">{{ showHistory ? '📁' : '🕒' }}</button>
+                        <button class="header-btn"
+                            :title="t('fileManagerPanel.importPlayerWardrobe') || 'Import Player Wardrobe'"
+                            @click.stop="importPlayerWardrobe">📥
+                        </button>
                         <button class="header-btn" :title="t('fileManagerPanel.saveBackup')"
                             @click.stop="saveBackup">💾</button>
                         <button class="header-btn" :title="t('fileManagerPanel.importBackup')"
                             @click.stop="importBackup">📂</button>
+                        <button class="header-btn"
+                            :title="showHistory ? t('historyViewer.toggleToFileManager') : t('historyViewer.toggleToHistory')"
+                            @click.stop="toggleView">{{ showHistory ? '📁' : '🕒' }}</button>
                         <button class="header-btn" :title="t('fileManagerPanel.toggleTheme')"
                             @click.stop="toggleTheme">🌓</button>
+
                         <!--button class="header-btn" title="保存当前 (active) 到当前文件夹" @click.stop="saveCurrentToFolder">
                         💾 当前到文件夹
                     </button>
@@ -97,7 +103,7 @@ import Studio from '@/components/Studio/Studio.vue'
 import { ExternalAdapter } from '@/utils/external_adapters.js'
 import { useStudioStore } from '@/stores/studioStore.js'
 import { PlayerHost, hostWindow, doc } from '@/utils/host-window.js'
-import { useTheme,injectTheme } from '@/composables/useTheme'
+import { useTheme, injectTheme } from '@/composables/useTheme'
 import * as DialogService from '@/services/DialogService.js'
 
 const { t } = useI18n()
@@ -531,6 +537,59 @@ async function applyActiveToCharacter() {
     } catch (e) {
         console.error('applyActiveToCharacter失败', e)
         await DialogService.alert('应用失败，请查看控制台')
+    }
+}
+
+/**
+ * Import outfits from Player.Wardrobe into a new folder
+ */
+async function importPlayerWardrobe() {
+    try {
+        // Check if Player data exists
+        if (!hostWindow.Player || !hostWindow.Player.Wardrobe || !hostWindow.Player.WardrobeCharacterNames) {
+            await DialogService.alert('Player Wardrobe data not available')
+            return
+        }
+
+        const wardrobeData = hostWindow.Player.Wardrobe
+        const wardrobeNames = hostWindow.Player.WardrobeCharacterNames
+
+        // Create folder with timestamp
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+        const folderName = `Player_Wardrobe_${timestamp}`
+
+        // Create folder in current directory
+        fs.fs.addFolder(fs.currentPath, folderName)
+
+        // Navigate into the new folder
+        const newPath = [...fs.currentPath, folderName]
+        fs.moveTo(newPath)
+
+        // Import each outfit
+        let importCount = 0
+        for (let i = 0; i < wardrobeData.length; i++) {
+            const outfitData = wardrobeData[i]
+            if (outfitData === null || outfitData === undefined) {
+                continue // Skip null entries
+            }
+
+            // Validate that outfit data is a non-empty array
+            if (Array.isArray(outfitData) && outfitData.length > 0) {
+                const outfitName = (wardrobeNames[i] && wardrobeNames[i].trim()) || `Outfit_${i}`
+                const file = {
+                    name: outfitName,
+                    type: 'outfit',
+                    data: JSON.parse(JSON.stringify(outfitData))
+                }
+                fs.addFile(file)
+                importCount++
+            }
+        }
+
+        await DialogService.alert(`Successfully imported ${importCount} outfits into "${folderName}"`)
+    } catch (e) {
+        console.error('importPlayerWardrobe failed', e)
+        await DialogService.alert('Failed to import Player Wardrobe. Check console for details.')
     }
 }
 
