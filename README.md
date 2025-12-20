@@ -40,6 +40,13 @@ A BC script that adds a **portable wardrobe system** with a preview mirror and a
 - 支持导入/导出装扮代码。  
 - 支持整库备份与恢复。  
 
+### New functions / 新功能
+- Widget resizing & dragging overhaul  
+  窗口拖动和缩放重构   
+- Dressroom plug-in  
+  Dressroom 插件支持  
+- Multi-language support  
+  多语言支持   
 ---
 
 ## 🚀 How to Start / 如何使用
@@ -71,14 +78,8 @@ A BC script that adds a **portable wardrobe system** with a preview mirror and a
 
 ## 📝 TODO
 
-- Widget resizing & dragging overhaul  
-  窗口拖动和缩放重构  
 - Implement online storage limit  
   实现在线存储容量限制  
-- Dressroom plug-in  
-  Dressroom 插件支持  
-- Multi-language support  
-  多语言支持  
 - Cloud/local selective-save toggle  
   云端/本地选择性保存  
 
