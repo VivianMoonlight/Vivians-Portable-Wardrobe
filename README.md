@@ -1,11 +1,6 @@
 # Vivian's Portable Wardrobe for Bondage Club / Vivian 的 BC 随身衣柜
 
-**dev version available at https://raw.githubusercontent.com/VivianMoonlight/Vivians-Portable-Wardrobe/dev/VPW.user.js**
-
-
-**本项目正在重构中 20251123**
-
-**This repo is undergoing code-refactoring 20251123**
+# The 0.9 Version is out now! / v0.9版本已发布
 
 A BC script that adds a **portable wardrobe system** with a preview mirror and advanced outfit management.  
 本脚本为 BC 游戏提供 **随身衣柜**，内置预览镜和高级服装管理功能。
@@ -67,12 +62,18 @@ A BC script that adds a **portable wardrobe system** with a preview mirror and a
 ## 📥 Load Script / 加载脚本
 
 - **Direct Userscript / 直接用户脚本**:
+- https://vivianmoonlight.github.io/Vivians-Portable-Wardrobe/ViviansPortableWardrobeLoader.user.js
+- old version/旧版本
 - https://vivianmoonlight.github.io/Vivians-Portable-Wardrobe/PortableWardrobeLoader.user.js
 
 
 - **Bookmark / 书签栏**:
 ```javascript
   javascript:(()=>{fetch('https://vivianmoonlight.github.io/Vivians-Portable-Wardrobe/PortableWardrobeLoader.user.js?'+Date.now()).then(r=>r.text()).then(r=>eval(r));})();
+```
+- old version/旧版本
+```javascript
+  javascript:(()=>{fetch('https://vivianmoonlight.github.io/Vivians-Portable-Wardrobe/ViviansPortableWardrobeLoader.user.js?'+Date.now()).then(r=>r.text()).then(r=>eval(r));})();
 ```
 ---
 
