@@ -2,6 +2,11 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import monkey from 'vite-plugin-monkey'
 import path from 'path'
+import fs from 'fs'
+
+// Read version from package.json (single source of truth)
+const pkgJson = JSON.parse(fs.readFileSync(new URL('./package.json', import.meta.url)))
+const VERSION = pkgJson.version || '0.0.0'
 
 const hosts = [
   'https://bondageprojects.elementfx.com/*',
@@ -22,9 +27,12 @@ export default defineConfig({
       userscript: {
         name: 'Vivians Portable Wardrobe',
         namespace: 'http://tampermonkey.net/',
-        version: '0.9.0',
+        version: VERSION,
         description: 'Loader for Portable Wardrobe and Vue floating panel',
         match: hosts,
+        // Tampermonkey auto-update URLs (served via GitHub Pages)
+        updateURL: 'https://vivianmoonlight.github.io/Vivians-Portable-Wardrobe/ViviansPortableWardrobeLoader.user.js',
+        downloadURL: 'https://vivianmoonlight.github.io/Vivians-Portable-Wardrobe/ViviansPortableWardrobeLoader.user.js',
         // 建议使用相对路径或稳定托管的 URL（不要在示例中写入个人用户名）
         // 若你在仓库里有 public/icon.png，使用 '/public/icon.png' 或 './icon.png' 并在 build 时内联/打包
         //icon: '/public/icon.png',

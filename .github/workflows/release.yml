@@ -1,0 +1,50 @@
+name: Release Userscript
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prepare release (CI mode)
+        run: npm run release:ci
+
+      - name: Commit out folder changes
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          if [[ -n $(git status --porcelain out) ]]; then
+            git add out
+            git commit -m "chore(release): update out userscript"
+            git push
+          else
+            echo "No changes in out/"
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            out/ViviansPortableWardrobeLoader.user.js
+            dist/*.user.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
