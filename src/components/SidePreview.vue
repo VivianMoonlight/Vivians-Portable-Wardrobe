@@ -177,19 +177,17 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .side-preview {
-  width: 300px;
-  min-width: 250px;
-  max-width: 420px;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   border-right: var(--color-border-light, #dbeafe) 1px solid;
   background: var(--color-bg-hover, #ffffff);
-  padding: 5px;
+  padding: var(--space-fluid-sm, 8px);
   box-sizing: border-box;
   display: flex;
   align-items: stretch;
-  /* fill vertical space */
   justify-content: center;
   height: 100%;
-  /* ensure it can stretch inside the panel */
   object-fit: contain;
 }
 
@@ -198,11 +196,11 @@ onBeforeUnmount(() => {
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-fluid-sm, 8px);
   align-items: center;
   flex: 1 1 auto;
-  /* allow to grow and fill vertical space */
-  min-height: 220px;
+  min-height: clamp(180px, 40vh, 320px);
+  max-height: var(--panel-max-height-safe, calc(100dvh - 120px));
   position: relative;
   object-fit: contain;
 }

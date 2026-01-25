@@ -314,14 +314,14 @@ function onBreadcrumbDrop(e, idx) {
 .panel-inner {
   width: 100%;
   height: 100%;
-  padding: var(--space-md, 12px);
+  padding: var(--panel-inline-padding, 12px);
   box-sizing: border-box;
   background: var(--color-bg-surface, #fbfdff);
   border: 1.5px solid var(--color-border-base, rgba(230,235,240,0.9));
   border-radius: var(--radius-xl, 12px);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--space-fluid-sm, 10px);
 }
 
 /* Top area with title and actions */
@@ -472,13 +472,14 @@ function onBreadcrumbDrop(e, idx) {
 
 /* file list grid */
 .file-list {
-  padding: var(--space-lg, 18px);
+  padding: var(--space-fluid-md, 12px);
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px,1fr));
-  gap: var(--space-lg, 16px);
+  grid-template-columns: repeat(auto-fill, minmax(160px,1fr));
+  gap: var(--space-fluid-sm, 12px);
   overflow-y:auto;
   min-height: 200px;
-  max-height: calc(100%);
+  max-height: var(--panel-max-height-safe, calc(100dvh - 140px));
+  -webkit-overflow-scrolling: touch;
 }
 .empty-tip { 
   color: var(--color-text-muted, #94a3b8); 
@@ -526,10 +527,17 @@ function onBreadcrumbDrop(e, idx) {
 :deep(.file-item-card) { opacity: 0; transform: translateY(6px); animation: itemIn .22s ease forwards; }
 @keyframes itemIn { to { opacity: 1; transform: translateY(0); } }
 
-/* small responsive tweak for narrow screens */
-@media (max-width: 640px) {
-  .file-list { grid-template-columns: repeat(auto-fill, minmax(160px,1fr)); }
-  .panel-inner { padding: 8px; }
-  .title-text { font-size: 1em; }
+/* responsive adjustments */
+@media (min-width: 768px) {
+  .file-list {
+    grid-template-columns: repeat(auto-fill, minmax(200px,1fr));
+    gap: var(--space-lg, 16px);
+  }
+}
+
+@media (min-width: 1024px) {
+  .file-list {
+    grid-template-columns: repeat(auto-fill, minmax(220px,1fr));
+  }
 }
 </style>

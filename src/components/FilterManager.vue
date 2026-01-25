@@ -101,31 +101,33 @@ onMounted(() => {
 <style scoped>
 .filter-panel {
   border-left: 1px solid var(--color-border-base, #e2e8f0);
-  padding: var(--space-md, 12px);
+  padding: var(--space-fluid-md, 12px);
   box-sizing: border-box;
   background: var(--color-bg-surface, #f8fafc);
   height: 100%;
   display: flex;
   flex-direction: column;
-  gap: var(--space-md, 10px);
-  overflow:auto;
+  gap: var(--space-fluid-sm, 10px);
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .filter-top {
   display: flex;
-  gap: var(--space-sm, 8px);
+  gap: var(--space-fluid-sm, 8px);
   flex-wrap: wrap;
   align-items: center;
 }
 
 .batch {
-  padding: var(--space-sm, 6px) 10px;
+  padding: clamp(8px, 1.5vw, 10px) 12px;
+  min-height: 36px;
   border-radius: var(--radius-md, 8px);
   border: 1px solid var(--color-border-base, #e2e8f0);
   background: var(--color-bg-base, #fff);
   color: var(--color-text-primary, #0f172a);
   cursor: pointer;
-  font-size: var(--font-size-base, 13px);
+  font-size: var(--font-size-fluid-sm, 13px);
   transition: all var(--transition-fast, 0.15s) ease;
 }
 
@@ -151,7 +153,10 @@ onMounted(() => {
 .filter-scroll {
   flex: 1;
   overflow: auto;
+  max-height: var(--panel-max-height-safe, calc(100dvh - 160px));
   padding-right: var(--space-sm, 6px);
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
 }
 
 .filter-group {
@@ -222,14 +227,17 @@ onMounted(() => {
 }
 
 .filter-item {
-  padding: var(--space-sm, 6px) 10px;
+  padding: clamp(8px, 1.5vw, 10px) 12px;
+  min-height: 36px;
   border-radius: var(--radius-md, 8px);
   border: 1px solid var(--color-border-base, #e2e8f0);
   background: var(--color-bg-base, #fff);
   color: var(--color-text-primary, #0f172a);
   cursor: pointer;
-  font-size: var(--font-size-base, 13px);
+  font-size: var(--font-size-fluid-sm, 13px);
   transition: all var(--transition-fast, 0.15s) ease;
+  display: inline-flex;
+  align-items: center;
 }
 
 .filter-item:hover {
