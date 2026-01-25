@@ -1,7 +1,7 @@
 <template>
     <transition name="fade-zoom">
         <div :class="themeClass">
-            <div v-if="visible" class="fm-panel-shell" :style="{
+            <div v-if="visible" class="fm-panel-shell" :class="{ 'is-mobile': isMobile }" :style="{
                 width: panel.w + 'px',
                 height: panel.h + 'px',
                 left: panel.x + 'px',
@@ -9,7 +9,7 @@
                 zIndex: panelZ
             }" role="dialog" :aria-label="t('fileManagerPanel.ariaLabel')" tabindex="0" @mousedown="bringToFront"
                 @focus="bringToFront">
-                <header class="fm-panel-header" @mousedown.stop.prevent="startDrag">
+                <header class="fm-panel-header" @pointerdown.stop.prevent="startDrag">
                     <div class="fm-title">{{ t('fileManagerPanel.title') }}</div>
                     <div class="fm-header-actions">
                         <button class="header-btn"
@@ -40,8 +40,13 @@
                     </div>
                 </header>
 
-                <div class="fm-panel-body" :style="{ height: (panel.h - 56) + 'px' }">
-                    <aside class="fm-side" aria-hidden="false">
+                <div class="fm-panel-body" :class="{ 'is-mobile': isMobile }" :style="{ height: (panel.h - 56) + 'px' }">
+                    <div class="fm-mobile-actions u-show-mobile">
+                        <button class="mobile-toggle" @click="showSide = !showSide">{{ showSide ? 'Hide Preview' : 'Show Preview' }}</button>
+                        <button class="mobile-toggle" @click="showFilters = !showFilters">{{ showFilters ? 'Hide Filters' : 'Show Filters' }}</button>
+                    </div>
+
+                    <aside v-if="!isMobile || showSide" class="fm-side" aria-hidden="false">
                         <div class="side-preview-wrap" style="height:calc(100% - 40px);">
                             <SidePreview />
                         </div>
@@ -64,23 +69,23 @@
                         <FileManager v-if="!showHistory" :embedded="true" @close="requestClose" />
                         <HistoryViewer v-else :embedded="true" />
                     </main>
-                    <aside class="main-right">
+                    <aside v-if="!isMobile || showFilters" class="main-right">
                         <FilterManager />
                     </aside>
                 </div>
 
-                <div class="resize-handle top" @mousedown.stop.prevent="startResize('top', $event)"></div>
-                <div class="resize-handle right" @mousedown.stop.prevent="startResize('right', $event)"></div>
-                <div class="resize-handle bottom" @mousedown.stop.prevent="startResize('bottom', $event)"></div>
-                <div class="resize-handle left" @mousedown.stop.prevent="startResize('left', $event)"></div>
-                <div class="resize-handle corner top-left" @mousedown.stop.prevent="startResize('top-left', $event)">
+                <div class="resize-handle top" @pointerdown.stop.prevent="startResize('top', $event)"></div>
+                <div class="resize-handle right" @pointerdown.stop.prevent="startResize('right', $event)"></div>
+                <div class="resize-handle bottom" @pointerdown.stop.prevent="startResize('bottom', $event)"></div>
+                <div class="resize-handle left" @pointerdown.stop.prevent="startResize('left', $event)"></div>
+                <div class="resize-handle corner top-left" @pointerdown.stop.prevent="startResize('top-left', $event)">
                 </div>
-                <div class="resize-handle corner top-right" @mousedown.stop.prevent="startResize('top-right', $event)">
+                <div class="resize-handle corner top-right" @pointerdown.stop.prevent="startResize('top-right', $event)">
                 </div>
                 <div class="resize-handle corner bottom-right"
-                    @mousedown.stop.prevent="startResize('bottom-right', $event)"></div>
+                    @pointerdown.stop.prevent="startResize('bottom-right', $event)"></div>
                 <div class="resize-handle corner bottom-left"
-                    @mousedown.stop.prevent="startResize('bottom-left', $event)">
+                    @pointerdown.stop.prevent="startResize('bottom-left', $event)">
                 </div>
             </div>
         </div>
@@ -113,6 +118,7 @@ const theme = useTheme()
 const { initTheme, themeClass: getThemeClass, toggleTheme, currentTheme } = theme
 
 const WINDOW_MARGIN = 12 // 保持与 CSS 中的 margin/间距一致
+const MOBILE_BREAKPOINT = 900
 
 const props = defineProps({
     visible: { type: Boolean, default: false }
@@ -149,6 +155,10 @@ const panel = ref({
     startRect: { x: 0, y: 0, w: 0, h: 0 }
 })
 
+const isMobile = ref(false)
+const showSide = ref(true)
+const showFilters = ref(true)
+
 // z-index 管理：默认值与聚焦时的提升值
 const panelZ = ref(2200)
 const FOCUSED_Z = 10050
@@ -160,8 +170,9 @@ function bringToFront() {
 
 function clampToViewport() {
     // 保证面板尺寸和位置不会超出视窗（避免出现横向滚动）
-    const maxW = Math.max(320, hostWindow.innerWidth - WINDOW_MARGIN)
-    const maxH = Math.max(220, hostWindow.innerHeight - WINDOW_MARGIN)
+    const margin = isMobile.value ? 8 : WINDOW_MARGIN
+    const maxW = Math.max(280, hostWindow.innerWidth - margin)
+    const maxH = Math.max(220, hostWindow.innerHeight - margin)
     panel.value.w = Math.min(panel.value.w, maxW)
     panel.value.h = Math.min(panel.value.h, maxH)
 
@@ -172,13 +183,13 @@ function clampToViewport() {
 
 function ensurePanelDefaults() {
     if (panel.value.x === null || panel.value.y === null) {
-        panel.value.w = Math.min(1200, Math.round(hostWindow.innerWidth * 0.8))
-        panel.value.h = Math.min(1000, Math.round(hostWindow.innerHeight * 0.72))
-        // 确保不超过视窗
-        panel.value.w = Math.min(panel.value.w, hostWindow.innerWidth - WINDOW_MARGIN)
-        panel.value.h = Math.min(panel.value.h, hostWindow.innerHeight - WINDOW_MARGIN)
-        panel.value.x = Math.max(12, Math.round((hostWindow.innerWidth - panel.value.w) / 2))
-        panel.value.y = Math.max(12, Math.round((hostWindow.innerHeight - panel.value.h) / 2))
+        const margin = isMobile.value ? 8 : WINDOW_MARGIN
+        const targetW = Math.round(hostWindow.innerWidth * (isMobile.value ? 0.98 : 0.82))
+        const targetH = Math.round(hostWindow.innerHeight * (isMobile.value ? 0.9 : 0.72))
+        panel.value.w = Math.min(1200, hostWindow.innerWidth - margin * 2, targetW)
+        panel.value.h = Math.min(1000, hostWindow.innerHeight - margin * 2, targetH)
+        panel.value.x = Math.max(margin, Math.round((hostWindow.innerWidth - panel.value.w) / 2))
+        panel.value.y = Math.max(margin, Math.round((hostWindow.innerHeight - panel.value.h) / 2))
     } else {
         clampToViewport()
     }
@@ -221,20 +232,22 @@ function requestClose() {
 
 /* Drag / Resize logic */
 function startDrag(e) {
-    if (e.button !== 0) return
+    if (e.pointerType === 'mouse' && e.button !== 0) return
     panel.value.dragging = true
     panel.value.pointerStart = { x: e.clientX, y: e.clientY }
     panel.value.startRect = { x: panel.value.x, y: panel.value.y, w: panel.value.w, h: panel.value.h }
     doc.body.style.userSelect = 'none'
+    e.target?.setPointerCapture?.(e.pointerId)
 }
 
 function startResize(dir, e) {
-    if (e.button !== 0) return
+    if (e.pointerType === 'mouse' && e.button !== 0) return
     panel.value.resizing = true
     panel.value.resizeDir = dir
     panel.value.pointerStart = { x: e.clientX, y: e.clientY }
     panel.value.startRect = { x: panel.value.x, y: panel.value.y, w: panel.value.w, h: panel.value.h }
     doc.body.style.userSelect = 'none'
+    e.target?.setPointerCapture?.(e.pointerId)
 }
 
 function onPointerMove(e) {
@@ -599,18 +612,33 @@ function escHandler(e) {
 
 const prevOverflowX = ref('')
 
+function updateIsMobile() {
+    isMobile.value = hostWindow.innerWidth < MOBILE_BREAKPOINT
+}
+
+watch(isMobile, (v) => {
+    if (v) {
+        showFilters.value = false
+        showSide.value = true
+    } else {
+        showFilters.value = true
+        showSide.value = true
+    }
+})
+
 onMounted(() => {
-    hostWindow.addEventListener('mousemove', onPointerMove)
-    hostWindow.addEventListener('mouseup', onPointerUp)
+    hostWindow.addEventListener('pointermove', onPointerMove, { passive: true })
+    hostWindow.addEventListener('pointerup', onPointerUp, { passive: true })
     hostWindow.addEventListener('keydown', escHandler)
     hostWindow.addEventListener('resize', onWindowResize)
+    updateIsMobile()
     // 当组件挂载时确保 panel 不超出（处理首次渲染时）
     ensurePanelDefaults()
 })
 
 onBeforeUnmount(() => {
-    hostWindow.removeEventListener('mousemove', onPointerMove)
-    hostWindow.removeEventListener('mouseup', onPointerUp)
+    hostWindow.removeEventListener('pointermove', onPointerMove)
+    hostWindow.removeEventListener('pointerup', onPointerUp)
     hostWindow.removeEventListener('keydown', escHandler)
     hostWindow.removeEventListener('resize', onWindowResize)
     // 恢复 overflowX（以防万一）
@@ -622,14 +650,16 @@ onBeforeUnmount(() => {
 })
 
 function onWindowResize() {
+    updateIsMobile()
     if (!props.visible) {
         // 仍然要限制 panel 尺寸，即使不可见也防止未来显示时超出
         clampToViewport()
         return
     }
     // 在窗口变化时调整面板大小和位置，避免溢出与出现横向滚动
-    const maxW = Math.max(320, hostWindow.innerWidth - WINDOW_MARGIN)
-    const maxH = Math.max(220, hostWindow.innerHeight - WINDOW_MARGIN)
+    const margin = isMobile.value ? 8 : WINDOW_MARGIN
+    const maxW = Math.max(280, hostWindow.innerWidth - margin)
+    const maxH = Math.max(220, hostWindow.innerHeight - margin)
 
     // 如果当前宽度超出最大宽度，则缩小并保持居中或保持 x 在视窗内
     if (panel.value.w > maxW) {
@@ -638,8 +668,8 @@ function onWindowResize() {
     if (panel.value.h > maxH) {
         panel.value.h = maxH
     }
-    panel.value.x = Math.max(6, Math.min(panel.value.x, hostWindow.innerWidth - panel.value.w - 6))
-    panel.value.y = Math.max(6, Math.min(panel.value.y, hostWindow.innerHeight - panel.value.h - 6))
+    panel.value.x = Math.max(margin / 2, Math.min(panel.value.x, hostWindow.innerWidth - panel.value.w - margin / 2))
+    panel.value.y = Math.max(margin / 2, Math.min(panel.value.y, hostWindow.innerHeight - panel.value.h - margin / 2))
 }
 </script>
 
@@ -660,8 +690,8 @@ function onWindowResize() {
     transition: box-shadow var(--transition-base, 0.18s) ease, transform 0s;
 
     /* 始终限制最大尺寸到视窗（考虑 margin） */
-    max-width: calc(100vw - 24px);
-    max-height: calc(100vh - 24px);
+    max-width: calc(100vw - 16px);
+    max-height: var(--panel-max-height-safe, calc(100dvh - 24px));
     box-sizing: border-box;
 }
 
@@ -734,8 +764,9 @@ function onWindowResize() {
 /* body layout */
 .fm-panel-body {
     display: flex;
-    gap: var(--space-md, 12px);
-    padding: var(--space-md, 12px);
+    flex-direction: column;
+    gap: var(--space-fluid-sm, 12px);
+    padding: var(--space-fluid-md, 12px);
     box-sizing: border-box;
     align-items: stretch;
     width: 100%;
@@ -747,13 +778,32 @@ function onWindowResize() {
     /* allow children to shrink for proper overflow handling */
 }
 
+.fm-panel-body.is-mobile {
+    padding: var(--space-fluid-sm, 10px);
+}
+
+.fm-mobile-actions {
+    display: flex;
+    gap: var(--space-sm, 8px);
+    margin-bottom: var(--space-sm, 8px);
+}
+
+.mobile-toggle {
+    flex: 1 1 0;
+    padding: var(--space-sm, 8px);
+    border-radius: var(--radius-md, 8px);
+    border: 1px solid var(--color-border-base, #e2e8f0);
+    background: var(--color-bg-base, #fff);
+    font-size: var(--font-size-base, 13px);
+    cursor: pointer;
+}
+
 /* left side preview area */
 /* 使用灵活的宽度，同时保留一个合适的最小值，避免在小屏幕时撑出横向滚动 */
 .fm-side {
-    flex: 0 0 300px;
-    /* 默认固定 300px 宽度 */
-    max-width: 40%;
-    min-width: 220px;
+    flex: 0 0 clamp(240px, 32vw, 320px);
+    max-width: 100%;
+    min-width: 200px;
     height: auto;
     background: linear-gradient(180deg, var(--color-bg-base), var(--color-bg-surface));
     border-radius: 8px;
@@ -826,8 +876,8 @@ function onWindowResize() {
 
 /* main content area where FileManager sits */
 .fm-main {
-    flex: 0.7 0.7 480px;
-    min-width: 240px;
+    flex: 1 1 auto;
+    min-width: 0;
     height: 100%;
     background: transparent;
     border-radius: 8px;
@@ -840,9 +890,9 @@ function onWindowResize() {
 
 /* right aside */
 .main-right {
-    flex: 0.3 0.3 320px;
-    min-width: 240px;
-    max-width: 32%;
+    flex: 0 0 clamp(240px, 32vw, 320px);
+    min-width: 200px;
+    max-width: 100%;
     box-sizing: border-box;
     overflow-y: auto;
     overflow-x: hidden;
@@ -860,7 +910,7 @@ function onWindowResize() {
     left: 8px;
     right: 8px;
     top: -6px;
-    height: 12px;
+    height: 16px;
     cursor: ns-resize;
 }
 
@@ -868,7 +918,7 @@ function onWindowResize() {
     left: 8px;
     right: 8px;
     bottom: -6px;
-    height: 12px;
+    height: 16px;
     cursor: ns-resize;
 }
 
@@ -876,7 +926,7 @@ function onWindowResize() {
     top: 8px;
     bottom: 8px;
     left: -6px;
-    width: 12px;
+    width: 16px;
     cursor: ew-resize;
 }
 
@@ -886,7 +936,7 @@ function onWindowResize() {
     right: -6px;
     width: 12px;
     cursor: ew-resize;
-}
+    width: 16px;
 
 /* corner handles (small visible squares) */
 .resize-handle.corner {
@@ -943,47 +993,25 @@ function onWindowResize() {
     transform: scale(1);
 }
 
-/* responsive adjustments */
-@media (max-width: 900px) {
-    .fm-panel-shell {
-        width: 94vw !important;
-        height: 84vh !important;
-        left: 3vw !important;
-        top: 6vh !important;
-        max-width: calc(100vw - 24px);
-        max-height: calc(100vh - 24px);
+@media (min-width: 900px) {
+    .fm-panel-body {
+        flex-direction: row;
+        gap: var(--space-md, 12px);
     }
 
     .fm-side {
-        width: 100%;
-        max-width: none;
-        min-width: 0;
-        object-fit: contain;
-        overflow: auto;
-        flex: 0 0 auto;
-    }
-
-    .fm-panel-body {
-        flex-direction: column;
-        gap: 8px;
-        padding: 10px;
-        overflow-x: hidden;
-    }
-
-    .fm-side-left-actions {
-        left: 10px;
-        bottom: 10px;
-        flex-direction: row;
+        max-width: 40%;
+        min-width: 220px;
+        flex: 0 0 clamp(260px, 28vw, 340px);
     }
 
     .main-right {
-        width: 100%;
-        max-width: none;
-        flex: 0 0 auto;
+        max-width: 32%;
+        flex: 0 0 clamp(240px, 28vw, 320px);
     }
 
-    .fm-main {
-        min-width: 0;
+    .fm-mobile-actions {
+        display: none;
     }
 }
 </style>

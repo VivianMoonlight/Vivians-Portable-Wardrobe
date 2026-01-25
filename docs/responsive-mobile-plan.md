@@ -2,6 +2,11 @@
 
 Goal: Fully interactive, touch-friendly experience across phone, tablet, and desktop while preserving desktop resizable workflows.
 
+## Progress (2026-01-25)
+- Added safe-area + fluid spacing/typography tokens and dvh helpers in src/styles/theme.css.
+- Introduced responsive utilities (fluid padding/gap, safe-area padding, sticky helpers, dvh max-height, mobile/desktop visibility) in src/styles/responsive.css and wired globally.
+- Refactored FileManagerPanel to mobile-first layout with pointer-based drag/resize, touch-friendly handles, mobile toggles for preview/filters, and clamp-based sizing that respects safe area/dvh.
+
 ## Principles
 - Mobile-first: fluid widths/heights with clamp() and percent-based sizing; avoid fixed px defaults.
 - Touch friendly: pointer events (mouse, touch, pen), 44px min hit targets, inertia-free dragging.
