@@ -1,0 +1,66 @@
+/* Responsive utility helpers */
+
+.u-fluid-padding {
+  padding: clamp(12px, 3vw, 20px);
+}
+
+.u-fluid-gap {
+  gap: clamp(8px, 2vw, 16px);
+}
+
+.u-inline-padding {
+  padding-inline: var(--panel-inline-padding);
+}
+
+.u-section-gap {
+  row-gap: var(--space-fluid-md);
+  column-gap: var(--space-fluid-md);
+}
+
+.u-pad-safe {
+  padding-top: calc(var(--safe-area-top) + var(--space-sm));
+  padding-right: calc(var(--safe-area-right) + var(--space-sm));
+  padding-bottom: calc(var(--safe-area-bottom) + var(--space-sm));
+  padding-left: calc(var(--safe-area-left) + var(--space-sm));
+}
+
+.u-sticky-top {
+  position: sticky;
+  top: calc(var(--safe-area-top) + var(--space-sm));
+  z-index: 5;
+  background-color: inherit;
+}
+
+.u-sticky-bottom {
+  position: sticky;
+  bottom: calc(var(--safe-area-bottom) + var(--space-sm));
+  z-index: 5;
+}
+
+.u-max-height-safe {
+  max-height: var(--panel-max-height-safe);
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
+}
+
+/* Visibility helpers */
+.u-show-mobile {
+  display: block !important;
+}
+
+@media (min-width: 640px) {
+  .u-show-mobile {
+    display: none !important;
+  }
+}
+
+.u-show-desktop {
+  display: none !important;
+}
+
+@media (min-width: 640px) {
+  .u-show-desktop {
+    display: revert !important;
+  }
+}

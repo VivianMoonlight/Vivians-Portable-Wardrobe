@@ -59,6 +59,48 @@
   --breakpoint-lg: 1024px;
   --breakpoint-xl: 1280px;
   --breakpoint-2xl: 1536px;
+
+  /* Safe Areas */
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-right: env(safe-area-inset-right, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-left: env(safe-area-inset-left, 0px);
+
+  /* Fluid Spacing & Typography */
+  --space-fluid-sm: clamp(8px, 1.6vw, 14px);
+  --space-fluid-md: clamp(12px, 2.4vw, 18px);
+  --space-fluid-lg: clamp(16px, 3vw, 22px);
+  --font-size-fluid-sm: clamp(12px, 1vw + 11px, 14px);
+  --font-size-fluid-base: clamp(13px, 1vw + 12px, 16px);
+  --font-size-fluid-lg: clamp(14px, 1.2vw + 12px, 18px);
+
+  /* Viewport Helpers */
+  --dvh-100: 100dvh;
+  --dvh-safe: calc(100dvh - var(--safe-area-top) - var(--safe-area-bottom));
+  --panel-max-height-safe: calc(var(--dvh-safe) - var(--space-xl));
+  --panel-inline-padding: clamp(12px, 3vw, 20px);
+}
+
+/* Responsive ramps (mobile-first) */
+@media (min-width: 640px) {
+  :root {
+    --font-size-base: 14px;
+    --font-size-lg: 15px;
+    --font-size-xl: 17px;
+    --space-lg: 18px;
+    --space-xl: 26px;
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --font-size-base: 15px;
+    --font-size-lg: 16px;
+    --font-size-xl: 18px;
+    --space-lg: 20px;
+    --space-xl: 28px;
+    --space-xxl: 36px;
+  }
 }
 
 /* ========== Light Theme ========== */

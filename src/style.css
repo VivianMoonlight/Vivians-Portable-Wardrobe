@@ -9,6 +9,9 @@
 /* Import shared component styles */
 @import './styles/components.css'; 
 
+/* Import responsive utilities */
+@import './styles/responsive.css';
+
 /* ---------- Scrollable Containers ---------- */
 .scrollable {
   overflow: auto;
