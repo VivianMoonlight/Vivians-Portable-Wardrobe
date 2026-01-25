@@ -146,46 +146,48 @@ function closeDialog() {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: var(--color-overlay, rgba(0, 0, 0, 0.5));
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 99999999999;
-  padding: 20px;
+  padding: calc(var(--safe-area-top) + 16px) calc(var(--safe-area-right) + 16px) calc(var(--safe-area-bottom) + 16px) calc(var(--safe-area-left) + 16px);
 }
 
 .dialog-container {
-  background: var(--bg-primary, #ffffff);
-  border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-  max-width: 500px;
-  width: 100%;
-  min-width: 300px;
-  overflow: hidden;
+  background: var(--color-bg-base, #ffffff);
+  border-radius: var(--radius-lg, 10px);
+  box-shadow: var(--shadow-xl, 0 4px 20px rgba(0, 0, 0, 0.3));
+  width: clamp(280px, 90vw, 500px);
+  max-width: calc(100vw - var(--safe-area-left) - var(--safe-area-right) - 32px);
+  max-height: calc(var(--dvh-safe, 100dvh) - 32px);
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .dialog-content {
-  padding: 24px;
+  padding: var(--panel-inline-padding, 20px);
 }
 
 .dialog-message {
-  font-size: 16px;
-  line-height: 1.5;
-  color: var(--text-primary, #333333);
-  margin-bottom: 20px;
+  font-size: var(--font-size-fluid-base, 15px);
+  line-height: 1.6;
+  color: var(--color-text-primary, #333333);
+  margin-bottom: var(--space-fluid-md, 16px);
   word-wrap: break-word;
   white-space: pre-wrap;
 }
 
 .dialog-input {
   width: 100%;
-  padding: 10px 12px;
-  font-size: 14px;
-  border: 1px solid var(--border-color, #d0d0d0);
-  border-radius: 4px;
-  margin-bottom: 20px;
-  background: var(--bg-secondary, #ffffff);
-  color: var(--text-primary, #333333);
+  padding: clamp(10px, 2vw, 12px) 14px;
+  min-height: 44px;
+  font-size: var(--font-size-fluid-sm, 14px);
+  border: 1px solid var(--color-border-base, #d0d0d0);
+  border-radius: var(--radius-md, 6px);
+  margin-bottom: var(--space-fluid-md, 16px);
+  background: var(--color-bg-base, #ffffff);
+  color: var(--color-text-primary, #333333);
   box-sizing: border-box;
 }
 
@@ -197,19 +199,22 @@ function closeDialog() {
 
 .dialog-buttons {
   display: flex;
-  gap: 12px;
+  gap: var(--space-fluid-sm, 10px);
   justify-content: flex-end;
+  flex-wrap: wrap;
 }
 
 .dialog-btn {
-  padding: 10px 20px;
-  font-size: 14px;
-  font-weight: 500;
+  padding: clamp(10px, 2vw, 12px) clamp(18px, 4vw, 24px);
+  min-height: 44px;
+  font-size: var(--font-size-fluid-sm, 14px);
+  font-weight: var(--font-weight-medium, 500);
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-md, 6px);
   cursor: pointer;
-  transition: all 0.2s ease;
-  min-width: 80px;
+  transition: all var(--transition-fast, 0.2s) ease;
+  min-width: clamp(80px, 20vw, 100px);
+  flex: 1 1 auto;
 }
 
 .dialog-btn-ok {

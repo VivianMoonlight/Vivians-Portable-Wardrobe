@@ -16,6 +16,12 @@ Goal: Fully interactive, touch-friendly experience across phone, tablet, and des
 - FilterManager: Fluid padding and gaps, touch-friendly 36px min button heights, dvh scrollable area with momentum scrolling.
 - SidePreview: Removed fixed widths, applied fluid padding, clamp-based min/max heights using dvh and vh units for responsive canvas sizing.
 
+### Step 4: Dialogs/Modals ✓
+- OutfitPanel: Clamp-based width (320px-620px), safe-area aware max-width/height, fluid padding, 36px touch-friendly buttons, dvh-based scrollable body.
+- MyWindow: Responsive clamp width (300px-520px), safe-area offsets, fluid padding, 40px touch-target close button.
+- DialogModal: Safe-area padding on overlay, clamp width (280px-500px), dvh max-height, 44px touch-friendly inputs/buttons, fluid spacing.
+- ThemedStatusWidget: Mobile-adaptive positioning (top-right desktop, bottom-center mobile <640px), safe-area offsets, clamp width (280px-340px), 36px+ touch buttons, dvh scrollable content.
+
 ## Principles
 - Mobile-first: fluid widths/heights with clamp() and percent-based sizing; avoid fixed px defaults.
 - Touch friendly: pointer events (mouse, touch, pen), 44px min hit targets, inertia-free dragging.

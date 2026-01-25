@@ -117,9 +117,10 @@ const handleSync = () => {
 <style scoped>
 .themed-status-widget {
   position: fixed;
-  top: 20px;
-  right: 20px;
-  width: 320px;
+  top: calc(var(--safe-area-top) + 20px);
+  right: calc(var(--safe-area-right) + 20px);
+  width: clamp(280px, 90vw, 340px);
+  max-width: calc(100vw - var(--safe-area-left) - var(--safe-area-right) - 32px);
   background: var(--color-bg-surface);
   border: 1px solid var(--color-border-base);
   border-radius: var(--radius-lg);
@@ -129,11 +130,22 @@ const handleSync = () => {
   overflow: hidden;
 }
 
+@media (max-width: 640px) {
+  .themed-status-widget {
+    bottom: calc(var(--safe-area-bottom) + 20px);
+    top: auto;
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    width: clamp(280px, 94vw, 340px);
+  }
+}
+
 .widget-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-md);
+  padding: var(--space-fluid-md, 12px);
   background: var(--color-bg-panel);
   border-bottom: 1px solid var(--color-border-base);
 }
@@ -147,16 +159,18 @@ const handleSync = () => {
   background: none;
   border: none;
   color: var(--color-text-secondary);
-  font-size: 20px;
+  font-size: 22px;
   line-height: 1;
   cursor: pointer;
   padding: 0;
-  width: 24px;
-  height: 24px;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   transition: background var(--transition-fast);
 }
 
@@ -166,14 +180,17 @@ const handleSync = () => {
 }
 
 .widget-content {
-  padding: var(--space-md);
+  padding: var(--space-fluid-md, 12px);
+  max-height: var(--panel-max-height-safe, calc(100dvh - 180px));
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .status-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-sm) 0;
+  padding: var(--space-fluid-sm, 8px) 0;
   border-bottom: 1px solid var(--color-border-light);
 }
 
@@ -201,20 +218,23 @@ const handleSync = () => {
 
 .widget-actions {
   display: flex;
-  gap: var(--space-sm);
-  margin-top: var(--space-md);
-  padding-top: var(--space-md);
+  gap: var(--space-fluid-sm, 8px);
+  margin-top: var(--space-fluid-md, 12px);
+  padding-top: var(--space-fluid-md, 12px);
   border-top: 1px solid var(--color-border-light);
+  flex-wrap: wrap;
 }
 
 .action-btn {
-  flex: 1;
-  padding: var(--space-sm) var(--space-md);
+  flex: 1 1 auto;
+  min-width: 100px;
+  padding: clamp(10px, 2vw, 12px) var(--space-md);
+  min-height: 40px;
   background: var(--color-primary);
   color: var(--color-text-inverse);
   border: none;
   border-radius: var(--radius-md);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-fluid-sm, 13px);
   font-weight: var(--font-weight-medium);
   cursor: pointer;
   transition: background var(--transition-fast);
