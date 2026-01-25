@@ -22,6 +22,13 @@ Goal: Fully interactive, touch-friendly experience across phone, tablet, and des
 - DialogModal: Safe-area padding on overlay, clamp width (280px-500px), dvh max-height, 44px touch-friendly inputs/buttons, fluid spacing.
 - ThemedStatusWidget: Mobile-adaptive positioning (top-right desktop, bottom-center mobile <640px), safe-area offsets, clamp width (280px-340px), 36px+ touch buttons, dvh scrollable content.
 
+### Step 5: Studio Workspace ✓
+- Mobile-first sizing: default size reduced to 98vw×94vh on mobile vs 92vw×88vh desktop, respects safe-area margins (8px mobile, 12px desktop).
+- Pointer-based drag/resize: switched all mousedown/mousemove/mouseup to pointerdown/pointermove/pointerup with setPointerCapture for touch support; enlarged handles to 16-18px for touch targets.
+- Breakpoint-based layout collapse: mobile tab switcher (<900px) for Preview/Stacks/Parts/Inspector/Assets tabs; desktop row layout (≥900px) with fixed column widths.
+- Responsive panel sections: mobile columns stack vertically (width 100%, flex 1), desktop maintains fixed widths (450px preview, 240px stack, fluid parts, 360px inspector/assets).
+- dvh max-height applied to window and all scrollable areas for safe-area/keyboard awareness; window resize listener updates mobile state and clamps sizing.
+
 ## Principles
 - Mobile-first: fluid widths/heights with clamp() and percent-based sizing; avoid fixed px defaults.
 - Touch friendly: pointer events (mouse, touch, pen), 44px min hit targets, inertia-free dragging.

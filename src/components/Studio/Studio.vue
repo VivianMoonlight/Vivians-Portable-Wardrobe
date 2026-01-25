@@ -4,18 +4,18 @@
       <div :class="themeClass">
         <div class="studio-window" role="dialog" :aria-label="t('studio.ariaLabel')" :style="panelStyle">
           <!-- Resize handles -->
-          <div class="resize-handle top" @mousedown.stop.prevent="startResize('top', $event)"></div>
-          <div class="resize-handle right" @mousedown.stop.prevent="startResize('right', $event)"></div>
-          <div class="resize-handle bottom" @mousedown.stop.prevent="startResize('bottom', $event)"></div>
-          <div class="resize-handle left" @mousedown.stop.prevent="startResize('left', $event)"></div>
-          <div class="resize-handle corner top-left" @mousedown.stop.prevent="startResize('top-left', $event)"></div>
-          <div class="resize-handle corner top-right" @mousedown.stop.prevent="startResize('top-right', $event)"></div>
-          <div class="resize-handle corner bottom-right" @mousedown.stop.prevent="startResize('bottom-right', $event)">
+          <div class="resize-handle top" @pointerdown.stop.prevent="startResize('top', $event)"></div>
+          <div class="resize-handle right" @pointerdown.stop.prevent="startResize('right', $event)"></div>
+          <div class="resize-handle bottom" @pointerdown.stop.prevent="startResize('bottom', $event)"></div>
+          <div class="resize-handle left" @pointerdown.stop.prevent="startResize('left', $event)"></div>
+          <div class="resize-handle corner top-left" @pointerdown.stop.prevent="startResize('top-left', $event)"></div>
+          <div class="resize-handle corner top-right" @pointerdown.stop.prevent="startResize('top-right', $event)"></div>
+          <div class="resize-handle corner bottom-right" @pointerdown.stop.prevent="startResize('bottom-right', $event)">
           </div>
-          <div class="resize-handle corner bottom-left" @mousedown.stop.prevent="startResize('bottom-left', $event)">
+          <div class="resize-handle corner bottom-left" @pointerdown.stop.prevent="startResize('bottom-left', $event)">
           </div>
 
-          <header class="studio-header" @mousedown.stop.prevent="startDrag">
+          <header class="studio-header" @pointerdown.stop.prevent="startDrag">
             <div class="header-title">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                 stroke-linecap="round" stroke-linejoin="round">
@@ -251,27 +251,36 @@
             </div>
           </transition>
 
-          <div class="studio-body">
+          <div class="studio-body" :class="{ 'is-mobile': isMobile }">
+            <!-- Mobile tab switcher -->
+            <div v-if="isMobile" class="mobile-tabs u-show-mobile">
+              <button @click="mobileTab = 'preview'" :class="{ active: mobileTab === 'preview' }">Preview</button>
+              <button @click="mobileTab = 'stacks'" :class="{ active: mobileTab === 'stacks' }">Stacks</button>
+              <button @click="mobileTab = 'parts'" :class="{ active: mobileTab === 'parts' }">Parts</button>
+              <button v-if="!isReplaceMode" @click="mobileTab = 'inspector'" :class="{ active: mobileTab === 'inspector' }">Inspector</button>
+              <button v-if="isReplaceMode" @click="mobileTab = 'assets'" :class="{ active: mobileTab === 'assets' }">Assets</button>
+            </div>
+
             <!-- 左侧：Preview -->
-            <aside class="panel-section studio-left">
+            <aside v-if="!isMobile || mobileTab === 'preview'" class="panel-section studio-left">
               <PreviewWidget />
             </aside>
 
             <!-- 中间：StackList (窄) + PartList (宽) -->
-            <aside class="panel-section stack-column">
+            <aside v-if="!isMobile || mobileTab === 'stacks'" class="panel-section stack-column">
               <StackList />
             </aside>
-            <aside class="panel-section parts-column">
+            <aside v-if="!isMobile || mobileTab === 'parts'" class="panel-section parts-column">
               <PartListPanel />
             </aside>
 
             <!-- Inspector 列：只在非替换模式显示 -->
-            <aside v-if="!isReplaceMode" class="panel-section studio-right">
+            <aside v-if="(!isMobile || mobileTab === 'inspector') && !isReplaceMode" class="panel-section studio-right">
               <PartInspectorPanel />
             </aside>
 
             <!-- Asset selector 列：只在替换模式显示 -->
-            <aside v-if="isReplaceMode" class="panel-section studio-assets">
+            <aside v-if="(!isMobile || mobileTab === 'assets') && isReplaceMode" class="panel-section studio-assets">
               <AssetSelectorPanel />
             </aside>
 
@@ -382,40 +391,52 @@ const resizeDir = ref(null)
 const pointerStart = ref({ x: 0, y: 0 })
 const startRect = ref({ x: 0, y: 0, w: 0, h: 0 })
 
+const MOBILE_BREAKPOINT = 900
+const isMobile = ref(false)
+const mobileTab = ref('preview') // 'preview', 'stacks', 'parts', 'inspector'
+
 const panelStyle = computed(() => {
-  const left = pos.value.x !== null ? pos.value.x : Math.max(12, Math.round((hostWindow.innerWidth - size.value.w) / 2))
-  const top = pos.value.y !== null ? pos.value.y : Math.max(12, Math.round((hostWindow.innerHeight - size.value.h) / 2))
+  const margin = isMobile.value ? 8 : 12
+  const maxW = hostWindow.innerWidth - margin * 2
+  const maxH = hostWindow.innerHeight - margin * 2
+  const left = pos.value.x !== null ? pos.value.x : Math.max(margin, Math.round((hostWindow.innerWidth - size.value.w) / 2))
+  const top = pos.value.y !== null ? pos.value.y : Math.max(margin, Math.round((hostWindow.innerHeight - size.value.h) / 2))
   return {
     left: left + 'px',
     top: top + 'px',
-    width: Math.min(size.value.w, hostWindow.innerWidth - 24) + 'px',
-    height: Math.min(size.value.h, hostWindow.innerHeight - 24) + 'px',
+    width: Math.min(size.value.w, maxW) + 'px',
+    height: Math.min(size.value.h, maxH) + 'px',
+    maxHeight: `calc(var(--dvh-safe, 100dvh) - ${margin * 2}px)`,
     position: 'fixed',
     zIndex: 10060
   }
 })
 
 function startDrag(e) {
-  if (e.button !== 0) return
+  if (e.pointerType === 'mouse' && e.button !== 0) return
   if (e.target.closest('button')) return
 
   dragging.value = true
   pointerStart.value = { x: e.clientX, y: e.clientY }
-  const computedLeft = pos.value.x !== null ? pos.value.x : Math.max(12, Math.round((hostWindow.innerWidth - size.value.w) / 2))
-  const computedTop = pos.value.y !== null ? pos.value.y : Math.max(12, Math.round((hostWindow.innerHeight - size.value.h) / 2))
+  const margin = isMobile.value ? 8 : 12
+  const computedLeft = pos.value.x !== null ? pos.value.x : Math.max(margin, Math.round((hostWindow.innerWidth - size.value.w) / 2))
+  const computedTop = pos.value.y !== null ? pos.value.y : Math.max(margin, Math.round((hostWindow.innerHeight - size.value.h) / 2))
   startRect.value = { x: computedLeft, y: computedTop, w: size.value.w, h: size.value.h }
   doc.body.style.userSelect = 'none'
+  e.target?.setPointerCapture?.(e.pointerId)
 }
 
 function startResize(dir, e) {
-  if (e.button !== 0) return
+  if (e.pointerType === 'mouse' && e.button !== 0) return
   resizing.value = true
   resizeDir.value = dir
   pointerStart.value = { x: e.clientX, y: e.clientY }
-  const computedLeft = pos.value.x !== null ? pos.value.x : Math.max(12, Math.round((hostWindow.innerWidth - size.value.w) / 2))
-  const computedTop = pos.value.y !== null ? pos.value.y : Math.max(12, Math.round((hostWindow.innerHeight - size.value.h) / 2))
+  const margin = isMobile.value ? 8 : 12
+  const computedLeft = pos.value.x !== null ? pos.value.x : Math.max(margin, Math.round((hostWindow.innerWidth - size.value.w) / 2))
+  const computedTop = pos.value.y !== null ? pos.value.y : Math.max(margin, Math.round((hostWindow.innerHeight - size.value.h) / 2))
   startRect.value = { x: computedLeft, y: computedTop, w: size.value.w, h: size.value.h }
   doc.body.style.userSelect = 'none'
+  e.target?.setPointerCapture?.(e.pointerId)
 }
 
 function onPointerMove(e) {
@@ -469,20 +490,44 @@ function onPointerUp() {
   }
 }
 
+function updateIsMobile() {
+  isMobile.value = hostWindow.innerWidth < MOBILE_BREAKPOINT
+}
+
+function onWindowResize() {
+  updateIsMobile()
+  if (!props.visible) return
+  const margin = isMobile.value ? 8 : 12
+  const maxW = Math.max(280, hostWindow.innerWidth - margin * 2)
+  const maxH = Math.max(220, hostWindow.innerHeight - margin * 2)
+  if (size.value.w > maxW) size.value.w = maxW
+  if (size.value.h > maxH) size.value.h = maxH
+  const computedLeft = pos.value.x !== null ? pos.value.x : Math.max(margin, Math.round((hostWindow.innerWidth - size.value.w) / 2))
+  const computedTop = pos.value.y !== null ? pos.value.y : Math.max(margin, Math.round((hostWindow.innerHeight - size.value.h) / 2))
+  pos.value.x = Math.max(margin, Math.min(computedLeft, hostWindow.innerWidth - size.value.w - margin))
+  pos.value.y = Math.max(margin, Math.min(computedTop, hostWindow.innerHeight - size.value.h - margin))
+}
+
 // Watch visibility
 watch(() => props.visible, async (v) => {
   if (v) {
     await nextTick()
-    size.value.w = Math.min(size.value.w, Math.round(hostWindow.innerWidth * 0.96))
-    size.value.h = Math.min(size.value.h, Math.round(hostWindow.innerHeight * 0.9))
+    updateIsMobile()
+    const margin = isMobile.value ? 8 : 12
+    const targetW = isMobile.value ? Math.round(hostWindow.innerWidth * 0.98) : Math.round(hostWindow.innerWidth * 0.92)
+    const targetH = isMobile.value ? Math.round(hostWindow.innerHeight * 0.94) : Math.round(hostWindow.innerHeight * 0.88)
+    size.value.w = Math.min(size.value.w, targetW)
+    size.value.h = Math.min(size.value.h, targetH)
     if (pos.value.x === null || pos.value.y === null) {
-      pos.value.x = Math.max(12, Math.round((hostWindow.innerWidth - size.value.w) / 2))
-      pos.value.y = Math.max(12, Math.round((hostWindow.innerHeight - size.value.h) / 2))
+      pos.value.x = Math.max(margin, Math.round((hostWindow.innerWidth - size.value.w) / 2))
+      pos.value.y = Math.max(margin, Math.round((hostWindow.innerHeight - size.value.h) / 2))
     }
     store.loadAssetData().catch(() => { /* ignore */ })
     hostWindow.addEventListener('keydown', escHandler)
+    hostWindow.addEventListener('resize', onWindowResize)
   } else {
     hostWindow.removeEventListener('keydown', escHandler)
+    hostWindow.removeEventListener('resize', onWindowResize)
   }
 })
 
@@ -491,8 +536,9 @@ function escHandler(e) {
 }
 
 onMounted(async () => {
-  hostWindow.addEventListener('mousemove', onPointerMove)
-  hostWindow.addEventListener('mouseup', onPointerUp)
+  updateIsMobile()
+  hostWindow.addEventListener('pointermove', onPointerMove, { passive: true })
+  hostWindow.addEventListener('pointerup', onPointerUp, { passive: true })
 
   // Enable auto-save
   store.enableAutoSave()
@@ -509,9 +555,10 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
-  hostWindow.removeEventListener('mousemove', onPointerMove)
-  hostWindow.removeEventListener('mouseup', onPointerUp)
+  hostWindow.removeEventListener('pointermove', onPointerMove)
+  hostWindow.removeEventListener('pointerup', onPointerUp)
   hostWindow.removeEventListener('keydown', escHandler)
+  hostWindow.removeEventListener('resize', onWindowResize)
 
   // Disable auto-save
   store.disableAutoSave()
@@ -762,6 +809,7 @@ async function clearAutoSave() {
   flex-direction: column;
   overflow: hidden;
   box-sizing: border-box;
+  max-height: var(--panel-max-height-safe, calc(100dvh - 24px));
 }
 
 /* --- Header & Toolbar --- */
@@ -925,12 +973,47 @@ async function clearAutoSave() {
 }
 
 /* --- Main Layout --- */
+.mobile-tabs {
+  display: flex;
+  gap: var(--space-xs, 4px);
+  padding: var(--space-sm, 8px);
+  background: var(--color-bg-base, #fff);
+  border-bottom: 1px solid var(--color-border-base, #e2e8f0);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.mobile-tabs button {
+  flex: 1 1 auto;
+  min-width: 80px;
+  padding: clamp(10px, 2vw, 12px) var(--space-md, 12px);
+  min-height: 44px;
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--color-border-base, #e2e8f0);
+  background: var(--color-bg-base, #fff);
+  color: var(--color-text-secondary, #64748b);
+  font-size: var(--font-size-fluid-sm, 13px);
+  font-weight: var(--font-weight-medium, 500);
+  cursor: pointer;
+  transition: all var(--transition-fast, 0.15s) ease;
+  white-space: nowrap;
+}
+
+.mobile-tabs button.active {
+  background: var(--color-primary, #2563eb);
+  color: var(--color-text-inverse, #fff);
+  border-color: var(--color-primary, #2563eb);
+}
+
 .studio-body {
   flex: 1;
   display: flex;
   overflow: hidden;
-  /* Contains scrollbars inside sections */
   background: var(--color-bg-panel, #f1f5f9);
+}
+
+.studio-body.is-mobile {
+  flex-direction: column;
 }
 
 .panel-section {
@@ -939,8 +1022,16 @@ async function clearAutoSave() {
   background: var(--color-bg-base, #ffffff);
   border-right: 1px solid var(--color-border-base, #e2e8f0);
   min-height: 0;
-  /* Critical for flex scrolling */
   position: relative;
+}
+
+.studio-body.is-mobile .panel-section {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  flex: 1 1 auto;
+  border-right: none;
+  border-bottom: 1px solid var(--color-border-base, #e2e8f0);
 }
 
 .panel-section:last-child {
@@ -1009,38 +1100,38 @@ async function clearAutoSave() {
 .resize-handle.top {
   left: 0;
   right: 0;
-  top: -4px;
-  height: 8px;
+  top: -6px;
+  height: 16px;
   cursor: ns-resize;
 }
 
 .resize-handle.bottom {
   left: 0;
   right: 0;
-  bottom: -4px;
-  height: 8px;
+  bottom: -6px;
+  height: 16px;
   cursor: ns-resize;
 }
 
 .resize-handle.left {
   top: 0;
   bottom: 0;
-  left: -4px;
-  width: 8px;
+  left: -6px;
+  width: 16px;
   cursor: ew-resize;
 }
 
 .resize-handle.right {
   top: 0;
   bottom: 0;
-  right: -4px;
-  width: 8px;
+  right: -6px;
+  width: 16px;
   cursor: ew-resize;
 }
 
 .resize-handle.corner {
-  width: 12px;
-  height: 12px;
+  width: 18px;
+  height: 18px;
   z-index: 10101;
 }
 
