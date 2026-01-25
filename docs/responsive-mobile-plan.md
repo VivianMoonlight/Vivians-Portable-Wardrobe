@@ -29,6 +29,13 @@ Goal: Fully interactive, touch-friendly experience across phone, tablet, and des
 - Responsive panel sections: mobile columns stack vertically (width 100%, flex 1), desktop maintains fixed widths (450px preview, 240px stack, fluid parts, 360px inspector/assets).
 - dvh max-height applied to window and all scrollable areas for safe-area/keyboard awareness; window resize listener updates mobile state and clamps sizing.
 
+### Step 6: Launcher Positioning ✓
+- Applied safe-area offsets to launcher FAB: `left: calc(var(--safe-area-left) + clamp(16px, 3vw, 20px))` and `bottom: calc(var(--safe-area-bottom) + clamp(80px, 12vh, 100px))` to avoid notches and gesture areas.
+- Mobile-adaptive positioning: launcher centers horizontally at bottom on mobile (<640px) with `left: 50%; transform: translateX(-50%)` for better thumb reach and visual balance.
+- Responsive sizing: button uses `clamp(56px, 12vw, 64px)` for fluid scaling with guaranteed minimum touch target of 56×56px.
+- Fixed hover/active state transforms to account for mobile centering: added nested media queries to preserve translateX offset during animations.
+- Applied same safe-area and mobile patterns to theme toggle button (if enabled): positioned adjacent to launcher on mobile with `left: calc(50% + 48px)` offset.
+
 ## Principles
 - Mobile-first: fluid widths/heights with clamp() and percent-based sizing; avoid fixed px defaults.
 - Touch friendly: pointer events (mouse, touch, pen), 44px min hit targets, inertia-free dragging.
@@ -60,5 +67,20 @@ Goal: Fully interactive, touch-friendly experience across phone, tablet, and des
 ## Legacy Widget
 - PortableWardrobe/ui/main_ui_view.js: align to responsive patterns or gate to desktop-only to prevent mobile conflicts.
 
-## Open Decision
-- Launcher on mobile: A1) floating FAB; A2) bottom bar entrypoint. Pick one and cascade through layouts.
+## Implementation Status
+All core responsive features are complete:
+- ✓ Step 1: Shared Foundation (theme tokens, responsive utilities)
+- ✓ Step 2: Panel & Launcher (FileManagerPanel mobile-first refactor)
+- ✓ Step 3: Supporting Panes (FileManager, FilterManager, SidePreview)
+- ✓ Step 4: Dialogs/Modals (OutfitPanel, MyWindow, DialogModal, ThemedStatusWidget)
+- ✓ Step 5: Studio Workspace (mobile tabs, responsive layout)
+- ✓ Step 6: Launcher Positioning (FAB with safe-area and mobile centering)
+
+Remaining: Step 7 (Legacy Widget alignment) - optional, desktop-only gating recommended.
+
+## Design Decision: Launcher Model
+Selected **Option A1: Floating FAB** with mobile adaptations:
+- Desktop: Bottom-left FAB with safe-area offsets
+- Mobile (<640px): Bottom-center FAB for ergonomic thumb reach
+- Both respect safe-area-bottom + clamp-based spacing for device-specific safety zones
+- 56-64px size range ensures consistent touch target compliance across devices

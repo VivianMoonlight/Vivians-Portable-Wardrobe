@@ -48,12 +48,15 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useTheme, provideTheme } from './composables/useTheme'
 import FileManagerPanel from './components/FileManagerPanel.vue'
-import logo from './assets/logo.png' // logo 位于脚本的上级目录（../assests/logo.png）
+import { hostWindow } from './utils/host-window.js'
+import logo from './assets/logo.png'
 
 const showPanel = ref(false)
+const isMobile = ref(false)
+const MOBILE_BREAKPOINT = 640
 
 // Initialize theme
 const theme = useTheme()
@@ -63,8 +66,22 @@ const themeClass = computed(() => getThemeClass())
 // Provide theme context to all descendants
 provideTheme(theme)
 
+function updateIsMobile() {
+  isMobile.value = hostWindow.innerWidth < MOBILE_BREAKPOINT
+}
+
+function onWindowResize() {
+  updateIsMobile()
+}
+
 onMounted(() => {
   initTheme()
+  updateIsMobile()
+  hostWindow.addEventListener('resize', onWindowResize)
+})
+
+onBeforeUnmount(() => {
+  hostWindow.removeEventListener('resize', onWindowResize)
 })
 
 function openPanel() {
@@ -91,11 +108,13 @@ function closePanel() {
 /* 圆形悬浮按钮主样式 */
 .open-fm-btn {
   position: fixed;
-  left: 20px;
-  bottom: 100px;
+  left: calc(var(--safe-area-left) + clamp(16px, 3vw, 20px));
+  bottom: calc(var(--safe-area-bottom) + clamp(80px, 12vh, 100px));
 
-  width: 64px;
-  height: 64px;
+  width: clamp(56px, 12vw, 64px);
+  height: clamp(56px, 12vw, 64px);
+  min-width: 56px;
+  min-height: 56px;
   padding: 0;
   display: inline-flex;
   align-items: center;
@@ -109,13 +128,30 @@ function closePanel() {
   box-shadow:
     0 10px 30px rgba(7, 33, 58, 0.18),
     inset 0 1px 0 rgba(255,255,255,0.35);
-  z-index: 2147483647; /* 尽量放到最上层 */
+  z-index: 2147483647;
 
   transition: transform 180ms cubic-bezier(.2,.9,.2,1), box-shadow 180ms, filter 180ms;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
   pointer-events: auto;
   outline: none;
+}
+
+/* Mobile: center button at bottom */
+@media (max-width: 640px) {
+  .open-fm-btn {
+    left: 50%;
+    bottom: calc(var(--safe-area-bottom) + 20px);
+    transform: translateX(-50%);
+  }
+  
+  .open-fm-btn:hover {
+    transform: translateX(-50%) translateY(-6px);
+  }
+  
+  .open-fm-btn:active {
+    transform: translateX(-50%) translateY(-2px) scale(0.985);
+  }
 }
 
 /* 内部 logo，使用相对导入的图片资源 */
@@ -137,6 +173,12 @@ function closePanel() {
       inset 0 1px 0 rgba(255,255,255,0.38);
     filter: saturate(1.05);
   }
+
+  @media (max-width: 640px) {
+    .open-fm-btn:hover {
+      transform: translateX(-50%) translateY(-6px);
+    }
+  }
 }
 
 .open-fm-btn:active {
@@ -144,6 +186,19 @@ function closePanel() {
   box-shadow:
     0 8px 20px rgba(7, 33, 58, 0.18),
     inset 0 1px 0 rgba(255,255,255,0.25);
+}
+
+/* Mobile: center button at bottom */
+@media (max-width: 640px) {
+  .open-fm-btn {
+    left: 50%;
+    bottom: calc(var(--safe-area-bottom) + 20px);
+    transform: translateX(-50%);
+  }
+
+  .open-fm-btn:active {
+    transform: translateX(-50%) translateY(-2px) scale(0.985);
+  }
 }
 
 /* Focus-visible 优化，便于键盘用户 */
@@ -225,10 +280,12 @@ function closePanel() {
 /* Theme toggle button */
 .theme-toggle-btn {
   position: fixed;
-  left: 20px;
-  bottom: 30px;
-  width: 48px;
-  height: 48px;
+  left: calc(var(--safe-area-left) + clamp(16px, 3vw, 20px));
+  bottom: calc(var(--safe-area-bottom) + clamp(20px, 4vh, 30px));
+  width: clamp(44px, 10vw, 48px);
+  height: clamp(44px, 10vw, 48px);
+  min-width: 44px;
+  min-height: 44px;
   padding: 0;
   display: inline-flex;
   align-items: center;
@@ -245,6 +302,14 @@ function closePanel() {
   touch-action: manipulation;
   pointer-events: auto;
   outline: none;
+}
+
+/* Mobile: position theme toggle near launcher */
+@media (max-width: 640px) {
+  .theme-toggle-btn {
+    left: calc(50% + 48px);
+    bottom: calc(var(--safe-area-bottom) + 24px);
+  }
 }
 
 @media (hover: hover) and (pointer: fine) {
