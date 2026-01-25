@@ -1,5 +1,6 @@
 import fs from 'fs'
 import path from 'path'
+import { fileURLToPath } from 'url'
 import { spawn } from 'child_process'
 
 function readJSON(p) {
@@ -24,7 +25,7 @@ async function run(cmd, args, opts = {}) {
 
 async function main() {
   const mode = process.argv[2] || 'patch'
-  const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..')
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
   const pkgPath = path.join(root, 'package.json')
   const distDir = path.join(root, 'dist')
   const outDir = path.join(root, 'out')
@@ -52,10 +53,10 @@ async function main() {
   if (!userJs) throw new Error('No .user.js file found in dist')
 
   const src = path.join(distDir, userJs)
-  const dest = path.join(outDir, 'ViviansPortableWardrobeLoader.user.js')
+  const dest = path.join(outDir, 'Vivians-Portable-Wardrobe.user.js')
 
   fs.copyFileSync(src, dest)
-  console.log(`Copied ${userJs} -> out/ViviansPortableWardrobeLoader.user.js`)
+  console.log(`Copied ${userJs} -> out/Vivians-Portable-Wardrobe.user.js`)
 
   console.log('Release preparation complete.')
 }
