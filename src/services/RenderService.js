@@ -9,12 +9,11 @@
  * - bigCanvas is used as a higher-resolution render target and we typically don't read it,
  *   so we use a normal context for it.
  */
-import { hostWindow ,doc, setTimeoutHost} from '@/utils/host-window.js';
+import { hostWindow, doc, setTimeoutHost } from '@/utils/host-window.js';
+import { createCanvas, get2DContext } from '@/utils/canvas.js';
+
 export class RenderService {
     constructor({ drawCallbacks, thumbwidth = 250, thumbheight = 500, previewwidth = 500, previewheight = 1000, pollInterval = 500 } = {}) {
-        /* if (typeof drawCallbacks !== 'function') {
-            throw new Error('RenderService: drawCallback is required and must be a function');
-        } */
         this.drawCallbacks = drawCallbacks;
         this.thumbwidth = thumbwidth;
         this.thumbheight = thumbheight;
@@ -28,43 +27,22 @@ export class RenderService {
         // item -> { promise, resolve, reject, timer }
         // keep pending waiters for getThumbCanvas()
         this._pending = new WeakMap();
-
-        //this.previewItem = null;
     }
 
     _createThumbCanvas() {
-        const canvas = doc.createElement('canvas');
-        canvas.width = this.thumbwidth;
-        canvas.height = this.thumbheight;
-        return canvas;
+        return createCanvas(this.thumbwidth, this.thumbheight);
     }
 
     _createPreviewCanvas() {
-        const canvas = doc.createElement('canvas');
-        canvas.width = this.previewwidth;
-        canvas.height = this.previewheight;
-        return canvas;
+        return createCanvas(this.previewwidth, this.previewheight);
     }
-
-
 
     /**
      * Helper to obtain 2D context with graceful fallback.
      * For canvases where we will frequently call getImageData, request { willReadFrequently: true }.
      */
     _get2DContext(canvas, { willReadFrequently = false } = {}) {
-        if (!canvas) return null;
-        try {
-            // try with options (modern browsers)
-            return canvas.getContext('2d', willReadFrequently ? { willReadFrequently: true } : undefined);
-        } catch (e) {
-            // Some environments / older browsers may throw for unsupported options
-            try {
-                return canvas.getContext('2d');
-            } catch (e2) {
-                return null;
-            }
-        }
+        return get2DContext(canvas, willReadFrequently ? { willReadFrequently: true } : {});
     }
 
     /**

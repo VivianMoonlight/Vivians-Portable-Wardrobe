@@ -5,6 +5,7 @@
  */
 import { toRaw } from "vue";
 import { hostWindow, doc, setTimeoutHost } from '@/utils/host-window.js';
+import { createCanvas, get2DContext } from '@/utils/canvas.js';
 import { isEqual } from 'lodash-es';
 
 // Constants for character ID generation
@@ -79,26 +80,14 @@ export class OptimizedRenderService {
      * Create preview canvas
      */
     _createPreviewCanvas() {
-        const canvas = doc.createElement('canvas');
-        canvas.width = this.previewwidth;
-        canvas.height = this.previewheight;
-        return canvas;
+        return createCanvas(this.previewwidth, this.previewheight);
     }
 
     /**
      * Get 2D context helper
      */
     _get2DContext(canvas, { willReadFrequently = false } = {}) {
-        if (!canvas) return null;
-        try {
-            return canvas.getContext('2d', willReadFrequently ? { willReadFrequently: true } : undefined);
-        } catch (e) {
-            try {
-                return canvas.getContext('2d');
-            } catch (e2) {
-                return null;
-            }
-        }
+        return get2DContext(canvas, willReadFrequently ? { willReadFrequently: true } : {});
     }
 
     /**

@@ -1,5 +1,5 @@
 import { watch, onBeforeUnmount } from 'vue'
-import debounce from 'lodash.debounce'
+import { debounce } from '@/utils/performance.js'
 
 /**
  * Composable for auto-save functionality
@@ -20,7 +20,7 @@ export function useAutoSave(store, options = {}) {
     if (!store.autoSaveEnabled) {
       return
     }
-    
+
     try {
       // Use new autoSave method if available, fallback to legacy
       if (typeof store.autoSave === 'function') {
@@ -36,7 +36,7 @@ export function useAutoSave(store, options = {}) {
   }, debounceMs)
 
   // Watch specified store properties
-  const stopWatchers = watchKeys.map(key => 
+  const stopWatchers = watchKeys.map(key =>
     watch(() => store[key], () => {
       if (store.autoSaveEnabled) {
         debouncedSave()
@@ -47,6 +47,11 @@ export function useAutoSave(store, options = {}) {
   // Cleanup
   onBeforeUnmount(() => {
     stopWatchers.forEach(stop => stop())
+    // Note: Our debounce implementation doesn't have cancel() method
+    // For compatibility with existing code, we add a no-op cancel
+    if (!debouncedSave.cancel) {
+      debouncedSave.cancel = () => {}
+    }
     debouncedSave.cancel()
   })
 

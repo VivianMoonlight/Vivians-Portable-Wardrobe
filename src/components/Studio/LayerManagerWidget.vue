@@ -77,7 +77,7 @@ import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useStudioStore } from '@/stores/studioStore'
 import { isHiddenGroup } from '@/config/filterGroupConfig'
-import throttle from 'lodash.throttle'
+import { throttle } from '@/utils/performance.js'
 
 const { t } = useI18n()
 const store = useStudioStore()

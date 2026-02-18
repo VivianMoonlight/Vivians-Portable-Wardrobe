@@ -1,7 +1,7 @@
 /**
  * PaletteService (pure functions) - OPTIMIZED
  *
- * This module provides pure, non-mutating functions for palette handling. 
+ * This module provides pure, non-mutating functions for palette handling.
  * Functions accept the current paletteMap / counter / stacks / focusedPart
  * and return new values rather than modifying any store directly.
  *
@@ -12,51 +12,11 @@
  *  - Uses Map/Set for faster lookups
  *
  * Important:
- *  - Inputs are treated as immutable; returned objects are new copies. 
- *  - Equality for palette entries is implemented using JSON.stringify (best-effort). 
+ *  - Inputs are treated as immutable; returned objects are new copies.
+ *  - Equality for palette entries is implemented using JSON.stringify (best-effort).
  */
 
-// =============================================
-// Performance utilities
-// =============================================
-
-/**
- * Fast deep clone using structuredClone when available
- * Falls back to JSON.parse/stringify, then shallow clone
- */
-function deepClone(v) {
-  if (v === null || v === undefined) return v
-  if (typeof v !== 'object') return v
-
-  // Use structuredClone for modern browsers (much faster)
-  if (typeof structuredClone === 'function') {
-    try {
-      return structuredClone(v)
-    } catch (e) {
-      // Fall through to JSON fallback for non-cloneable objects
-    }
-  }
-
-  // JSON fallback
-  try {
-    return JSON.parse(JSON.stringify(v))
-  } catch (e) {
-    // Shallow fallback for non-serializable objects
-    if (Array.isArray(v)) return v.slice()
-    if (v && typeof v === 'object') return Object.assign({}, v)
-    return v
-  }
-}
-
-/**
- * Shallow clone - faster when deep clone isn't needed
- */
-function shallowClone(v) {
-  if (v === null || v === undefined) return v
-  if (Array.isArray(v)) return v.slice()
-  if (typeof v === 'object') return Object.assign({}, v)
-  return v
-}
+import { deepClone, shallowClone } from '@/utils/clone.js'
 
 /**
  * Fast string hash for caching comparisons

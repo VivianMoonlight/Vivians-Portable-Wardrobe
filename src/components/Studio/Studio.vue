@@ -544,7 +544,7 @@ onMounted(async () => {
   store.enableAutoSave()
 
   // Try to restore auto-saved data using new method
-  const result = {}//await store.autoRestoreSession()
+  // const result = await store.autoRestoreSession()
   if (result.restored) {
     restoreInfo.value = result
     showRestoreBanner.value = true

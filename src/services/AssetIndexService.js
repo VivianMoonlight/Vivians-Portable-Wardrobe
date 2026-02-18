@@ -1,8 +1,8 @@
 /**
  * AssetIndexService (pure functions) - OPTIMIZED
  *
- * Exposes pure helpers to build and query asset index data. 
- * 
+ * Exposes pure helpers to build and query asset index data.
+ *
  * PERFORMANCE OPTIMIZATIONS:
  *  - Pre-builds group name index for O(1) lookup
  *  - Caches asset lookups per part
@@ -11,29 +11,7 @@
  */
 
 import { AssetApi } from '@/utils/AssetApi'
-
-// =============================================
-// Performance utilities
-// =============================================
-
-function deepClone(v) {
-  if (v === null || v === undefined) return v
-  if (typeof v !== 'object') return v
-
-  if (typeof structuredClone === 'function') {
-    try {
-      return structuredClone(v)
-    } catch (e) { }
-  }
-
-  try {
-    return JSON.parse(JSON.stringify(v))
-  } catch (e) {
-    if (Array.isArray(v)) return v.slice()
-    if (v && typeof v === 'object') return Object.assign({}, v)
-    return v
-  }
-}
+import { deepClone } from '@/utils/clone.js'
 
 // =============================================
 // Cached index structures

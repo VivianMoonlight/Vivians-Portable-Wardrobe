@@ -14,6 +14,23 @@ import LZString from 'lz-string'
 
 import { hostWindow, setTimeoutHost, clearTimeoutHost, doc } from '@/utils/host-window.js'
 
+// Clone utilities
+import { fastClone, shallowClone } from '@/utils/clone.js'
+
+// Action modules
+import * as StackActions from '@/studio/stack-actions.js'
+import * as PaletteActions from '@/studio/palette-actions.js'
+import * as FocusActions from '@/studio/focus-actions.js'
+import * as RenderingActions from '@/studio/rendering-actions.js'
+import * as UndoActions from '@/studio/undo-redo-actions.js'
+import * as LayerActions from '@/studio/layer-actions.js'
+import * as SelectionActions from '@/studio/selection-actions.js'
+import * as PreviewActions from '@/studio/preview-actions.js'
+import * as PriorityActions from '@/studio/priority-actions.js'
+import * as AssetActions from '@/studio/asset-actions.js'
+import * as StorageActions from '@/studio/storage-actions.js'
+import * as SaveActions from '@/studio/save-actions.js'
+
 /*
   NOTE:
   - Palette functions: '@/services/PaletteService'
@@ -32,47 +49,6 @@ import UndoRedoManager from '@/utils/undo_redo'
 
 // Studio Storage Service
 import { StudioStorageService } from '@/services/StudioStorageService'
-
-// =============================================
-// Performance utilities
-// =============================================
-
-/**
- * Fast deep clone using structuredClone when available, fallback to JSON
- */
-function fastClone(v) {
-  if (v === null || v === undefined) return v
-  if (typeof v !== 'object') return v
-
-  // Use structuredClone for modern browsers (much faster than JSON for large objects)
-  if (typeof structuredClone === 'function') {
-    try {
-      return structuredClone(v)
-    } catch (e) {
-      // Fall through to JSON fallback
-    }
-  }
-
-  // JSON fallback
-  try {
-    return JSON.parse(JSON.stringify(v))
-  } catch (e) {
-    // Shallow fallback for non-serializable
-    if (Array.isArray(v)) return v.slice()
-    if (v && typeof v === 'object') return Object.assign({}, v)
-    return v
-  }
-}
-
-/**
- * Shallow clone for objects where we only need top-level copy
- */
-function shallowClone(v) {
-  if (v === null || v === undefined) return v
-  if (Array.isArray(v)) return v.slice()
-  if (typeof v === 'object') return Object.assign({}, v)
-  return v
-}
 
 /**
  * Simple hash for part content (used for caching layer entries)
@@ -276,6 +252,20 @@ export const useStudioStore = defineStore('studio', {
   },
 
   actions: {
+    // Action modules imported from separate files
+    StackActions,
+    PaletteActions,
+    FocusActions,
+    RenderingActions,
+    UndoActions,
+    LayerActions,
+    SelectionActions,
+    PreviewActions,
+    PriorityActions,
+    AssetActions,
+    StorageActions,
+    SaveActions,
+
     // -------------------------
     // Layer manager toggle
     // -------------------------

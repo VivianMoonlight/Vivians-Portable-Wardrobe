@@ -45,7 +45,7 @@ import { useI18n } from 'vue-i18n'
 import { useStudioStore } from '@/stores/studioStore'
 import { RenderApi } from '@/utils/RenderApi'
 import { hostWindow, doc } from '@/utils/host-window.js'
-import throttle from 'lodash.throttle'
+import { throttle } from '@/utils/performance.js'
 
 const { t } = useI18n()
 

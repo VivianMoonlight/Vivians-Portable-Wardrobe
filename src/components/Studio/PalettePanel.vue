@@ -111,7 +111,7 @@ import { ref, computed, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useStudioStore } from '@/stores/studioStore'
 import { Chrome } from '@ckpack/vue-color'
-import throttle from 'lodash.throttle'
+import { throttle } from '@/utils/performance.js'
 import { hostWindow, doc, setTimeoutHost } from '@/utils/host-window.js'
 import * as DialogService from '@/services/DialogService.js'
 

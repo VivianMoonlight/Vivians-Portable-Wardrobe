@@ -1,13 +1,13 @@
 /**
  * UndoRedoManager - Lightweight undo/redo manager with transaction support
- * 
+ *
  * Features:
  * - Snapshot-based history tracking (stores minimal necessary state)
  * - Transaction support for merging high-frequency operations
  * - Automatic deduplication to avoid redundant history entries
  * - Configurable capacity limits (default 100)
  * - Throttling support for continuous operations
- * 
+ *
  * Usage:
  * ```js
  * const manager = new UndoRedoManager({
@@ -15,49 +15,22 @@
  *   restoreState: (snapshot) => { store.stacks = snapshot.stacks; ... },
  *   maxHistory: 100
  * })
- * 
+ *
  * // Discrete operations
  * manager.pushSnapshot()
- * 
+ *
  * // Continuous operations
  * manager.startTransaction('color-drag')
  * // ... multiple changes during drag ...
  * manager.endTransaction()
- * 
+ *
  * // Undo/Redo
  * manager.undo()
  * manager.redo()
  * ```
  */
 
-/**
- * Fast deep clone using structuredClone when available, fallback to JSON
- * Note: This function is intentionally duplicated from studioStore.js for module independence.
- * The undo_redo module is designed to be reusable and framework-agnostic.
- */
-function fastClone(v) {
-  if (v === null || v === undefined) return v
-  if (typeof v !== 'object') return v
-
-  // Use structuredClone for modern browsers
-  if (typeof structuredClone === 'function') {
-    try {
-      return structuredClone(v)
-    } catch (e) {
-      // Fall through to JSON fallback
-    }
-  }
-
-  // JSON fallback
-  try {
-    return JSON.parse(JSON.stringify(v))
-  } catch (e) {
-    // Shallow fallback for non-serializable
-    if (Array.isArray(v)) return v.slice()
-    if (v && typeof v === 'object') return Object.assign({}, v)
-    return v
-  }
-}
+import { fastClone } from '@/utils/clone.js'
 
 /**
  * Compare two snapshots for equality

@@ -6,7 +6,7 @@
  * Exports:
  *   - buildLayerEntriesForPart(part, deps)
  *   - reconstructPartFromLayerEntries(entries, originalPart, extra)
- * 
+ *
  * PERFORMANCE OPTIMIZATIONS:
  *   - Uses structuredClone when available
  *   - Caches layer display names per asset
@@ -15,34 +15,7 @@
  */
 
 import { hostWindow, doc } from '@/utils/host-window';
-
-// =============================================
-// Performance utilities
-// =============================================
-
-/**
- * Fast deep clone using structuredClone when available
- */
-function deepClone(v) {
-  if (v === null || v === undefined) return v
-  if (typeof v !== 'object') return v
-
-  if (typeof structuredClone === 'function') {
-    try {
-      return structuredClone(v)
-    } catch (e) {
-      // Fall through
-    }
-  }
-
-  try {
-    return JSON.parse(JSON.stringify(v))
-  } catch (e) {
-    if (Array.isArray(v)) return v.slice()
-    if (v && typeof v === 'object') return Object.assign({}, v)
-    return v
-  }
-}
+import { deepClone } from '@/utils/clone.js'
 
 function looksLikeCssColor(s) {
   if (!s || typeof s !== 'string') return false

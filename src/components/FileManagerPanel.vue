@@ -937,6 +937,7 @@ function onWindowResize() {
     width: 12px;
     cursor: ew-resize;
     width: 16px;
+}
 
 /* corner handles (small visible squares) */
 .resize-handle.corner {

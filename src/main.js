@@ -39,20 +39,6 @@ async function injectVueApp() {
   // 防止重复 mount
   if (doc.getElementById('vue-tampermonkey-root')) return;
 
-  // 尝试调用外部环境的 ItemColorLoad（若可用）
-
-  /* hostWindow.ItemColorLoad(
-   hostWindow.Player,
-   hostWindow.Player.Appearance?.[0],
-   10000,
-   10000,
-   0,
-   0,
-   true
- );
- //setTimeout(() => hostWindow.ItemColorFireExit(false), 5000);  */
-
-
   await LayerTranslator.ensureItemColorLayerNamesLoaded();
   LayerTranslator.cleanUpItemColorLayerNamesLoad();
 
