@@ -10,9 +10,8 @@ import OptimizedRenderService from '@/services/OptimizedRenderService'
 import { RenderApi } from '@/utils/RenderApi'
 import { AssetApi } from '@/utils/AssetApi'
 import { toRaw } from 'vue'
-import LZString from 'lz-string'
 
-import { hostWindow, setTimeoutHost, clearTimeoutHost, doc } from '@/utils/host-window.js'
+import { setTimeoutHost, clearTimeoutHost } from '@/utils/host-window.js'
 
 // Clone utilities
 import { fastClone, shallowClone } from '@/utils/clone.js'
@@ -1327,31 +1326,20 @@ export const useStudioStore = defineStore('studio', {
     },
 
     importStacksFromJsonFile(file) {
-      return new Promise((resolve) => {
-        if (!file) return resolve(false)
-        const reader = new FileReader()
-        reader.onload = (ev) => {
-          try {
-            const parsed = JSON.parse(String(ev.target.result || ''))
-            let stacksPayload = null
-            if (Array.isArray(parsed)) stacksPayload = parsed
-            else if (parsed && Array.isArray(parsed.stacks)) stacksPayload = parsed.stacks
-            if (!stacksPayload) return resolve(false)
-            this.stacks = stacksPayload
-            if (parsed._partUidCounter && typeof parsed._partUidCounter === 'number') {
-              this._partUidCounter = parsed._partUidCounter
-            }
-            this.RebuildAllStacksLayerEntriesFromParts()
-            this._refreshAllLayerEntriesFromPalette()
-            this.refreshMergedAppearanceData()
-            resolve(true)
-          } catch (e) {
-            console.warn('[studioStore] importStacksFromJsonFile parse failed', e)
-            resolve(false)
-          }
+      return new Promise(async (resolve) => {
+        const result = await StorageActions.importStacksFromJsonFile(file)
+        if (!result.success) {
+          resolve(false)
+          return
         }
-        reader.onerror = () => resolve(false)
-        reader.readAsText(file)
+        this.stacks = result.stacks
+        if (result._partUidCounter) {
+          this._partUidCounter = result._partUidCounter
+        }
+        this.RebuildAllStacksLayerEntriesFromParts()
+        this._refreshAllLayerEntriesFromPalette()
+        this.refreshMergedAppearanceData()
+        resolve(true)
       })
     },
 
@@ -1360,31 +1348,20 @@ export const useStudioStore = defineStore('studio', {
     },
 
     importPaletteFromJsonFile(file) {
-      return new Promise((resolve) => {
-        if (!file) return resolve(false)
-        const reader = new FileReader()
-        reader.onload = (ev) => {
-          try {
-            const parsed = JSON.parse(String(ev.target.result || ''))
-            let newMap = null
-            if (parsed && parsed.paletteMap && typeof parsed.paletteMap === 'object') newMap = parsed.paletteMap
-            else if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) newMap = parsed
-            if (!newMap) return resolve(false)
-            this.paletteMap = newMap
-            this._paletteVersion++
-            if (parsed._paletteNextCounter && typeof parsed._paletteNextCounter === 'number') {
-              this._paletteNextCounter = parsed._paletteNextCounter
-            }
-            this._refreshAllLayerEntriesFromPalette()
-            this.refreshMergedAppearanceData()
-            resolve(true)
-          } catch (e) {
-            console.warn('[studioStore] importPaletteFromJsonFile parse failed', e)
-            resolve(false)
-          }
+      return new Promise(async (resolve) => {
+        const result = await StorageActions.importPaletteFromJsonFile(file)
+        if (!result.success) {
+          resolve(false)
+          return
         }
-        reader.onerror = () => resolve(false)
-        reader.readAsText(file)
+        this.paletteMap = result.paletteMap
+        this._paletteVersion++
+        if (result._paletteNextCounter) {
+          this._paletteNextCounter = result._paletteNextCounter
+        }
+        this._refreshAllLayerEntriesFromPalette()
+        this.refreshMergedAppearanceData()
+        resolve(true)
       })
     },
 
@@ -1393,46 +1370,35 @@ export const useStudioStore = defineStore('studio', {
     },
 
     importStudioSnapshotFromFile(file) {
-      return new Promise((resolve) => {
-        if (!file) return resolve(false)
-        const reader = new FileReader()
-        reader.onload = (ev) => {
-          try {
-            const parsed = JSON.parse(String(ev.target.result || ''))
-            if (!parsed) return resolve(false)
-            if (Array.isArray(parsed.stacks)) {
-              this.stacks = parsed.stacks
-            }
-            if (parsed.paletteMap && typeof parsed.paletteMap === 'object') {
-              this.paletteMap = parsed.paletteMap
-              this._paletteVersion++
-            }
-            if (parsed._paletteNextCounter && typeof parsed._paletteNextCounter === 'number') {
-              this._paletteNextCounter = parsed._paletteNextCounter
-            }
-            if (parsed._partUidCounter && typeof parsed._partUidCounter === 'number') {
-              this._partUidCounter = parsed._partUidCounter
-            }
-            this.RebuildAllStacksLayerEntriesFromParts()
-            this._refreshAllLayerEntriesFromPalette()
-            this.refreshMergedAppearanceData()
-            resolve(true)
-          } catch (e) {
-            console.warn('[studioStore] importStudioSnapshotFromFile parse failed', e)
-            resolve(false)
-          }
+      return new Promise(async (resolve) => {
+        const result = await StorageActions.importStudioSnapshotFromFile(file)
+        if (!result.success) {
+          resolve(false)
+          return
         }
-        reader.onerror = () => resolve(false)
-        reader.readAsText(file)
+        const { data } = result
+        if (data.stacks) {
+          this.stacks = data.stacks
+        }
+        if (data.paletteMap) {
+          this.paletteMap = data.paletteMap
+          this._paletteVersion++
+        }
+        if (data._paletteNextCounter) {
+          this._paletteNextCounter = data._paletteNextCounter
+        }
+        if (data._partUidCounter) {
+          this._partUidCounter = data._partUidCounter
+        }
+        this.RebuildAllStacksLayerEntriesFromParts()
+        this._refreshAllLayerEntriesFromPalette()
+        this.refreshMergedAppearanceData()
+        resolve(true)
       })
     },
 
     getMergedAppearanceForExport() {
-      try {
-        return fastClone(this.mergedAppearanceData || { data: [] })
-      } catch (e) {
-        try { return toRaw(this.mergedAppearanceData || { data: [] }) } catch (ee) { return { data: [] } }
-      }
+      return SaveActions.getMergedAppearanceForExport(this)
     },
 
     // -------------------------
@@ -1830,162 +1796,92 @@ export const useStudioStore = defineStore('studio', {
      * Enable auto-save with debounce
      */
     enableAutoSave() {
-      this.autoSaveEnabled = true
+      const result = SaveActions.enableAutoSave()
+      this.autoSaveEnabled = result.autoSaveEnabled
     },
 
     /**
      * Disable auto-save
      */
     disableAutoSave() {
-      this.autoSaveEnabled = false
+      const result = SaveActions.disableAutoSave()
+      this.autoSaveEnabled = result.autoSaveEnabled
     },
 
     /**
      * Save state to localStorage with compression
      */
     async saveToLocalStorage() {
-      try {
-        this.saveStatus = 'saving'
+      this.saveStatus = 'saving'
+      const result = await SaveActions.saveToLocalStorage(this)
 
-        const dataToSave = {
-          version: '1.0',
-          timestamp: Date.now(),
-          data: {
-            stacks: toRaw(this.stacks),
-            paletteMap: toRaw(this.paletteMap),
-            _paletteNextCounter: this._paletteNextCounter,
-            _partUidCounter: this._partUidCounter,
-            selectedIndex: this.selectedIndex
-          }
-        }
-
-        // Compress data (LZString imported at module level)
-        const jsonString = JSON.stringify(dataToSave)
-        const compressed = LZString.compress(jsonString)
-
-        // Save to localStorage
-        hostWindow.localStorage.setItem('studio-autosave', compressed)
-
-        this.lastSaveTime = Date.now()
-        this.saveStatus = 'saved'
-
-        // Clear any existing timeout and set new one
-        if (this._saveStatusTimeout) {
-          clearTimeoutHost(this._saveStatusTimeout)
-        }
-        this._saveStatusTimeout = setTimeoutHost(() => {
-          if (this.saveStatus === 'saved') {
-            this.saveStatus = 'idle'
-          }
-          this._saveStatusTimeout = null
-        }, 2000)
-
-        return true
-      } catch (error) {
-        console.error('[studioStore] saveToLocalStorage failed', error)
-        this.saveStatus = 'error'
-
-        // Clear any existing timeout and set new one
-        if (this._saveStatusTimeout) {
-          clearTimeoutHost(this._saveStatusTimeout)
-        }
-        this._saveStatusTimeout = setTimeoutHost(() => {
-          if (this.saveStatus === 'error') {
-            this.saveStatus = 'idle'
-          }
-          this._saveStatusTimeout = null
-        }, 2000)
-
-        // If quota exceeded, try to provide fallback
-        if (error.name === 'QuotaExceededError') {
-          console.warn('[studioStore] LocalStorage quota exceeded, falling back to download')
-          // Could trigger a download as fallback
-        }
-
-        return false
+      if (result.success) {
+        this.lastSaveTime = result.lastSaveTime
+        this.saveStatus = result.saveStatus
+      } else {
+        this.saveStatus = result.saveStatus || 'error'
       }
+
+      // Clear any existing timeout and set new one
+      if (this._saveStatusTimeout) {
+        clearTimeoutHost(this._saveStatusTimeout)
+      }
+      this._saveStatusTimeout = setTimeoutHost(() => {
+        if (this.saveStatus === 'saved' || this.saveStatus === 'error') {
+          this.saveStatus = 'idle'
+        }
+        this._saveStatusTimeout = null
+      }, 2000)
+
+      return result.success
     },
 
     /**
      * Restore state from localStorage
      */
     async restoreFromLocalStorage() {
-      try {
-        const compressed = hostWindow.localStorage.getItem('studio-autosave')
-        if (!compressed) {
-          return { restored: false, reason: 'no-data' }
-        }
+      const result = await SaveActions.restoreFromLocalStorage()
 
-        // Decompress data (LZString imported at module level)
-        const jsonString = LZString.decompress(compressed)
-        if (!jsonString) {
-          throw new Error('Failed to decompress data')
-        }
+      if (!result.restored) {
+        return result
+      }
 
-        const savedData = JSON.parse(jsonString)
+      // Restore data from result
+      const data = result.data
+      if (data.stacks) {
+        this.stacks = data.stacks
+      }
+      if (data.paletteMap) {
+        this.paletteMap = data.paletteMap
+      }
+      if (typeof data._paletteNextCounter === 'number') {
+        this._paletteNextCounter = data._paletteNextCounter
+      }
+      if (typeof data._partUidCounter === 'number') {
+        this._partUidCounter = data._partUidCounter
+      }
+      if (typeof data.selectedIndex === 'number') {
+        this.selectedIndex = data.selectedIndex
+      }
+      if (typeof data.focusedPartIndex === 'object' && data.focusedPartIndex !== null) {
+        this.focusedPartIndex = fastClone(data.focusedPartIndex)
+      }
 
-        // Check version compatibility
-        if (savedData.version !== '1.0') {
-          console.warn('[studioStore] Incompatible autosave version:', savedData.version)
-          return { restored: false, reason: 'incompatible-version' }
-        }
+      this._paletteVersion++
+      // Rebuild layer entries and refresh
+      this.RebuildAllStacksLayerEntriesFromParts()
+      this._refreshAllLayerEntriesFromPalette()
+      this.refreshMergedAppearanceData()
 
-        // Check if data is too old (>7 days)
-        const age = Date.now() - savedData.timestamp
-        const maxAge = 7 * 24 * 60 * 60 * 1000 // 7 days in milliseconds
-        if (age > maxAge) {
-          console.log('[studioStore] Autosave data is too old, ignoring')
-          return { restored: false, reason: 'too-old', age }
-        }
+      this.lastSaveTime = result.timestamp
+      if (this.focusedPartIndex.stackIndex !== null && this.focusedPartIndex.partIndex !== null) {
+        this.triggerFocusedPartUpdate()
+      }
 
-        // Restore data
-        const data = savedData.data
-        if (data.stacks) {
-          this.stacks = data.stacks
-        }
-        if (data.paletteMap) {
-          this.paletteMap = data.paletteMap
-        }
-        if (typeof data._paletteNextCounter === 'number') {
-          this._paletteNextCounter = data._paletteNextCounter
-        }
-        if (typeof data._partUidCounter === 'number') {
-          this._partUidCounter = data._partUidCounter
-        }
-        if (typeof data.selectedIndex === 'number') {
-          this.selectedIndex = data.selectedIndex
-        }
-        if (typeof data.focusedPartIndex === 'object' && data.focusedPartIndex !== null) {
-          this.focusedPartIndex = fastClone(data.focusedPartIndex)
-        }
-
-        this._paletteVersion++
-        // Rebuild layer entries and refresh
-        this.RebuildAllStacksLayerEntriesFromParts()
-        this._refreshAllLayerEntriesFromPalette()
-        this.refreshMergedAppearanceData()
-
-        this.lastSaveTime = savedData.timestamp
-        if (this.focusedPartIndex.stackIndex !== null && this.focusedPartIndex.partIndex !== null) {
-          this.triggerFocusedPartUpdate()
-        }
-
-        return {
-          restored: true,
-          timestamp: savedData.timestamp,
-          age
-        }
-      } catch (error) {
-        console.error('[studioStore] restoreFromLocalStorage failed', error)
-
-        // Clear corrupted data
-        try {
-          hostWindow.localStorage.removeItem('studio-autosave')
-        } catch (e) {
-          console.error('[studioStore] Failed to clear corrupted data', e)
-        }
-
-        return { restored: false, reason: 'error', error: error.message }
+      return {
+        restored: true,
+        timestamp: result.timestamp,
+        age: result.age
       }
     },
 
@@ -1993,47 +1889,19 @@ export const useStudioStore = defineStore('studio', {
      * Clear auto-saved data from localStorage
      */
     clearLocalStorage() {
-      try {
-        hostWindow.localStorage.removeItem('studio-autosave')
+      const result = SaveActions.clearLocalStorage()
+      if (result) {
         this.lastSaveTime = null
         this.saveStatus = 'idle'
-        return true
-      } catch (error) {
-        console.error('[studioStore] clearLocalStorage failed', error)
-        return false
       }
+      return result
     },
 
     /**
      * Get information about auto-saved data
      */
     async getAutoSaveInfo() {
-      try {
-        const compressed = hostWindow.localStorage.getItem('studio-autosave')
-        if (!compressed) {
-          return { exists: false }
-        }
-
-        // Decompress data (LZString imported at module level)
-        const jsonString = LZString.decompress(compressed)
-        if (!jsonString) {
-          return { exists: false, error: 'Failed to decompress' }
-        }
-
-        const savedData = JSON.parse(jsonString)
-
-        return {
-          exists: true,
-          timestamp: savedData.timestamp,
-          age: Date.now() - savedData.timestamp,
-          version: savedData.version,
-          size: compressed.length,
-          stackCount: savedData.data?.stacks?.length || 0
-        }
-      } catch (error) {
-        console.error('[studioStore] getAutoSaveInfo failed', error)
-        return { exists: false, error: error.message }
-      }
+      return SaveActions.getAutoSaveInfo()
     },
 
     // -------------------------
@@ -2046,152 +1914,102 @@ export const useStudioStore = defineStore('studio', {
     async autoSave() {
       if (!this.autoSaveEnabled) return
 
-      try {
-        this.saveStatus = 'saving'
-        const data = {
-          stacks: toRaw(this.stacks),
-          paletteMap: toRaw(this.paletteMap),
-          _paletteNextCounter: this._paletteNextCounter,
-          _partUidCounter: this._partUidCounter,
-          selectedIndex: this.selectedIndex
-        }
+      this.saveStatus = 'saving'
+      const result = SaveActions.autoSave(this)
 
-        const result = StudioStorageService.createSave('Quick Save', data, true)
-        if (result.success) {
-          this.lastSaveTime = Date.now()
-          this.saveStatus = 'saved'
-          // Auto-hide after 2s
-          if (this._saveStatusTimeout) {
-            clearTimeoutHost(this._saveStatusTimeout)
-          }
-          this._saveStatusTimeout = setTimeoutHost(() => {
-            if (this.saveStatus === 'saved') this.saveStatus = 'idle'
-            this._saveStatusTimeout = null
-          }, 2000)
-        } else {
-          this.saveStatus = 'error'
-          if (this._saveStatusTimeout) {
-            clearTimeoutHost(this._saveStatusTimeout)
-          }
-          this._saveStatusTimeout = setTimeoutHost(() => {
-            if (this.saveStatus === 'error') this.saveStatus = 'idle'
-            this._saveStatusTimeout = null
-          }, 3000)
-        }
-      } catch (e) {
-        console.error('Auto-save failed', e)
-        this.saveStatus = 'error'
-        if (this._saveStatusTimeout) {
-          clearTimeoutHost(this._saveStatusTimeout)
-        }
-        this._saveStatusTimeout = setTimeoutHost(() => {
-          if (this.saveStatus === 'error') this.saveStatus = 'idle'
-          this._saveStatusTimeout = null
-        }, 3000)
+      if (result.success) {
+        this.lastSaveTime = result.lastSaveTime
+        this.saveStatus = result.saveStatus
+      } else {
+        this.saveStatus = result.saveStatus || 'error'
       }
+
+      // Auto-hide status after delay
+      if (this._saveStatusTimeout) {
+        clearTimeoutHost(this._saveStatusTimeout)
+      }
+      this._saveStatusTimeout = setTimeoutHost(() => {
+        if (this.saveStatus === 'saved' || this.saveStatus === 'error') {
+          this.saveStatus = 'idle'
+        }
+        this._saveStatusTimeout = null
+      }, result.success ? 2000 : 3000)
     },
 
     /**
      * Manual save with custom name
      */
     async saveStudioSession(name) {
-      try {
-        this.saveStatus = 'saving'
-        const data = {
-          stacks: toRaw(this.stacks),
-          paletteMap: toRaw(this.paletteMap),
-          _paletteNextCounter: this._paletteNextCounter,
-          _partUidCounter: this._partUidCounter,
-          selectedIndex: this.selectedIndex
-        }
+      this.saveStatus = 'saving'
+      const result = SaveActions.saveStudioSession(this, name)
 
-        const result = StudioStorageService.createSave(name, data, false)
-        if (result.success) {
-          this.currentSaveId = result.id
-          this.lastSaveTime = Date.now()
-          this.saveStatus = 'saved'
-          if (this._saveStatusTimeout) {
-            clearTimeoutHost(this._saveStatusTimeout)
-          }
-          this._saveStatusTimeout = setTimeoutHost(() => {
-            if (this.saveStatus === 'saved') this.saveStatus = 'idle'
-            this._saveStatusTimeout = null
-          }, 2000)
-          return { success: true }
-        } else {
-          this.saveStatus = 'error'
-          if (this._saveStatusTimeout) {
-            clearTimeoutHost(this._saveStatusTimeout)
-          }
-          this._saveStatusTimeout = setTimeoutHost(() => {
-            if (this.saveStatus === 'error') this.saveStatus = 'idle'
-            this._saveStatusTimeout = null
-          }, 3000)
-          return { success: false, error: result.error }
-        }
-      } catch (e) {
-        this.saveStatus = 'error'
-        if (this._saveStatusTimeout) {
-          clearTimeoutHost(this._saveStatusTimeout)
-        }
-        this._saveStatusTimeout = setTimeoutHost(() => {
-          if (this.saveStatus === 'error') this.saveStatus = 'idle'
-          this._saveStatusTimeout = null
-        }, 3000)
-        return { success: false, error: e.message }
+      if (result.success) {
+        this.currentSaveId = result.id
+        this.lastSaveTime = result.lastSaveTime
+        this.saveStatus = result.saveStatus
+      } else {
+        this.saveStatus = result.saveStatus || 'error'
       }
+
+      // Auto-hide status after delay
+      if (this._saveStatusTimeout) {
+        clearTimeoutHost(this._saveStatusTimeout)
+      }
+      this._saveStatusTimeout = setTimeoutHost(() => {
+        if (this.saveStatus === 'saved' || this.saveStatus === 'error') {
+          this.saveStatus = 'idle'
+        }
+        this._saveStatusTimeout = null
+      }, result.success ? 2000 : 3000)
+
+      return { success: result.success, error: result.error }
     },
 
     /**
      * Load a save by ID
      */
     async loadStudioSession(id) {
-      try {
-        const result = StudioStorageService.loadSave(id)
-        if (result.success) {
-          const { data } = result
-          this.stacks = data.stacks || []
-          this.paletteMap = data.paletteMap || {}
-          this._paletteNextCounter = data._paletteNextCounter || 0
-          this._partUidCounter = data._partUidCounter || 0
-          this.selectedIndex = data.selectedIndex ?? -1
-          this.currentSaveId = id
+      const result = SaveActions.loadStudioSession(id)
 
-          // Increment palette version to invalidate caches
-          this._paletteVersion++
-
-          // Rebuild layer entries and refresh
-          this.RebuildAllStacksLayerEntriesFromParts()
-          this._refreshAllLayerEntriesFromPalette()
-          this.refreshMergedAppearanceData()
-
-          return { success: true }
-        } else {
-          return { success: false, error: result.error }
-        }
-      } catch (e) {
-        console.error('Load session failed', e)
-        return { success: false, error: e.message }
+      if (!result.success) {
+        return { success: false, error: result.error }
       }
+
+      const { data } = result
+      this.stacks = data.stacks || []
+      this.paletteMap = data.paletteMap || {}
+      this._paletteNextCounter = data._paletteNextCounter || 0
+      this._partUidCounter = data._partUidCounter || 0
+      this.selectedIndex = data.selectedIndex ?? -1
+      this.currentSaveId = id
+
+      // Increment palette version to invalidate caches
+      this._paletteVersion++
+
+      // Rebuild layer entries and refresh
+      this.RebuildAllStacksLayerEntriesFromParts()
+      this._refreshAllLayerEntriesFromPalette()
+      this.refreshMergedAppearanceData()
+
+      return { success: true }
     },
 
     /**
      * Auto-restore from quick save on studio open
      */
     async autoRestoreSession() {
-      const autoSave = StudioStorageService.getAutoSave()
-      if (!autoSave) return { restored: false }
-
-      // Check if save is recent (< 7 days)
-      const ageMs = Date.now() - autoSave.timestamp
-      const ageDays = ageMs / (1000 * 60 * 60 * 24)
-      if (ageDays > 7) return { restored: false, reason: 'too-old' }
-
-      const result = await this.loadStudioSession(autoSave.id)
-      if (result.success) {
-        return { restored: true, save: autoSave }
+      const result = SaveActions.autoRestoreSession()
+      if (!result.restored) {
+        return result
       }
-      return { restored: false }
+
+      // Load the auto-save
+      return this.loadStudioSession(result.save.id).then(loadResult => {
+        if (loadResult.success) {
+          return { restored: true, save: result.save }
+        }
+        return { restored: false }
+      })
     }
   }
 })

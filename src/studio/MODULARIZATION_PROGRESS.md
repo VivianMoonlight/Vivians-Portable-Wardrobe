@@ -149,27 +149,27 @@
 | persistPaletteToLocalStorage | ✅ | ✅ | ✅ 完成 |
 | loadPaletteFromLocalStorage | ✅ | ✅ | ✅ 完成 |
 | exportStacksToJsonFile | ✅ | ✅ | ✅ 完成 |
-| importStacksFromJsonFile | ⏳ | ❌ | ⏳ 待开始 |
+| importStacksFromJsonFile | ✅ | ✅ | ✅ 完成 |
 | exportPaletteToJsonFile | ✅ | ✅ | ✅ 完成 |
-| importPaletteFromJsonFile | ⏳ | ❌ | ⏳ 待开始 |
+| importPaletteFromJsonFile | ✅ | ✅ | ✅ 完成 |
 | exportStudioSnapshot | ✅ | ✅ | ✅ 完成 |
-| importStudioSnapshotFromFile | ⏳ | ❌ | ⏳ 待开始 |
-| getMergedAppearanceForExport | ✅ | ⏳ | ⏳ 待开始 |
+| importStudioSnapshotFromFile | ✅ | ✅ | ✅ 完成 |
+| getMergedAppearanceForExport | ✅ | ✅ | ✅ 完成 |
 
 ### 12. Save Actions - 保存操作
 
 | 函数 | 模块实现 | Store 使用 | 状态 |
 |------|----------|------------|------|
-| saveToLocalStorage | ⏳ | ❌ | ⏳ 待开始 |
-| restoreFromLocalStorage | ⏳ | ❌ | ⏳ 待开始 |
-| getAutoSaveInfo | ⏳ | ❌ | ⏳ 待开始 |
-| autoSave | ✅ | ⏳ | ⏳ 待开始 |
-| saveStudioSession | ✅ | ⏳ | ⏳ 待开始 |
-| loadStudioSession | ✅ | ⏳ | ⏳ 待开始 |
-| autoRestoreSession | ✅ | ⏳ | ⏳ 待开始 |
-| enableAutoSave | ✅ | ⏳ | ⏳ 待开始 |
-| disableAutoSave | ✅ | ⏳ | ⏳ 待开始 |
-| clearLocalStorage | ✅ | ⏳ | ⏳ 待开始 |
+| saveToLocalStorage | ✅ | ✅ | ✅ 完成 |
+| restoreFromLocalStorage | ✅ | ✅ | ✅ 完成 |
+| getAutoSaveInfo | ✅ | ✅ | ✅ 完成 |
+| autoSave | ✅ | ✅ | ✅ 完成 |
+| saveStudioSession | ✅ | ✅ | ✅ 完成 |
+| loadStudioSession | ✅ | ✅ | ✅ 完成 |
+| autoRestoreSession | ✅ | ✅ | ✅ 完成 |
+| enableAutoSave | ✅ | ✅ | ✅ 完成 |
+| disableAutoSave | ✅ | ✅ | ✅ 完成 |
+| clearLocalStorage | ✅ | ✅ | ✅ 完成 |
 
 ---
 
@@ -179,8 +179,8 @@
 |------|------|
 | 总函数数 | ~120 |
 | 模块已实现 | ~100 |
-| Store 已集成 | ~50 |
-| 完成度 | ~42% |
+| Store 已集成 | ~90 |
+| 完成度 | ~75% |
 
 ---
 
@@ -203,7 +203,14 @@
   - Storage Actions: 7/11 (64%)
   - Asset Actions: 1/8 (12%)
 
+- 2026-02-20: 完成 Storage Actions 和 Save Actions 集成
+  - Storage Actions: 11/11 (100%)
+  - Save Actions: 10/10 (100%)
+  - Selection Actions: 13/13 (100%)
+  - Priority Actions: 4/4 (100%)
+
 ## 修复的问题
 
 1. ✅ 修复 `applyBatchEdit` 语法错误 (括号不匹配)
 2. ✅ 修复 `restoreFromLocalStorage` 中缺少 `this.` 前缀的错误
+3. ✅ 移除未使用的 `LZString` 和 `hostWindow` 导入
