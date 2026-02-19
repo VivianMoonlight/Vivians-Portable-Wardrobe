@@ -239,15 +239,7 @@ export const useStudioStore = defineStore('studio', {
 
     // Check if move tool can be used (requires focused part)
     canUseMoveTool(state) {
-      const idx = state.focusedPartIndex
-      if (idx.stackIndex === null || idx.partIndex === null) return false
-      if (idx.stackIndex < 0 || idx.stackIndex >= state.stacks.length) return false
-
-      const stack = state.stacks[idx.stackIndex]
-      if (!stack || !Array.isArray(stack.data)) return false
-      if (idx.partIndex < 0 || idx.partIndex >= stack.data.length) return false
-
-      return true
+      return PreviewActions.canUseMoveTool(state)
     }
   },
 
@@ -271,7 +263,8 @@ export const useStudioStore = defineStore('studio', {
     // -------------------------
 
     toggleLayerManager(val) {
-      this.layerManagerActive = typeof val === 'boolean' ? val : !this.layerManagerActive
+      const result = FocusActions.toggleLayerManagerState(this, val)
+      this.layerManagerActive = result.layerManagerActive
     },
 
     // -------------------------
@@ -283,23 +276,16 @@ export const useStudioStore = defineStore('studio', {
      * @param {string} tool - 'view' or 'move'
      */
     setPreviewTool(tool) {
-      if (tool === 'view' || tool === 'move') {
-        this.previewTool = tool
-      }
+      const result = PreviewActions.setPreviewTool(tool)
+      this.previewTool = result.previewTool
     },
 
     /**
      * Toggle between view and move modes
      */
     togglePreviewTool() {
-      if (this.previewTool === 'view') {
-        // Only switch to move if available
-        if (this.canUseMoveTool) {
-          this.previewTool = 'move'
-        }
-      } else {
-        this.previewTool = 'view'
-      }
+      const result = PreviewActions.togglePreviewTool(this)
+      this.previewTool = result.previewTool
     },
 
     // -------------------------
@@ -330,18 +316,15 @@ export const useStudioStore = defineStore('studio', {
     // replace mode helpers
     // -------------------------
     setReplaceTarget(item, key, isEmpty = false) {
-      this.replaceTarget = {
-        active: true,
-        key: key || null,
-        item: item ? (typeof item === 'object' ? fastClone(item) : item) : null,
-        isEmpty: !!isEmpty
-      }
+      const result = FocusActions.setReplaceTargetState(this, item, key, isEmpty)
+      this.replaceTarget = result.replaceTarget
       this.focusedPartIndex = { stackIndex: null, partIndex: null }
       this.clearFocusedProperty()
     },
 
     clearReplaceTarget() {
-      this.replaceTarget = { active: false, key: null, item: null, isEmpty: false }
+      const result = FocusActions.clearReplaceTargetState()
+      this.replaceTarget = result.replaceTarget
     },
 
     // -------------------------
@@ -445,194 +428,103 @@ export const useStudioStore = defineStore('studio', {
     // stack manipulation
     // -------------------------
     async addElement(el) {
-      let copy
-      if (!this.assetIndex || Object.keys(this.assetIndex).length === 0 || !this.assetGroupsRaw || this.assetGroupsRaw.length === 0) {
+      if (!this.assetIndex || Object.keys(this.assetIndex).length === 0 ||
+          !this.assetGroupsRaw || this.assetGroupsRaw.length === 0) {
         await this.loadAssetData()
       }
 
-      copy = fastClone(el)
+      const result = StackActions.addElementToStacks(this, el, {
+        fastClone: this.fastClone,
+        ensurePartUid: this.ensurePartUid.bind(this),
+        _buildLayerEntriesWithCache: this._buildLayerEntriesWithCache.bind(this),
+        _updateLayerEntriesColorCss: this._updateLayerEntriesColorCss.bind(this),
+        refreshMergedAppearanceData: this.refreshMergedAppearanceData.bind(this),
+        pushHistorySnapshot: this.pushHistorySnapshot.bind(this)
+      })
 
-      try {
-        const res = Palette.applyPaletteToElement(copy, this.paletteMap, this._paletteNextCounter)
-        copy = res.element
-        this.paletteMap = res.paletteMap
-        this._paletteNextCounter = res.paletteCounter
-        this._paletteVersion++
-      } catch (e) {
-        console.warn('[studioStore] applyPaletteToElement failed', e)
+      if (result.element !== null) {
+        // Element is already in the returned stacks, just assign
+        this.stacks = result.stacks
+        this.selectedIndex = result.selectedIndex
+        this.paletteMap = result.paletteMap
+        this._paletteNextCounter = result._paletteNextCounter
+        this._paletteVersion = result._paletteVersion
+        this.refreshMergedAppearanceData()
+        this.pushHistorySnapshot()
       }
-
-      // Attach LayerEntries for each part
-      try {
-        if (Array.isArray(copy.data)) {
-          copy.data = copy.data.map((p) => {
-            try {
-              if (!p) return p
-              try { this.ensurePartUid(p) } catch (e) { console.warn(e) }
-
-              if (!Array.isArray(p.layerEntries) || p.layerEntries.length === 0) {
-                const entries = this._buildLayerEntriesWithCache(p) || []
-                p.layerEntries = fastClone(entries)
-              } else {
-                // Update colorCss fields
-                this._updateLayerEntriesColorCss(p.layerEntries)
-              }
-            } catch (e) { /* ignore per-item errors */ }
-            return p
-          })
-        }
-      } catch (e) { console.warn('[studioStore] attach layerEntries failed', e) }
-
-      try {
-        copy.PrioritiesMapping = {}
-        copy.PrioritiesUngrouped = []
-      } catch (e) { console.warn(e) }
-
-      this.stacks.push(copy)
-      this.selectedIndex = this.stacks.length - 1
-      this.refreshMergedAppearanceData()
-
-      // Push to history (discrete operation)
-      this.pushHistorySnapshot()
-
-      return copy
     },
 
     removeElement(idx) {
-      if (idx < 0 || idx >= this.stacks.length) return
+      const result = StackActions.removeElementFromStacks(this, idx, {
+        renderer: this.renderer,
+        stacks: this.stacks,
+        selectedIndex: this.selectedIndex,
+        focusedPartIndex: this.focusedPartIndex,
+        pushHistorySnapshot: this.pushHistorySnapshot.bind(this)
+      })
 
-      // Push to history before removing (discrete operation)
-      this.pushHistorySnapshot()
-
-      try {
-        const item = this.stacks[idx]
-        if (item) this.renderer.removeCanvas({ data: item.data, type: 'outfit' })
-      } catch (e) { console.warn(e) }
-
-      this.stacks.splice(idx, 1)
-      if (this.selectedIndex === idx) {
-        if (this.stacks.length === 0) this.selectedIndex = -1
-        else this.selectedIndex = Math.max(0, Math.min(this.selectedIndex, this.stacks.length - 1))
-      } else if (this.selectedIndex > idx) {
-        this.selectedIndex = Math.max(-1, this.selectedIndex - 1)
-      }
-
-      if (this.focusedPartIndex.stackIndex === idx) {
-        this.focusedPartIndex = { stackIndex: null, partIndex: null }
-      } else if (this.focusedPartIndex.stackIndex > idx) {
-        this.focusedPartIndex.stackIndex--
-      }
-
+      this.stacks = result.stacks
+      this.selectedIndex = result.selectedIndex
+      this.focusedPartIndex = result.focusedPartIndex
       this._scheduleRefresh()
     },
 
     moveElement(fromIdx, toIdx) {
-      if (fromIdx === toIdx) return
-      if (fromIdx < 0 || fromIdx >= this.stacks.length) return
-      if (toIdx < 0 || toIdx >= this.stacks.length) return
-      const [item] = this.stacks.splice(fromIdx, 1)
-      this.stacks.splice(toIdx, 0, item)
-      if (this.selectedIndex === fromIdx) {
-        this.selectedIndex = toIdx
-      } else if (fromIdx < this.selectedIndex && toIdx >= this.selectedIndex) {
-        this.selectedIndex--
-      } else if (fromIdx > this.selectedIndex && toIdx <= this.selectedIndex) {
-        this.selectedIndex++
-      }
+      const result = StackActions.moveElementInStacks(this, fromIdx, toIdx, {
+        stacks: this.stacks,
+        selectedIndex: this.selectedIndex,
+        focusedPartIndex: this.focusedPartIndex,
+        _scheduleRefresh: this._scheduleRefresh.bind(this)
+      })
 
-      if (this.focusedPartIndex.stackIndex === fromIdx) {
-        this.focusedPartIndex.stackIndex = toIdx
-      } else if (fromIdx < this.focusedPartIndex.stackIndex && toIdx >= this.focusedPartIndex.stackIndex) {
-        this.focusedPartIndex.stackIndex--
-      } else if (fromIdx > this.focusedPartIndex.stackIndex && toIdx <= this.focusedPartIndex.stackIndex) {
-        this.focusedPartIndex.stackIndex++
-      }
-
+      this.stacks = result.stacks
+      this.selectedIndex = result.selectedIndex
+      this.focusedPartIndex = result.focusedPartIndex
       this._scheduleRefresh()
     },
 
     select(idx) {
-      if (idx === -1) {
-        this.selectedIndex = -1
-        return
+      const result = StackActions.selectElementInStacks(this, idx, {
+        clearFocusedProperty: this.clearFocusedProperty.bind(this),
+        focusedPartIndex: this.focusedPartIndex
+      })
+
+      this.selectedIndex = result.selectedIndex
+      if (result.focusedPartIndex) {
+        this.focusedPartIndex = result.focusedPartIndex
       }
-      if (idx < 0 || idx >= this.stacks.length) return
-      this.selectedIndex = idx
-      this.focusedPartIndex = { stackIndex: null, partIndex: null }
-      this.clearFocusedProperty()
+      if (result.clearFocusedProperty) {
+        this.clearFocusedProperty()
+      }
     },
 
     clear() {
-      try {
-        this.stacks.forEach(it => { this.renderer.removeCanvas({ data: it.data, type: 'outfit' }) })
-      } catch (e) { console.warn(e) }
-      this.stacks = []
-      this.selectedIndex = -1
-      this.mergedAppearanceData = []
-      this.focusedPartIndex = { stackIndex: null, partIndex: null }
-      this.clearFocusedProperty()
+      const result = StackActions.clearAllStacks(this, {
+        renderer: this.renderer,
+        clearFocusedProperty: this.clearFocusedProperty.bind(this),
+        focusedPartIndex: this.focusedPartIndex
+      })
+
+      this.stacks = result.stacks
+      this.selectedIndex = result.selectedIndex
+      this.mergedAppearanceData = result.mergedAppearanceData
+      this.focusedPartIndex = result.focusedPartIndex
+      if (result.clearFocusedProperty) {
+        this.clearFocusedProperty()
+      }
     },
 
     focusPart(part) {
-      if (!part) {
-        this.focusedPartIndex = { stackIndex: null, partIndex: null }
-        // Clear selections when losing focus
+      const result = FocusActions.focusOnPart(this, part, {
+        focusedPartIndex: this.focusedPartIndex,
+        findPartByUid: this.findPartByUid.bind(this),
+        ensurePartUid: this.ensurePartUid.bind(this),
+        clearLayerSelection: this.clearLayerSelection.bind(this)
+      })
+
+      this.focusedPartIndex = result.focusedPartIndex
+      if (result.clearLayerSelection) {
         this.clearLayerSelection()
-        return
-      }
-
-      const uid = this.ensurePartUid(part)
-      const found = this.findPartByUid(uid)
-
-      if (found) {
-        // Check if focusing a different part
-        const isDifferentPart = this.focusedPartIndex.stackIndex !== found.stackIndex ||
-          this.focusedPartIndex.partIndex !== found.partIndex
-
-        this.focusedPartIndex = {
-          stackIndex: found.stackIndex,
-          partIndex: found.partIndex
-        }
-
-        // Clear selections when switching parts
-        if (isDifferentPart) {
-          this.clearLayerSelection()
-        }
-      } else {
-        let foundByStructure = false
-        try {
-          const partJson = JSON.stringify(part)
-          for (let si = 0; si < this.stacks.length; si++) {
-            const stack = this.stacks[si]
-            if (!stack || !Array.isArray(stack.data)) continue
-            for (let pi = 0; pi < stack.data.length; pi++) {
-              try {
-                if (JSON.stringify(stack.data[pi]) === partJson) {
-                  // Check if focusing a different part
-                  const isDifferentPart = this.focusedPartIndex.stackIndex !== si ||
-                    this.focusedPartIndex.partIndex !== pi
-
-                  this.focusedPartIndex = { stackIndex: si, partIndex: pi }
-                  foundByStructure = true
-
-                  // Clear selections when switching parts
-                  if (isDifferentPart) {
-                    this.clearLayerSelection()
-                  }
-                  break
-                }
-              } catch (e) { continue }
-            }
-            if (foundByStructure) break
-          }
-        } catch (e) { console.warn(e) }
-
-        if (!foundByStructure) {
-          console.warn('[studioStore] focusPart: part not found in stacks')
-          this.focusedPartIndex = { stackIndex: null, partIndex: null }
-          this.clearLayerSelection()
-          return
-        }
       }
 
       this.clearReplaceTarget()
@@ -640,9 +532,19 @@ export const useStudioStore = defineStore('studio', {
     },
 
     clearFocus() {
-      this.focusedPartIndex = { stackIndex: null, partIndex: null }
-      this.clearFocusedProperty()
-      this.clearLayerSelection()
+      const result = FocusActions.clearFocusState({
+        clearFocusedProperty: this.clearFocusedProperty.bind(this),
+        focusedPartIndex: this.focusedPartIndex,
+        clearLayerSelection: this.clearLayerSelection.bind(this)
+      })
+
+      this.focusedPartIndex = result.focusedPartIndex
+      if (result.clearFocusedProperty) {
+        this.clearFocusedProperty()
+      }
+      if (result.clearLayerSelection) {
+        this.clearLayerSelection()
+      }
     },
 
     // -------------------------
@@ -779,117 +681,77 @@ export const useStudioStore = defineStore('studio', {
     // apply/modify palette targets (OPTIMIZED)
     // -------------------------
     applyColorToActivePaletteTargets(newColor) {
-      if (!this.paletteModeActive) return false
-      const targets = Array.isArray(this.activePaletteTargets) ? this.activePaletteTargets.slice() : []
-      if (!targets.length) return false
-
-      let changed = false
-
-      for (const t of targets) {
-        try {
-          let found = null
-          if (t.uid) {
-            const res = this.findPartByUid(t.uid)
-            found = res?.partRef || null
-          }
-          if (!found && (typeof t.stackIndex === 'number' && typeof t.partIndex === 'number')) {
-            const s = this.stacks[t.stackIndex]
-            if (s && Array.isArray(s.data) && s.data[t.partIndex]) {
-              found = s.data[t.partIndex]
-            }
-          }
-
-          const layerIdx = t.layerIndex
-          if (!found.layerEntries) {
-            found.layerEntries = this._buildLayerEntriesWithCache(found) || []
-          }
-
-          if (found && Array.isArray(found.layerEntries) && layerIdx !== null && layerIdx !== undefined && layerIdx >= 0) {
-            const entry = found.layerEntries.find((le, i) => {
-              if (!le || !le.isColorable) return false
-              return found.layerEntries.slice(0, i).filter(e => e?.isColorable).length === layerIdx
-            })
-            if (entry) {
-              try { entry.colorText = newColor === undefined || newColor === null ? '' : String(newColor) } catch (e) { entry.colorText = newColor }
-
-              try {
-                const resolvedCss = this._resolveColorCssFromText(entry.colorText)
-                entry.colorCss = resolvedCss
-              } catch (e) { entry.colorCss = null }
-              changed = true
-            }
-          }
-        } catch (e) {
-          console.warn(e)
-        }
-      }
+      const changed = PaletteActions.applyColorToTargets(this, newColor, {
+        paletteModeActive: this.paletteModeActive,
+        activePaletteTargets: this.activePaletteTargets,
+        stacks: this.stacks,
+        findPartByUid: this.findPartByUid.bind(this),
+        _buildLayerEntriesWithCache: this._buildLayerEntriesWithCache.bind(this),
+        _scheduleLayerRefresh: this._scheduleLayerRefresh.bind(this),
+        _schedulePartUpdate: this._schedulePartUpdate.bind(this),
+        triggerFocusedPartUpdate: this.triggerFocusedPartUpdate.bind(this),
+        pushHistorySnapshotThrottled: this.pushHistorySnapshotThrottled.bind(this),
+        _resolveColorCssFromText: this._resolveColorCssFromText.bind(this)
+      })
 
       if (changed) {
-        // Use scheduled refresh instead of immediate
-        this._scheduleLayerRefresh()
-        this._schedulePartUpdate()
         this._scheduleRefresh()
-        this.triggerFocusedPartUpdate()
-
-        // Push to history (throttled to avoid excessive entries during continuous updates)
-        this.pushHistorySnapshotThrottled()
       }
-
       return changed
     },
 
     applyTagToActivePaletteTargets(tag) {
-      return this.applyColorToActivePaletteTargets(tag)
+      return PaletteActions.applyTagToTargets(this, tag, {
+        paletteModeActive: this.paletteModeActive,
+        activePaletteTargets: this.activePaletteTargets,
+        stacks: this.stacks,
+        findPartByUid: this.findPartByUid.bind(this),
+        _buildLayerEntriesWithCache: this._buildLayerEntriesWithCache.bind(this),
+        _scheduleLayerRefresh: this._scheduleLayerRefresh.bind(this),
+        _schedulePartUpdate: this._schedulePartUpdate.bind(this),
+        triggerFocusedPartUpdate: this.triggerFocusedPartUpdate.bind(this),
+        pushHistorySnapshotThrottled: this.pushHistorySnapshotThrottled.bind(this),
+        _resolveColorCssFromText: this._resolveColorCssFromText.bind(this)
+      })
     },
 
     deletePaletteTag(tag) {
-      this.UpdateAllStacksPartFromLayerEntries()
+      const result = PaletteActions.deleteTagFromPalette(this, tag, {
+        paletteMap: this.paletteMap,
+        focusedPart: this.focusedPart,
+        stacks: this.stacks,
+        findPartByUid: this.findPartByUid.bind(this),
+        _updateFocusedPartInPlace: this._updateFocusedPartInPlace.bind(this),
+        _scheduleLayerRefresh: this._scheduleLayerRefresh.bind(this),
+        RebuildAllStacksLayerEntriesFromParts: this.RebuildAllStacksLayerEntriesFromParts.bind(this),
+        _scheduleRefresh: this._scheduleRefresh.bind(this),
+        pushHistorySnapshot: this.pushHistorySnapshot.bind(this)
+      })
 
-      if (!tag || !(tag in (this.paletteMap || {}))) return false
-
-      const fp = this.focusedPart
-      const res = Palette.deletePaletteTagFromStacks(this.stacks, this.paletteMap, fp, tag)
-      this.stacks = res.stacks
-
-      if (fp && res.focusedPart) {
-        this._updateFocusedPartInPlace(res.focusedPart)
-      }
-
-      this.paletteMap = res.paletteMap
+      if (result.stacks) this.stacks = result.stacks
+      if (result.paletteMap) this.paletteMap = result.paletteMap
       this._paletteVersion++
 
-      if (res.removed) {
+      if (result._scheduleLayerRefresh) {
         this._scheduleLayerRefresh()
         this.RebuildAllStacksLayerEntriesFromParts()
         this._scheduleRefresh()
-
-        // Push to history (discrete operation)
         this.pushHistorySnapshot()
       }
-      return res.removed
+      return result._scheduleLayerRefresh
     },
 
     clearPalette() {
-      // Push to history before clearing (discrete operation)
-      this.pushHistorySnapshot()
+      const result = PaletteActions.clearPalette(this, {
+        paletteMap: this.paletteMap,
+        _paletteNextCounter: this._paletteNextCounter,
+        _paletteVersion: this._paletteVersion,
+        pushHistorySnapshot: this.pushHistorySnapshot.bind(this)
+      })
 
-      const tags = Object.keys(this.paletteMap || {})
-      let s = this.stacks
-      let fp = this.focusedPart
-      let pm = this.paletteMap
-      for (const tag of tags) {
-        const res = Palette.deletePaletteTagFromStacks(s, pm, fp, tag)
-        s = res.stacks
-        fp = res.focusedPart
-        pm = res.paletteMap
-      }
-      this.stacks = s
-      if (fp) {
-        this._updateFocusedPartInPlace(fp)
-      }
-      this.paletteMap = {}
-      this._paletteNextCounter = 1
-      this._paletteVersion++
+      this.paletteMap = result.paletteMap
+      this._paletteNextCounter = result._paletteNextCounter
+      this._paletteVersion = result._paletteVersion
 
       // Rebuild all layer entries
       try {
@@ -915,15 +777,24 @@ export const useStudioStore = defineStore('studio', {
     },
 
     updatePaletteTag(tag, newValue) {
-      if (!tag || !(tag in (this.paletteMap || {}))) return false
-      this.paletteMap = Palette.updatePaletteTag(this.paletteMap, tag, newValue)
-      this._paletteVersion++
-      this._scheduleLayerRefresh()
-      this._scheduleRefresh()
+      const result = PaletteActions.updatePaletteTag(this, tag, newValue, {
+        paletteMap: this.paletteMap,
+        stacks: this.stacks,
+        focusedPart: this.focusedPart,
+        findPartByUid: this.findPartByUid.bind(this),
+        _buildLayerEntriesWithCache: this._buildLayerEntriesWithCache.bind(this),
+        _scheduleLayerRefresh: this._scheduleLayerRefresh.bind(this),
+        _schedulePartUpdate: this._schedulePartUpdate.bind(this),
+        triggerFocusedPartUpdate: this.triggerFocusedPartUpdate.bind(this),
+        pushHistorySnapshotThrottled: this.pushHistorySnapshotThrottled.bind(this)
+      })
 
-      // Push to history with throttling (can be called multiple times during tag editing)
-      this.pushHistorySnapshotThrottled()
-
+      this.paletteMap = result.paletteMap
+      if (result._scheduleLayerRefresh) {
+        this._scheduleLayerRefresh()
+        this._scheduleRefresh()
+        this.pushHistorySnapshotThrottled()
+      }
       return true
     },
 
@@ -931,37 +802,25 @@ export const useStudioStore = defineStore('studio', {
     // Saved colors management
     // -------------------------
     addSavedColor(value) {
-      try {
-        const v = (value === undefined || value === null) ? '' : fastClone(value)
-        this.savedColors = (this.savedColors || []).concat([v])
-        return true
-      } catch (e) {
-        this.savedColors = (this.savedColors || []).concat([value])
-        return true
-      }
+      const result = PaletteActions.addSavedColor(this, value)
+      this.savedColors = result.savedColors
+      this._paletteVersion = result._paletteVersion
+      return true
     },
 
     updateSavedColor(idx, newValue) {
       if (typeof idx !== 'number' || idx < 0 || idx >= (this.savedColors || []).length) return false
-      try {
-        const v = (newValue === undefined || newValue === null) ? '' : fastClone(newValue)
-        const copy = (this.savedColors || []).slice()
-        copy[idx] = v
-        this.savedColors = copy
-        return true
-      } catch (e) {
-        const copy = (this.savedColors || []).slice()
-        copy[idx] = newValue
-        this.savedColors = copy
-        return true
-      }
+      const result = PaletteActions.updateSavedColor(this, idx, newValue)
+      this.savedColors = result.savedColors
+      this._paletteVersion = result._paletteVersion
+      return true
     },
 
     deleteSavedColor(idx) {
       if (typeof idx !== 'number' || idx < 0 || idx >= (this.savedColors || []).length) return false
-      const copy = (this.savedColors || []).slice()
-      copy.splice(idx, 1)
-      this.savedColors = copy
+      const result = PaletteActions.deleteSavedColor(this, idx)
+      this.savedColors = result.savedColors
+      this._paletteVersion = result._paletteVersion
       return true
     },
 
@@ -1277,36 +1136,25 @@ export const useStudioStore = defineStore('studio', {
     // PRIORITY ARRANGEMENT helpers
     // -------------------------
     getPriorityListForSelected() {
-      const el = this.selectedElement
-      if (!el) return []
-      return PriorityService.buildPriorityListForStackObject(el, { getGroupDescriptionForPart: (p) => this.getGroupDescriptionForPart(p) })
+      return PriorityActions.getPriorityListForSelected(this, this.getGroupDescriptionForPart.bind(this))
     },
 
     updatePrioritiesForSelected(updates = []) {
-      const idx = this.selectedIndex
-      if (idx < 0 || idx >= this.stacks.length) return false
-      try {
-        const el = this.stacks[idx]
-        const newEl = PriorityService.applyPriorityUpdatesToStackObject(el, updates)
-        const copyStacks = fastClone(this.stacks)
-        copyStacks[idx] = newEl
-        this.stacks = copyStacks
+      const result = PriorityActions.updatePrioritiesForSelected(this, updates, this.getGroupDescriptionForPart.bind(this))
+      if (result.stacks) {
+        this.stacks = result.stacks
         this._scheduleRefresh()
         return true
-      } catch (e) {
-        console.error('[studioStore] updatePrioritiesForSelected failed', e)
-        return false
       }
+      return false
     },
 
     recomputePrioritiesForSelected() {
-      return this.getPriorityListForSelected()
+      return PriorityActions.recomputePrioritiesForSelected(this, this.getGroupDescriptionForPart.bind(this))
     },
 
     getSelectedPrioritiesSnapshot() {
-      const sel = this.selectedElement
-      if (!sel) return { mapping: {}, ungrouped: [] }
-      return { mapping: sel.PrioritiesMapping || {}, ungrouped: sel.PrioritiesUngrouped || [] }
+      return PriorityActions.getSelectedPrioritiesSnapshot(this)
     },
 
     // -------------------------
@@ -1413,74 +1261,21 @@ export const useStudioStore = defineStore('studio', {
     // Apply asset to selected stack
     // -------------------------
     async applyAssetToSelectedStack(asset, replaceTarget = null) {
-      if (!asset) return null
+      const result = AssetActions.applyAssetToSelectedStack(this, asset, replaceTarget, {
+        ensurePartUid: this.ensurePartUid.bind(this),
+        _buildLayerEntriesWithCache: this._buildLayerEntriesWithCache.bind(this),
+        fastClone: fastClone
+      })
 
-      const sidx = this.selectedIndex
-      if (typeof sidx !== 'number' || sidx < 0 || sidx >= this.stacks.length) {
-        console.warn('[studioStore] applyAssetToSelectedStack: no selected stack')
-        return null
-      }
-
-      try {
-        const newPart = {
-          Name: asset.Name,
-          Group: (asset.Group && (typeof asset.Group === 'string' ? asset.Group : (asset.Group.Name || asset.Group.name))) || undefined,
-          Color: asset.DefaultColor ?? asset.DefaultColour ?? asset.Default ?? null
-        }
-
-        try { this.ensurePartUid(newPart) } catch (e) { console.warn(e) }
-
-        let entries = []
-        try {
-          entries = this._buildLayerEntriesWithCache(newPart) || []
-        } catch (e) {
-          entries = []
-        }
-        newPart.layerEntries = fastClone(entries)
-
-        let newStacks = fastClone(this.stacks)
-
-        const sel = newStacks[sidx] || { data: [] }
-        const parts = Array.isArray(sel.data) ? sel.data.slice() : []
-
-        let replaced = false
-        if (replaceTarget && !replaceTarget.isEmpty && replaceTarget.item) {
-          try {
-            const origJson = JSON.stringify(replaceTarget.item)
-            for (let i = 0; i < parts.length; i++) {
-              try {
-                if (JSON.stringify(parts[i]) === origJson) {
-                  parts[i] = fastClone(newPart)
-                  replaced = true
-                  break
-                }
-              } catch (pe) { /* ignore */ }
-            }
-          } catch (e) { console.warn(e) }
-        }
-
-        if (!replaced) {
-          parts.push(fastClone(newPart))
-        }
-
-        newStacks[sidx] = Object.assign({}, newStacks[sidx] || {}, { data: parts })
-        this.stacks = newStacks
-
-        const newFocused = parts.find(p => p.Name === newPart.Name && (p.Group === newPart.Group)) || parts[parts.length - 1]
-        const partIdx = parts.indexOf(newFocused)
-        if (partIdx >= 0) {
-          this.focusedPartIndex = { stackIndex: sidx, partIndex: partIdx }
-        }
-
+      if (result.stacks) {
+        this.stacks = result.stacks
+        this.focusedPartIndex = result.focusedPartIndex
         try { this.translateFocusedPartToLayers && this.translateFocusedPartToLayers() } catch (e) { }
         this._scheduleRefresh()
         this.pushHistorySnapshot()
-
         return this.focusedPart || null
-      } catch (err) {
-        console.error('[studioStore] applyAssetToSelectedStack failed', err)
-        return null
       }
+      return null
     },
 
     // -------------------------
@@ -1490,84 +1285,45 @@ export const useStudioStore = defineStore('studio', {
     _localStorageKeyForPalette() { return 'studio_palette_v1' },
 
     persistStacksToLocalStorage() {
-      try {
-        const payload = { stacks: this.stacks, _partUidCounter: this._partUidCounter }
-        hostWindow.localStorage.setItem(this._localStorageKeyForStacks(), JSON.stringify(payload))
-        return true
-      } catch (e) {
-        console.warn('[studioStore] persistStacksToLocalStorage failed', e)
-        return false
-      }
+      return StorageActions.persistStacksToLocalStorage(this)
     },
 
     loadStacksFromLocalStorage() {
-      try {
-        const raw = hostWindow.localStorage.getItem(this._localStorageKeyForStacks())
-        if (!raw) return false
-        const parsed = JSON.parse(raw)
-        if (!parsed || !Array.isArray(parsed.stacks)) return false
-        this.stacks = parsed.stacks
-        if (parsed._partUidCounter && typeof parsed._partUidCounter === 'number') {
-          this._partUidCounter = parsed._partUidCounter
+      const result = StorageActions.loadStacksFromLocalStorage()
+      if (result) {
+        this.stacks = result.stacks
+        if (result._partUidCounter) {
+          this._partUidCounter = result._partUidCounter
         }
         this.RebuildAllStacksLayerEntriesFromParts()
         this._refreshAllLayerEntriesFromPalette()
         this.refreshMergedAppearanceData()
         return true
-      } catch (e) {
-        console.warn('[studioStore] loadStacksFromLocalStorage failed', e)
-        return false
       }
+      return false
     },
 
     persistPaletteToLocalStorage() {
-      try {
-        const payload = { paletteMap: this.paletteMap, _paletteNextCounter: this._paletteNextCounter }
-        hostWindow.localStorage.setItem(this._localStorageKeyForPalette(), JSON.stringify(payload))
-        return true
-      } catch (e) {
-        console.warn('[studioStore] persistPaletteToLocalStorage failed', e)
-        return false
-      }
+      return StorageActions.persistPaletteToLocalStorage(this)
     },
 
     loadPaletteFromLocalStorage() {
-      try {
-        const raw = hostWindow.localStorage.getItem(this._localStorageKeyForPalette())
-        if (!raw) return false
-        const parsed = JSON.parse(raw)
-        if (!parsed || !parsed.paletteMap) return false
-        this.paletteMap = parsed.paletteMap || {}
+      const result = StorageActions.loadPaletteFromLocalStorage()
+      if (result) {
+        this.paletteMap = result.paletteMap || {}
         this._paletteVersion++
-        if (parsed._paletteNextCounter && typeof parsed._paletteNextCounter === 'number') {
-          this._paletteNextCounter = parsed._paletteNextCounter
+        if (result._paletteNextCounter) {
+          this._paletteNextCounter = result._paletteNextCounter
         }
         this._refreshAllLayerEntriesFromPalette()
         this.refreshMergedAppearanceData()
         return true
-      } catch (e) {
-        console.warn('[studioStore] loadPaletteFromLocalStorage failed', e)
-        return false
       }
+      return false
     },
 
-    exportStacksToJsonFile(filename = 'stacks. json') {
-      try {
-        const payload = { stacks: toRaw(this.stacks), _partUidCounter: this._partUidCounter }
-        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
-        const url = hostWindow.URL.createObjectURL(blob)
-        const a = doc.createElement('a')
-        a.href = url
-        a.download = filename
-        doc.body.appendChild(a)
-        a.click()
-        a.remove()
-        setTimeoutHost(() => hostWindow.URL.revokeObjectURL(url), 5000)
-        return true
-      } catch (e) {
-        console.warn('[studioStore] exportStacksToJsonFile failed', e)
-        return false
-      }
+    exportStacksToJsonFile(filename = 'stacks.json') {
+      return StorageActions.exportStacksToJsonFile(this, filename)
     },
 
     importStacksFromJsonFile(file) {
@@ -1600,22 +1356,7 @@ export const useStudioStore = defineStore('studio', {
     },
 
     exportPaletteToJsonFile(filename = 'palette.json') {
-      try {
-        const payload = { paletteMap: toRaw(this.paletteMap), _paletteNextCounter: this._paletteNextCounter }
-        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
-        const url = hostWindow.URL.createObjectURL(blob)
-        const a = doc.createElement('a')
-        a.href = url
-        a.download = filename
-        doc.body.appendChild(a)
-        a.click()
-        a.remove()
-        setTimeoutHost(() => hostWindow.URL.revokeObjectURL(url), 5000)
-        return true
-      } catch (e) {
-        console.warn('[studioStore] exportPaletteToJsonFile failed', e)
-        return false
-      }
+      return StorageActions.exportPaletteToJsonFile(this, filename)
     },
 
     importPaletteFromJsonFile(file) {
@@ -1648,27 +1389,7 @@ export const useStudioStore = defineStore('studio', {
     },
 
     exportStudioSnapshot(filename = 'studio_snapshot.json') {
-      try {
-        const payload = {
-          stacks: toRaw(this.stacks),
-          paletteMap: toRaw(this.paletteMap),
-          _paletteNextCounter: this._paletteNextCounter,
-          _partUidCounter: this._partUidCounter
-        }
-        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
-        const url = hostWindow.URL.createObjectURL(blob)
-        const a = doc.createElement('a')
-        a.href = url
-        a.download = filename
-        doc.body.appendChild(a)
-        a.click()
-        a.remove()
-        setTimeoutHost(() => hostWindow.URL.revokeObjectURL(url), 5000)
-        return true
-      } catch (e) {
-        console.warn('[studioStore] exportStudioSnapshot failed', e)
-        return false
-      }
+      return StorageActions.exportStudioSnapshot(this, filename)
     },
 
     importStudioSnapshotFromFile(file) {
@@ -1729,183 +1450,61 @@ export const useStudioStore = defineStore('studio', {
      * Toggle selection mode between single and multiple
      */
     toggleSelectionMode() {
-      if (this.selectionMode === 'single') {
-        this.selectionMode = 'multiple'
-      } else {
-        this.selectionMode = 'single'
-        // Clear selections when switching back to single mode
-        this.clearLayerSelection()
-      }
+      const result = SelectionActions.toggleSelectionMode(this)
+      this.selectionMode = result.selectionMode
     },
 
     /**
      * Toggle layer selection (add or remove)
      */
     toggleLayerSelection(layerInfo) {
-      if (!layerInfo || typeof layerInfo.stackIndex !== 'number' ||
-        typeof layerInfo.partIndex !== 'number' ||
-        typeof layerInfo.layerIndex !== 'number') {
-        console.warn('[studioStore] toggleLayerSelection: invalid layerInfo', layerInfo)
-        return
-      }
-
-      const key = this._buildLayerKey(layerInfo.stackIndex, layerInfo.partIndex, layerInfo.layerIndex)
-      const existingIndex = this.selectedLayers.findIndex(l => l._key === key)
-
-      if (existingIndex >= 0) {
-        // Remove from selection
-        this.selectedLayers = this.selectedLayers.filter((_, i) => i !== existingIndex)
-      } else {
-        // Add to selection
-        this.selectedLayers = [...this.selectedLayers, {
-          stackIndex: layerInfo.stackIndex,
-          partIndex: layerInfo.partIndex,
-          layerIndex: layerInfo.layerIndex,
-          _key: key
-        }]
-      }
+      const result = SelectionActions.toggleLayerSelection(this, layerInfo)
+      this.selectedLayers = result.selectedLayers
     },
 
     /**
      * Check if a layer is currently selected
      */
     isLayerSelected(layerInfo) {
-      if (!layerInfo || typeof layerInfo.stackIndex !== 'number' ||
-        typeof layerInfo.partIndex !== 'number' ||
-        typeof layerInfo.layerIndex !== 'number') {
-        return false
-      }
-
-      const key = this._buildLayerKey(layerInfo.stackIndex, layerInfo.partIndex, layerInfo.layerIndex)
-      return this.selectedLayers.some(l => l._key === key)
+      return SelectionActions.isLayerSelected(this, layerInfo)
     },
 
     /**
      * Select all layers in the focused part
      */
     selectAllLayers() {
-      const fp = this.focusedPart
-      if (!fp || !Array.isArray(fp.layerEntries)) {
-        console.warn('[studioStore] selectAllLayers: no focused part or layer entries')
-        return
-      }
-
-      const idx = this.focusedPartIndex
-      if (idx.stackIndex === null || idx.partIndex === null) {
-        console.warn('[studioStore] selectAllLayers: invalid focused part index')
-        return
-      }
-
-      // Select all colorable layers in the focused part
-      const newSelections = []
-      fp.layerEntries.forEach((layer) => {
-        const key = this._buildLayerKey(idx.stackIndex, idx.partIndex, layer.layerIndex)
-        newSelections.push({
-          stackIndex: idx.stackIndex,
-          partIndex: idx.partIndex,
-          layerIndex: layer.layerIndex,
-          _key: key
-        })
-      })
-
-      this.selectedLayers = newSelections
+      const result = SelectionActions.selectAllLayers(this)
+      this.selectedLayers = result.selectedLayers
     },
 
     /**
      * Clear all layer selections
      */
     clearLayerSelection() {
-      this.selectedLayers = []
+      const result = SelectionActions.clearLayerSelection()
+      this.selectedLayers = result.selectedLayers
     },
 
     /**
      * Select a range of layers (Shift+Click)
      */
     selectLayerRange(fromIndex, toIndex) {
-      const fp = this.focusedPart
-      if (!fp || !Array.isArray(fp.layerEntries)) {
-        console.warn('[studioStore] selectLayerRange: no focused part or layer entries')
-        return
-      }
-
-      const idx = this.focusedPartIndex
-      if (idx.stackIndex === null || idx.partIndex === null) {
-        console.warn('[studioStore] selectLayerRange: invalid focused part index')
-        return
-      }
-
-      const start = Math.min(fromIndex, toIndex)
-      const end = Math.max(fromIndex, toIndex)
-
-      const newSelections = []
-      for (let layerIndex = start; layerIndex <= end && layerIndex < fp.layerEntries.length; layerIndex++) {
-        const key = this._buildLayerKey(idx.stackIndex, idx.partIndex, layerIndex)
-        // Only add if not already selected
-        if (!this.selectedLayers.some(l => l._key === key)) {
-          newSelections.push({
-            stackIndex: idx.stackIndex,
-            partIndex: idx.partIndex,
-            layerIndex: layerIndex,
-            _key: key
-          })
-        }
-      }
-
-      this.selectedLayers = [...this.selectedLayers, ...newSelections]
+      const result = SelectionActions.selectLayerRange(this, fromIndex, toIndex)
+      this.selectedLayers = result.selectedLayers
     },
 
     /**
      * Get full data for selected layers
      */
     getSelectedLayersData() {
-      const results = []
-
-      for (const sel of this.selectedLayers) {
-        try {
-          if (sel.stackIndex < 0 || sel.stackIndex >= this.stacks.length) continue
-
-          const stack = this.stacks[sel.stackIndex]
-          if (!stack || !Array.isArray(stack.data)) continue
-
-          if (sel.partIndex < 0 || sel.partIndex >= stack.data.length) continue
-
-          const part = stack.data[sel.partIndex]
-          if (!part || !Array.isArray(part.layerEntries)) continue
-
-          //if (sel.layerIndex < 0 || sel.layerIndex >= part.layerEntries.length) continue
-
-          const layer = part.layerEntries.find(l => l.layerIndex === sel.layerIndex)
-          if (!layer) continue
-          results.push({
-            selection: sel,
-            part: part,
-            layer: layer
-          })
-        } catch (e) {
-          console.warn('[studioStore] getSelectedLayersData: error processing selection', sel, e)
-        }
-      }
-
-      return results
+      return SelectionActions.getSelectedLayersData(this)
     },
 
     /**
      * Validate if a batch operation can be performed on targets
      */
     validateBatchOperation(operation, targets) {
-      if (!targets || targets.length === 0) {
-        return { valid: false, reason: 'No targets selected' }
-      }
-
-      if (operation === 'color') {
-        // Check if at least one layer is colorable
-        const hasColorable = targets.some(t => t.layer && t.layer.isColorable)
-        if (!hasColorable) {
-          return { valid: false, reason: 'No colorable layers selected' }
-        }
-      }
-
-      return { valid: true }
+      return SelectionActions.validateBatchOperation(operation, targets)
     },
 
     /**
@@ -1914,52 +1513,17 @@ export const useStudioStore = defineStore('studio', {
      * @param {string} mode - 'absolute' or 'relative'
      */
     batchUpdateOpacity(value, mode = 'absolute') {
-      const targets = this.getSelectedLayersData()
-      const validation = this.validateBatchOperation('opacity', targets)
+      const result = SelectionActions.batchUpdateOpacity(this, value, mode)
 
-      if (!validation.valid) {
-        console.warn('[studioStore] batchUpdateOpacity:', validation.reason)
-        return { success: false, reason: validation.reason }
-      }
-
-      let updatedCount = 0
-
-      for (const target of targets) {
-        try {
-          const { selection, part, layer } = target
-
-          let newOpacity
-          if (mode === 'relative') {
-            // Relative adjustment
-            const currentOpacity = (layer.opacity != null ? layer.opacity : 1) * 100
-            newOpacity = Math.max(0, Math.min(100, currentOpacity + value)) / 100
-          } else {
-            // Absolute value
-            newOpacity = Math.max(0, Math.min(100, value)) / 100
-          }
-
-          // Update the layer entry
-          layer.opacity = newOpacity
-
-          // Mark as changed
-          updatedCount++
-        } catch (e) {
-          console.warn('[studioStore] batchUpdateOpacity: error updating layer', target, e)
-        }
-      }
-
-      if (updatedCount > 0) {
-        // Trigger refresh
+      if (result.success) {
         this._scheduleLayerRefresh()
         this._schedulePartUpdate()
         this._scheduleRefresh()
         this.triggerFocusedPartUpdate()
-
-        // Push to history (single snapshot for entire batch operation)
         this.pushHistorySnapshot()
       }
 
-      return { success: true, updatedCount }
+      return result
     },
 
     /**
@@ -1969,69 +1533,17 @@ export const useStudioStore = defineStore('studio', {
      * @param {string} mode - 'absolute' or 'relative'
      */
     batchUpdateOffset(x, y, mode = 'absolute') {
-      const targets = this.getSelectedLayersData()
-      const validation = this.validateBatchOperation('offset', targets)
+      const result = SelectionActions.batchUpdateOffset(this, x, y, mode)
 
-      if (!validation.valid) {
-        console.warn('[studioStore] batchUpdateOffset:', validation.reason)
-        return { success: false, reason: validation.reason }
-      }
-
-      let updatedCount = 0
-
-      for (const target of targets) {
-        try {
-          const { layer } = target
-
-          if (mode === 'relative') {
-            // Relative adjustment
-            const currentLeft = layer.drawingLeft != null ? layer.drawingLeft : 0
-            const currentTop = layer.drawingTop != null ? layer.drawingTop : 0
-            layer.drawingLeft = currentLeft + (x || 0)
-            layer.drawingTop = currentTop + (y || 0)
-            if (layer.subLayers && Array.isArray(layer.subLayers)) {
-              for (const subLayer of layer.subLayers) {
-                if (subLayer.drawingLeft != null) {
-                  subLayer.drawingLeft += (x || 0)
-                }
-                if (subLayer.drawingTop != null) {
-                  subLayer.drawingTop += (y || 0)
-                }
-              }
-            }
-          } else {
-            // Absolute value
-            layer.drawingLeft = x != null ? x : (layer.drawingLeft || 0)
-            layer.drawingTop = y != null ? y : (layer.drawingTop || 0)
-            if (layer.subLayers && Array.isArray(layer.subLayers)) {
-              for (const subLayer of layer.subLayers) {
-                if (subLayer.drawingLeft != null) {
-                  subLayer.drawingLeft = x != null ? x : (subLayer.drawingLeft || 0)
-                }
-                if (subLayer.drawingTop != null) {
-                  subLayer.drawingTop = y != null ? y : (subLayer.drawingTop || 0)
-                }
-              }
-            }
-          }
-
-          updatedCount++
-        } catch (e) {
-          console.warn('[studioStore] batchUpdateOffset: error updating layer', target, e)
-        }
-      }
-
-      if (updatedCount > 0) {
+      if (result.success) {
         this._scheduleLayerRefresh()
         this._schedulePartUpdate()
         this._scheduleRefresh()
         this.triggerFocusedPartUpdate()
-
-        // Push to history (single snapshot for entire batch operation)
         this.pushHistorySnapshot()
       }
 
-      return { success: true, updatedCount }
+      return result
     },
 
     /**
@@ -2039,55 +1551,17 @@ export const useStudioStore = defineStore('studio', {
      * @param {string} colorValue - Color value or tag
      */
     batchUpdateColor(colorValue) {
-      const targets = this.getSelectedLayersData()
-      const validation = this.validateBatchOperation('color', targets)
+      const result = SelectionActions.batchUpdateColor(this, colorValue, this._resolveColorCssFromText.bind(this))
 
-      if (!validation.valid) {
-        console.warn('[studioStore] batchUpdateColor:', validation.reason)
-        return { success: false, reason: validation.reason }
-      }
-
-      let updatedCount = 0
-      let skippedCount = 0
-
-      for (const target of targets) {
-        try {
-          const { layer } = target
-
-          // Only update colorable layers
-          if (!layer.isColorable) {
-            skippedCount++
-            continue
-          }
-
-          // Update color
-          layer.colorText = colorValue === undefined || colorValue === null ? '' : String(colorValue)
-
-          // Update colorCss
-          try {
-            const resolvedCss = this._resolveColorCssFromText(layer.colorText)
-            layer.colorCss = resolvedCss
-          } catch (e) {
-            layer.colorCss = null
-          }
-
-          updatedCount++
-        } catch (e) {
-          console.warn('[studioStore] batchUpdateColor: error updating layer', target, e)
-        }
-      }
-
-      if (updatedCount > 0) {
+      if (result.success) {
         this._scheduleLayerRefresh()
         this._schedulePartUpdate()
         this._scheduleRefresh()
         this.triggerFocusedPartUpdate()
-
-        // Push to history (single snapshot for entire batch operation)
         this.pushHistorySnapshot()
       }
 
-      return { success: true, updatedCount, skippedCount }
+      return result
     },
 
     /**
@@ -2096,68 +1570,34 @@ export const useStudioStore = defineStore('studio', {
      * @param {string} mode - 'absolute' or 'relative'
      */
     batchUpdatePriority(value, mode = 'absolute') {
-      const targets = this.getSelectedLayersData()
-      const validation = this.validateBatchOperation('priority', targets)
+      const result = SelectionActions.batchUpdatePriority(this, value, mode)
 
-      if (!validation.valid) {
-        console.warn('[studioStore] batchUpdatePriority:', validation.reason)
-        return { success: false, reason: validation.reason }
-      }
-
-      let updatedCount = 0
-
-      for (const target of targets) {
-        try {
-          const { layer } = target
-
-          if (mode === 'relative') {
-            // Relative adjustment
-            const currentPriority = layer.overridePriority != null ? layer.overridePriority : (layer.defaultPriority || 0)
-            const newPriority = currentPriority + (value || 0)
-            layer.overridePriority = newPriority
-            layer.isOverridePriority = true
-          } else {
-            // Absolute value
-            layer.overridePriority = value != null ? value : (layer.defaultPriority || 0)
-            layer.isOverridePriority = true
-          }
-
-          updatedCount++
-        } catch (e) {
-          console.warn('[studioStore] batchUpdatePriority: error updating layer', target, e)
-        }
-      }
-
-      if (updatedCount > 0) {
+      if (result.success) {
         this._scheduleLayerRefresh()
         this._schedulePartUpdate()
         this._scheduleRefresh()
         this.triggerFocusedPartUpdate()
-
-        // Push to history (single snapshot for entire batch operation)
         this.pushHistorySnapshot()
       }
 
-      return { success: true, updatedCount }
+      return result
     },
 
     /**
      * Generic batch operation handler
      */
     applyBatchEdit(operation, payload) {
-      switch (operation) {
-        case 'opacity':
-          return this.batchUpdateOpacity(payload.value, payload.mode)
-        case 'offset':
-          return this.batchUpdateOffset(payload.x, payload.y, payload.mode)
-        case 'color':
-          return this.batchUpdateColor(payload.value)
-        case 'priority':
-          return this.batchUpdatePriority(payload.value, payload.mode)
-        default:
-          console.warn('[studioStore] applyBatchEdit: unknown operation', operation)
-          return { success: false, reason: 'Unknown operation' }
+      const result = SelectionActions.applyBatchEdit(this, operation, payload, this._resolveColorCssFromText.bind(this))
+
+      if (result.success) {
+        this._scheduleLayerRefresh()
+        this._schedulePartUpdate()
+        this._scheduleRefresh()
+        this.triggerFocusedPartUpdate()
+        this.pushHistorySnapshot()
       }
+
+      return result
     },
 
     /**
@@ -2187,9 +1627,10 @@ export const useStudioStore = defineStore('studio', {
      * Toggle between optimized and legacy renderer
      */
     toggleRendererMode(useOptimized = true) {
-      this.useOptimizedRenderer = !!useOptimized;
+      const result = PreviewActions.toggleRendererMode(useOptimized)
+      this.useOptimizedRenderer = result.useOptimizedRenderer
       // Force refresh with new renderer
-      this.refreshMergedAppearanceData();
+      this.refreshMergedAppearanceData()
     },
 
     // -------------------------
@@ -2514,8 +1955,8 @@ export const useStudioStore = defineStore('studio', {
         if (typeof data.selectedIndex === 'number') {
           this.selectedIndex = data.selectedIndex
         }
-        if (typeof focusedPartIndex === 'object' && focusedPartIndex !== null) {
-          this.focusedPartIndex = fastClone(focusedPartIndex)
+        if (typeof data.focusedPartIndex === 'object' && data.focusedPartIndex !== null) {
+          this.focusedPartIndex = fastClone(data.focusedPartIndex)
         }
 
         this._paletteVersion++
