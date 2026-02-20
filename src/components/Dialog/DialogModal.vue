@@ -193,8 +193,8 @@ function closeDialog() {
 
 .dialog-input:focus {
   outline: none;
-  border-color: var(--primary-color, #4a90e2);
-  box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+  border-color: var(--color-primary, #4a90e2);
+  box-shadow: 0 0 0 3px var(--color-selection-single-bg, rgba(74, 144, 226, 0.1));
 }
 
 .dialog-buttons {
@@ -218,12 +218,12 @@ function closeDialog() {
 }
 
 .dialog-btn-ok {
-  background: var(--primary-color, #4a90e2);
-  color: white;
+  background: var(--color-primary, #4a90e2);
+  color: var(--color-text-inverse, white);
 }
 
 .dialog-btn-ok:hover {
-  background: var(--primary-hover, #357abd);
+  background: var(--color-primary-hover, #357abd);
 }
 
 .dialog-btn-ok:active {
@@ -231,12 +231,12 @@ function closeDialog() {
 }
 
 .dialog-btn-cancel {
-  background: var(--bg-tertiary, #f0f0f0);
-  color: var(--text-primary, #333333);
+  background: var(--color-bg-panel, #f0f0f0);
+  color: var(--color-text-primary, #333333);
 }
 
 .dialog-btn-cancel:hover {
-  background: var(--bg-hover, #e0e0e0);
+  background: var(--color-bg-hover, #e0e0e0);
 }
 
 .dialog-btn-cancel:active {
@@ -269,25 +269,25 @@ function closeDialog() {
 
 /* Dark theme support */
 .theme-dark .dialog-container {
-  background: var(--bg-primary, #2a2a2a);
+  background: var(--color-bg-base, #2a2a2a);
 }
 
 .theme-dark .dialog-message {
-  color: var(--text-primary, #e0e0e0);
+  color: var(--color-text-primary, #e0e0e0);
 }
 
 .theme-dark .dialog-input {
-  background: var(--bg-secondary, #1a1a1a);
-  color: var(--text-primary, #e0e0e0);
-  border-color: var(--border-color, #404040);
+  background: var(--color-bg-surface, #1a1a1a);
+  color: var(--color-text-primary, #e0e0e0);
+  border-color: var(--color-border-base, #404040);
 }
 
 .theme-dark .dialog-btn-cancel {
-  background: var(--bg-tertiary, #3a3a3a);
-  color: var(--text-primary, #e0e0e0);
+  background: var(--color-bg-panel, #3a3a3a);
+  color: var(--color-text-primary, #e0e0e0);
 }
 
 .theme-dark .dialog-btn-cancel:hover {
-  background: var(--bg-hover, #4a4a4a);
+  background: var(--color-bg-hover, #4a4a4a);
 }
 </style>

@@ -113,7 +113,7 @@ watch(selected, () => {
 .header-actions button {
   margin-left: 8px;
   padding: 6px 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-md, 8px);
   border: 1px solid var(--color-border-light, #f1f5f9);
   background: var(--color-bg-base, #fff);
   cursor: pointer;
@@ -124,7 +124,7 @@ watch(selected, () => {
   flex: 1;
   overflow: auto;
   padding: 8px;
-  border-radius: 8px;
+  border-radius: var(--radius-md, 8px);
   background: linear-gradient(180deg, var(--color-bg-base), var(--color-bg-surface));
   border: 1px solid var(--color-border-base);
 }
@@ -151,7 +151,7 @@ watch(selected, () => {
   overflow: auto;
   max-height: calc(100% - 44px);
   padding: 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-md, 8px);
   background: var(--color-bg-surface, #f8fafc);
   color: var(--color-text-primary, #0f172a);
   box-shadow: var(--shadow-md);

@@ -1165,7 +1165,7 @@ async function clearAutoSave() {
   align-items: center;
   gap: 6px;
   padding: 4px 12px;
-  border-radius: var(--radius-base, 6px);
+  border-radius: var(--radius-sm, 6px);
   font-size: 12px;
   font-weight: 500;
   margin-left: 8px;
@@ -1180,18 +1180,18 @@ async function clearAutoSave() {
 }
 
 .save-status-saving {
-  background: var(--color-bg-info, #e0f2fe);
-  color: var(--color-text-info, #0369a1);
+  background: var(--color-info-bg, #e0f2fe);
+  color: var(--color-info, #0369a1);
 }
 
 .save-status-saved {
-  background: var(--color-bg-success, #dcfce7);
-  color: var(--color-text-success, #16a34a);
+  background: var(--color-success-bg, #dcfce7);
+  color: var(--color-success, #16a34a);
 }
 
 .save-status-error {
-  background: var(--color-bg-error, #fee2e2);
-  color: var(--color-text-error, #dc2626);
+  background: var(--color-error-bg, #fee2e2);
+  color: var(--color-error, #dc2626);
 }
 
 .save-status-text {
@@ -1205,9 +1205,9 @@ async function clearAutoSave() {
   justify-content: space-between;
   gap: 12px;
   padding: 10px 16px;
-  background: var(--color-bg-info, #dbeafe);
+  background: var(--color-info-bg, #dbeafe);
   border-bottom: 1px solid var(--color-border-base, #e2e8f0);
-  color: var(--color-text-base, #1e293b);
+  color: var(--color-text-primary, #1e293b);
   font-size: 13px;
 }
 
@@ -1245,7 +1245,7 @@ async function clearAutoSave() {
 
 .banner-dismiss:hover {
   background: var(--color-bg-hover, rgba(0, 0, 0, 0.05));
-  color: var(--color-text-base, #1e293b);
+  color: var(--color-text-primary, #1e293b);
 }
 
 /* Banner slide animation */

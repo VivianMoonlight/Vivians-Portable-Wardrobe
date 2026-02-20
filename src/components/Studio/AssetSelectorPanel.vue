@@ -650,7 +650,7 @@ function onSearchInput() {
 
 .search-input {
   padding: 6px 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-md, 8px);
   border: 1px solid var(--color-border-light, #f1f5f9);
   background: var(--color-bg-base, #fff);
   font-size: 13px;
@@ -660,7 +660,7 @@ function onSearchInput() {
 
 .refresh-btn {
   padding: 6px 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-md, 8px);
   border: 1px solid var(--color-border-light, #f1f5f9);
   background: var(--color-bg-base, #fff);
   cursor: pointer;
@@ -673,7 +673,7 @@ function onSearchInput() {
   flex: 1;
   overflow: auto;
   padding: 8px;
-  border-radius: 8px;
+  border-radius: var(--radius-md, 8px);
   background: linear-gradient(180deg, var(--color-bg-base, #fff), var(--color-bg-surface, #f8fafc));
   border: 1px solid var(--color-border-base, #e2e8f0);
 }
@@ -733,7 +733,7 @@ function onSearchInput() {
   width: 56px;
   /* CSS size */
   height: 56px;
-  border-radius: 8px;
+  border-radius: var(--radius-md, 8px);
   background: var(--color-bg-surface, #f8fafc);
   border: 1px solid var(--color-border-base, #e2e8f0);
   display: block;
@@ -770,7 +770,7 @@ function onSearchInput() {
 
 .tiny {
   padding: 6px 8px;
-  border-radius: 8px;
+  border-radius: var(--radius-md, 8px);
   border: 1px solid var(--color-border-light, #f1f5f9);
   background: var(--color-bg-base, #fff);
   cursor: pointer;
@@ -781,7 +781,7 @@ function onSearchInput() {
 /* ============ 新增：切换按钮 ============ */
 .view-toggle-btn {
   padding: 6px 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-md, 8px);
   border: 1px solid var(--color-border-light, #f1f5f9);
   background: var(--color-bg-base, #fff);
   cursor: pointer;
@@ -803,7 +803,7 @@ function onSearchInput() {
 .asset-card {
   background: var(--color-bg-base, #ffffff);
   border: 1px solid var(--color-border-base, #e2e8f0);
-  border-radius: 12px;
+  border-radius: var(--radius-xl, 12px);
   padding: 8px;
   position: relative;
   display: flex;
@@ -822,7 +822,7 @@ function onSearchInput() {
   width: 100%;
   padding-top: 100%;  /* 正方形 */
   overflow: hidden;
-  border-radius: 10px;
+  border-radius: var(--radius-lg, 10px);
   background: var(--color-bg-surface, #f8fafc);
   border: 1px solid var(--color-border-base, #e2e8f0);
 }
@@ -855,7 +855,7 @@ function onSearchInput() {
 
 .apply-btn {
   padding: 6px 8px;
-  border-radius: 8px;
+  border-radius: var(--radius-md, 8px);
   border: 1px solid var(--color-border-light, #f1f5f9);
   font-size: 12px;
   background: var(--color-bg-base, #fff);

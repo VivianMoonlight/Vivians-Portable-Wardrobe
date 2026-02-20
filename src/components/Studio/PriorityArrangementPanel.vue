@@ -208,13 +208,13 @@ function countLayersInGroup(grp) {
 }
 .header { display:flex; align-items:center; justify-content:space-between; }
 .header h4 { margin:0; font-size:15px; color:var(--color-text-primary, #0f172a); }
-.header .actions button { margin-left:8px; padding:6px 10px; border-radius:8px; border:1px solid var(--color-border-light, #f1f5f9); background:var(--color-bg-base, #fff); cursor:pointer; font-size:13px; }
+.header .actions button { margin-left:8px; padding:6px 10px; border-radius: var(--radius-md, 8px); border:1px solid var(--color-border-light, #f1f5f9); background:var(--color-bg-base, #fff); cursor:pointer; font-size:13px; }
 
 .body {
   flex:1;
   overflow:auto;
   padding:8px;
-  border-radius:8px;
+  border-radius: var(--radius-md, 8px);
   background:linear-gradient(180deg,var(--color-bg-base, #fff),var(--color-bg-surface, #f8fafc));
   border:1px solid var(--color-border-base, #e2e8f0);
   min-height:0;
@@ -227,7 +227,7 @@ function countLayersInGroup(grp) {
 
 /* group card */
 .group-card {
-  border-radius:8px;
+  border-radius: var(--radius-md, 8px);
   background:var(--color-bg-base, #fff);
   border:1px solid var(--color-border-base, #e2e8f0);
   padding:8px;
@@ -242,14 +242,14 @@ function countLayersInGroup(grp) {
 .fold-arrow { font-size:12px; color:var(--color-text-tertiary, #64748b); width:18px; display:inline-flex; align-items:center; justify-content:center; }
 
 /* part block */
-.part-block { border-radius:6px; border:1px dashed var(--color-border-light, #f1f5f9); padding:6px; background:linear-gradient(180deg,var(--color-bg-surface, #f8fafc),var(--color-bg-base, #ffffff)); margin-bottom:8px; }
+.part-block { border-radius: var(--radius-sm, 6px); border:1px dashed var(--color-border-light, #f1f5f9); padding:6px; background:linear-gradient(180deg,var(--color-bg-surface, #f8fafc),var(--color-bg-base, #ffffff)); margin-bottom:8px; }
 .part-header { display:flex; justify-content:space-between; align-items:center; padding:4px 6px; cursor:grab; }
 .part-title { font-weight:700; color:var(--color-text-primary, #0f172a); }
 .part-fold { color:var(--color-text-tertiary, #64748b); font-size:12px; }
 
 /* part body / layer rows */
 .part-body { padding-top:6px; display:flex; flex-direction:column; gap:6px; }
-.layer-row { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:6px; border-radius:6px; background:linear-gradient(180deg,var(--color-bg-base, #ffffff),var(--color-bg-surface, #f8fafc)); border:1px solid var(--color-border-light, #f1f5f9); cursor:grab; }
+.layer-row { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:6px; border-radius: var(--radius-sm, 6px); background:linear-gradient(180deg,var(--color-bg-base, #ffffff),var(--color-bg-surface, #f8fafc)); border:1px solid var(--color-border-light, #f1f5f9); cursor:grab; }
 .layer-name { font-weight:600; color:var(--color-text-primary, #0f172a); }
 .layer-meta { font-size:12px; color:var(--color-text-tertiary, #64748b); }
 

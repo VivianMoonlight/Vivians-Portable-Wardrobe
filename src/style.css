@@ -3,6 +3,9 @@
  * Import theme system, shared components, and define scrollbar styles
  */
 
+/* Import normalize/reset */
+@import './styles/normalize.css';
+
 /* Import theme system */
 @import './styles/theme.css';
 

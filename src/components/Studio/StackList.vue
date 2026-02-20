@@ -501,7 +501,7 @@ function resetDrag() {
   font-weight: 600;
   padding: 4px 6px;
   border: 1px solid var(--color-selection-single, #417aed);
-  border-radius: 4px;
+  border-radius: var(--radius-xs, 4px);
   outline: none;
   background: var(--color-bg-base, #fff);
   color: var(--color-text-primary, #0f172a);
@@ -526,7 +526,7 @@ function resetDrag() {
   text-align: center;
   color: var(--color-text-muted);
   padding: 16px;
-  border-radius: 8px;
+  border-radius: var(--radius-md, 8px);
   border: 1px dashed var(--color-border-base);
   font-size: 14px;
 }

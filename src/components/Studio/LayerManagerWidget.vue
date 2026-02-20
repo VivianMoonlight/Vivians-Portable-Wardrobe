@@ -382,7 +382,7 @@ function onDragEnd() {
 
 .custom-scroll::-webkit-scrollbar-thumb {
     background: var(--scrollbar-thumb, #ccc);
-    border-radius: 3px;
+    border-radius: var(--radius-2xs, 3px);
 }
 
 .custom-scroll::-webkit-scrollbar-track {
@@ -501,7 +501,7 @@ function onDragEnd() {
     font-size: 10px;
     background: var(--color-border-light, #f1f5f9);
     padding: 1px 4px;
-    border-radius: 4px;
+    border-radius: var(--radius-xs, 4px);
     margin-left: 6px;
     color: var(--color-text-secondary, #475569);
 }

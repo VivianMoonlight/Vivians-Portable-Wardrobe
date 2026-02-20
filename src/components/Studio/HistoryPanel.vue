@@ -418,7 +418,7 @@ function scrollToCurrentState() {
 
 .history-timeline::-webkit-scrollbar-thumb {
   background: var(--color-border-strong, #cbd5e1);
-  border-radius: 4px;
+  border-radius: var(--radius-xs, 4px);
 }
 
 .history-timeline::-webkit-scrollbar-thumb:hover {

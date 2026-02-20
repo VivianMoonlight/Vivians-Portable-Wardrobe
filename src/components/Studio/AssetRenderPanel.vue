@@ -346,7 +346,7 @@ onBeforeUnmount(() => {
   flex:1;
   overflow:auto;
   padding:8px;
-  border-radius:8px;
+  border-radius: var(--radius-md, 8px);
   background:linear-gradient(180deg,var(--color-bg-base, #fff),var(--color-bg-surface, #f8fafc));
   border:1px solid var(--color-border-base, #e2e8f0);
   min-height:0;
@@ -374,7 +374,7 @@ onBeforeUnmount(() => {
   width:100%;
   flex:1 1 auto;
   min-height:120px;
-  border-radius:8px;
+  border-radius: var(--radius-md, 8px);
   background: var(--color-bg-surface, #f8fafc);
   border:1px solid var(--color-border-base, #e2e8f0);
   display:block;
@@ -386,7 +386,7 @@ onBeforeUnmount(() => {
   bottom:12px;
   background: var(--color-bg-base, rgba(255,255,255,0.9));
   padding:6px 8px;
-  border-radius:6px;
+  border-radius: var(--radius-sm, 6px);
   border:1px solid var(--color-border-base, #e2e8f0);
   font-size:13px;
 }
@@ -404,7 +404,7 @@ onBeforeUnmount(() => {
 }
 .controls button {
   padding:6px 10px;
-  border-radius:8px;
+  border-radius: var(--radius-md, 8px);
   border:1px solid var(--color-border-light, #f1f5f9);
   background:var(--color-bg-base, #fff);
   cursor:pointer;

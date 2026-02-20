@@ -623,7 +623,7 @@ function togglePaletteForEntry() {
   --text: var(--color-text-primary);
   --accent: var(--color-selection-single);
   --chip-border: var(--color-border-light);
-  border-radius: 10px;
+  border-radius: var(--radius-lg, 10px);
   border: 1px solid var(--panel-border);
   background: var(--bg);
   display: flex;
@@ -655,7 +655,7 @@ function togglePaletteForEntry() {
   align-items: center;
   gap: 10px;
   padding: 8px 12px;
-  border-radius: 9px 9px 0 0;
+  border-radius: var(--radius-lg, 9px) var(--radius-lg, 9px) 0 0;
   border-bottom: 1px dashed rgba(240, 238, 251, 0.9);
   background: linear-gradient(90deg, var(--header-bg-a) 60%, var(--header-bg-b) 100%);
   font-size: 14px;
@@ -731,7 +731,7 @@ function togglePaletteForEntry() {
 
 .edit-input {
   padding: 4px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm, 6px);
   border: 1px solid var(--color-border-base);
   font-size: 13px;
   outline: none;
@@ -787,7 +787,7 @@ function togglePaletteForEntry() {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
+  border-radius: var(--radius-sm, 6px);
   border: 1px solid var(--color-border-base);
   background: var(--color-bg-base);
   cursor: pointer;
@@ -820,7 +820,7 @@ function togglePaletteForEntry() {
 /* Color Chip */
 .color-chip {
   padding: 4px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm, 6px);
   font-weight: 600;
   font-size: 12px;
   border: 1px solid var(--color-border-light);
@@ -832,7 +832,7 @@ function togglePaletteForEntry() {
 .priority-badge {
   font-size: 11px;
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs, 4px);
   font-weight: 700;
   background: var(--color-badge-blue-bg);
   color: var(--color-badge-blue-text);

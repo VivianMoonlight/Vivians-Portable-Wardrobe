@@ -350,7 +350,7 @@ watch(() => store.previewTool, (newTool) => {
 .batch-edit-panel {
   background: var(--color-panel-glassmorphism-bg);
   border: 1px solid var(--color-panel-glassmorphism-border);
-  border-radius: 10px;
+  border-radius: var(--radius-lg, 10px);
   margin-bottom: 12px;
   backdrop-filter: blur(8px);
   box-shadow: 0 2px 8px var(--color-panel-glassmorphism-shadow);
@@ -390,7 +390,7 @@ watch(() => store.previewTool, (newTool) => {
   color: var(--color-accent-purple);
   background: var(--color-accent-purple-bg-light);
   padding: 2px 8px;
-  border-radius: 12px;
+  border-radius: var(--radius-xl, 12px);
   font-weight: 600;
 }
 
@@ -441,7 +441,7 @@ watch(() => store.previewTool, (newTool) => {
   gap: 2px;
   background: var(--color-accent-purple-bg-subtle);
   padding: 2px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm, 6px);
 }
 
 .mode-btn {
@@ -451,7 +451,7 @@ watch(() => store.previewTool, (newTool) => {
   color: var(--color-accent-purple);
   font-size: 12px;
   font-weight: 600;
-  border-radius: 4px;
+  border-radius: var(--radius-xs, 4px);
   cursor: pointer;
   transition: all 0.15s;
 }
@@ -482,7 +482,7 @@ watch(() => store.previewTool, (newTool) => {
 .num-input {
   width: 60px;
   padding: 6px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm, 6px);
   border: 1px solid var(--color-accent-purple-light);
   font-size: 13px;
   outline: none;
@@ -519,7 +519,7 @@ watch(() => store.previewTool, (newTool) => {
   border: 1px solid var(--color-accent-purple);
   background: linear-gradient(135deg, var(--color-accent-purple), var(--color-primary));
   color: var(--color-text-inverse);
-  border-radius: 6px;
+  border-radius: var(--radius-sm, 6px);
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -541,7 +541,7 @@ watch(() => store.previewTool, (newTool) => {
   border: 1px solid var(--color-accent-purple-light);
   background: var(--color-bg-base);
   color: var(--color-accent-purple);
-  border-radius: 6px;
+  border-radius: var(--radius-sm, 6px);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -571,7 +571,7 @@ watch(() => store.previewTool, (newTool) => {
   background: var(--color-panel-glassmorphism-bg);
   backdrop-filter: blur(4px);
   color: var(--color-accent-purple);
-  border-radius: 6px;
+  border-radius: var(--radius-sm, 6px);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -618,7 +618,7 @@ watch(() => store.previewTool, (newTool) => {
   border: 1px solid var(--color-border-light);
   background: var(--color-bg-base);
   color: var(--color-primary);
-  border-radius: 6px;
+  border-radius: var(--radius-sm, 6px);
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -633,7 +633,7 @@ watch(() => store.previewTool, (newTool) => {
 
 .feedback-message {
   padding: 8px 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm, 6px);
   font-size: 12px;
   font-weight: 600;
   text-align: center;

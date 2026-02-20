@@ -825,7 +825,7 @@ button:focus,
   width: 36px;
   height: 36px;
   padding: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-md, 8px);
   border: 1px solid var(--color-border-base);
   background: var(--color-bg-base);
   cursor: pointer;
@@ -873,7 +873,7 @@ button:focus,
 .search {
   flex: 1;
   padding: 8px 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-md, 8px);
   border: 1px solid var(--color-border-light, #f1f5f9);
   background: var(--color-bg-base, #fff);
   font-size: 13px;
@@ -889,7 +889,7 @@ button:focus,
 
 .control-buttons button {
   padding: 6px 8px;
-  border-radius: 8px;
+  border-radius: var(--radius-md, 8px);
   border: 1px solid var(--color-border-light, #f1f5f9);
   background: var(--color-bg-base, #fff);
   cursor: pointer;
@@ -935,7 +935,7 @@ button:focus,
   flex: 1 1 auto;
   overflow: auto;
   padding: 8px;
-  border-radius: 8px;
+  border-radius: var(--radius-md, 8px);
   background: linear-gradient(180deg, var(--color-bg-base), var(--color-bg-surface));
   border: 1px solid var(--color-border-base);
   min-height: 0;
@@ -944,7 +944,7 @@ button:focus,
 
 /* group card: 保持平面化 */
 .group-card {
-  border-radius: 6px;
+  border-radius: var(--radius-sm, 6px);
   background: var(--color-bg-base);
   border: 1px solid var(--color-border-base);
   padding: 8px;
@@ -978,7 +978,7 @@ button:focus,
 .chev {
   width: 22px;
   height: 22px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm, 6px);
   background: transparent;
   border: none;
   font-weight: 700;
@@ -996,7 +996,7 @@ button:focus,
 .hidden-badge {
   font-size: 10px;
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs, 4px);
   background: var(--color-border-light, #f1f5f9);
   color: var(--color-text-secondary, #475569);
   font-weight: 500;

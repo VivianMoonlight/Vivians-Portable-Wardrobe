@@ -227,7 +227,7 @@ onMounted(() => {
   background: var(--color-primary, #3b82f6);
   color: white;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-sm, 6px);
   cursor: pointer;
   font-weight: 500;
 }
@@ -261,7 +261,7 @@ onMounted(() => {
   margin-bottom: 8px;
   background: var(--color-bg-surface, #f8fafc);
   border: 1px solid var(--color-border-base, #e2e8f0);
-  border-radius: 8px;
+  border-radius: var(--radius-md, 8px);
   transition: all 0.2s;
 }
 
@@ -305,7 +305,7 @@ onMounted(() => {
   background: var(--color-success, #10b981);
   color: white;
   font-size: 11px;
-  border-radius: 12px;
+  border-radius: var(--radius-xl, 12px);
   font-weight: 500;
 }
 
@@ -313,7 +313,7 @@ onMounted(() => {
   width: 100%;
   padding: 4px 8px;
   border: 1px solid var(--color-primary, #3b82f6);
-  border-radius: 4px;
+  border-radius: var(--radius-xs, 4px);
   font-size: 14px;
 }
 
@@ -335,7 +335,7 @@ onMounted(() => {
   justify-content: center;
   border: none;
   background: transparent;
-  border-radius: 6px;
+  border-radius: var(--radius-sm, 6px);
   cursor: pointer;
   font-size: 16px;
   transition: background 0.2s;

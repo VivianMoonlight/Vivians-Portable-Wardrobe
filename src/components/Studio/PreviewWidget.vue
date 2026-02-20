@@ -483,7 +483,7 @@ watch(() => store.mergedAppearanceData, () => updatePreview(), { deep: true })
   display: flex;
   background: var(--color-bg-surface);
   padding: 2px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm, 6px);
   gap: 2px;
   align-items: center;
 }
@@ -500,7 +500,7 @@ watch(() => store.mergedAppearanceData, () => updatePreview(), { deep: true })
   height: 28px;
   border: none;
   background: transparent;
-  border-radius: 4px;
+  border-radius: var(--radius-xs, 4px);
   cursor: pointer;
   font-size: 16px;
   display: flex;
@@ -544,7 +544,7 @@ watch(() => store.mergedAppearanceData, () => updatePreview(), { deep: true })
   min-height: 220px;
   overflow: hidden;
   background: var(--color-bg-surface);
-  border-radius: 10px;
+  border-radius: var(--radius-lg, 10px);
   border: 1px solid var(--color-border-base);
 }
 
@@ -587,7 +587,7 @@ watch(() => store.mergedAppearanceData, () => updatePreview(), { deep: true })
   background: var(--color-bg-overlay);
   color: var(--color-text-secondary);
   padding: 4px 10px;
-  border-radius: 12px;
+  border-radius: var(--radius-xl, 12px);
   font-size: 11px;
   pointer-events: none;
   opacity: 0.8;
@@ -597,7 +597,7 @@ watch(() => store.mergedAppearanceData, () => updatePreview(), { deep: true })
   width: 36px;
   height: 36px;
   padding: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-md, 8px);
   border: 1px solid var(--color-border-base);
   background: var(--color-bg-base);
   cursor: pointer;

@@ -306,7 +306,7 @@ function onBreadcrumbDrop(e, idx) {
   max-width: 98vw;
   max-height: 94vh;
   overflow: hidden;
-  border-radius: var(--radius-xl, 13px);
+  border-radius: var(--radius-xl, 12px);
   box-shadow: var(--shadow-lg, 0 6px 28px rgba(10,20,40,0.06));
 }
 
@@ -316,7 +316,7 @@ function onBreadcrumbDrop(e, idx) {
   height: 100%;
   padding: var(--panel-inline-padding, 12px);
   box-sizing: border-box;
-  background: var(--color-bg-surface, #fbfdff);
+  background: var(--color-bg-surface, #f8fafc);
   border: 1.5px solid var(--color-border-base, rgba(230,235,240,0.9));
   border-radius: var(--radius-xl, 12px);
   display: flex;
@@ -494,7 +494,7 @@ function onBreadcrumbDrop(e, idx) {
   width: 19px;
   height: 19px;
   background: var(--color-border-strong, #cbd5e1);
-  border-radius: 11px;
+  border-radius: var(--radius-xl, 12px);
   position: absolute;
   right: 6px;
   bottom: 6px;

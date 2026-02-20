@@ -550,7 +550,7 @@ function handleKeydown(e) {
   padding: 8px 12px;
   height: 36px;
   min-width: 64px;
-  border-radius: 8px;
+  border-radius: var(--radius-md, 8px);
   border: 1px solid var(--color-border-light);
   background: var(--color-bg-base);
   cursor: pointer;
@@ -594,7 +594,7 @@ function handleKeydown(e) {
   flex: 1;
   overflow: auto;
   padding: 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-md, 8px);
   background: linear-gradient(180deg, var(--color-bg-base), var(--color-bg-surface));
   border: 1px solid var(--panel-border);
   box-sizing: border-box;
@@ -643,7 +643,7 @@ function handleKeydown(e) {
 /* Inputs */
 .edit-input {
   padding: 8px 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-md, 8px);
   border: 1px solid var(--color-border-base);
   color: var(--color-text-primary);
   font-size: 13px;
@@ -678,7 +678,7 @@ function handleKeydown(e) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
+  border-radius: var(--radius-md, 8px);
   border: 1px solid var(--color-border-base);
   background: var(--color-bg-base);
   cursor: pointer;
@@ -762,7 +762,7 @@ function handleKeydown(e) {
   gap: 12px;
   padding: 6px 8px;
   background: var(--color-bg-surface);
-  border-radius: 8px;
+  border-radius: var(--radius-md, 8px);
   border: 1px solid var(--color-border-base);
   box-sizing: border-box;
 }
@@ -789,7 +789,7 @@ function handleKeydown(e) {
   padding: 10px;
   background: var(--color-bg-panel);
   color: var(--color-text-primary);
-  border-radius: 8px;
+  border-radius: var(--radius-md, 8px);
   overflow: auto;
   max-height: 240px;
 }

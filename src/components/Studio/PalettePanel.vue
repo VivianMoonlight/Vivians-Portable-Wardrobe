@@ -467,7 +467,7 @@ function savedText(v) {
   background: var(--color-bg-base, #fff);
   color: var(--color-warning, #f59e0b);
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-xs, 4px);
   padding: 2px 8px;
   font-weight: 700;
   cursor: pointer;
@@ -484,7 +484,7 @@ function savedText(v) {
 .vc-sketch-custom {
   box-shadow: none !important;
   border: 1px solid var(--color-border-base, #e2e8f0);
-  border-radius: 6px;
+  border-radius: var(--radius-sm, 6px);
   background: var(--color-bg-base, #fff);
 }
 
@@ -499,7 +499,7 @@ function savedText(v) {
   padding: 6px;
   border: 1px solid var(--color-border-base, #e2e8f0);
   background: var(--color-bg-base, #fff);
-  border-radius: 6px;
+  border-radius: var(--radius-sm, 6px);
   cursor: pointer;
   font-size: 12px;
   display: flex;
@@ -571,7 +571,7 @@ function savedText(v) {
 
 .clear-btn:hover {
   background: var(--color-error-bg, #fee2e2);
-  border-radius: 4px;
+  border-radius: var(--radius-xs, 4px);
 }
 
 /* --- Saved Colors Grid --- */
@@ -584,7 +584,7 @@ function savedText(v) {
 .saved-swatch-item {
   width: 28px;
   height: 28px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs, 4px);
   border: 1px solid var(--color-border-base, #e2e8f0);
   cursor: pointer;
   position: relative;
@@ -643,7 +643,7 @@ function savedText(v) {
   align-items: center;
   gap: 8px;
   padding: 4px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm, 6px);
   border: 1px solid transparent;
   background: var(--color-bg-base, #fff);
   transition: all 0.1s;
@@ -670,7 +670,7 @@ function savedText(v) {
   display: block;
   width: 100%;
   height: 100%;
-  border-radius: 4px;
+  border-radius: var(--radius-xs, 4px);
   border: 1px solid var(--color-border-base, #e2e8f0);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2);
 }
@@ -687,7 +687,7 @@ function savedText(v) {
   font-size: 13px;
   color: var(--color-text-primary, #0f172a);
   padding: 2px 4px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs, 4px);
   font-weight: 600;
 }
 
@@ -728,7 +728,7 @@ function savedText(v) {
   height: 24px;
   border: 1px solid var(--color-border-light, #f1f5f9);
   background: var(--color-bg-base, #fff);
-  border-radius: 4px;
+  border-radius: var(--radius-xs, 4px);
   display: flex;
   align-items: center;
   justify-content: center;
