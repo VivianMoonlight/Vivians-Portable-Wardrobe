@@ -433,7 +433,7 @@ export const useStudioStore = defineStore('studio', {
       }
 
       const result = StackActions.addElementToStacks(this, el, {
-        fastClone: this.fastClone,
+        fastClone,
         ensurePartUid: this.ensurePartUid.bind(this),
         _buildLayerEntriesWithCache: this._buildLayerEntriesWithCache.bind(this),
         _updateLayerEntriesColorCss: this._updateLayerEntriesColorCss.bind(this),
