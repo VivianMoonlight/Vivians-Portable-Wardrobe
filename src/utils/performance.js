@@ -10,15 +10,44 @@
  * @returns {Function} Debounced function
  */
 export function debounce(func, wait = 0) {
-  let timeout
-  return function executedFunction(...args) {
+  let timeout = null
+  let lastArgs = null
+  let lastThis = null
+
+  const debounced = function executedFunction(...args) {
+    lastArgs = args
+    lastThis = this
     const later = () => {
-      clearTimeout(timeout)
-      func(...args)
+      timeout = null
+      if (lastArgs) {
+        func.apply(lastThis, lastArgs)
+        lastArgs = null
+        lastThis = null
+      }
     }
     clearTimeout(timeout)
     timeout = setTimeout(later, wait)
   }
+
+  debounced.cancel = () => {
+    if (timeout !== null) {
+      clearTimeout(timeout)
+      timeout = null
+    }
+    lastArgs = null
+    lastThis = null
+  }
+
+  debounced.flush = () => {
+    if (timeout === null || !lastArgs) return
+    clearTimeout(timeout)
+    timeout = null
+    func.apply(lastThis, lastArgs)
+    lastArgs = null
+    lastThis = null
+  }
+
+  return debounced
 }
 
 /**
@@ -28,14 +57,32 @@ export function debounce(func, wait = 0) {
  * @returns {Function} Throttled function
  */
 export function throttle(func, limit = 100) {
-  let inThrottle
-  return function executedFunction(...args) {
-    if (!inThrottle) {
-      func.apply(this, args)
-      inThrottle = true
-      setTimeout(() => inThrottle = false, limit)
-    }
+  let inThrottle = false
+  let timeoutId = null
+
+  const throttled = function executedFunction(...args) {
+    if (inThrottle) return
+    func.apply(this, args)
+    inThrottle = true
+    timeoutId = setTimeout(() => {
+      inThrottle = false
+      timeoutId = null
+    }, limit)
   }
+
+  throttled.cancel = () => {
+    if (timeoutId !== null) {
+      clearTimeout(timeoutId)
+      timeoutId = null
+    }
+    inThrottle = false
+  }
+
+  throttled.flush = () => {
+    throttled.cancel()
+  }
+
+  return throttled
 }
 
 /**

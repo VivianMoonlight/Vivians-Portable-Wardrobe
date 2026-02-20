@@ -28,7 +28,7 @@
             <div class="studio-toolbar">
               <!-- Group 1: Stack IO (Standard File Icons) -->
               <div class="tool-group">
-                <button class="tool-btn icon-only" @mousedown.stop.prevent @click="onSaveStacks"
+                <button class="tool-btn icon-only" @pointerdown.stop.prevent @click="onSaveStacks"
                   :title="t('studio.saveStacksTitle')">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                     stroke-linecap="round" stroke-linejoin="round">
@@ -37,7 +37,7 @@
                     <polyline points="7 3 7 8 15 8"></polyline>
                   </svg>
                 </button>
-                <button class="tool-btn icon-only" @mousedown.stop.prevent @click="onLoadStacksClick"
+                <button class="tool-btn icon-only" @pointerdown.stop.prevent @click="onLoadStacksClick"
                   :title="t('studio.loadStacksTitle')">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                     stroke-linecap="round" stroke-linejoin="round">
@@ -51,7 +51,7 @@
               <!-- Group 2: Palette IO & Toggle -->
               <div class="tool-group">
                 <!-- Save Palette: Floppy with Swatch Grid -->
-                <button class="tool-btn icon-only" @mousedown.stop.prevent @click="onSavePalette"
+                <button class="tool-btn icon-only" @pointerdown.stop.prevent @click="onSavePalette"
                   :title="t('studio.savePaletteTitle')">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                     stroke-linecap="round" stroke-linejoin="round">
@@ -68,7 +68,7 @@
                 </button>
 
                 <!-- Load Palette: Folder with Swatch Grid -->
-                <button class="tool-btn icon-only" @mousedown.stop.prevent @click="onLoadPaletteClick"
+                <button class="tool-btn icon-only" @pointerdown.stop.prevent @click="onLoadPaletteClick"
                   :title="t('studio.loadPaletteTitle')">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                     stroke-linecap="round" stroke-linejoin="round">
@@ -88,7 +88,7 @@
 
               <!-- Group 3: Layer Manager -->
               <div class="tool-group">
-                <button class="tool-btn icon-only" @mousedown.stop.prevent @click="togglePalette"
+                <button class="tool-btn icon-only" @pointerdown.stop.prevent @click="togglePalette"
                   :title="store.palettePanelVisible ? t('studio.hidePalette') : t('studio.showPalette')"
                   :class="{ active: store.palettePanelVisible }">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -103,7 +103,7 @@
                   </svg>
                 </button>
 
-                <button class="tool-btn icon-only" @mousedown.stop.prevent @click="toggleLayerManager"
+                <button class="tool-btn icon-only" @pointerdown.stop.prevent @click="toggleLayerManager"
                   :title="store.layerManagerActive ? t('studio.hideLayerManager') : t('studio.showLayerManager')"
                   :class="{ active: store.layerManagerActive }">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -112,7 +112,7 @@
                   </svg>
                 </button>
 
-                <button class="tool-btn icon-only" @mousedown.stop.prevent @click="toggleHistoryPanel"
+                <button class="tool-btn icon-only" @pointerdown.stop.prevent @click="toggleHistoryPanel"
                   :title="store.historyPanelVisible ? t('studio.hideHistory') : t('studio.showHistory')"
                   :class="{ active: store.historyPanelVisible }">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -122,7 +122,7 @@
                   </svg>
                 </button>
                  <!-- Saves Manager Button -->
-                <button class="tool-btn icon-only" @mousedown.stop.prevent @click="toggleSavesManager"
+                <button class="tool-btn icon-only" @pointerdown.stop.prevent @click="toggleSavesManager"
                   :title="t('studio.savesManager') || 'Manage Saves'"
                   :aria-label="t('studio.savesManager') || 'Manage Saves'" :class="{ active: savesManagerActive }">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -139,7 +139,7 @@
               <!-- Group 4: Character / Import / Export (Redesigned) -->
               <div class="tool-group">
                 <!-- Import Character -->
-                <button class="tool-btn icon-only" @mousedown.stop.prevent @click="importCharacterAsStack"
+                <button class="tool-btn icon-only" @pointerdown.stop.prevent @click="importCharacterAsStack"
                   :disabled="!hasCharacterData"
                   :title="t('studio.importCharacterTitle') || 'Import Character as Stack'">
                   <!-- User Icon with Down Arrow (Import) -->
@@ -152,7 +152,7 @@
                 </button>
 
                 <!-- Apply to target -->
-                <button class="tool-btn icon-only" @mousedown.stop.prevent @click="applyToTarget" :disabled="!hasTarget"
+                <button class="tool-btn icon-only" @pointerdown.stop.prevent @click="applyToTarget" :disabled="!hasTarget"
                   :title="applyButtonTitle">
                   <!-- T-Shirt/Appearance Icon -->
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -166,7 +166,7 @@
                 </button>
 
                 <!-- Export mergedAppearance -->
-                <button class="tool-btn icon-only" @mousedown.stop.prevent @click="exportMergedToFileStore"
+                <button class="tool-btn icon-only" @pointerdown.stop.prevent @click="exportMergedToFileStore"
                   :disabled="!hasFileSystem" :title="t('studio.exportMergedTitle')">
                   <!-- File Export Icon -->
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -185,7 +185,7 @@
               <!-- Group 5: Auto-save Controls -->
               <div class="tool-group">
                 <!-- Force Save Button -->
-                <button class="tool-btn icon-only" @mousedown.stop.prevent @click="forceSave" title="Force Save Now">
+                <button class="tool-btn icon-only" @pointerdown.stop.prevent @click="forceSave" title="Force Save Now">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                     stroke-linecap="round" stroke-linejoin="round">
                     <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v13a2 2 0 0 1-2 2z"></path>
@@ -196,7 +196,7 @@
                 </button>
 
                 <!-- Clear Auto-save Button -->
-                <button class="tool-btn icon-only" @mousedown.stop.prevent @click="clearAutoSave"
+                <button class="tool-btn icon-only" @pointerdown.stop.prevent @click="clearAutoSave"
                   title="Clear Auto-saved Data">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                     stroke-linecap="round" stroke-linejoin="round">
@@ -222,7 +222,12 @@
               <div class="spacer"></div>
 
               <!-- Close Button -->
-              <button class="window-control-btn close" @mousedown.stop.prevent="close" :title="t('studio.closeTitle')">
+              <button
+                class="window-control-btn close"
+                @pointerdown.stop
+                @click.stop.prevent="close"
+                :title="t('studio.closeTitle')"
+              >
                 <svg width="10" height="10" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M1 1L11 11M11 1L1 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
                 </svg>
@@ -544,7 +549,7 @@ onMounted(async () => {
   store.enableAutoSave()
 
   // Try to restore auto-saved data using new method
-  // const result = await store.autoRestoreSession()
+  const result = await store.autoRestoreSession()
   if (result.restored) {
     restoreInfo.value = result
     showRestoreBanner.value = true

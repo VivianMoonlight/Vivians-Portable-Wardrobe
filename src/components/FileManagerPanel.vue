@@ -1,13 +1,22 @@
 <template>
     <transition name="fade-zoom">
         <div :class="themeClass">
-            <div v-if="visible" class="fm-panel-shell" :class="{ 'is-mobile': isMobile }" :style="{
+            <div
+                v-if="visible"
+                :id="props.id"
+                class="fm-panel-shell"
+                :class="{ 'is-mobile': isMobile }"
+                :style="{
                 width: panel.w + 'px',
                 height: panel.h + 'px',
                 left: panel.x + 'px',
                 top: panel.y + 'px',
                 zIndex: panelZ
-            }" role="dialog" :aria-label="t('fileManagerPanel.ariaLabel')" tabindex="0" @mousedown="bringToFront"
+            }"
+                role="dialog"
+                :aria-label="t('fileManagerPanel.ariaLabel')"
+                tabindex="0"
+                @mousedown="bringToFront"
                 @focus="bringToFront">
                 <header class="fm-panel-header" @pointerdown.stop.prevent="startDrag">
                     <div class="fm-title">{{ t('fileManagerPanel.title') }}</div>
@@ -121,7 +130,8 @@ const WINDOW_MARGIN = 12 // 保持与 CSS 中的 margin/间距一致
 const MOBILE_BREAKPOINT = 900
 
 const props = defineProps({
-    visible: { type: Boolean, default: false }
+    visible: { type: Boolean, default: false },
+    id: { type: String, default: 'file-manager-panel' }
 })
 const emit = defineEmits(['close'])
 

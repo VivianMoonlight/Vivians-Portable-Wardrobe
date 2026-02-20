@@ -47,11 +47,6 @@ export function useAutoSave(store, options = {}) {
   // Cleanup
   onBeforeUnmount(() => {
     stopWatchers.forEach(stop => stop())
-    // Note: Our debounce implementation doesn't have cancel() method
-    // For compatibility with existing code, we add a no-op cancel
-    if (!debouncedSave.cancel) {
-      debouncedSave.cancel = () => {}
-    }
     debouncedSave.cancel()
   })
 
