@@ -49,105 +49,150 @@
       </div>
     </div>
 
+    <div class="mode-bar" v-if="hasPart">
+      <div class="mode-chip" :class="{ active: !isMultiMode }">
+        {{ t('partInspector.singleMode') || 'Single' }}
+      </div>
+      <div class="mode-chip" :class="{ active: isMultiMode }">
+        {{ t('partInspector.multiMode') || 'Multi' }}
+      </div>
+      <div class="mode-chip" :class="{ active: isMoveTool }">
+        {{ isMoveTool ? (t('partInspector.moveMode') || 'Move') : (t('partInspector.viewMode') || 'View') }}
+      </div>
+      <div class="mode-chip scope">
+        {{ scopeLabel }}
+      </div>
+    </div>
+
     <div class="body  scrollable">
       <div v-if="!hasPart" class="placeholder">{{ t('partInspector.noPartPlaceholder') }}</div>
 
       <div v-else class="content">
+        <div class="workflow-summary">
+          <div class="workflow-title">{{ t('partInspector.workflowTitle') || 'Workflow' }}</div>
+          <div class="workflow-steps">
+            <span>1. {{ t('partInspector.workflowScope') || 'Scope' }}</span>
+            <span>2. {{ t('partInspector.workflowProperty') || 'Property' }}</span>
+            <span>3. {{ t('partInspector.workflowValue') || 'Value' }}</span>
+            <span>4. {{ t('partInspector.workflowApply') || 'Apply' }}</span>
+          </div>
+        </div>
+
         <!-- Batch Edit Panel (shown when multiple layers selected) -->
         <BatchEditPanel v-if="isMultiMode" />
-        <!-- Description 编辑 -->
-        <div class="row">
-          <label>{{ t('partInspector.descriptionLabel') }}</label>
-          <div class="val edit-box">
-            <span>{{ partDescription }}</span>
-          </div>
-        </div>
-
-        <!-- Group 编辑 -->
-        <div class="row">
-          <label>{{ t('partInspector.groupLabel') }}</label>
-          <div class="val edit-box">
-            <span>{{ groupDescription }}</span>
-          </div>
-        </div>
-
-        <!-- Modular Asset Logic (New) -->
-        <template v-if="modularOptions && modularOptions.length > 0">
-          <div v-for="mod in modularOptions" :key="mod.Key" class="row">
-            <label>{{ mod.Description || mod.Name }}</label>
+        
+        <!-- Core Properties Section -->
+        <CollapsibleSection 
+          :title="t('partInspector.corePropertiesTitle') || 'Core Properties'"
+          :default-collapsed="false"
+        >
+          <!-- Description 编辑 -->
+          <div class="row">
+            <label>{{ t('partInspector.descriptionLabel') }}</label>
             <div class="val edit-box">
-              <select class="edit-input" :value="getModularValue(mod.Key)" @change="(e) => onModularChange(mod.Key, e)">
-                <option class="edit-option" v-for="opt in mod.Options" :key="opt.Index" :value="opt.Index">
+              <span>{{ partDescription }}</span>
+            </div>
+          </div>
+
+          <!-- Group 编辑 -->
+          <div class="row">
+            <label>{{ t('partInspector.groupLabel') }}</label>
+            <div class="val edit-box">
+              <span>{{ groupDescription }}</span>
+            </div>
+          </div>
+
+          <!-- Modular Asset Logic (New) -->
+          <template v-if="modularOptions && modularOptions.length > 0">
+            <div v-for="mod in modularOptions" :key="mod.Key" class="row">
+              <label>{{ mod.Description || mod.Name }}</label>
+              <div class="val edit-box">
+                <select class="edit-input" :value="getModularValue(mod.Key)" @change="(e) => onModularChange(mod.Key, e)">
+                  <option class="edit-option" v-for="opt in mod.Options" :key="opt.Index" :value="opt.Index">
+                    {{ opt.Description || opt.Name }}
+                  </option>
+                </select>
+              </div>
+            </div>
+          </template>
+
+          <!-- Typed Asset Type Selector (Standard Typed) -->
+          <div v-if="typedOptions.length > 0" class="row">
+            <label>{{ t('partInspector.typeRecordLabel') || 'Type' }}</label>
+            <div class="val edit-box">
+              <select class="edit-input" :value="currentTypeIndex" @change="onTypeChange">
+                <option class="edit-option" v-if="currentTypeIndex === -1" :value="-1" disabled>{{ t('partInspector.selectType') || 'Select...' }}</option>
+                <option class="edit-option" v-for="(opt, idx) in typedOptions" :key="idx" :value="idx">
                   {{ opt.Description || opt.Name }}
                 </option>
               </select>
             </div>
           </div>
-        </template>
+        </CollapsibleSection>
 
-        <!-- Typed Asset Type Selector (Standard Typed) -->
-        <div v-if="typedOptions.length > 0" class="row">
-          <label>{{ t('partInspector.typeRecordLabel') || 'Type' }}</label>
-          <div class="val edit-box">
-            <select class="edit-input" :value="currentTypeIndex" @change="onTypeChange">
-              <option class="edit-option" v-if="currentTypeIndex === -1" :value="-1" disabled>{{ t('partInspector.selectType') || 'Select...' }}</option>
-              <option class="edit-option" v-for="(opt, idx) in typedOptions" :key="idx" :value="idx">
-                {{ opt.Description || opt.Name }}
-              </option>
-            </select>
+        <!-- Layer Edits Section -->
+        <CollapsibleSection 
+          :title="t('partInspector.layerEditsTitle') || 'Layer Edits'"
+          :default-collapsed="false"
+        >
+          <!-- Layers: 使用子组件展示每个 main layer（基于 local 副本） -->
+          <div class="colorgroup-list">
+            <template v-if="layerEntriesLocal && layerEntriesLocal.length">
+              <ColorableLayer v-for="(m, mi) in layerEntriesLocal"
+                :key="m._key || (m.name || mi)"
+                :layer="m"
+                :part="part"
+                :stackIndex="store.focusedPartIndex?.stackIndex ?? 0"
+                :partIndex="store.focusedPartIndex?.partIndex ?? 0"
+                :selectionMode="store.selectionMode"
+                @save-layer="onSaveLayer" />
+            </template>
+
+            <!-- fallback: 没有 layerEntries 时原色展示 -->
+            <template v-else>
+              <div class="row">
+                <label>{{ t('partInspector.colorLabel') }}</label>
+                <div class="val">
+                  <template v-if="Array.isArray(part.Color) && part.Color.length">
+                    <div class="color-list">
+                      <div v-for="(c, i) in part.Color" :key="i" class="color-item">{{ c }}</div>
+                    </div>
+                  </template>
+                  <template v-else-if="part.Color">
+                    <div class="color-item">{{ part.Color }}</div>
+                  </template>
+                  <template v-else><span class="muted">—</span></template>
+                </div>
+              </div>
+            </template>
           </div>
-        </div>
+        </CollapsibleSection>
 
-        <!-- Layers: 使用子组件展示每个 main layer（基于 local 副本） -->
-        <div class="colorgroup-list">
-          <template v-if="layerEntriesLocal && layerEntriesLocal.length">
-            <ColorableLayer v-for="(m, mi) in layerEntriesLocal"
-              :key="m._key || (m.name || mi)"
-              :layer="m"
-              :part="part"
-              :stackIndex="store.focusedPartIndex?.stackIndex ?? 0"
-              :partIndex="store.focusedPartIndex?.partIndex ?? 0"
-              :selectionMode="store.selectionMode"
-              @save-layer="onSaveLayer" />
-          </template>
+        <!-- Advanced Properties Section (collapsed by default) -->
+        <CollapsibleSection 
+          v-if="part.Property || part.Craft"
+          :title="t('partInspector.advancedPropertiesTitle') || 'Advanced Properties'"
+          :default-collapsed="true"
+          variant="subtle"
+        >
+          <div v-if="part.Property" class="prop-block">
+            <div class="prop-title">{{ t('partInspector.propertyLabel') }}</div>
 
-          <!-- fallback: 没有 layerEntries 时原色展示 -->
-          <template v-else>
-            <div class="row">
-              <label>{{ t('partInspector.colorLabel') }}</label>
-              <div class="val">
-                <template v-if="Array.isArray(part.Color) && part.Color.length">
-                  <div class="color-list">
-                    <div v-for="(c, i) in part.Color" :key="i" class="color-item">{{ c }}</div>
-                  </div>
-                </template>
-                <template v-else-if="part.Color">
-                  <div class="color-item">{{ part.Color }}</div>
-                </template>
-                <template v-else><span class="muted">—</span></template>
+            <div v-if="part.Property.TypeRecord" class="prop-sub">
+              <div class="sub-title">{{ t('partInspector.typeRecordLabel') }}</div>
+              <div class="kv-list">
+                <div v-for="(v, k) in part.Property.TypeRecord" :key="k" class="kv">
+                  <span class="k">{{ k }}</span><span class="v">{{ v }}</span>
+                </div>
               </div>
             </div>
-          </template>
-        </div>
-
-        <!-- Properties 与 Craft 保持展示（只读） -->
-        <div v-if="part.Property" class="prop-block">
-          <div class="prop-title">{{ t('partInspector.propertyLabel') }}</div>
-
-          <div v-if="part.Property.TypeRecord" class="prop-sub">
-            <div class="sub-title">{{ t('partInspector.typeRecordLabel') }}</div>
-            <div class="kv-list">
-              <div v-for="(v, k) in part.Property.TypeRecord" :key="k" class="kv">
-                <span class="k">{{ k }}</span><span class="v">{{ v }}</span>
-              </div>
-            </div>
           </div>
-        </div>
 
-        <div v-if="part.Craft" class="prop-block">
-          <div class="prop-title">{{ t('partInspector.craftLabel') }}</div>
-          <pre class="craft-json">{{ shortJson(part.Craft) }}</pre>
-        </div>
+          <div v-if="part.Craft" class="prop-block">
+            <div class="prop-title">{{ t('partInspector.craftLabel') }}</div>
+            <pre class="craft-json">{{ shortJson(part.Craft) }}</pre>
+          </div>
+        </CollapsibleSection>
       </div>
     </div>
   </div>
@@ -159,6 +204,7 @@ import { useI18n } from 'vue-i18n'
 import { useStudioStore } from '@/stores/studioStore'
 import ColorableLayer from './ColorableLayer.vue'
 import BatchEditPanel from './BatchEditPanel.vue'
+import CollapsibleSection from '../ui/CollapsibleSection.vue'
 import { hostWindow, setTimeoutHost, doc } from '@/utils/host-window.js'
 import { AssetApi } from '@/utils/AssetApi'
 
@@ -172,6 +218,14 @@ const hasPart = computed(() => !!part.value)
 // Multi-selection state
 const isMultiMode = computed(() => store.selectionMode === 'multiple')
 const hasSelections = computed(() => store.selectedLayers && store.selectedLayers.length > 0)
+const scopeLabel = computed(() => {
+  if (!hasPart.value) return ''
+  if (isMultiMode.value) {
+    const count = store.selectedLayers?.length || 0
+    return `${t('partInspector.applyTo') || 'Apply to'} ${count} ${t('partInspector.layers') || 'layers'}`
+  }
+  return t('partInspector.applyToCurrentLayer') || 'Apply to current layer'
+})
 
 // Preview tool state
 const isMoveTool = computed(() => store.previewTool === 'move')
@@ -589,6 +643,36 @@ function handleKeydown(e) {
   cursor: not-allowed;
 }
 
+.mode-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-right: 8px;
+}
+
+.mode-chip {
+  padding: 4px 10px;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-xl, 12px);
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-surface);
+}
+
+.mode-chip.active {
+  color: var(--color-text-primary);
+  border-color: var(--color-border-focus);
+  background: var(--color-selection-single-bg);
+}
+
+.mode-chip.scope {
+  margin-left: auto;
+  color: var(--color-text-primary);
+  border-color: var(--color-selection-multi-border);
+  background: var(--color-selection-multi-bg);
+}
+
 /* Body */
 .body {
   flex: 1;
@@ -605,6 +689,29 @@ function handleKeydown(e) {
   padding: 12px;
   text-align: center;
   font-size: 14px;
+}
+
+.workflow-summary {
+  margin-bottom: 10px;
+  padding: 10px;
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--color-border-base);
+  background: var(--color-bg-surface);
+}
+
+.workflow-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+  margin-bottom: 6px;
+}
+
+.workflow-steps {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--color-text-primary);
 }
 
 /* Rows */

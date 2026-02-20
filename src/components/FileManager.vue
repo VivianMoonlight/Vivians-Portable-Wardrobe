@@ -3,6 +3,7 @@ import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFileSystemStore } from '@/stores/fileSystemStore'
 import FileItem from './FileItem.vue'
+import BaseButton from './ui/BaseButton.vue'
 import { hostWindow, doc, } from '@/utils/host-window.js'
 import { injectTheme } from '@/composables/useTheme'
 import * as DialogService from '@/services/DialogService.js'
@@ -232,12 +233,30 @@ function onBreadcrumbDrop(e, idx) {
         </div>
 
         <div class="top-actions">
-          <button class="panel-button" @click.stop="onAddFolder" :title="t('fileManager.newFolderTitle')">📁+</button>
+          <BaseButton 
+            variant="ghost" 
+            icon-only 
+            size="sm"
+            @click.stop="onAddFolder" 
+            :title="t('fileManager.newFolderTitle')"
+            :aria-label="t('fileManager.newFolderTitle')"
+          >
+            📁+
+          </BaseButton>
           <!--button class="batch" @click.stop="fsStore.saveAll" title="保存">💾 保存</button>
           <button class="batch" @click.stop="fsStore.loadAll" :title="t('fileManager.restoreTitle')">🔄</button-->
 
           <!-- 新增：刷新当前显示的缩略图 -->
-          <button class="panel-button" @click.stop="onRefreshThumbnails" :title="t('fileManager.refreshThumbnails')">🔄</button>
+          <BaseButton 
+            variant="ghost" 
+            icon-only 
+            size="sm"
+            @click.stop="onRefreshThumbnails" 
+            :title="t('fileManager.refreshThumbnails')"
+            :aria-label="t('fileManager.refreshThumbnails')"
+          >
+            🔄
+          </BaseButton>
 
           <!--button class="panel-close" @click="$emit('close')" :aria-label="t('fileManager.closePanel')">×</button-->
         </div>
@@ -269,10 +288,29 @@ function onBreadcrumbDrop(e, idx) {
               class="search-input"
               :aria-label="t('fileManager.searchAria')"
             />
-            <button class="header-btn" @click="clearSearch" :title="t('fileManager.clearSearch')" v-if="searchQuery">✕</button>
-            <button class="header-btn" @click="toggleScope" :title="searchScope === 'current' ? t('fileManager.switchToGlobalSearch') : t('fileManager.switchToCurrentSearch')">
+            <BaseButton 
+              v-if="searchQuery"
+              variant="ghost" 
+              icon-only 
+              size="sm"
+              @click="clearSearch" 
+              :title="t('fileManager.clearSearch')"
+              :aria-label="t('fileManager.clearSearch')"
+              class="search-box-btn"
+            >
+              ✕
+            </BaseButton>
+            <BaseButton 
+              variant="ghost" 
+              icon-only 
+              size="sm"
+              @click="toggleScope" 
+              :title="searchScope === 'current' ? t('fileManager.switchToGlobalSearch') : t('fileManager.switchToCurrentSearch')"
+              :aria-label="searchScope === 'current' ? t('fileManager.switchToGlobalSearch') : t('fileManager.switchToCurrentSearch')"
+              class="search-box-btn"
+            >
               {{ searchScope === 'current' ? '🔍' : '🌐' }}
-            </button>
+            </BaseButton>
           </div>
         </div>
       </div>

@@ -62,6 +62,8 @@
   --color-success: #10b981;
   --color-warning: #f59e0b;
   --color-error: #ef4444;
+  --color-danger: #dc2626;
+  --color-danger-hover: #b91c1c;
   --color-info: #3b82f6;
 
   /* Shadows */
@@ -285,6 +287,8 @@
   --color-warning-bg: rgba(251, 191, 36, 0.15);
   --color-error: var(--tmd-blocked, #f87171);
   --color-error-bg: #7f1d1d;
+  --color-danger: #ef4444;
+  --color-danger-hover: #dc2626;
   --color-info: #60a5fa;
   --color-info-bg: #1e3a8a;
 

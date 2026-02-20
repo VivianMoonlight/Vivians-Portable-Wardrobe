@@ -91,7 +91,7 @@
             <div v-show="!isCollapsed(gid)" class="group-body">
               <!-- 显示已有的 parts -->
               <div v-for="(p, idx) in groupData.parts" :key="gid + '::part::' + (p.Name || idx)" class="part-row"
-                :class="{ focused: isFocused(p) }" @click="focusPart(p)">
+                :class="{ active: isFocused(p) }" @click="focusPart(p)">
                 <div class="row-content">
                   <div class="left-col">
                     <div class="slot-name">{{ partGroupDescription(p) }}</div>
@@ -132,7 +132,7 @@
 
               <!-- 显示空槽位：现在点击直接进入替换模式 -->
               <div v-if="showEmptySlots" v-for="slot in groupData.emptySlots" :key="gid + '::empty::' + slot.Name"
-                class="part-row empty-slot clickable" :class="{ focused: isFocusedSlot(slot) }"
+                class="part-row empty-slot clickable" :class="{ active: isFocusedSlot(slot) }"
                 @click="enterReplaceForEmptySlot(slot, gid)">
                 <div class="row-content">
                   <div class="left-col">
@@ -1037,7 +1037,7 @@ button:focus,
 }
 
 /* 选中状态：使用左栏加背景色来标识（不影响水平对齐） */
-.part-row.focused {
+.part-row.active {
   border-left: 3px solid var(--color-selection-single);
   background: var(--color-selection-single-bg);
   padding-left: 9px;

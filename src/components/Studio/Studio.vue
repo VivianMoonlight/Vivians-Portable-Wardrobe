@@ -28,22 +28,36 @@
             <div class="studio-toolbar">
               <!-- Group 1: Stack IO (Standard File Icons) -->
               <div class="tool-group">
-                <button class="tool-btn icon-only" @pointerdown.stop.prevent @click="onSaveStacks"
-                  :title="t('studio.saveStacksTitle')">
+                <BaseButton 
+                  variant="ghost" 
+                  icon-only 
+                  size="sm"
+                  @pointerdown.stop.prevent 
+                  @click="onSaveStacks"
+                  :title="t('studio.saveStacksTitle')"
+                  :aria-label="t('studio.saveStacksTitle')"
+                >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                     stroke-linecap="round" stroke-linejoin="round">
                     <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v13a2 2 0 0 1-2 2z"></path>
                     <polyline points="17 21 17 13 7 13 7 21"></polyline>
                     <polyline points="7 3 7 8 15 8"></polyline>
                   </svg>
-                </button>
-                <button class="tool-btn icon-only" @pointerdown.stop.prevent @click="onLoadStacksClick"
-                  :title="t('studio.loadStacksTitle')">
+                </BaseButton>
+                <BaseButton 
+                  variant="ghost" 
+                  icon-only 
+                  size="sm"
+                  @pointerdown.stop.prevent 
+                  @click="onLoadStacksClick"
+                  :title="t('studio.loadStacksTitle')"
+                  :aria-label="t('studio.loadStacksTitle')"
+                >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                     stroke-linecap="round" stroke-linejoin="round">
                     <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
                   </svg>
-                </button>
+                </BaseButton>
               </div>
 
               <div class="divider"></div>
@@ -51,8 +65,15 @@
               <!-- Group 2: Palette IO & Toggle -->
               <div class="tool-group">
                 <!-- Save Palette: Floppy with Swatch Grid -->
-                <button class="tool-btn icon-only" @pointerdown.stop.prevent @click="onSavePalette"
-                  :title="t('studio.savePaletteTitle')">
+                <BaseButton 
+                  variant="ghost" 
+                  icon-only 
+                  size="sm"
+                  @pointerdown.stop.prevent 
+                  @click="onSavePalette"
+                  :title="t('studio.savePaletteTitle')"
+                  :aria-label="t('studio.savePaletteTitle')"
+                >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                     stroke-linecap="round" stroke-linejoin="round">
                     <!-- Floppy Disk Base -->
@@ -65,11 +86,18 @@
                     <rect x="9" y="18" width="2" height="2" fill="currentColor" stroke="none"></rect>
                     <rect x="13" y="18" width="2" height="2" fill="currentColor" stroke="none"></rect>
                   </svg>
-                </button>
+                </BaseButton>
 
                 <!-- Load Palette: Folder with Swatch Grid -->
-                <button class="tool-btn icon-only" @pointerdown.stop.prevent @click="onLoadPaletteClick"
-                  :title="t('studio.loadPaletteTitle')">
+                <BaseButton 
+                  variant="ghost" 
+                  icon-only 
+                  size="sm"
+                  @pointerdown.stop.prevent 
+                  @click="onLoadPaletteClick"
+                  :title="t('studio.loadPaletteTitle')"
+                  :aria-label="t('studio.loadPaletteTitle')"
+                >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                     stroke-linecap="round" stroke-linejoin="round">
                     <!-- Folder Base -->
@@ -80,7 +108,7 @@
                     <rect x="9" y="14" width="2" height="2" fill="currentColor" stroke="none"></rect>
                     <rect x="13" y="14" width="2" height="2" fill="currentColor" stroke="none"></rect>
                   </svg>
-                </button>
+                </BaseButton>
 
               </div>
 
@@ -88,9 +116,16 @@
 
               <!-- Group 3: Layer Manager -->
               <div class="tool-group">
-                <button class="tool-btn icon-only" @pointerdown.stop.prevent @click="togglePalette"
+                <BaseButton 
+                  variant="ghost" 
+                  icon-only 
+                  size="sm"
+                  @pointerdown.stop.prevent 
+                  @click="togglePalette"
                   :title="store.palettePanelVisible ? t('studio.hidePalette') : t('studio.showPalette')"
-                  :class="{ active: store.palettePanelVisible }">
+                  :aria-label="store.palettePanelVisible ? t('studio.hidePalette') : t('studio.showPalette')"
+                  :class="{ active: store.palettePanelVisible }"
+                >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                     stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="13.5" cy="6.5" r=".5" fill="currentColor"></circle>
@@ -101,37 +136,58 @@
                       d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z">
                     </path>
                   </svg>
-                </button>
+                </BaseButton>
 
-                <button class="tool-btn icon-only" @pointerdown.stop.prevent @click="toggleLayerManager"
+                <BaseButton 
+                  variant="ghost" 
+                  icon-only 
+                  size="sm"
+                  @pointerdown.stop.prevent 
+                  @click="toggleLayerManager"
                   :title="store.layerManagerActive ? t('studio.hideLayerManager') : t('studio.showLayerManager')"
-                  :class="{ active: store.layerManagerActive }">
+                  :aria-label="store.layerManagerActive ? t('studio.hideLayerManager') : t('studio.showLayerManager')"
+                  :class="{ active: store.layerManagerActive }"
+                >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                     stroke-linecap="round" stroke-linejoin="round">
                     <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
                   </svg>
-                </button>
+                </BaseButton>
 
-                <button class="tool-btn icon-only" @pointerdown.stop.prevent @click="toggleHistoryPanel"
+                <BaseButton 
+                  variant="ghost" 
+                  icon-only 
+                  size="sm"
+                  @pointerdown.stop.prevent 
+                  @click="toggleHistoryPanel"
                   :title="store.historyPanelVisible ? t('studio.hideHistory') : t('studio.showHistory')"
-                  :class="{ active: store.historyPanelVisible }">
+                  :aria-label="store.historyPanelVisible ? t('studio.hideHistory') : t('studio.showHistory')"
+                  :class="{ active: store.historyPanelVisible }"
+                >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                     stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="10"></circle>
                     <polyline points="12 6 12 12 16 14"></polyline>
                   </svg>
-                </button>
+                </BaseButton>
                  <!-- Saves Manager Button -->
-                <button class="tool-btn icon-only" @pointerdown.stop.prevent @click="toggleSavesManager"
+                <BaseButton 
+                  variant="ghost" 
+                  icon-only 
+                  size="sm"
+                  @pointerdown.stop.prevent 
+                  @click="toggleSavesManager"
                   :title="t('studio.savesManager') || 'Manage Saves'"
-                  :aria-label="t('studio.savesManager') || 'Manage Saves'" :class="{ active: savesManagerActive }">
+                  :aria-label="t('studio.savesManager') || 'Manage Saves'"
+                  :class="{ active: savesManagerActive }"
+                >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                     stroke-linecap="round" stroke-linejoin="round">
                     <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v13a2 2 0 0 1-2 2z"></path>
                     <polyline points="17 21 17 13 7 13 7 21"></polyline>
                     <polyline points="7 3 7 8 15 8"></polyline>
                   </svg>
-                </button>
+                </BaseButton>
               </div>
 
               <div class="divider"></div>
@@ -139,9 +195,16 @@
               <!-- Group 4: Character / Import / Export (Redesigned) -->
               <div class="tool-group">
                 <!-- Import Character -->
-                <button class="tool-btn icon-only" @pointerdown.stop.prevent @click="importCharacterAsStack"
+                <BaseButton 
+                  variant="ghost" 
+                  icon-only 
+                  size="sm"
+                  @pointerdown.stop.prevent 
+                  @click="importCharacterAsStack"
                   :disabled="!hasCharacterData"
-                  :title="t('studio.importCharacterTitle') || 'Import Character as Stack'">
+                  :title="t('studio.importCharacterTitle') || 'Import Character as Stack'"
+                  :aria-label="t('studio.importCharacterTitle') || 'Import Character as Stack'"
+                >
                   <!-- User Icon with Down Arrow (Import) -->
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                     stroke-linecap="round" stroke-linejoin="round">
@@ -149,11 +212,19 @@
                     <circle cx="12" cy="7" r="4"></circle>
                     <path d="M19 13l-3 3l-3-3" stroke-width="1.5"></path>
                   </svg>
-                </button>
+                </BaseButton>
 
                 <!-- Apply to target -->
-                <button class="tool-btn icon-only" @pointerdown.stop.prevent @click="applyToTarget" :disabled="!hasTarget"
-                  :title="applyButtonTitle">
+                <BaseButton 
+                  variant="primary" 
+                  icon-only 
+                  size="sm"
+                  @pointerdown.stop.prevent 
+                  @click="applyToTarget" 
+                  :disabled="!hasTarget"
+                  :title="applyButtonTitle"
+                  :aria-label="applyButtonTitle"
+                >
                   <!-- T-Shirt/Appearance Icon -->
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                     stroke-linecap="round" stroke-linejoin="round">
@@ -163,11 +234,19 @@
                     <path d="M16 19l2 2 4-4" stroke-width="1.5" transform="scale(0.5) translate(20, 20)"></path>
                     <!-- Small checkmark implication -->
                   </svg>
-                </button>
+                </BaseButton>
 
                 <!-- Export mergedAppearance -->
-                <button class="tool-btn icon-only" @pointerdown.stop.prevent @click="exportMergedToFileStore"
-                  :disabled="!hasFileSystem" :title="t('studio.exportMergedTitle')">
+                <BaseButton 
+                  variant="ghost" 
+                  icon-only 
+                  size="sm"
+                  @pointerdown.stop.prevent 
+                  @click="exportMergedToFileStore"
+                  :disabled="!hasFileSystem" 
+                  :title="t('studio.exportMergedTitle')"
+                  :aria-label="t('studio.exportMergedTitle')"
+                >
                   <!-- File Export Icon -->
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                     stroke-linecap="round" stroke-linejoin="round">
@@ -176,7 +255,7 @@
                     <path d="M12 18v-6"></path>
                     <path d="M9 15l3 3l3-3"></path>
                   </svg>
-                </button>
+                </BaseButton>
                
               </div>
 
@@ -185,7 +264,15 @@
               <!-- Group 5: Auto-save Controls -->
               <div class="tool-group">
                 <!-- Force Save Button -->
-                <button class="tool-btn icon-only" @pointerdown.stop.prevent @click="forceSave" title="Force Save Now">
+                <BaseButton 
+                  variant="ghost" 
+                  icon-only 
+                  size="sm"
+                  @pointerdown.stop.prevent 
+                  @click="forceSave" 
+                  title="Force Save Now"
+                  aria-label="Force Save Now"
+                >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                     stroke-linecap="round" stroke-linejoin="round">
                     <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v13a2 2 0 0 1-2 2z"></path>
@@ -193,11 +280,18 @@
                     <polyline points="7 3 7 8 15 8"></polyline>
                     <circle cx="12" cy="17" r="1" fill="currentColor"></circle>
                   </svg>
-                </button>
+                </BaseButton>
 
                 <!-- Clear Auto-save Button -->
-                <button class="tool-btn icon-only" @pointerdown.stop.prevent @click="clearAutoSave"
-                  title="Clear Auto-saved Data">
+                <BaseButton 
+                  variant="danger" 
+                  icon-only 
+                  size="sm"
+                  @pointerdown.stop.prevent 
+                  @click="clearAutoSave"
+                  title="Clear Auto-saved Data"
+                  aria-label="Clear Auto-saved Data"
+                >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                     stroke-linecap="round" stroke-linejoin="round">
                     <polyline points="3 6 5 6 21 6"></polyline>
@@ -205,7 +299,64 @@
                     <line x1="10" y1="11" x2="10" y2="17"></line>
                     <line x1="14" y1="11" x2="14" y2="17"></line>
                   </svg>
-                </button>
+                </BaseButton>
+              </div>
+
+              <!-- Mode Indicators -->
+              <div class="mode-indicators" v-if="hasActiveMode">
+                <StatusChip 
+                  v-if="isReplaceMode" 
+                  variant="primary" 
+                  size="sm"
+                  closable
+                  @close="exitReplaceMode"
+                >
+                  <template #icon>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                    </svg>
+                  </template>
+                  {{ t('studio.replaceMode') || 'Replace Mode' }}
+                </StatusChip>
+
+                <StatusChip 
+                  v-if="isMultiSelectMode" 
+                  variant="info" 
+                  size="sm"
+                  closable
+                  @close="exitMultiSelectMode"
+                >
+                  <template #icon>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="3" y="3" width="7" height="7"></rect>
+                      <rect x="14" y="3" width="7" height="7"></rect>
+                      <rect x="3" y="14" width="7" height="7"></rect>
+                      <rect x="14" y="14" width="7" height="7"></rect>
+                    </svg>
+                  </template>
+                  {{ selectedLayersCount }} {{ t('studio.layersSelected') || 'selected' }}
+                </StatusChip>
+
+                <StatusChip 
+                  v-if="isVisualMoveMode" 
+                  variant="warning" 
+                  size="sm"
+                  closable
+                  @close="exitVisualMoveMode"
+                >
+                  <template #icon>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <polyline points="5 9 2 12 5 15"></polyline>
+                      <polyline points="9 5 12 2 15 5"></polyline>
+                      <polyline points="15 19 12 22 9 19"></polyline>
+                      <polyline points="19 9 22 12 19 15"></polyline>
+                      <line x1="2" y1="12" x2="22" y2="12"></line>
+                      <line x1="12" y1="2" x2="12" y2="22"></line>
+                    </svg>
+                  </template>
+                  {{ t('studio.visualMoveMode') || 'Visual Move' }}
+                </StatusChip>
               </div>
 
               <!-- Save Status Indicator -->
@@ -222,16 +373,20 @@
               <div class="spacer"></div>
 
               <!-- Close Button -->
-              <button
+              <BaseButton
+                variant="ghost"
+                icon-only
+                size="sm"
                 class="window-control-btn close"
                 @pointerdown.stop
                 @click.stop.prevent="close"
                 :title="t('studio.closeTitle')"
+                :aria-label="t('studio.closeTitle')"
               >
                 <svg width="10" height="10" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M1 1L11 11M11 1L1 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
                 </svg>
-              </button>
+              </BaseButton>
             </div>
           </header>
 
@@ -248,11 +403,18 @@
                   Auto-saved data from <strong>{{ formatRestoreTime() }}</strong> has been restored
                 </span>
               </div>
-              <button class="banner-dismiss" @click="dismissRestoreBanner" aria-label="Dismiss">
+              <BaseButton 
+                variant="ghost" 
+                icon-only 
+                size="sm"
+                class="banner-dismiss" 
+                @click="dismissRestoreBanner" 
+                aria-label="Dismiss"
+              >
                 <svg width="14" height="14" viewBox="0 0 12 12" fill="none">
                   <path d="M1 1L11 11M11 1L1 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
                 </svg>
-              </button>
+              </BaseButton>
             </div>
           </transition>
 
@@ -333,6 +495,8 @@ import PalettePanel from './PalettePanel.vue'
 import LayerManagerWidget from './LayerManagerWidget.vue'
 import HistoryPanel from './HistoryPanel.vue'
 import SavesManager from './SavesManager.vue'
+import BaseButton from '../ui/BaseButton.vue'
+import StatusChip from '../ui/StatusChip.vue'
 import { useStudioStore } from '@/stores/studioStore'
 import { useFileSystemStore } from '@/stores/fileSystemStore'
 import { ExternalAdapter } from '@/utils/external_adapters'
@@ -632,6 +796,23 @@ async function importCharacterAsStack() {
 }
 
 const isReplaceMode = computed(() => !!(store.replaceTarget && store.replaceTarget.active))
+const isMultiSelectMode = computed(() => store.selectionMode === 'multiple' && store.selectedLayers.length > 0)
+const isVisualMoveMode = computed(() => store.previewTool === 'move')
+const hasActiveMode = computed(() => isReplaceMode.value || isMultiSelectMode.value || isVisualMoveMode.value)
+const selectedLayersCount = computed(() => store.selectedLayers.length)
+
+function exitReplaceMode() {
+  store.clearReplaceTarget()
+}
+
+function exitMultiSelectMode() {
+  store.clearLayerSelection()
+  store.selectionMode = 'single'
+}
+
+function exitVisualMoveMode() {
+  store.previewTool = 'view'
+}
 
 function togglePalette() {
   if (store.palettePanelVisible) store.closePalettePanel()
@@ -927,6 +1108,15 @@ async function clearAutoSave() {
   line-height: 1;
   background: rgba(255, 255, 255, 0.8);
   border-radius: 50%;
+}
+
+.mode-indicators {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm, 8px);
+  margin-left: var(--space-sm, 8px);
+  padding-left: var(--space-sm, 8px);
+  border-left: 1px solid var(--color-border-light, #e2e8f0);
 }
 
 .target-indicator {

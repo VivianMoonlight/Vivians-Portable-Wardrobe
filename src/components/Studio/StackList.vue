@@ -23,8 +23,8 @@
         class="stack-row"
         :class="{
           active: entry.idx === selectedIndex,
-          'drop-target-top': isDropTarget(entry.idx, 'top'),
-          'drop-target-bottom': isDropTarget(entry.idx, 'bottom')
+          'drag-over-top': isDropTarget(entry.idx, 'top'),
+          'drag-over-bottom': isDropTarget(entry.idx, 'bottom')
         }"
         @click="select(entry.idx)"
         @dragover="onDragOver($event, entry.idx)"
@@ -433,15 +433,15 @@ function resetDrag() {
   background: var(--color-bg-base, #fdfdfd);
 }
 
-/* Drop Indicators */
-.stack-row.drop-target-top {
+/* Drag Feedback Indicators */
+.stack-row.drag-over-top {
   border-top: 2px solid var(--color-primary, #2563eb);
-  margin-top: -1px; /* prevent layout shift */
+  margin-top: -2px; /* prevent layout shift */
 }
 
-.stack-row.drop-target-bottom {
+.stack-row.drag-over-bottom {
   border-bottom: 2px solid var(--color-primary, #2563eb);
-  margin-bottom: -1px;
+  margin-bottom: -2px;
 }
 
 /* Drag Handle */

@@ -1,5 +1,5 @@
 <template>
-  <div class="batch-edit-panel" v-if="true||hasSelections">
+  <div class="batch-edit-panel" v-if="true">
     <div class="panel-header" @click="toggleCollapse">
       <div class="title-section">
         <span class="title">{{ t('batchEdit.title') || 'Batch Edit' }}</span>
@@ -10,168 +10,91 @@
 
     <transition name="panel-collapse">
       <div v-show="!collapsed" class="panel-body">
-        <!-- Opacity Control -->
-        <div class="control-section">
+        <div class="scope-banner">
+          {{ t('batchEdit.applyTo') || 'Apply to' }} {{ selectedCount }} {{ t('batchEdit.layers') || 'layers' }}
+        </div>
+
+        <div class="workflow-steps">
+          <span>1. {{ t('batchEdit.stepProperty') || 'Property' }}</span>
+          <span>2. {{ t('batchEdit.stepMode') || 'Mode' }}</span>
+          <span>3. {{ t('batchEdit.stepValue') || 'Value' }}</span>
+          <span>4. {{ t('batchEdit.stepApply') || 'Apply' }}</span>
+        </div>
+
+        <div class="property-tabs">
+          <button class="tab-btn" :class="{ active: activeProperty === 'opacity' }" @click="activeProperty = 'opacity'">{{ t('batchEdit.opacity') || 'Opacity' }}</button>
+          <button class="tab-btn" :class="{ active: activeProperty === 'offset' }" @click="activeProperty = 'offset'">{{ t('batchEdit.offset') || 'Offset' }}</button>
+          <button class="tab-btn" :class="{ active: activeProperty === 'priority' }" @click="activeProperty = 'priority'">{{ t('batchEdit.priority') || 'Priority' }}</button>
+          <button class="tab-btn" :class="{ active: activeProperty === 'color' }" @click="activeProperty = 'color'">{{ t('batchEdit.color') || 'Color' }}</button>
+        </div>
+
+        <div class="control-section" v-if="activeProperty === 'opacity'">
           <div class="section-header">
             <label>{{ t('batchEdit.opacity') || 'Opacity' }}</label>
             <div class="mode-toggle">
-              <button 
-                class="mode-btn" 
-                :class="{ active: opacityMode === 'absolute' }"
-                @click="opacityMode = 'absolute'"
-                :title="t('batchEdit.absoluteMode') || 'Set to exact value'"
-              >
-                =
-              </button>
-              <button 
-                class="mode-btn" 
-                :class="{ active: opacityMode === 'relative' }"
-                @click="opacityMode = 'relative'"
-                :title="t('batchEdit.relativeMode') || 'Adjust by amount'"
-              >
-                ±
-              </button>
+              <button class="mode-btn" :class="{ active: opacityMode === 'absolute' }" @click="opacityMode = 'absolute'" :title="t('batchEdit.absoluteMode') || 'Set to exact value'">=</button>
+              <button class="mode-btn" :class="{ active: opacityMode === 'relative' }" @click="opacityMode = 'relative'" :title="t('batchEdit.relativeMode') || 'Adjust by amount'">±</button>
             </div>
           </div>
           <div class="control-group">
-            <input
-              type="range"
-              class="slider-input"
-              v-model.number="opacityValue"
-              :min="opacityMode === 'relative' ? -100 : 0"
-              :max="100"
-            />
-            <input
-              v-model.number="opacityValue"
-              class="num-input"
-              type="number"
-              :min="opacityMode === 'relative' ? -100 : 0"
-              :max="100"
-              step="1"
-            />
+            <input type="range" class="slider-input" v-model.number="opacityValue" :min="opacityMode === 'relative' ? -100 : 0" :max="100" />
+            <input v-model.number="opacityValue" class="num-input" type="number" :min="opacityMode === 'relative' ? -100 : 0" :max="100" step="1" />
             <span class="unit">%</span>
-            <button class="apply-btn" @click="applyOpacity" :title="t('batchEdit.apply') || 'Apply'">
-              {{ t('batchEdit.apply') || 'Apply' }}
-            </button>
+            <button class="apply-btn" @click="applyOpacity" :disabled="selectedCount === 0" :title="t('batchEdit.apply') || 'Apply'">{{ t('batchEdit.apply') || 'Apply' }}</button>
           </div>
         </div>
 
-        <!-- Offset Control -->
-        <div class="control-section">
+        <div class="control-section" v-if="activeProperty === 'offset'">
           <div class="section-header">
             <label>{{ t('batchEdit.offset') || 'Offset' }}</label>
             <div class="mode-toggle">
-              <button 
-                class="mode-btn" 
-                :class="{ active: offsetMode === 'absolute' }"
-                @click="offsetMode = 'absolute'"
-                :title="t('batchEdit.absoluteMode') || 'Set to exact value'"
-              >
-                =
-              </button>
-              <button 
-                class="mode-btn" 
-                :class="{ active: offsetMode === 'relative' }"
-                @click="offsetMode = 'relative'"
-                :title="t('batchEdit.relativeMode') || 'Adjust by amount'"
-              >
-                ±
-              </button>
+              <button class="mode-btn" :class="{ active: offsetMode === 'absolute' }" @click="offsetMode = 'absolute'" :title="t('batchEdit.absoluteMode') || 'Set to exact value'">=</button>
+              <button class="mode-btn" :class="{ active: offsetMode === 'relative' }" @click="offsetMode = 'relative'" :title="t('batchEdit.relativeMode') || 'Adjust by amount'">±</button>
             </div>
           </div>
-          
-          <!-- Visual Move Toggle -->
+
           <div class="visual-move-section">
-            <button 
-              class="visual-move-toggle" 
-              :class="{ active: visualMoveEnabled }"
-              @click="toggleVisualMove"
-              :title="t('batchEdit.visualMove') || 'Visual Move'"
-            >
+            <button class="visual-move-toggle" :class="{ active: visualMoveEnabled }" @click="toggleVisualMove" :title="t('batchEdit.visualMove') || 'Visual Move'">
               <span class="icon">✥</span>
               <span class="label">{{ t('batchEdit.visualMove') || 'Visual Move' }}</span>
             </button>
-            <span class="info-text" v-if="visualMoveEnabled">
-              {{ selectedCount === 1 ? t('batchEdit.visualMoveSingle') : t('batchEdit.visualMoveMultiple', { count: selectedCount }) }}
-            </span>
+            <span class="info-text" v-if="visualMoveEnabled">{{ selectedCount === 1 ? t('batchEdit.visualMoveSingle') : t('batchEdit.visualMoveMultiple', { count: selectedCount }) }}</span>
           </div>
 
           <div class="control-group">
             <div class="offset-input-group">
               <span class="input-label">X</span>
-              <input
-                v-model.number="offsetX"
-                class="num-input"
-                type="number"
-                step="1"
-                :placeholder="offsetMode === 'relative' ? '0' : 'X'"
-              />
+              <input v-model.number="offsetX" class="num-input" type="number" step="1" :placeholder="offsetMode === 'relative' ? '0' : 'X'" />
             </div>
             <div class="offset-input-group">
               <span class="input-label">Y</span>
-              <input
-                v-model.number="offsetY"
-                class="num-input"
-                type="number"
-                step="1"
-                :placeholder="offsetMode === 'relative' ? '0' : 'Y'"
-              />
+              <input v-model.number="offsetY" class="num-input" type="number" step="1" :placeholder="offsetMode === 'relative' ? '0' : 'Y'" />
             </div>
-            <button class="apply-btn" @click="applyOffset" :title="t('batchEdit.apply') || 'Apply'">
-              {{ t('batchEdit.apply') || 'Apply' }}
-            </button>
+            <button class="apply-btn" @click="applyOffset" :disabled="selectedCount === 0" :title="t('batchEdit.apply') || 'Apply'">{{ t('batchEdit.apply') || 'Apply' }}</button>
           </div>
         </div>
 
-        <!-- Priority Control -->
-        <div class="control-section">
+        <div class="control-section" v-if="activeProperty === 'priority'">
           <div class="section-header">
             <label>{{ t('batchEdit.priority') || 'Priority' }}</label>
             <div class="mode-toggle">
-              <button 
-                class="mode-btn" 
-                :class="{ active: priorityMode === 'absolute' }"
-                @click="priorityMode = 'absolute'"
-                :title="t('batchEdit.absoluteMode') || 'Set to exact value'"
-              >
-                =
-              </button>
-              <button 
-                class="mode-btn" 
-                :class="{ active: priorityMode === 'relative' }"
-                @click="priorityMode = 'relative'"
-                :title="t('batchEdit.relativeMode') || 'Adjust by amount'"
-              >
-                ±
-              </button>
+              <button class="mode-btn" :class="{ active: priorityMode === 'absolute' }" @click="priorityMode = 'absolute'" :title="t('batchEdit.absoluteMode') || 'Set to exact value'">=</button>
+              <button class="mode-btn" :class="{ active: priorityMode === 'relative' }" @click="priorityMode = 'relative'" :title="t('batchEdit.relativeMode') || 'Adjust by amount'">±</button>
             </div>
           </div>
           <div class="control-group">
-            <input
-              v-model.number="priorityValue"
-              class="num-input"
-              type="number"
-              step="1"
-              :placeholder="priorityMode === 'relative' ? '0' : 'Priority'"
-            />
-            <button class="apply-btn" @click="applyPriority" :title="t('batchEdit.apply') || 'Apply'">
-              {{ t('batchEdit.apply') || 'Apply' }}
-            </button>
+            <input v-model.number="priorityValue" class="num-input" type="number" step="1" :placeholder="priorityMode === 'relative' ? '0' : 'Priority'" />
+            <button class="apply-btn" @click="applyPriority" :disabled="selectedCount === 0" :title="t('batchEdit.apply') || 'Apply'">{{ t('batchEdit.apply') || 'Apply' }}</button>
           </div>
         </div>
 
-        <!-- Color Control -->
-        <div class="control-section">
+        <div class="control-section" v-if="activeProperty === 'color'">
           <div class="section-header">
             <label>{{ t('batchEdit.color') || 'Color' }}</label>
-            <span class="info-text" v-if="colorableCount < selectedCount">
-              {{ colorableCount }} {{ t('batchEdit.colorable') || 'colorable' }}
-            </span>
+            <span class="info-text" v-if="colorableCount < selectedCount">{{ colorableCount }} {{ t('batchEdit.colorable') || 'colorable' }}</span>
           </div>
           <div class="control-group">
-            <button class="palette-btn" @click="openPaletteForBatch" :title="t('batchEdit.openPalette') || 'Open palette to select color'">
-              🎨 {{ t('batchEdit.selectColor') || 'Select Color' }}
-            </button>
+            <button class="palette-btn" @click="openPaletteForBatch" :disabled="selectedCount === 0" :title="t('batchEdit.openPalette') || 'Open palette to select color'">🎨 {{ t('batchEdit.selectColor') || 'Select Color' }}</button>
           </div>
         </div>
 
@@ -180,6 +103,12 @@
           <button class="clear-btn" @click="clearSelection">
             {{ t('batchEdit.clearSelection') || 'Clear Selection' }}
           </button>
+        </div>
+
+        <div v-if="resultSummary" class="result-summary" :class="resultSummary.type">
+          <span>{{ t('batchEdit.updated') || 'Updated' }}: {{ resultSummary.updated }}</span>
+          <span>{{ t('batchEdit.skipped') || 'Skipped' }}: {{ resultSummary.skipped }}</span>
+          <span>{{ t('batchEdit.failed') || 'Failed' }}: {{ resultSummary.failed }}</span>
         </div>
 
         <!-- Feedback Message -->
@@ -203,6 +132,8 @@ const store = useStudioStore()
 const collapsed = ref(false)
 const feedbackMessage = ref('')
 const feedbackType = ref('success') // 'success' | 'warning' | 'error'
+const activeProperty = ref('opacity')
+const resultSummary = ref(null)
 
 // Opacity
 const opacityMode = ref('absolute')
@@ -242,9 +173,38 @@ function showFeedback(message, type = 'success') {
   }, 3000)
 }
 
+function setResultSummary(result) {
+  if (!result) {
+    resultSummary.value = null
+    return
+  }
+
+  if (!result.success) {
+    resultSummary.value = {
+      updated: 0,
+      skipped: 0,
+      failed: selectedCount.value,
+      type: 'error'
+    }
+    return
+  }
+
+  const updated = Number(result.updatedCount || 0)
+  const skipped = Number(result.skippedCount || Math.max(0, selectedCount.value - updated))
+  const failed = 0
+
+  resultSummary.value = {
+    updated,
+    skipped,
+    failed,
+    type: skipped > 0 ? 'warning' : 'success'
+  }
+}
+
 function applyOpacity() {
   try {
     const result = store.batchUpdateOpacity(opacityValue.value, opacityMode.value)
+    setResultSummary(result)
     if (result.success) {
       showFeedback(`${t('batchEdit.updated') || 'Updated'} ${result.updatedCount} ${t('batchEdit.layers') || 'layers'}`, 'success')
     } else {
@@ -261,6 +221,7 @@ function applyOffset() {
     const x = offsetX.value || 0
     const y = offsetY.value || 0
     const result = store.batchUpdateOffset(x, y, offsetMode.value)
+    setResultSummary(result)
     if (result.success) {
       showFeedback(`${t('batchEdit.updated') || 'Updated'} ${result.updatedCount} ${t('batchEdit.layers') || 'layers'}`, 'success')
     } else {
@@ -275,6 +236,7 @@ function applyOffset() {
 function applyPriority() {
   try {
     const result = store.batchUpdatePriority(priorityValue.value, priorityMode.value)
+    setResultSummary(result)
     if (result.success) {
       showFeedback(`${t('batchEdit.updated') || 'Updated'} ${result.updatedCount} ${t('batchEdit.layers') || 'layers'}`, 'success')
     } else {
@@ -300,11 +262,13 @@ function openPaletteForBatch() {
       }))
     
     if (colorableTargets.length === 0) {
+      setResultSummary({ success: true, updatedCount: 0, skippedCount: selectedCount.value })
       showFeedback(t('batchEdit.noColorableLayers') || 'No colorable layers selected', 'warning')
       return
     }
     
     store.openPalettePanel(colorableTargets)
+    setResultSummary({ success: true, updatedCount: colorableTargets.length, skippedCount: Math.max(0, selectedCount.value - colorableTargets.length) })
   } catch (e) {
     console.error('[BatchEditPanel] openPaletteForBatch error:', e)
     showFeedback(t('batchEdit.error') || 'An error occurred', 'error')
@@ -336,6 +300,7 @@ watch(() => store.selectedLayers.length, (newCount, oldCount) => {
     priorityValue.value = 0
     priorityMode.value = 'absolute'
     feedbackMessage.value = ''
+    resultSummary.value = null
     visualMoveEnabled.value = false
   }
 })
@@ -409,6 +374,47 @@ watch(() => store.previewTool, (newTool) => {
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+.scope-banner {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-accent-purple-dark);
+  border: 1px solid var(--color-accent-purple-light);
+  background: var(--color-accent-purple-bg-subtle);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm, 6px);
+}
+
+.workflow-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--color-accent-purple-light);
+}
+
+.property-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tab-btn {
+  padding: 5px 10px;
+  border: 1px solid var(--color-accent-purple-light);
+  background: var(--color-bg-base);
+  color: var(--color-accent-purple);
+  border-radius: var(--radius-sm, 6px);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tab-btn.active {
+  background: var(--color-accent-purple);
+  color: var(--color-text-inverse);
+  border-color: var(--color-accent-purple);
 }
 
 .control-section {
@@ -652,6 +658,34 @@ watch(() => store.previewTool, (newTool) => {
 }
 
 .feedback-message.error {
+  background: var(--color-error-bg);
+  color: var(--color-error);
+  border: 1px solid var(--color-error);
+}
+
+.result-summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm, 6px);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.result-summary.success {
+  background: var(--color-success-bg, rgba(16, 185, 129, 0.15));
+  color: var(--color-success);
+  border: 1px solid var(--color-success);
+}
+
+.result-summary.warning {
+  background: var(--color-warning-bg, rgba(245, 158, 11, 0.15));
+  color: var(--color-warning);
+  border: 1px solid var(--color-warning);
+}
+
+.result-summary.error {
   background: var(--color-error-bg);
   color: var(--color-error);
   border: 1px solid var(--color-error);

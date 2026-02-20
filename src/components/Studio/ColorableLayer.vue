@@ -9,9 +9,10 @@
       <span class="color-main-title" :title="layerLocal.name">
         {{ layerLocal.displayName || layerLocal.name || ("#" + (displayIndex + 1)) }}
       </span>
-      <span class="fold-arrow" :class="{ collapsed: collapsed }" v-if="hasSublayers">
-        {{ collapsed ? "▸" : "▾" }}
-      </span>
+      <button class="fold-toggle" v-if="hasSublayers" @click.stop="toggleCollapse"
+        :title="collapsed ? (t('colorableLayer.expand') || 'Expand') : (t('colorableLayer.collapse') || 'Collapse')">
+        <span class="fold-arrow" :class="{ collapsed: collapsed }">{{ collapsed ? "▸" : "▾" }}</span>
+      </button>
     </div>
 
     <div class="color-main-body">
@@ -283,9 +284,7 @@ const throttledEmitSave = throttle((newLayerData) => {
 /* ------------------- Input Handlers ------------------- */
 
 function toggleCollapse() {
-  if (!isMultiMode.value) {
-    collapsed.value = !collapsed.value
-  }
+  collapsed.value = !collapsed.value
 }
 
 // Track the last clicked layer index for range selection
@@ -306,11 +305,11 @@ function handleHeaderClick(e) {
       lastClickedLayerIndex.value = layerLocal.value.layerIndex
     }
   } else {
-    // In single mode, Ctrl/Cmd + Click toggles selection temporarily
+    // In single mode, keep click semantic focused on selection/focus only
     if (e.ctrlKey || e.metaKey) {
       toggleSelection()
     } else {
-      toggleCollapse()
+      selectProperty('color')
     }
   }
 }
@@ -684,6 +683,23 @@ function togglePaletteForEntry() {
   color: var(--color-text-tertiary);
   width: 12px;
   text-align: center;
+}
+
+.fold-toggle {
+  border: 1px solid var(--color-border-base);
+  background: var(--color-bg-base);
+  color: var(--color-text-tertiary);
+  border-radius: var(--radius-xs, 4px);
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.fold-toggle:hover {
+  background: var(--color-bg-hover);
 }
 
 .fold-arrow.collapsed {

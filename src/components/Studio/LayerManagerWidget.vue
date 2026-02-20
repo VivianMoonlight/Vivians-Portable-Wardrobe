@@ -17,7 +17,7 @@
                 <div v-for="item in displayList" :key="item.uniqueId" class="layer-item" :class="{
                     'is-group': item.isGroup,
                     'is-locked': item.locked,
-                    'is-active': isPartActive(item.partUid),
+                    'active': isPartActive(item.partUid),
                     'drag-over-top': dropTarget === item.uniqueId && dropPosition === 'top',
                     'drag-over-bottom': dropTarget === item.uniqueId && dropPosition === 'bottom',
                     'drag-over-middle': dropTarget === item.uniqueId && dropPosition === 'middle'
@@ -411,7 +411,7 @@ function onDragEnd() {
     background: var(--color-bg-hover, #f4f8ff);
 }
 
-.layer-item.is-active {
+.layer-item.active {
     background: var(--color-info-bg, #eef6ff);
 }
 

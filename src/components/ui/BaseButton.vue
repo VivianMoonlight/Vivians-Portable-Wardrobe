@@ -7,7 +7,7 @@ defineProps({
   variant: {
     type: String,
     default: 'primary',
-    validator: (v) => ['primary', 'secondary', 'ghost'].includes(v)
+    validator: (v) => ['primary', 'secondary', 'ghost', 'danger'].includes(v)
   },
   size: {
     type: String,
@@ -15,6 +15,8 @@ defineProps({
     validator: (v) => ['sm', 'md', 'lg'].includes(v)
   },
   disabled: Boolean,
+  loading: Boolean,
+  iconOnly: Boolean,
   type: {
     type: String,
     default: 'button'
@@ -24,8 +26,13 @@ defineProps({
 
 <template>
   <button
-    :class="['btn-base', `btn-${variant}`, `btn-${size}`]"
-    :disabled="disabled"
+    :class="[
+      'btn-base', 
+      `btn-${variant}`, 
+      `btn-${size}`,
+      { 'btn-icon-only': iconOnly, 'btn-loading': loading }
+    ]"
+    :disabled="disabled || loading"
     :type="type"
   >
     <slot />
@@ -114,5 +121,46 @@ defineProps({
 
 .btn-ghost:active:not(:disabled) {
   background: var(--color-bg-active, #e2e8f0);
+}
+
+/* Danger */
+.btn-danger {
+  background: var(--color-danger, #dc2626);
+  color: var(--color-text-inverse, #fff);
+  border-color: var(--color-danger, #dc2626);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: var(--color-danger-hover, #b91c1c);
+}
+
+.btn-danger:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+/* Icon-only modifier - square buttons for toolbars */
+.btn-icon-only.btn-sm {
+  padding: var(--space-xs, 4px);
+  width: var(--button-height-sm, 28px);
+  min-width: var(--button-height-sm, 28px);
+}
+
+.btn-icon-only.btn-md {
+  padding: var(--space-sm, 8px);
+  width: var(--button-height-md, 32px);
+  min-width: var(--button-height-md, 32px);
+}
+
+.btn-icon-only.btn-lg {
+  padding: var(--space-md, 12px);
+  width: var(--button-height-lg, 36px);
+  min-width: var(--button-height-lg, 36px);
+}
+
+/* Loading state */
+.btn-loading {
+  position: relative;
+  opacity: 0.7;
+  pointer-events: none;
 }
 </style>
