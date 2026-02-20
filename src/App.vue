@@ -188,19 +188,6 @@ function closePanel() {
     inset 0 1px 0 rgba(255,255,255,0.25);
 }
 
-/* Mobile: center button at bottom */
-@media (max-width: 640px) {
-  .open-fm-btn {
-    left: 50%;
-    bottom: calc(var(--safe-area-bottom) + 20px);
-    transform: translateX(-50%);
-  }
-
-  .open-fm-btn:active {
-    transform: translateX(-50%) translateY(-2px) scale(0.985);
-  }
-}
-
 /* Focus-visible 优化，便于键盘用户 */
 .open-fm-btn:focus-visible {
   box-shadow:

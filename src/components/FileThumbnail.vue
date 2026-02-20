@@ -90,7 +90,7 @@ async function insertCanvas() {
   // 先调整尺寸
   setCanvasSizeToContainer();
 
-  let src = null; s
+  let src = null;
   try {
     src = await fsStore.renderer.getCanvas(props.item, { timeout: 6000 });
   } catch (err) {

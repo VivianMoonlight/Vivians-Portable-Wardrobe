@@ -277,3 +277,55 @@ a { color: inherit; text-decoration: none; }
 - 可复用的 Vue UI 组件
 - 一致的组件样式
 - 完善的明暗主题支持
+
+---
+
+## 八、UI/UX 组件架构现代化（2026-02-20 新增）
+
+### 8.1 组件架构升级 (P0 完成)
+
+基于 `components-architecture-analysis.md` 和 `uiux-modernization-roadmap.md`，完成了基础架构层改造：
+
+#### 窗口原语（P0.1）
+- ✅ **创建** `src/composables/useWindowDragResize.js`
+  - 提取窗口拖拽/缩放行为为可复用 composable
+  - 统一 drag/resize 生命周期、边界约束、响应式适配
+  - 支持 mobile/desktop 自适应
+
+- ✅ **创建** `src/components/ui/BaseWindow.vue`
+  - 标准化窗口外壳组件（header/body/footer slots）
+  - 内置 resize handles 与过渡动画
+  - 准备用于统一 FileManagerPanel 和 Studio 窗口行为
+
+#### 面板骨架原语（P0.2）
+- ✅ **创建** `src/components/ui/BasePanelHeader.vue`
+  - 标准化面板头部（title + actions slots）
+  - 统一间距与对齐规则
+
+- ✅ **创建** `src/components/ui/BasePanelBody.vue`
+  - 标准化面板主体（scrollable + padding 变体）
+  - 统一 overflow 与滚动行为
+
+- ✅ **创建** `src/components/ui/BasePanelFooter.vue`
+  - 标准化面板底部（对齐选项：left/center/right/between）
+  - 统一 border 与背景样式
+
+#### 小瑕疵修复（P0.3）
+- ✅ **修复** `FileThumbnail.vue` 脚本 typo (`let src = null; s` -> `let src = null;`)
+- ✅ **合并** `App.vue` 重复的 mobile media query 块
+- ✅ 验证所有新组件均使用标准 design token
+
+### 8.2 下一步路线（P1 计划中）
+
+**面板迁移目标**（P1.1 - P1.4）：
+- 逐步将 `Studio` 子面板（PartListPanel/PartInspectorPanel/AssetSelectorPanel/PalettePanel）迁移到新骨架
+- 统一 action semantics（Primary/Secondary/Danger 按钮层次）
+- 改进 mode 状态可见性（replace mode/multi-select mode chips）
+
+**风险控制策略**：
+- 渐进式迁移（一次一个组件）
+- 每次迁移后验证交互无回归
+- 保留原有功能完整性
+
+详细进度追踪见：`docs/modernization-progress.md`
+
