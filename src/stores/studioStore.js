@@ -1,8 +1,7 @@
 /**
  * NOTE:
- * This file is a modified version of the original store to add "focusedProperty"
- * management and per-part _uid bookkeeping so components can refer to parts by
- * reference or uid.  The rest of the store logic is preserved with minimal changes.
+ * This file manages the studio state with unified focus system (focusState) and
+ * per-part _uid bookkeeping so components can refer to parts by reference or uid.
  */
 import { defineStore } from 'pinia'
 import { RenderService } from '@/services/RenderService'
@@ -131,9 +130,6 @@ export const useStudioStore = defineStore('studio', {
     },
     layerManagerActive: false,
 
-    // NEW: focusedProperty keeps a single focused attribute within a part
-    focusedProperty: null,
-
     assetGroupsRaw: [],
     assetIndex: {},
 
@@ -157,7 +153,6 @@ export const useStudioStore = defineStore('studio', {
 
     // Palette editing mode
     paletteModeActive: false,
-    activePaletteTargets: [],
 
     // NEW: central palette panel visibility (UI-level)
     palettePanelVisible: false,
@@ -191,14 +186,58 @@ export const useStudioStore = defineStore('studio', {
       priority: null
     },
 
+    // NEW: Active focus context (meta information for selected layers)
+    activeFocusContext: {
+      property: null,      // 'color' | 'opacity' | 'drawing' | 'priority' | null
+      subLayerIndex: null, // For sublayers
+      timestamp: 0         // Last focus timestamp
+    },
+
     // Preview tool state
     previewTool: 'view', // 'view' | 'move'
+
+    // Single source of truth for focus (Phase 0/1)
+    focusState: {
+      scope: {
+        stackIndex: null,
+        partIndex: null,
+        partUid: null
+      },
+      selection: {
+        mode: 'single',
+        layerKeys: [],
+        anchorLayerKey: null
+      },
+      editor: {
+        property: null,
+        subLayerIndex: null,
+        timestamp: 0
+      },
+      tool: {
+        preview: 'view'
+      }
+    },
 
     // Undo/Redo Manager
     _undoRedoManager: null,
 
     // History panel visibility
     historyPanelVisible: false,
+    // Studio V2 UI state
+    workspaceMode: 'pro', // fixed to 'pro'
+    taskStage: 'assemble', // 'assemble' | 'replace' | 'polish' | 'commit'
+    activeContextPanel: 'inspector', // 'inspector' | 'asset' | 'palette'
+    panelStates: {
+      inspector: 'pinned',
+      asset: 'hidden',
+      palette: 'hidden',
+      layer: 'hidden',
+      history: 'hidden',
+      saves: 'hidden'
+    }, // 'pinned' | 'peek' | 'hidden'
+    pinnedPanel: null,
+    mobileTab: 'structure', // 'structure' | 'replace' | 'property' | 'history'
+    firstRunGuideDone: false,
     // Auto-save state
     autoSaveEnabled: true,
     lastSaveTime: null,
@@ -234,6 +273,26 @@ export const useStudioStore = defineStore('studio', {
     },
     paletteSnapshot(state) {
       return Palette.paletteSnapshot(state.paletteMap)
+    },
+
+    activePaletteTargets(state) {
+      if (!state.paletteModeActive) return []
+      const selected = SelectionActions.getSelectedLayersData(state)
+      return selected
+        .filter(d => d.layer && d.layer.isColorable)
+        .map(d => ({
+          uid: d.part?._uid || null,
+          stackIndex: d.selection?.stackIndex,
+          partIndex: d.selection?.partIndex,
+          layerIndex: (typeof d.layer?.colorableIndex === 'number') ? d.layer.colorableIndex : d.selection?.layerIndex,
+          currentColorText: d.layer?.colorText || null,
+          currentColorCss: this._resolveColorCssFromText(d.layer?.colorText || null)
+        }))
+    },
+
+    // NEW: Get all focused layers data (unified getter)
+    focusedLayersData(state) {
+      return SelectionActions.getSelectedLayersData(state)
     },
 
     // Check if move tool can be used (requires focused part)
@@ -277,6 +336,7 @@ export const useStudioStore = defineStore('studio', {
     setPreviewTool(tool) {
       const result = PreviewActions.setPreviewTool(tool)
       this.previewTool = result.previewTool
+      this.focusState.tool.preview = result.previewTool
     },
 
     /**
@@ -285,6 +345,7 @@ export const useStudioStore = defineStore('studio', {
     togglePreviewTool() {
       const result = PreviewActions.togglePreviewTool(this)
       this.previewTool = result.previewTool
+      this.focusState.tool.preview = result.previewTool
     },
 
     // -------------------------
@@ -318,45 +379,216 @@ export const useStudioStore = defineStore('studio', {
       const result = FocusActions.setReplaceTargetState(this, item, key, isEmpty)
       this.replaceTarget = result.replaceTarget
       this.focusedPartIndex = { stackIndex: null, partIndex: null }
-      this.clearFocusedProperty()
+      this.clearPropertyFocus()
+      this.onReplaceEnter({ key, isEmpty })
     },
 
     clearReplaceTarget() {
       const result = FocusActions.clearReplaceTargetState()
       this.replaceTarget = result.replaceTarget
+      if (this.taskStage === 'replace') {
+        this.setTaskStage('polish')
+      }
+      if (this.activeContextPanel === 'asset' && this.pinnedPanel !== 'asset') {
+        this.openContextPanel('inspector', 'replace-cleared')
+      }
     },
 
-    // -------------------------
-    // Focused property helpers
-    // -------------------------
-    setFocusedProperty(payload = {}) {
-      if (!payload) return
-      const out = {
-        uid: null,
-        partRef: null,
-        stackIndex: (typeof payload.stackIndex === 'number') ? payload.stackIndex : null,
-        partIndex: (typeof payload.partIndex === 'number') ? payload.partIndex : null,
-        layerIndex: (typeof payload.layerIndex === 'number') ? payload.layerIndex : null,
-        subLayerIndex: (typeof payload.subLayerIndex === 'number') ? payload.subLayerIndex : null,
-        property: payload.property || null
-      }
-
-      if (payload.part && typeof payload.part === 'object') {
-        out.partRef = payload.part
-        out.uid = this.ensurePartUid(payload.part)
-      } else if (payload.uid) {
-        out.uid = payload.uid
-        const found = this.findPartByUid(out.uid)
-        if (found) out.partRef = found.partRef
-        if (found && out.stackIndex === null) out.stackIndex = found.stackIndex
-        if (found && out.partIndex === null) out.partIndex = found.partIndex
-      }
-
-      this.focusedProperty = out
+    setWorkspaceMode() {
+      this.workspaceMode = 'pro'
+      this.persistUiLayout()
     },
 
-    clearFocusedProperty() {
-      this.focusedProperty = null
+    setTaskStage(stage = 'assemble') {
+      const allowed = new Set(['assemble', 'replace', 'polish', 'commit'])
+      const nextStage = allowed.has(stage) ? stage : 'assemble'
+      this.taskStage = nextStage
+
+      if (nextStage === 'replace') {
+        this.openContextPanel('asset', 'task-stage-replace')
+      } else if ((nextStage === 'polish' || nextStage === 'assemble') && this.pinnedPanel !== 'asset') {
+        if (this.activeContextPanel === 'asset') {
+          this.openContextPanel('inspector', 'task-stage-' + nextStage)
+        }
+      }
+
+      if (nextStage !== 'polish' && this.panelStates.layer !== 'pinned') {
+        this.panelStates.layer = this.workspaceMode === 'pro' ? this.panelStates.layer : 'hidden'
+      }
+
+      this.persistUiLayout()
+    },
+
+    openContextPanel(panel, reason = 'manual') {
+      if (!['inspector', 'asset', 'palette'].includes(panel)) return
+
+      if (this.pinnedPanel && this.pinnedPanel !== panel) {
+        const pinned = this.pinnedPanel
+        if (['inspector', 'asset', 'palette'].includes(pinned)) {
+          this.activeContextPanel = pinned
+          return
+        }
+      }
+
+      this.activeContextPanel = panel
+
+      if (panel === 'asset') {
+        this.panelStates.asset = 'pinned'
+        if (this.panelStates.inspector !== 'pinned') this.panelStates.inspector = 'hidden'
+      }
+      if (panel === 'inspector') {
+        this.panelStates.inspector = 'pinned'
+        if (this.panelStates.asset !== 'pinned') this.panelStates.asset = 'hidden'
+      }
+      if (panel === 'palette') {
+        if (this.panelStates.palette === 'hidden') this.panelStates.palette = 'peek'
+      }
+
+      if (panel === 'palette') {
+        this.palettePanelVisible = true
+      } else if (this.panelStates.palette !== 'pinned') {
+        this.palettePanelVisible = false
+      }
+
+      if (reason === 'part-selected' && this.taskStage !== 'replace') {
+        this.taskStage = 'replace'
+      }
+
+      this.persistUiLayout()
+    },
+
+    pinPanel(panel) {
+      if (!panel || !(panel in this.panelStates)) return
+      this.panelStates[panel] = 'pinned'
+      this.pinnedPanel = panel
+
+      if (panel === 'palette') {
+        this.palettePanelVisible = true
+        this.activeContextPanel = 'palette'
+      }
+      if (panel === 'asset') this.activeContextPanel = 'asset'
+      if (panel === 'inspector') this.activeContextPanel = 'inspector'
+      if (panel === 'history') this.historyPanelVisible = true
+      if (panel === 'layer') this.layerManagerActive = true
+
+      this.persistUiLayout()
+    },
+
+    unpinPanel(panel) {
+      if (!panel || !(panel in this.panelStates)) return
+      if (this.pinnedPanel === panel) this.pinnedPanel = null
+      this.panelStates[panel] = 'hidden'
+
+      if (panel === 'palette') this.palettePanelVisible = false
+      if (panel === 'history') this.historyPanelVisible = false
+      if (panel === 'layer') this.layerManagerActive = false
+
+      this.persistUiLayout()
+    },
+
+    setPanelState(panel, state) {
+      if (!panel || !(panel in this.panelStates)) return
+      if (!['pinned', 'peek', 'hidden'].includes(state)) return
+
+      this.panelStates[panel] = state
+
+      if (state === 'pinned') {
+        this.pinnedPanel = panel
+      } else if (this.pinnedPanel === panel) {
+        this.pinnedPanel = null
+      }
+
+      if (panel === 'palette') {
+        this.palettePanelVisible = state !== 'hidden'
+      }
+      if (panel === 'history') {
+        this.historyPanelVisible = state !== 'hidden'
+      }
+      if (panel === 'layer') {
+        this.layerManagerActive = state !== 'hidden'
+      }
+
+      this.persistUiLayout()
+    },
+
+    onReplaceEnter(payload = {}) {
+      this.setTaskStage('replace')
+      this.openContextPanel('asset', payload?.isEmpty ? 'replace-enter-empty' : 'replace-enter-part')
+      if (this.mobileTab !== 'replace') {
+        this.mobileTab = 'replace'
+      }
+    },
+
+    onReplaceApplied() {
+      this.setTaskStage('polish')
+      if (this.pinnedPanel !== 'asset') {
+        this.openContextPanel('inspector', 'replace-applied')
+      }
+      if (this.mobileTab === 'replace') {
+        this.mobileTab = 'property'
+      }
+    },
+
+    enterPeekPanel(panel) {
+      if (!panel || !(panel in this.panelStates)) return
+      if (this.panelStates[panel] === 'pinned') return
+      this.panelStates[panel] = 'peek'
+      if (panel === 'palette') this.palettePanelVisible = true
+      this.persistUiLayout()
+    },
+
+    exitPeekPanel(panel) {
+      if (!panel || !(panel in this.panelStates)) return
+      if (this.panelStates[panel] === 'pinned') return
+      this.panelStates[panel] = 'hidden'
+      if (panel === 'palette') this.palettePanelVisible = false
+      this.persistUiLayout()
+    },
+
+    hydrateUiLayout() {
+      try {
+        this.workspaceMode = 'pro'
+
+        const statesRaw = localStorage.getItem('studio.ui.panelStates')
+        if (statesRaw) {
+          const parsed = JSON.parse(statesRaw)
+          if (parsed && typeof parsed === 'object') {
+            this.panelStates = {
+              ...this.panelStates,
+              ...parsed
+            }
+          }
+        }
+
+        const pinned = localStorage.getItem('studio.ui.pinnedPanel')
+        this.pinnedPanel = pinned || null
+
+        const stage = localStorage.getItem('studio.ui.lastTaskStage')
+        if (stage && ['assemble', 'replace', 'polish', 'commit'].includes(stage)) {
+          this.taskStage = stage
+        }
+
+        if (this.panelStates.palette !== 'hidden') this.palettePanelVisible = true
+        if (this.panelStates.history !== 'hidden') this.historyPanelVisible = true
+        if (this.panelStates.layer !== 'hidden') this.layerManagerActive = true
+
+        if (['inspector', 'asset', 'palette'].includes(this.pinnedPanel)) {
+          this.activeContextPanel = this.pinnedPanel
+        }
+      } catch (e) {
+        // ignore malformed persisted ui state
+      }
+    },
+
+    persistUiLayout() {
+      try {
+        localStorage.setItem('studio.ui.workspaceMode', this.workspaceMode)
+        localStorage.setItem('studio.ui.panelStates', JSON.stringify(this.panelStates))
+        localStorage.setItem('studio.ui.pinnedPanel', this.pinnedPanel || '')
+        localStorage.setItem('studio.ui.lastTaskStage', this.taskStage)
+      } catch (e) {
+        // ignore storage write failures
+      }
     },
 
     // -------------------------
@@ -484,7 +716,6 @@ export const useStudioStore = defineStore('studio', {
 
     select(idx) {
       const result = StackActions.selectElementInStacks(this, idx, {
-        clearFocusedProperty: this.clearFocusedProperty.bind(this),
         focusedPartIndex: this.focusedPartIndex
       })
 
@@ -492,15 +723,14 @@ export const useStudioStore = defineStore('studio', {
       if (result.focusedPartIndex) {
         this.focusedPartIndex = result.focusedPartIndex
       }
-      if (result.clearFocusedProperty) {
-        this.clearFocusedProperty()
+      if (result.clearPropertyFocus) {
+        this.clearPropertyFocus()
       }
     },
 
     clear() {
       const result = StackActions.clearAllStacks(this, {
         renderer: this.renderer,
-        clearFocusedProperty: this.clearFocusedProperty.bind(this),
         focusedPartIndex: this.focusedPartIndex
       })
 
@@ -508,8 +738,8 @@ export const useStudioStore = defineStore('studio', {
       this.selectedIndex = result.selectedIndex
       this.mergedAppearanceData = result.mergedAppearanceData
       this.focusedPartIndex = result.focusedPartIndex
-      if (result.clearFocusedProperty) {
-        this.clearFocusedProperty()
+      if (result.clearPropertyFocus) {
+        this.clearPropertyFocus()
       }
     },
 
@@ -522,6 +752,7 @@ export const useStudioStore = defineStore('studio', {
       })
 
       this.focusedPartIndex = result.focusedPartIndex
+      this._syncFocusStateScopeFromFocusedPart()
       if (result.clearLayerSelection) {
         this.clearLayerSelection()
       }
@@ -530,20 +761,21 @@ export const useStudioStore = defineStore('studio', {
       this.triggerFocusedPartUpdate()
     },
 
-    clearFocus() {
+    clearPartFocus() {
       const result = FocusActions.clearFocusState({
-        clearFocusedProperty: this.clearFocusedProperty.bind(this),
         focusedPartIndex: this.focusedPartIndex,
         clearLayerSelection: this.clearLayerSelection.bind(this)
       })
 
       this.focusedPartIndex = result.focusedPartIndex
-      if (result.clearFocusedProperty) {
-        this.clearFocusedProperty()
+      if (result.clearPropertyFocus) {
+        this.clearPropertyFocus()
       }
       if (result.clearLayerSelection) {
         this.clearLayerSelection()
       }
+
+      this._syncFocusStateScopeFromFocusedPart()
     },
 
     // -------------------------
@@ -632,26 +864,24 @@ export const useStudioStore = defineStore('studio', {
     setPaletteMode(active = false, targets = []) {
       this.paletteModeActive = !!active
       if (!this.paletteModeActive) {
-        this.activePaletteTargets = []
+        this.paletteUpdateFlag++
         return
       }
-      const arr = Array.isArray(targets) ? targets.slice() : []
-      this.activePaletteTargets = arr.map(t => {
-        return {
-          uid: t && t.uid ? t.uid : null,
-          stackIndex: (typeof t.stackIndex === 'number') ? t.stackIndex : null,
-          partIndex: (typeof t.partIndex === 'number') ? t.partIndex : null,
-          layerIndex: (typeof t.layerIndex === 'number') ? t.layerIndex : null,
-          currentColorText: (t && t.currentColorText !== undefined && t.currentColorText !== null) ? t.currentColorText : null,
-          currentColorCss: this._resolveColorCssFromText(t && t.currentColorText ? t.currentColorText : null)
-        }
-      })
+
+      if (Array.isArray(targets) && targets.length > 0) {
+        this._applyPaletteTargetsToSelection(targets)
+      }
+
+      if (this.selectedLayers.length > 0) {
+        this.setPropertyFocus('color')
+      }
+
       this.paletteUpdateFlag++
     },
 
     clearPaletteMode() {
       this.paletteModeActive = false
-      this.activePaletteTargets = []
+      this.paletteUpdateFlag++
     },
 
     openPalettePanel(targets = []) {
@@ -659,9 +889,14 @@ export const useStudioStore = defineStore('studio', {
         this.setPaletteMode(true, targets)
         this.palettePanelVisible = true
         this.paletteWorkMode = 'external'
+        if (this.panelStates.palette !== 'pinned') {
+          this.panelStates.palette = 'peek'
+        }
+        this.activeContextPanel = 'palette'
       } catch (e) {
         this.palettePanelVisible = true
       }
+      this.persistUiLayout()
     },
 
     setPaletteWorkMode(mode = 'external') {
@@ -671,9 +906,16 @@ export const useStudioStore = defineStore('studio', {
     closePalettePanel() {
       try {
         this.palettePanelVisible = false
+        if (this.panelStates.palette !== 'pinned') {
+          this.panelStates.palette = 'hidden'
+          if (this.activeContextPanel === 'palette') {
+            this.activeContextPanel = this.pinnedPanel === 'asset' ? 'asset' : 'inspector'
+          }
+        }
       } finally {
         try { this.clearPaletteMode() } catch (e) { console.warn(e) }
       }
+      this.persistUiLayout()
     },
 
     // -------------------------
@@ -712,6 +954,55 @@ export const useStudioStore = defineStore('studio', {
         pushHistorySnapshotThrottled: this.pushHistorySnapshotThrottled.bind(this),
         _resolveColorCssFromText: this._resolveColorCssFromText.bind(this)
       })
+    },
+
+    applyTagOffsetToActivePaletteTargets(payload = {}) {
+      const changed = PaletteActions.applyTagOffsetToTargets(this, payload, {
+        paletteModeActive: this.paletteModeActive,
+        activePaletteTargets: this.activePaletteTargets,
+        stacks: this.stacks,
+        findPartByUid: this.findPartByUid.bind(this),
+        _buildLayerEntriesWithCache: this._buildLayerEntriesWithCache.bind(this),
+        _scheduleLayerRefresh: this._scheduleLayerRefresh.bind(this),
+        _schedulePartUpdate: this._schedulePartUpdate.bind(this),
+        triggerFocusedPartUpdate: this.triggerFocusedPartUpdate.bind(this),
+        pushHistorySnapshotThrottled: this.pushHistorySnapshotThrottled.bind(this),
+        _resolveColorCssFromText: this._resolveColorCssFromText.bind(this)
+      })
+
+      if (changed) {
+        this._scheduleRefresh()
+      }
+      return changed
+    },
+
+    resetTagOffsetToTag(tag) {
+      const changed = PaletteActions.clearTagOffsetOnTargets(this, { tag }, {
+        paletteModeActive: this.paletteModeActive,
+        activePaletteTargets: this.activePaletteTargets,
+        stacks: this.stacks,
+        findPartByUid: this.findPartByUid.bind(this),
+        _buildLayerEntriesWithCache: this._buildLayerEntriesWithCache.bind(this),
+        _scheduleLayerRefresh: this._scheduleLayerRefresh.bind(this),
+        _schedulePartUpdate: this._schedulePartUpdate.bind(this),
+        triggerFocusedPartUpdate: this.triggerFocusedPartUpdate.bind(this),
+        pushHistorySnapshotThrottled: this.pushHistorySnapshotThrottled.bind(this),
+        _resolveColorCssFromText: this._resolveColorCssFromText.bind(this)
+      })
+
+      if (changed) {
+        this._scheduleRefresh()
+      }
+      return changed
+    },
+
+    detachTagOffsetToRaw(payload = {}) {
+      const ref = String(payload?.ref || '').trim()
+      if (!ref) return false
+
+      const resolved = Palette.resolveTagOffsetColor(ref, this.paletteMap)
+      if (!resolved?.ok || !resolved.color) return false
+      return this.applyColorToActivePaletteTargets(resolved.color)
     },
 
     deletePaletteTag(tag) {
@@ -820,6 +1111,15 @@ export const useStudioStore = defineStore('studio', {
       const result = PaletteActions.deleteSavedColor(this, idx)
       this.savedColors = result.savedColors
       this._paletteVersion = result._paletteVersion
+      this.pushHistorySnapshot()
+      return true
+    },
+
+    clearSavedColors() {
+      if (!this.savedColors || this.savedColors.length === 0) return false
+      this.savedColors = []
+      this._paletteVersion++
+      this.pushHistorySnapshot()
       return true
     },
 
@@ -1167,6 +1467,10 @@ export const useStudioStore = defineStore('studio', {
           const v = this.paletteMap[t]
           return this._extractPrimaryCssColor(v)
         }
+        const resolvedTagOffset = Palette.resolveTagOffsetColor(t, this.paletteMap)
+        if (resolvedTagOffset?.ok) {
+          return resolvedTagOffset.color
+        }
         if (this._looksLikeCssColor(t)) return t
         return null
       } catch (e) { return null }
@@ -1272,6 +1576,7 @@ export const useStudioStore = defineStore('studio', {
         try { this.translateFocusedPartToLayers && this.translateFocusedPartToLayers() } catch (e) { }
         this._scheduleRefresh()
         this.pushHistorySnapshot()
+        this.onReplaceApplied()
         return this.focusedPart || null
       }
       return null
@@ -1412,12 +1717,99 @@ export const useStudioStore = defineStore('studio', {
       return `${stackIndex}-${partIndex}-${layerIndex}`
     },
 
+    _syncFocusStateScopeFromFocusedPart() {
+      const stackIndex = this.focusedPartIndex?.stackIndex
+      const partIndex = this.focusedPartIndex?.partIndex
+      let partUid = null
+      if (typeof stackIndex === 'number' && typeof partIndex === 'number') {
+        const stack = this.stacks[stackIndex]
+        const part = stack && Array.isArray(stack.data) ? stack.data[partIndex] : null
+        partUid = part?._uid || null
+      }
+
+      this.focusState.scope = {
+        stackIndex: (typeof stackIndex === 'number') ? stackIndex : null,
+        partIndex: (typeof partIndex === 'number') ? partIndex : null,
+        partUid
+      }
+    },
+
+    _syncFocusStateSelectionFromLegacy() {
+      const selected = Array.isArray(this.selectedLayers) ? this.selectedLayers : []
+      this.focusState.selection = {
+        mode: this.selectionMode,
+        layerKeys: selected.map(s => this._buildLayerKey(s.stackIndex, s.partIndex, s.layerIndex)),
+        anchorLayerKey: selected.length > 0
+          ? this._buildLayerKey(selected[selected.length - 1].stackIndex, selected[selected.length - 1].partIndex, selected[selected.length - 1].layerIndex)
+          : null
+      }
+    },
+
+    _syncFocusStateEditorFromLegacy() {
+      this.focusState.editor = {
+        property: this.activeFocusContext?.property || null,
+        subLayerIndex: this.activeFocusContext?.subLayerIndex ?? null,
+        timestamp: this.activeFocusContext?.timestamp || 0
+      }
+    },
+
+    _syncLegacyFromFocusState() {
+      const scope = this.focusState?.scope || {}
+      const selection = this.focusState?.selection || {}
+      const editor = this.focusState?.editor || {}
+      const tool = this.focusState?.tool || {}
+
+      this.focusedPartIndex = {
+        stackIndex: (typeof scope.stackIndex === 'number') ? scope.stackIndex : null,
+        partIndex: (typeof scope.partIndex === 'number') ? scope.partIndex : null
+      }
+
+      this.selectionMode = selection.mode === 'multiple' ? 'multiple' : 'single'
+      const layerKeys = Array.isArray(selection.layerKeys) ? selection.layerKeys : []
+      this.selectedLayers = layerKeys
+        .map((key) => {
+          const [stackRaw, partRaw, layerRaw] = String(key).split('-')
+          const stackIndex = Number(stackRaw)
+          const partIndex = Number(partRaw)
+          const layerIndex = Number(layerRaw)
+          if (!Number.isFinite(stackIndex) || !Number.isFinite(partIndex) || !Number.isFinite(layerIndex)) return null
+          return { stackIndex, partIndex, layerIndex, _key: key }
+        })
+        .filter(Boolean)
+
+      this.activeFocusContext = {
+        property: editor.property || null,
+        subLayerIndex: editor.subLayerIndex ?? null,
+        timestamp: editor.timestamp || 0
+      }
+
+      const preview = tool.preview === 'move' ? 'move' : 'view'
+      this.previewTool = preview
+    },
+
     /**
      * Toggle selection mode between single and multiple
+     * Now with smooth focus state transition
      */
     toggleSelectionMode() {
+      const wasSingleMode = this.selectionMode === 'single'
       const result = SelectionActions.toggleSelectionMode(this)
       this.selectionMode = result.selectionMode
+      const isNowMultiMode = this.selectionMode === 'multiple'
+
+      // Handle focus state transition
+      if (wasSingleMode && isNowMultiMode) {
+        // Single → Multi: preserve current selection
+        // selectedLayers is already populated, no action needed
+      } else if (!wasSingleMode && !isNowMultiMode) {
+        // Multi → Single: keep only the first selected layer
+        if (this.selectedLayers.length > 1) {
+          const firstLayer = this.selectedLayers[0]
+          this.selectedLayers = [firstLayer]
+        }
+      }
+
+      this._syncFocusStateSelectionFromLegacy()
     },
 
     /**
@@ -1426,6 +1818,7 @@ export const useStudioStore = defineStore('studio', {
     toggleLayerSelection(layerInfo) {
       const result = SelectionActions.toggleLayerSelection(this, layerInfo)
       this.selectedLayers = result.selectedLayers
+      this._syncFocusStateSelectionFromLegacy()
     },
 
     /**
@@ -1441,6 +1834,7 @@ export const useStudioStore = defineStore('studio', {
     selectAllLayers() {
       const result = SelectionActions.selectAllLayers(this)
       this.selectedLayers = result.selectedLayers
+      this._syncFocusStateSelectionFromLegacy()
     },
 
     /**
@@ -1449,6 +1843,7 @@ export const useStudioStore = defineStore('studio', {
     clearLayerSelection() {
       const result = SelectionActions.clearLayerSelection()
       this.selectedLayers = result.selectedLayers
+      this._syncFocusStateSelectionFromLegacy()
     },
 
     /**
@@ -1457,6 +1852,7 @@ export const useStudioStore = defineStore('studio', {
     selectLayerRange(fromIndex, toIndex) {
       const result = SelectionActions.selectLayerRange(this, fromIndex, toIndex)
       this.selectedLayers = result.selectedLayers
+      this._syncFocusStateSelectionFromLegacy()
     },
 
     /**
@@ -1467,11 +1863,306 @@ export const useStudioStore = defineStore('studio', {
     },
 
     /**
+     * Get primary layer index for single-layer move operations.
+     * Priority: selected layer in focused part -> focused subLayerIndex -> first layer.
+     */
+    getPrimaryMoveLayerIndex(part = this.focusedPart) {
+      if (!part || !Array.isArray(part.layerEntries) || part.layerEntries.length === 0) return 0
+
+      let idx = null
+      const primarySelection = Array.isArray(this.selectedLayers) && this.selectedLayers.length > 0
+        ? this.selectedLayers[0]
+        : null
+
+      if (primarySelection &&
+          primarySelection.stackIndex === this.focusedPartIndex?.stackIndex &&
+          primarySelection.partIndex === this.focusedPartIndex?.partIndex &&
+          typeof primarySelection.layerIndex === 'number') {
+        idx = primarySelection.layerIndex
+      }
+
+      if (idx === null && typeof this.activeFocusContext?.subLayerIndex === 'number') {
+        idx = this.activeFocusContext.subLayerIndex
+      }
+
+      if (typeof idx !== 'number' || idx < 0 || idx >= part.layerEntries.length) {
+        return 0
+      }
+      return idx
+    },
+
+    /**
+     * Build palette targets from current layer selection.
+     */
+    getPaletteTargetsForCurrentSelection() {
+      const data = this.getSelectedLayersData()
+      return data
+        .filter(d => d.layer && d.layer.isColorable)
+        .map(d => ({
+          uid: d.part?._uid || null,
+          stackIndex: d.selection?.stackIndex,
+          partIndex: d.selection?.partIndex,
+          layerIndex: (typeof d.layer?.colorableIndex === 'number') ? d.layer.colorableIndex : d.selection?.layerIndex,
+          currentColorText: d.layer?.colorText || null
+        }))
+    },
+
+    /**
+     * Build a palette target for a specific layer in UI panels.
+     */
+    getPaletteTargetForLayer({ stackIndex, partIndex, layerIndex, part = null, layer = null } = {}) {
+      if (typeof stackIndex !== 'number' || typeof partIndex !== 'number' || typeof layerIndex !== 'number') {
+        return null
+      }
+
+      const stack = this.stacks[stackIndex]
+      const resolvedPart = part || (stack && Array.isArray(stack.data) ? stack.data[partIndex] : null)
+      const entries = resolvedPart && Array.isArray(resolvedPart.layerEntries) ? resolvedPart.layerEntries : []
+      const resolvedLayer = layer || entries.find(l => l.layerIndex === layerIndex)
+      if (!resolvedLayer || !resolvedLayer.isColorable) return null
+
+      return {
+        uid: resolvedPart?._uid || null,
+        stackIndex,
+        partIndex,
+        layerIndex: (typeof resolvedLayer.colorableIndex === 'number') ? resolvedLayer.colorableIndex : layerIndex,
+        currentColorText: resolvedLayer.colorText || null
+      }
+    },
+
+    /**
+     * Check whether a palette target is currently active.
+     */
+    isPaletteTargetActive(target) {
+      if (!target || typeof target.layerIndex !== 'number') return false
+      const targets = Array.isArray(this.activePaletteTargets) ? this.activePaletteTargets : []
+      return targets.some(t => {
+        const sameLayer = t.layerIndex === target.layerIndex
+        const sameScope =
+          (t.uid && target.uid)
+            ? t.uid === target.uid
+            : (t.stackIndex === target.stackIndex && t.partIndex === target.partIndex)
+        return sameLayer && sameScope
+      })
+    },
+
+    _resolveLayerIndexFromPaletteTarget(part, targetLayerIndex) {
+      if (!part || !Array.isArray(part.layerEntries) || typeof targetLayerIndex !== 'number') return null
+
+      const byColorableIndex = part.layerEntries.find(le => le && le.isColorable && le.colorableIndex === targetLayerIndex)
+      if (byColorableIndex && typeof byColorableIndex.layerIndex === 'number') {
+        return byColorableIndex.layerIndex
+      }
+
+      let colorableCounter = -1
+      for (const entry of part.layerEntries) {
+        if (!entry || !entry.isColorable) continue
+        colorableCounter += 1
+        if (colorableCounter === targetLayerIndex) return entry.layerIndex
+      }
+
+      const byLayerIndex = part.layerEntries.find(le => le && le.layerIndex === targetLayerIndex)
+      return byLayerIndex ? byLayerIndex.layerIndex : null
+    },
+
+    _applyPaletteTargetsToSelection(targets = []) {
+      const arr = Array.isArray(targets) ? targets : []
+      if (!arr.length) return
+
+      const nextSelection = []
+      for (const t of arr) {
+        let stackIndex = (typeof t?.stackIndex === 'number') ? t.stackIndex : null
+        let partIndex = (typeof t?.partIndex === 'number') ? t.partIndex : null
+        let partRef = null
+
+        if (t?.uid) {
+          const found = this.findPartByUid(t.uid)
+          if (found) {
+            partRef = found.partRef
+            if (stackIndex === null) stackIndex = found.stackIndex
+            if (partIndex === null) partIndex = found.partIndex
+          }
+        }
+
+        if (!partRef && typeof stackIndex === 'number' && typeof partIndex === 'number') {
+          const stack = this.stacks[stackIndex]
+          partRef = stack && Array.isArray(stack.data) ? stack.data[partIndex] : null
+        }
+
+        if (!partRef || typeof stackIndex !== 'number' || typeof partIndex !== 'number') continue
+
+        const resolvedLayerIndex = this._resolveLayerIndexFromPaletteTarget(partRef, t?.layerIndex)
+        if (typeof resolvedLayerIndex !== 'number') continue
+
+        const key = this._buildLayerKey(stackIndex, partIndex, resolvedLayerIndex)
+        if (nextSelection.some(s => s._key === key)) continue
+        nextSelection.push({ stackIndex, partIndex, layerIndex: resolvedLayerIndex, _key: key })
+      }
+
+      if (!nextSelection.length) return
+
+      this.selectedLayers = nextSelection
+      this.selectionMode = nextSelection.length > 1 ? 'multiple' : 'single'
+
+      const primary = nextSelection[0]
+      this.focusedPartIndex = {
+        stackIndex: primary.stackIndex,
+        partIndex: primary.partIndex
+      }
+
+      this._syncFocusStateScopeFromFocusedPart()
+      this._syncFocusStateSelectionFromLegacy()
+    },
+
+    /**
      * Validate if a batch operation can be performed on targets
      */
     validateBatchOperation(operation, targets) {
       return SelectionActions.validateBatchOperation(operation, targets)
     },
+
+    // ===== NEW UNIFIED FOCUS API =====
+    // These methods provide a unified interface for layer focus management
+    // that automatically adapts to single/multi selection modes
+
+    /**
+     * Focus on a layer (unified method that adapts to selection mode)
+     * In single mode: replaces selection with this layer
+     * In multi mode: toggles selection of this layer
+     * @param {Object} layerInfo - { stackIndex, partIndex, layerIndex }
+     */
+    focusLayer(layerInfo) {
+      if (!layerInfo || typeof layerInfo.stackIndex !== 'number' ||
+          typeof layerInfo.partIndex !== 'number' ||
+          typeof layerInfo.layerIndex !== 'number') {
+        console.warn('[studioStore] focusLayer: invalid layerInfo', layerInfo)
+        return
+      }
+
+      if (this.selectionMode === 'multiple') {
+        // Multi mode: toggle selection
+        this.toggleLayerSelection(layerInfo)
+      } else {
+        // Single mode: replace selection with this layer
+        const key = this._buildLayerKey(layerInfo.stackIndex, layerInfo.partIndex, layerInfo.layerIndex)
+        this.selectedLayers = [{
+          stackIndex: layerInfo.stackIndex,
+          partIndex: layerInfo.partIndex,
+          layerIndex: layerInfo.layerIndex,
+          _key: key
+        }]
+        this._syncFocusStateSelectionFromLegacy()
+      }
+
+      this.focusedPartIndex = {
+        stackIndex: layerInfo.stackIndex,
+        partIndex: layerInfo.partIndex
+      }
+      this._syncFocusStateScopeFromFocusedPart()
+
+      // Clear property focus when switching layers
+      this.activeFocusContext.property = null
+      this.activeFocusContext.subLayerIndex = null
+      this.activeFocusContext.timestamp = Date.now()
+      this._syncFocusStateEditorFromLegacy()
+    },
+
+    /**
+     * Set property focus (applies to all currently selected layers)
+     * @param {string} property - 'color' | 'opacity' | 'drawing' | 'priority' | null
+     * @param {number} subLayerIndex - Optional sublayer index
+     */
+    setPropertyFocus(property, subLayerIndex = null) {
+      if (this.selectedLayers.length === 0) {
+        console.warn('[studioStore] setPropertyFocus: no layers selected')
+        return
+      }
+
+      this.activeFocusContext = {
+        property: property || null,
+        subLayerIndex: subLayerIndex,
+        timestamp: Date.now()
+      }
+      this._syncFocusStateEditorFromLegacy()
+    },
+
+    /**
+     * Clear all focus state (layers and property)
+     */
+    clearFocus() {
+      this.focusClear({ keepScope: false })
+    },
+
+    /**
+     * Unified focus clear action (single source + dual write)
+     * @param {Object} options
+     * @param {boolean} options.keepScope - keep part scope while clearing selection/editor
+     */
+    focusClear({ keepScope = false } = {}) {
+      if (!keepScope) {
+        this.focusState.scope = {
+          stackIndex: null,
+          partIndex: null,
+          partUid: null
+        }
+      }
+
+      this.focusState.selection = {
+        mode: this.focusState.selection?.mode === 'multiple' ? 'multiple' : 'single',
+        layerKeys: [],
+        anchorLayerKey: null
+      }
+
+      this.focusState.editor = {
+        property: null,
+        subLayerIndex: null,
+        timestamp: 0
+      }
+
+      this._syncLegacyFromFocusState()
+    },
+
+    /**
+     * Clear property focus only (keeps selected layers)
+     */
+    clearPropertyFocus() {
+      this.activeFocusContext = {
+        property: null,
+        subLayerIndex: null,
+        timestamp: Date.now()
+      }
+      this._syncFocusStateEditorFromLegacy()
+    },
+
+    /**
+     * Check if a specific layer is focused (selected)
+     * @param {Object} layerInfo - { stackIndex, partIndex, layerIndex }
+     * @returns {boolean}
+     */
+    isLayerFocused(layerInfo) {
+      return this.isLayerSelected(layerInfo)
+    },
+
+    /**
+     * Check if a specific layer's property is focused
+     * @param {Object} layerInfo - { stackIndex, partIndex, layerIndex }
+     * @param {string} property - 'color' | 'opacity' | 'drawing' | 'priority'
+     * @returns {boolean}
+     */
+    isLayerPropertyFocused(layerInfo, property) {
+      return this.isLayerSelected(layerInfo) && 
+             this.activeFocusContext.property === property
+    },
+
+    /**
+     * Get data for all focused (selected) layers
+     * @returns {Array} Array of layer data objects
+     */
+    getFocusedLayersData() {
+      return this.getSelectedLayersData()
+    },
+
+    // ===== END UNIFIED FOCUS API =====
 
     /**
      * Batch update opacity for selected layers
@@ -1619,7 +2310,12 @@ export const useStudioStore = defineStore('studio', {
             stacks: fastClone(this.stacks),
             paletteMap: fastClone(this.paletteMap),
             _paletteNextCounter: this._paletteNextCounter,
-            focusedPartIndex: fastClone(this.focusedPartIndex)
+            focusedPartIndex: fastClone(this.focusedPartIndex),
+            selectedLayers: fastClone(this.selectedLayers),
+            selectionMode: this.selectionMode,
+            activeFocusContext: fastClone(this.activeFocusContext),
+            previewTool: this.previewTool,
+            focusState: fastClone(this.focusState)
           }
         },
         restoreState: (snapshot) => {
@@ -1628,6 +2324,28 @@ export const useStudioStore = defineStore('studio', {
           this.paletteMap = fastClone(snapshot.paletteMap)
           this._paletteNextCounter = snapshot._paletteNextCounter || 1
           this.focusedPartIndex = fastClone(snapshot.focusedPartIndex)
+
+          if (snapshot.focusState) {
+            this.focusState = fastClone(snapshot.focusState)
+            this._syncLegacyFromFocusState()
+          } else {
+            if (Array.isArray(snapshot.selectedLayers)) {
+              this.selectedLayers = fastClone(snapshot.selectedLayers)
+            }
+            if (snapshot.selectionMode === 'single' || snapshot.selectionMode === 'multiple') {
+              this.selectionMode = snapshot.selectionMode
+            }
+            if (snapshot.activeFocusContext) {
+              this.activeFocusContext = fastClone(snapshot.activeFocusContext)
+            }
+            if (snapshot.previewTool === 'view' || snapshot.previewTool === 'move') {
+              this.previewTool = snapshot.previewTool
+            }
+            this._syncFocusStateScopeFromFocusedPart()
+            this._syncFocusStateSelectionFromLegacy()
+            this._syncFocusStateEditorFromLegacy()
+            this.focusState.tool.preview = this.previewTool
+          }
 
           // Increment palette version to invalidate caches
           this._paletteVersion++
@@ -1770,6 +2488,8 @@ export const useStudioStore = defineStore('studio', {
       } else {
         this.historyPanelVisible = !this.historyPanelVisible
       }
+      this.panelStates.history = this.historyPanelVisible ? 'pinned' : 'hidden'
+      this.persistUiLayout()
     },
 
     /**
@@ -1865,6 +2585,28 @@ export const useStudioStore = defineStore('studio', {
       }
       if (typeof data.focusedPartIndex === 'object' && data.focusedPartIndex !== null) {
         this.focusedPartIndex = fastClone(data.focusedPartIndex)
+      }
+
+      if (data.focusState && typeof data.focusState === 'object') {
+        this.focusState = fastClone(data.focusState)
+        this._syncLegacyFromFocusState()
+      } else {
+        if (Array.isArray(data.selectedLayers)) {
+          this.selectedLayers = fastClone(data.selectedLayers)
+        }
+        if (data.selectionMode === 'single' || data.selectionMode === 'multiple') {
+          this.selectionMode = data.selectionMode
+        }
+        if (data.activeFocusContext && typeof data.activeFocusContext === 'object') {
+          this.activeFocusContext = fastClone(data.activeFocusContext)
+        }
+        if (data.previewTool === 'view' || data.previewTool === 'move') {
+          this.previewTool = data.previewTool
+        }
+        this._syncFocusStateScopeFromFocusedPart()
+        this._syncFocusStateSelectionFromLegacy()
+        this._syncFocusStateEditorFromLegacy()
+        this.focusState.tool.preview = this.previewTool
       }
 
       this._paletteVersion++

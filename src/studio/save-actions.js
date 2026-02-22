@@ -41,7 +41,12 @@ export async function saveToLocalStorage(state) {
         _paletteNextCounter: state._paletteNextCounter,
         _partUidCounter: state._partUidCounter,
         selectedIndex: state.selectedIndex,
-        focusedPartIndex: state.focusedPartIndex
+        focusedPartIndex: state.focusedPartIndex,
+        selectedLayers: toRaw(state.selectedLayers || []),
+        selectionMode: state.selectionMode || 'single',
+        activeFocusContext: toRaw(state.activeFocusContext || null),
+        previewTool: state.previewTool || 'view',
+        focusState: toRaw(state.focusState || null)
       }
     }
 

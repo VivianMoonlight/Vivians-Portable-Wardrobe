@@ -38,33 +38,17 @@
         </span>
       </div>
       
-      <div class="status-item" v-if="status.detected">
-        <span class="status-label">Using Themed Colors:</span>
-        <span class="status-value" :class="{ 'status-yes': status.usingThemedColors, 'status-no': !status.usingThemedColors }">
-          {{ status.usingThemedColors ? 'Yes' : 'No' }}
-        </span>
-      </div>
-      
       <div class="status-item" v-if="status.detected && status.enabled">
         <span class="status-label">Available Colors:</span>
         <span class="status-value">{{ status.availableColors }}</span>
       </div>
       
-      <div class="widget-actions" v-if="status.detected">
+      <div class="widget-actions" v-if="status.detected && status.enabled">
         <button 
           class="action-btn"
-          @click="handleToggleIntegration"
-          :disabled="!status.enabled"
+          @click="handleRefresh"
         >
-          {{ status.usingThemedColors ? 'Disable' : 'Enable' }} Integration
-        </button>
-        
-        <button 
-          class="action-btn"
-          @click="handleSync"
-          :disabled="!status.enabled"
-        >
-          Sync Colors
+          Refresh Detection
         </button>
       </div>
       
@@ -81,7 +65,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { useTheme } from '../composables/useTheme'
+import { useTheme } from '../services/ThemeService'
 
 const showWidget = ref(true)
 const status = ref({
@@ -89,11 +73,10 @@ const status = ref({
   enabled: false,
   version: null,
   guiOverhaul: false,
-  usingThemedColors: false,
   availableColors: 0,
 })
 
-const { getThemedStatus, toggleThemedIntegration, syncWithThemed } = useTheme()
+const { getThemedStatus, refreshThemedDetection } = useTheme()
 
 onMounted(() => {
   updateStatus()
@@ -103,13 +86,8 @@ const updateStatus = () => {
   status.value = getThemedStatus()
 }
 
-const handleToggleIntegration = () => {
-  toggleThemedIntegration(!status.value.usingThemedColors)
-  setTimeout(updateStatus, 100)
-}
-
-const handleSync = () => {
-  syncWithThemed()
+const handleRefresh = () => {
+  refreshThemedDetection()
   setTimeout(updateStatus, 100)
 }
 </script>

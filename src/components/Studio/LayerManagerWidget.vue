@@ -198,13 +198,20 @@ function isPartActive(uid) {
 function focusItemPart(item) {
     if (item.rawPart) {
         store.focusPart(item.rawPart)
-        // If single layer, try to focus that layer property
+        // If single layer, focus that layer and its priority property
         if (!item.isGroup) {
-            store.setFocusedProperty({
-                part: item.rawPart,
-                layerIndex: item.layerIndex,
-                property: 'priority'
-            })
+            // Get stackIndex and partIndex
+            const stackIndex = store.selectedIndex
+            const partIndex = store.selectedElement.data.findIndex(p => p._uid === item.partUid)
+            
+            if (stackIndex >= 0 && partIndex >= 0) {
+                store.focusLayer({
+                    stackIndex,
+                    partIndex,
+                    layerIndex: item.layerIndex
+                })
+                store.setPropertyFocus('priority')
+            }
         }
     }
 }

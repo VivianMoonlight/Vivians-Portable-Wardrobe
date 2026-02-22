@@ -49,7 +49,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
-import { useTheme, provideTheme } from './composables/useTheme'
+import { useTheme, provideTheme } from './services/ThemeService'
 import FileManagerPanel from './components/FileManagerPanel.vue'
 import { hostWindow } from './utils/host-window.js'
 import logo from './assets/logo.png'

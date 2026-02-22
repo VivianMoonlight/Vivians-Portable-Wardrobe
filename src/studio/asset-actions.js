@@ -4,6 +4,27 @@
  * These functions handle asset loading, searching, and resolving
  */
 import * as AssetIndex from '@/services/AssetIndexService'
+import { AssetApi } from '@/utils/AssetApi'
+
+function buildInitialPartProperty(asset, groupName, assetName, fastClone) {
+  const sourceTypeRecord = asset?.Property?.TypeRecord
+  const hasSourceTypeRecord = !!(sourceTypeRecord && typeof sourceTypeRecord === 'object' && !Array.isArray(sourceTypeRecord))
+  const baseTypeRecord = hasSourceTypeRecord ? fastClone(sourceTypeRecord) : {}
+
+  const modularDefs = AssetApi.getModularAssetData(groupName, assetName)
+  if (Array.isArray(modularDefs) && modularDefs.length > 0) {
+    for (const mod of modularDefs) {
+      const key = mod?.Key
+      if (!key) continue
+      const rawVal = baseTypeRecord[key]
+      const normalized = Number.isFinite(Number(rawVal)) ? Number(rawVal) : 0
+      baseTypeRecord[key] = normalized
+    }
+  }
+
+  if (Object.keys(baseTypeRecord).length === 0) return null
+  return { TypeRecord: baseTypeRecord }
+}
 
 /**
  * Load asset data
@@ -131,12 +152,18 @@ export function applyAssetToSelectedStack(state, asset, replaceTarget = null, he
   }
 
   try {
+    const groupName = (asset.Group && (typeof asset.Group === 'string'
+      ? asset.Group
+      : (asset.Group.Name || asset.Group.name))) || undefined
+    const partProperty = buildInitialPartProperty(asset, groupName, asset.Name, fastClone)
+
     const newPart = {
       Name: asset.Name,
-      Group: (asset.Group && (typeof asset.Group === 'string'
-        ? asset.Group
-        : (asset.Group.Name || asset.Group.name))) || undefined,
+      Group: groupName,
       Color: asset.DefaultColor ?? asset.DefaultColour ?? asset.Default ?? null
+    }
+    if (partProperty) {
+      newPart.Property = partProperty
     }
 
     try { ensurePartUid(newPart) } catch (e) { console.warn(e) }

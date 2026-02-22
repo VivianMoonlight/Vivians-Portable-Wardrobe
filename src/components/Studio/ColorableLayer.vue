@@ -9,13 +9,13 @@
       <span class="color-main-title" :title="layerLocal.name">
         {{ layerLocal.displayName || layerLocal.name || ("#" + (displayIndex + 1)) }}
       </span>
-      <button class="fold-toggle" v-if="hasSublayers" @click.stop="toggleCollapse"
+      <button class="fold-toggle" @click.stop="toggleCollapse"
         :title="collapsed ? (t('colorableLayer.expand') || 'Expand') : (t('colorableLayer.collapse') || 'Collapse')">
         <span class="fold-arrow" :class="{ collapsed: collapsed }">{{ collapsed ? "▸" : "▾" }}</span>
       </button>
     </div>
 
-    <div class="color-main-body">
+    <div class="color-main-body" v-show="!collapsed">
       <!-- 1. Color Row -->
       <div class="color-row" @mousedown.stop="selectProperty('color')">
         <label>{{ t('colorableLayer.color') }}</label>
@@ -215,6 +215,52 @@ const layerLocal = computed(() => {
 
 const hasSublayers = computed(() => Array.isArray(layerLocal.value.subLayers) && layerLocal.value.subLayers.length > 0)
 
+// Focus Logic - use new unified Focus API
+// Replaces old focusedProperty checking with new isLayerFocused method
+const isFocused = computed(() => {
+  return store.isLayerFocused({
+    stackIndex: props.stackIndex,
+    partIndex: props.partIndex,
+    layerIndex: layerLocal.value.layerIndex
+  })
+})
+
+// Check if specific properties are focused (for visual feedback)
+const isColorPropertyFocused = computed(() => {
+  return store.isLayerPropertyFocused(
+    { stackIndex: props.stackIndex, partIndex: props.partIndex, layerIndex: layerLocal.value.layerIndex },
+    'color'
+  )
+})
+
+const isOpacityPropertyFocused = computed(() => {
+  return store.isLayerPropertyFocused(
+    { stackIndex: props.stackIndex, partIndex: props.partIndex, layerIndex: layerLocal.value.layerIndex },
+    'opacity'
+  )
+})
+
+const isDrawingPropertyFocused = computed(() => {
+  return store.isLayerPropertyFocused(
+    { stackIndex: props.stackIndex, partIndex: props.partIndex, layerIndex: layerLocal.value.layerIndex },
+    'drawing'
+  )
+})
+
+const isPriorityPropertyFocused = computed(() => {
+  return store.isLayerPropertyFocused(
+    { stackIndex: props.stackIndex, partIndex: props.partIndex, layerIndex: layerLocal.value.layerIndex },
+    'priority'
+  )
+})
+
+// Auto-expand when focused or selected
+watch([() => isFocused.value, () => isSelected.value], ([focused, selected]) => {
+  if (focused || selected) {
+    collapsed.value = false
+  }
+})
+
 function setChipTextColor(bgColor) {
   // Simple luminance check for light/dark background
   if (!bgColor) return ''
@@ -250,27 +296,33 @@ watch(() => layerLocal.value, (nv) => {
   }
 }, { immediate: true, deep: true })
 
-// 3. Focus Logic
-const isFocused = computed(() => {
-  const fp = store.focusedProperty
-  if (!fp) return false
-  if (props.part && fp.uid && props.part._uid) {
-    return fp.uid === props.part._uid && fp.layerIndex === layerLocal.value.layerIndex
-  }
-  return fp.layerIndex === layerLocal.value.layerIndex
-})
-
 // Visual move state
 const isThisLayerMoving = computed(() => {
   if (store.previewTool !== 'move') return false
-  const fp = store.focusedProperty
-  if (!fp) return false
-  return fp.layerIndex === layerLocal.value.layerIndex
+  // Use new unified API to check if this layer is focused
+  return store.isLayerFocused({
+    stackIndex: props.stackIndex,
+    partIndex: props.partIndex,
+    layerIndex: layerLocal.value.layerIndex
+  })
 })
 
 function activateVisualMove() {
-  // Focus this layer by selecting the drawing property
-  selectProperty('drawing')
+  // Focus this layer by selecting it and setting property focus
+  const layerInfo = {
+    stackIndex: props.stackIndex,
+    partIndex: props.partIndex,
+    layerIndex: layerLocal.value.layerIndex
+  }
+  
+  // Ensure layer is focused
+  if (!store.isLayerFocused(layerInfo)) {
+    store.focusLayer(layerInfo)
+  }
+  
+  // Set drawing property focus
+  store.setPropertyFocus('drawing')
+  
   // Enable move mode
   store.setPreviewTool('move')
 }
@@ -291,25 +343,34 @@ function toggleCollapse() {
 const lastClickedLayerIndex = ref(null)
 
 function handleHeaderClick(e) {
+  const layerInfo = {
+    stackIndex: props.stackIndex,
+    partIndex: props.partIndex,
+    layerIndex: layerLocal.value.layerIndex
+  }
+
   // In multi-mode, clicking header toggles selection
   if (isMultiMode.value) {
     // Check if Ctrl/Cmd or Shift key is pressed
     if (e.ctrlKey || e.metaKey) {
-      toggleSelection()
+      store.focusLayer(layerInfo)
       lastClickedLayerIndex.value = layerLocal.value.layerIndex
     } else if (e.shiftKey) {
       // Handle shift-click range selection
       handleRangeSelection()
     } else {
-      toggleSelection()
+      store.focusLayer(layerInfo)
       lastClickedLayerIndex.value = layerLocal.value.layerIndex
     }
   } else {
-    // In single mode, keep click semantic focused on selection/focus only
+    // In single mode, adapt behavior based on key
     if (e.ctrlKey || e.metaKey) {
-      toggleSelection()
+      // Ctrl/Cmd: toggle selection without focusing
+      store.toggleLayerSelection(layerInfo)
     } else {
-      selectProperty('color')
+      // Normal click: focus layer and set property focus
+      store.focusLayer(layerInfo)
+      store.setPropertyFocus('color')
     }
   }
 }
@@ -537,22 +598,37 @@ function formatOpacity(v) {
 }
 
 function selectProperty(propName) {
-  store.setFocusedProperty({
-    part: props.part || store.focusedPart,
-    partIndex: props.partIndex,
+  // Use new unified Focus API
+  const layerInfo = {
     stackIndex: props.stackIndex,
-    layerIndex: layerLocal.value.layerIndex,
-    property: propName
-  })
+    partIndex: props.partIndex,
+    layerIndex: layerLocal.value.layerIndex
+  }
+  
+  // Ensure layer is focused
+  if (!store.isLayerFocused(layerInfo)) {
+    store.focusLayer(layerInfo)
+  }
+  
+  // Set property focus
+  store.setPropertyFocus(propName)
 }
 
 function selectSubProperty(subIndex, propName) {
-  store.setFocusedProperty({
-    part: props.part || store.focusedPart,
-    layerIndex: layerLocal.value.layerIndex,
-    subLayerIndex: subIndex,
-    property: propName
-  })
+  // Use new unified Focus API with sublayer index
+  const layerInfo = {
+    stackIndex: props.stackIndex,
+    partIndex: props.partIndex,
+    layerIndex: layerLocal.value.layerIndex
+  }
+  
+  // Ensure layer is focused
+  if (!store.isLayerFocused(layerInfo)) {
+    store.focusLayer(layerInfo)
+  }
+  
+  // Set property focus with sublayer index
+  store.setPropertyFocus(propName, subIndex)
 }
 
 // --- Link Toggles ---
@@ -566,47 +642,28 @@ function toggleLinkedOffset() {
   if (linkedOffset.value) onDrawingInput()
 }
 
-// --- Palette (Unchanged logic) ---
-function buildPaletteTargetList() {
-  const targets = []
-  try {
-    const li = layerLocal.value.colorableIndex
-    const partObj = props.part || store.focusedPart
-    const uid = partObj && partObj._uid ? partObj._uid : null
-    const t = {
-      uid: uid,
-      stackIndex: (typeof props.stackIndex === 'number' ? props.stackIndex : null),
-      partIndex: (typeof props.partIndex === 'number' ? props.partIndex : null),
-      layerIndex: (typeof li === 'number' ? li : layerLocal.value.layerIndex),
-      currentColorText: layerLocal.value.colorText || null
-    }
-    targets.push(t)
-  } catch (e) { /* ignore */ }
-  return targets
-}
+// --- Palette ---
+const paletteTarget = computed(() => store.getPaletteTargetForLayer({
+  stackIndex: props.stackIndex,
+  partIndex: props.partIndex,
+  layerIndex: layerLocal.value.layerIndex,
+  part: props.part,
+  layer: layerLocal.value
+}))
 
 const isPaletteSelected = computed(() => {
-  if (!store.paletteModeActive) return false
-  const targets = store.activePaletteTargets || []
-  try {
-    const li = layerLocal.value.colorableIndex
-    const partObj = props.part || store.focusedPart
-    const uid = partObj && partObj._uid ? partObj._uid : null
-    return targets.some(t => (t.layerIndex === li) && (t.uid && uid ? t.uid === uid : true) && (t.partIndex === props.partIndex || t.partIndex === null))
-  } catch (e) {
-    return false
-  }
+  if (!store.paletteModeActive || !paletteTarget.value) return false
+  return store.isPaletteTargetActive(paletteTarget.value)
 })
 
 function togglePaletteForEntry() {
-  const targets = buildPaletteTargetList()
-  if (!targets || targets.length === 0) return
+  if (!paletteTarget.value) return
   if (isPaletteSelected.value && store.paletteModeActive) {
     store.clearPaletteMode()
 
     return
   }
-  store.openPalettePanel(targets)
+  store.openPalettePanel([paletteTarget.value])
 }
 </script>
 

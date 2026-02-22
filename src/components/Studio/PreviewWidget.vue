@@ -105,7 +105,7 @@ function setCanvasBackingSize() {
     if (!c || !parent) return
     const rect = parent.getBoundingClientRect()
     const cssW = Math.max(1, rect.width)
-    const cssH = Math.max(1, rect.height - 40) // leave space for title controls
+    const cssH = Math.max(1, rect.height)
     const dpr = hostWindow.devicePixelRatio || 1
     c.width = Math.round(cssW * dpr)
     c.height = Math.round(cssH * dpr)
@@ -276,8 +276,9 @@ function onPointerDown(e) {
       const isMultiMode = store.selectionMode === 'multiple'
       const selectedCount = store.selectedLayers.length
 
-      if (isMultiMode) {
+      if (isMultiMode && selectedCount > 0) {
         // Multi-layer dragging
+        store.setPropertyFocus('drawing')
         isDraggingMultipleLayers.value = true
         dragStartPointer.value = { x: e.clientX, y: e.clientY }
         
@@ -289,16 +290,17 @@ function onPointerDown(e) {
         }))
       } else {
         // Single layer dragging (existing behavior)
-        // Determine which layer to move. 
-        // If user has focused a specific property in inspector, try to use that layer index.
-        // Otherwise default to 0 (Main Layer).
-        let idx = 0
-        if (store.focusedProperty && typeof store.focusedProperty.layerIndex === 'number') {
-          idx = store.focusedProperty.layerIndex
-        }
+        const idx = store.getPrimaryMoveLayerIndex(part)
 
-        // Safety check index
-        if (idx < 0 || idx >= part.layerEntries.length) idx = 0
+        const stackIndex = store.focusedPartIndex?.stackIndex
+        const partIndex = store.focusedPartIndex?.partIndex
+        if (typeof stackIndex === 'number' && typeof partIndex === 'number') {
+          const layerInfo = { stackIndex, partIndex, layerIndex: idx }
+          if (!store.isLayerFocused(layerInfo)) {
+            store.focusLayer(layerInfo)
+          }
+          store.setPropertyFocus('drawing')
+        }
 
         const layer = part.layerEntries[idx]
         targetLayerIndex.value = idx
@@ -464,6 +466,7 @@ watch(() => store.mergedAppearanceData, () => updatePreview(), { deep: true })
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .header-left {
@@ -533,6 +536,7 @@ watch(() => store.mergedAppearanceData, () => updatePreview(), { deep: true })
   padding: 8px;
   box-sizing: border-box;
   height: 100%;
+  min-height: 0;
 }
 
 .preview-canvas-wrap {
@@ -541,7 +545,7 @@ watch(() => store.mergedAppearanceData, () => updatePreview(), { deep: true })
   align-items: center;
   justify-content: center;
   position: relative;
-  min-height: 220px;
+  min-height: 0;
   overflow: hidden;
   background: var(--color-bg-surface);
   border-radius: var(--radius-lg, 10px);

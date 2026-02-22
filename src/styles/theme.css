@@ -51,9 +51,9 @@
   --color-bg-hover: #f1f5f9;
   --color-bg-active: #e2e8f0;
   --color-text-primary: #0f172a;
-  --color-text-secondary: #475569;
-  --color-text-tertiary: #64748b;
-  --color-text-muted: #94a3b8;
+  --color-text-secondary: #0f172a;
+  --color-text-tertiary: #0f172a;
+  --color-text-muted: #0f172a;
   --color-text-inverse: #ffffff;
   --color-border-base: #e2e8f0;
   --color-border-light: #f1f5f9;
@@ -151,46 +151,45 @@
   }
 }
 
-/* ========== Light Theme ========== */
+/* ========== Light Theme (Independent) ========== */
 /* 
- * Themed BC Compatibility:
- * Variables use cascading fallback to Themed BC CSS variables when available
- * Format: var(--tmd-variable, fallback)
+ * Independent color scheme that does not depend on Themed BC
+ * Pure color values without automatic fallback
  */
 .theme-light {
-  /* Primary Colors - Themed BC Compatible */
-  --color-primary: var(--tmd-accent, #2563eb);
-  --color-primary-hover: var(--tmd-accent-hover, #1d4ed8);
+  /* Primary Colors */
+  --color-primary: #2563eb;
+  --color-primary-hover: #1d4ed8;
   --color-primary-active: #1e40af;
   --color-secondary: #64748b;
   --color-secondary-hover: #475569;
 
-  /* Background Colors - Themed BC Compatible */
-  --color-bg-base: var(--tmd-main, #ffffff);
-  --color-bg-surface: var(--tmd-element, #f8fafc);
+  /* Background Colors */
+  --color-bg-base: #ffffff;
+  --color-bg-surface: #f8fafc;
   --color-bg-panel: #f1f5f9;
-  --color-bg-hover: var(--tmd-element-hover, #f1f5f9);
+  --color-bg-hover: #f1f5f9;
   --color-bg-active: #e2e8f0;
 
-  /* Text Colors - Themed BC Compatible */
-  --color-text-primary: var(--tmd-text, #0f172a);
-  --color-text-secondary: var(--tmd-text, #475569);
-  --color-text-tertiary: var(--tmd-text-disabled, #64748b);
+  /* Text Colors */
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #475569;
+  --color-text-tertiary: #64748b;
   --color-text-muted: #94a3b8;
   --color-text-inverse: #ffffff;
 
-  /* Border Colors - Themed BC Compatible */
-  --color-border-light: var(--tmd-accent, #f1f5f9);
-  --color-border-base: var(--tmd-accent, #e2e8f0);
-  --color-border-strong: var(--tmd-accent, #cbd5e1);
+  /* Border Colors */
+  --color-border-light: #f1f5f9;
+  --color-border-base: #e2e8f0;
+  --color-border-strong: #cbd5e1;
   --color-border-focus: #3b82f6;
 
-  /* State Colors - Themed BC Compatible */
-  --color-success: var(--tmd-equipped, #10b981);
+  /* State Colors */
+  --color-success: #10b981;
   --color-success-bg: rgba(16, 185, 129, 0.15);
   --color-warning: #f59e0b;
   --color-warning-bg: rgba(245, 158, 11, 0.15);
-  --color-error: var(--tmd-blocked, #ef4444);
+  --color-error: #ef4444;
   --color-error-bg: #fee2e2;
   --color-info: #3b82f6;
   --color-info-bg: #eff6ff;
@@ -246,46 +245,45 @@
   --color-overlay: rgba(15, 23, 42, 0.3);
 }
 
-/* ========== Dark Theme ========== */
+/* ========== Dark Theme (Independent) ========== */
 /* 
- * Themed BC Compatibility:
- * Variables use cascading fallback to Themed BC CSS variables when available
- * Format: var(--tmd-variable, fallback)
+ * Independent color scheme that does not depend on Themed BC
+ * Pure color values without automatic fallback
  */
 .theme-dark {
-  /* Primary Colors - Themed BC Compatible */
-  --color-primary: var(--tmd-accent, #3b82f6);
-  --color-primary-hover: var(--tmd-accent-hover, #60a5fa);
+  /* Primary Colors */
+  --color-primary: #3b82f6;
+  --color-primary-hover: #60a5fa;
   --color-primary-active: #2563eb;
   --color-secondary: #94a3b8;
   --color-secondary-hover: #cbd5e1;
 
-  /* Background Colors - Themed BC Compatible */
-  --color-bg-base: var(--tmd-main, #0f172a);
-  --color-bg-surface: var(--tmd-element, #1e293b);
+  /* Background Colors */
+  --color-bg-base: #0f172a;
+  --color-bg-surface: #1e293b;
   --color-bg-panel: #334155;
-  --color-bg-hover: var(--tmd-element-hover, #475569);
+  --color-bg-hover: #475569;
   --color-bg-active: #64748b;
 
-  /* Text Colors - Themed BC Compatible */
-  --color-text-primary: var(--tmd-text, #f1f5f9);
-  --color-text-secondary: var(--tmd-text, #cbd5e1);
-  --color-text-tertiary: var(--tmd-text-disabled, #94a3b8);
+  /* Text Colors */
+  --color-text-primary: #f1f5f9;
+  --color-text-secondary: #cbd5e1;
+  --color-text-tertiary: #94a3b8;
   --color-text-muted: #64748b;
   --color-text-inverse: #0f172a;
 
-  /* Border Colors - Themed BC Compatible */
-  --color-border-light: var(--tmd-accent, #334155);
-  --color-border-base: var(--tmd-accent, #475569);
-  --color-border-strong: var(--tmd-accent, #64748b);
+  /* Border Colors */
+  --color-border-light: #334155;
+  --color-border-base: #475569;
+  --color-border-strong: #64748b;
   --color-border-focus: #60a5fa;
 
-  /* State Colors - Themed BC Compatible */
-  --color-success: var(--tmd-equipped, #34d399);
+  /* State Colors */
+  --color-success: #34d399;
   --color-success-bg: rgba(52, 211, 153, 0.15);
   --color-warning: #fbbf24;
   --color-warning-bg: rgba(251, 191, 36, 0.15);
-  --color-error: var(--tmd-blocked, #f87171);
+  --color-error: #f87171;
   --color-error-bg: #7f1d1d;
   --color-danger: #ef4444;
   --color-danger-hover: #dc2626;
@@ -343,9 +341,203 @@
   --color-overlay: rgba(0, 0, 0, 0.6);
 }
 
+/* ========== Themed BC Integration (Light) ========== */
+/* 
+ * When Themed BC is detected and user prefers light theme
+ * Uses Themed BC color variables without fallback
+ * Assumes Themed BC colors are light-themed (light backgrounds, dark text)
+ */
+.theme-themed-light {
+  /* Primary Colors - From Themed BC */
+  --color-primary: var(--tmd-accent);
+  --color-primary-hover: var(--tmd-accent-hover);
+  --color-primary-active: var(--tmd-accent);
+  --color-secondary: #64748b;
+  --color-secondary-hover: #475569;
+
+  /* Background Colors - From Themed BC */
+  --color-bg-base: var(--tmd-main);
+  --color-bg-surface: var(--tmd-element);
+  --color-bg-panel: var(--tmd-element);
+  --color-bg-hover: var(--tmd-element-hover);
+  --color-bg-active: var(--tmd-element-hover);
+
+  /* Text Colors - From Themed BC */
+  --color-text-primary: var(--tmd-text);
+  --color-text-secondary: var(--tmd-text);
+  --color-text-tertiary: var(--tmd-text);
+  --color-text-muted: var(--tmd-text-disabled, var(--tmd-text));
+  --color-text-inverse: var(--tmd-text);
+
+  /* Border Colors - From Themed BC */
+  --color-border-light: var(--tmd-border, var(--tmd-element));
+  --color-border-base: var(--tmd-border, var(--tmd-accent));
+  --color-border-strong: var(--tmd-accent);
+  --color-border-focus: var(--tmd-accent);
+
+  /* State Colors - From Themed BC */
+  --color-success: var(--tmd-equipped);
+  --color-success-bg: rgba(16, 185, 129, 0.15);
+  --color-warning: #f59e0b;
+  --color-warning-bg: rgba(245, 158, 11, 0.15);
+  --color-error: var(--tmd-blocked);
+  --color-error-bg: rgba(239, 68, 68, 0.15);
+  --color-info: var(--tmd-accent);
+  --color-info-bg: rgba(59, 130, 246, 0.15);
+
+  /* Shadow Colors */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+
+  /* Scrollbar Colors */
+  --scrollbar-track: rgba(0, 0, 0, 0.04);
+  --scrollbar-thumb: rgba(0, 0, 0, 0.12);
+  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.18);
+  --scrollbar-thumb-active: rgba(0, 0, 0, 0.24);
+  --scrollbar-corner: transparent;
+
+  /* Selection Colors */
+  --color-selection-single: var(--tmd-accent);
+  --color-selection-single-bg: var(--tmd-accent);
+  --color-selection-single-border: var(--tmd-accent);
+  --color-selection-multi: #7c3aed;
+  --color-selection-multi-bg: rgba(124, 58, 237, 0.03);
+  --color-selection-multi-border: rgba(124, 58, 237, 0.25);
+  --color-selection-multi-hover: rgba(124, 58, 237, 0.08);
+
+  /* Interactive States */
+  --color-interactive-hover: var(--tmd-element-hover);
+  --color-interactive-active: var(--tmd-element-hover);
+
+  /* Panel Specific */
+  --color-panel-glassmorphism-bg: var(--tmd-element);
+  --color-panel-glassmorphism-border: var(--tmd-accent);
+  --color-panel-glassmorphism-shadow: var(--tmd-accent);
+  --color-panel-glassmorphism-gradient-start: var(--tmd-element);
+  --color-panel-glassmorphism-gradient-end: var(--tmd-element-hover);
+
+  /* Accent Colors (Purple Variations) */
+  --color-accent-purple: #7c3aed;
+  --color-accent-purple-hover: #6d28d9;
+  --color-accent-purple-light: #8b5cf6;
+  --color-accent-purple-dark: #5b21b6;
+  --color-accent-purple-bg-light: rgba(124, 58, 237, 0.1);
+  --color-accent-purple-bg-subtle: rgba(124, 58, 237, 0.05);
+
+  /* Badge Colors */
+  --color-badge-blue-bg: var(--tmd-element);
+  --color-badge-blue-text: var(--tmd-accent);
+  --color-badge-blue-border: var(--tmd-accent);
+  
+  /* Overlay Colors */
+  --color-overlay: rgba(0, 0, 0, 0.3);
+}
+
+/* ========== Themed BC Integration (Dark) ========== */
+/* 
+ * When Themed BC is detected and user prefers dark theme
+ * Uses Themed BC color variables without fallback
+ * Assumes Themed BC colors are dark-themed (dark backgrounds, light text)
+ */
+.theme-themed-dark {
+  /* Primary Colors - From Themed BC */
+  --color-primary: var(--tmd-accent);
+  --color-primary-hover: var(--tmd-accent-hover);
+  --color-primary-active: var(--tmd-accent);
+  --color-secondary: #94a3b8;
+  --color-secondary-hover: #cbd5e1;
+
+  /* Background Colors - From Themed BC */
+  --color-bg-base: var(--tmd-main);
+  --color-bg-surface: var(--tmd-element);
+  --color-bg-panel: var(--tmd-element);
+  --color-bg-hover: var(--tmd-element-hover);
+  --color-bg-active: var(--tmd-element-hover);
+
+  /* Text Colors - From Themed BC */
+  --color-text-primary: var(--tmd-text);
+  --color-text-secondary: var(--tmd-text);
+  --color-text-tertiary: var(--tmd-text);
+  --color-text-muted: var(--tmd-text-disabled, var(--tmd-text));
+  --color-text-inverse: var(--tmd-text);
+
+  /* Border Colors - From Themed BC */
+  --color-border-light: var(--tmd-border, var(--tmd-element));
+  --color-border-base: var(--tmd-border, var(--tmd-accent));
+  --color-border-strong: var(--tmd-accent);
+  --color-border-focus: var(--tmd-accent);
+
+  /* State Colors - From Themed BC */
+  --color-success: var(--tmd-equipped);
+  --color-success-bg: rgba(52, 211, 153, 0.15);
+  --color-warning: #fbbf24;
+  --color-warning-bg: rgba(251, 191, 36, 0.15);
+  --color-error: var(--tmd-blocked);
+  --color-error-bg: rgba(248, 113, 113, 0.15);
+  --color-danger: #ef4444;
+  --color-danger-hover: #dc2626;
+  --color-info: var(--tmd-accent);
+  --color-info-bg: rgba(96, 165, 250, 0.15);
+
+  /* Shadow Colors (Darker for dark backgrounds) */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.4);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.6), 0 10px 10px -5px rgba(0, 0, 0, 0.5);
+  --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+
+  /* Scrollbar Colors */
+  --scrollbar-track: rgba(255, 255, 255, 0.03);
+  --scrollbar-thumb: rgba(255, 255, 255, 0.12);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.18);
+  --scrollbar-thumb-active: rgba(255, 255, 255, 0.24);
+  --scrollbar-corner: transparent;
+
+  /* Selection Colors */
+  --color-selection-single: var(--tmd-accent);
+  --color-selection-single-bg: var(--tmd-accent);
+  --color-selection-single-border: var(--tmd-accent);
+  --color-selection-multi: #a78bfa;
+  --color-selection-multi-bg: rgba(167, 139, 250, 0.06);
+  --color-selection-multi-border: rgba(167, 139, 250, 0.3);
+  --color-selection-multi-hover: rgba(167, 139, 250, 0.12);
+
+  /* Interactive States */
+  --color-interactive-hover: var(--tmd-element-hover);
+  --color-interactive-active: var(--tmd-element-hover);
+
+  /* Panel Specific */
+  --color-panel-glassmorphism-bg: var(--tmd-element);
+  --color-panel-glassmorphism-border: var(--tmd-accent);
+  --color-panel-glassmorphism-shadow: var(--tmd-accent);
+  --color-panel-glassmorphism-gradient-start: var(--tmd-element);
+  --color-panel-glassmorphism-gradient-end: var(--tmd-element-hover);
+
+  /* Accent Colors (Purple Variations) */
+  --color-accent-purple: #a78bfa;
+  --color-accent-purple-hover: #8b5cf6;
+  --color-accent-purple-light: #c4b5fd;
+  --color-accent-purple-dark: #7c3aed;
+  --color-accent-purple-bg-light: rgba(167, 139, 250, 0.15);
+  --color-accent-purple-bg-subtle: rgba(167, 139, 250, 0.08);
+
+  /* Badge Colors */
+  --color-badge-blue-bg: var(--tmd-element);
+  --color-badge-blue-text: var(--tmd-accent);
+  --color-badge-blue-border: var(--tmd-accent);
+  
+  /* Overlay Colors */
+  --color-overlay: rgba(0, 0, 0, 0.6);
+}
+
 /* ========== Utility Classes ========== */
 .theme-light,
-.theme-dark {
+.theme-dark,
+.theme-themed-light,
+.theme-themed-dark {
   font-family: var(--font-family);
   color: var(--color-text-primary);
   background-color: var(--color-bg-base);

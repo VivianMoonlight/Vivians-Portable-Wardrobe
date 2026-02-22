@@ -19,49 +19,40 @@
                 @mousedown="bringToFront"
                 @focus="bringToFront">
                 <header class="fm-panel-header" @pointerdown.stop.prevent="startDrag">
-                    <div class="fm-title">{{ t('fileManagerPanel.title') }}</div>
+                    <div class="fm-header-main">
+                        <div class="fm-title">{{ t('fileManagerPanel.title') }}</div>
+                        <nav class="fm-tabbar" role="tablist" :aria-label="t('fileManagerPanel.tabAriaLabel')">
+                            <button
+                                v-for="tab in tabs"
+                                :key="tab.id"
+                                class="fm-tab"
+                                :class="{ active: activeTab === tab.id }"
+                                role="tab"
+                                :aria-selected="activeTab === tab.id"
+                                :aria-controls="`workbench-tab-${tab.id}`"
+                                @click="setActiveTab(tab.id)">
+                                {{ tab.label }}
+                            </button>
+                        </nav>
+                    </div>
                     <div class="fm-header-actions">
-                        <button class="header-btn"
-                            :title="t('fileManagerPanel.importPlayerWardrobe') || 'Import Player Wardrobe'"
-                            @click.stop="importPlayerWardrobe">📥
-                        </button>
-                        <button class="header-btn" :title="t('fileManagerPanel.saveBackup')"
-                            @click.stop="saveBackup">💾</button>
-                        <button class="header-btn" :title="t('fileManagerPanel.importBackup')"
-                            @click.stop="importBackup">📂</button>
-                        <button class="header-btn"
-                            :title="showHistory ? t('historyViewer.toggleToFileManager') : t('historyViewer.toggleToHistory')"
-                            @click.stop="toggleView">{{ showHistory ? '📁' : '🕒' }}</button>
-                        <button class="header-btn" :title="t('fileManagerPanel.toggleTheme')"
-                            @click.stop="toggleTheme">🌓</button>
-
-                        <!--button class="header-btn" title="保存当前 (active) 到当前文件夹" @click.stop="saveCurrentToFolder">
-                        💾 当前到文件夹
-                    </button>
-                    <button class="header-btn" title="保存 character 到当前文件夹" @click.stop="saveCharacterToFolder">
-                        💾 Character到文件夹
-                    </button>
-                    <button class="header-btn" title="应用当前 activeItem 到目标角色" @click.stop="applyActiveToCharacter">
-                        🎭 应用当前
-                    </button-->
-                        <button class="header-btn" @click="openStudio">🎨</button>
                         <button class="close-btn" @click="requestClose" aria-label="关闭">&times;</button>
                     </div>
                 </header>
 
-                <div class="fm-panel-body" :class="{ 'is-mobile': isMobile }" :style="{ height: (panel.h - 56) + 'px' }">
-                    <div class="fm-mobile-actions u-show-mobile">
+                <div class="fm-panel-body" :class="{ 'is-mobile': isMobile }" :style="{ height: (panel.h - 58) + 'px' }">
+                    <div v-if="activeTab === 'wardrobe' || activeTab === 'history'" class="fm-mobile-actions u-show-mobile">
                         <button class="mobile-toggle" @click="showSide = !showSide">{{ showSide ? 'Hide Preview' : 'Show Preview' }}</button>
                         <button class="mobile-toggle" @click="showFilters = !showFilters">{{ showFilters ? 'Hide Filters' : 'Show Filters' }}</button>
                     </div>
 
-                    <aside v-if="!isMobile || showSide" class="fm-side" aria-hidden="false">
+                    <aside v-if="(activeTab === 'wardrobe' || activeTab === 'history') && (!isMobile || showSide)" class="fm-side" aria-hidden="false">
                         <div class="side-preview-wrap" style="height:calc(100% - 40px);">
                             <SidePreview />
                         </div>
 
                         <!-- 左下角两个美化按钮 -->
-                        <div class="fm-side-left-actions" role="group" aria-label="侧栏操作">
+                        <div v-if="activeTab === 'wardrobe'" class="fm-side-left-actions" role="group" aria-label="侧栏操作">
                             <button class="left-action-btn save-btn" :title="t('fileManagerPanel.saveCharacter')"
                                 @click.stop="saveCharacterToFolder">
 
@@ -74,11 +65,81 @@
                             </button>
                         </div>
                     </aside>
-                    <main class="fm-main">
-                        <FileManager v-if="!showHistory" :embedded="true" @close="requestClose" />
-                        <HistoryViewer v-else :embedded="true" />
+                    <main class="fm-main" :class="{ 'fm-main-studio': activeTab === 'studio' }">
+                        <div
+                            id="workbench-tab-wardrobe"
+                            ref="wardrobeTabRef"
+                            v-show="activeTab === 'wardrobe'"
+                            class="tab-panel"
+                            role="tabpanel"
+                            tabindex="-1">
+                            <FileManager
+                                :embedded="true"
+                                :on-import-player-wardrobe="importPlayerWardrobe"
+                                :on-save-backup="saveBackup"
+                                :on-import-backup="importBackup"
+                                @close="requestClose" />
+                        </div>
+                        <div
+                            id="workbench-tab-history"
+                            ref="historyTabRef"
+                            v-show="activeTab === 'history'"
+                            class="tab-panel"
+                            role="tabpanel"
+                            tabindex="-1">
+                            <HistoryViewer :embedded="true" />
+                        </div>
+                        <div
+                            id="workbench-tab-studio"
+                            ref="studioTabRef"
+                            v-show="activeTab === 'studio'"
+                            class="tab-panel tab-panel-studio"
+                            role="tabpanel"
+                            tabindex="-1">
+                            <Studio :visible="activeTab === 'studio'" :embedded="true" />
+                        </div>
+                        <div
+                            id="workbench-tab-settings"
+                            ref="settingsTabRef"
+                            v-show="activeTab === 'settings'"
+                            class="tab-panel settings-panel"
+                            role="tabpanel"
+                            tabindex="-1">
+                            <div class="settings-content">
+                                <h3 class="settings-title">{{ t('fileManagerPanel.themeSettings') }}</h3>
+                                <div class="theme-selector">
+                                    <button
+                                        class="theme-option"
+                                        :class="{ active: currentTheme === 'themed' }"
+                                        @click="setThemeMode('themed')">
+                                        <span class="theme-icon">🎨</span>
+                                        <span class="theme-label">{{ t('fileManagerPanel.themedMode') }}</span>
+                                        <span v-if="!themedAvailable && currentTheme === 'themed'" class="theme-warning">
+                                            {{ t('fileManagerPanel.themedNotAvailable') }}
+                                        </span>
+                                    </button>
+                                    <button
+                                        class="theme-option"
+                                        :class="{ active: currentTheme === 'light' }"
+                                        @click="setThemeMode('light')">
+                                        <span class="theme-icon">☀️</span>
+                                        <span class="theme-label">{{ t('fileManagerPanel.lightMode') }}</span>
+                                    </button>
+                                    <button
+                                        class="theme-option"
+                                        :class="{ active: currentTheme === 'dark' }"
+                                        @click="setThemeMode('dark')">
+                                        <span class="theme-icon">🌙</span>
+                                        <span class="theme-label">{{ t('fileManagerPanel.darkMode') }}</span>
+                                    </button>
+                                </div>
+                                <div v-if="currentTheme === 'themed'" class="theme-info">
+                                    <p>{{ t('fileManagerPanel.themedModeDesc') }}</p>
+                                </div>
+                            </div>
+                        </div>
                     </main>
-                    <aside v-if="!isMobile || showFilters" class="main-right">
+                    <aside v-if="(activeTab === 'wardrobe' || activeTab === 'history') && (!isMobile || showFilters)" class="main-right">
                         <FilterManager />
                     </aside>
                 </div>
@@ -100,8 +161,6 @@
         </div>
     </transition>
 
-    <!-- Studio 弹窗 -->
-    <Studio :visible="StudioVisible" @close="closeStudio" />
 </template>
 
 <script setup>
@@ -116,15 +175,16 @@ import { useFileSystemStore } from '@/stores/fileSystemStore.js'
 import Studio from '@/components/Studio/Studio.vue'
 import { ExternalAdapter } from '@/utils/external_adapters.js'
 import { useStudioStore } from '@/stores/studioStore.js'
+import { useWorkbenchStore } from '@/stores/workbenchStore.js'
 import { PlayerHost, hostWindow, doc } from '@/utils/host-window.js'
-import { useTheme, injectTheme } from '@/composables/useTheme'
+import { useTheme, injectTheme } from '@/services/ThemeService'
 import * as DialogService from '@/services/DialogService.js'
 
 const { t } = useI18n()
 const injectedTheme = injectTheme()
 const themeClass = computed(() => injectedTheme.themeClass())
 const theme = useTheme()
-const { initTheme, themeClass: getThemeClass, toggleTheme, currentTheme } = theme
+const { setTheme, currentTheme } = theme
 
 const WINDOW_MARGIN = 12 // 保持与 CSS 中的 margin/间距一致
 const MOBILE_BREAKPOINT = 900
@@ -137,20 +197,43 @@ const emit = defineEmits(['close'])
 
 const fs = useFileSystemStore()
 const studioStore = useStudioStore()
+const workbenchStore = useWorkbenchStore()
 
-const StudioVisible = ref(false)
-async function openStudio() {
-    await studioStore.loadAssetData()
-    StudioVisible.value = true
-}
-function closeStudio() {
-    StudioVisible.value = false
+const tabs = computed(() => [
+    { id: 'wardrobe', label: t('fileManagerPanel.tabWardrobe') },
+    { id: 'history', label: t('fileManagerPanel.tabHistory') },
+    { id: 'studio', label: t('fileManagerPanel.tabStudio') },
+    { id: 'settings', label: t('fileManagerPanel.tabSettings') }
+])
+
+const activeTab = computed(() => workbenchStore.activeTab)
+const wardrobeTabRef = ref(null)
+const historyTabRef = ref(null)
+const studioTabRef = ref(null)
+const settingsTabRef = ref(null)
+
+async function setActiveTab(tab) {
+    workbenchStore.setActiveTab(tab)
+    if (tab === 'studio') {
+        await studioStore.loadAssetData()
+    }
 }
 
-// History toggle state
-const showHistory = ref(false)
-function toggleView() {
-    showHistory.value = !showHistory.value
+function focusActivePanel() {
+    const panelMap = {
+        wardrobe: wardrobeTabRef.value,
+        history: historyTabRef.value,
+        studio: studioTabRef.value,
+        settings: settingsTabRef.value
+    }
+    const panelEl = panelMap[activeTab.value]
+    if (!panelEl) return
+    const firstInteractive = panelEl.querySelector('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')
+    if (firstInteractive && typeof firstInteractive.focus === 'function') {
+        firstInteractive.focus({ preventScroll: true })
+        return
+    }
+    panelEl.focus({ preventScroll: true })
 }
 
 const panel = ref({
@@ -177,6 +260,16 @@ function bringToFront() {
     // 提升 z-index 让窗体在最上层
     panelZ.value = FOCUSED_Z
 }
+
+function setThemeMode(mode) {
+    setTheme(mode)
+}
+
+const themedAvailable = computed(() => {
+    if (!theme.getThemedStatus) return false
+    const status = theme.getThemedStatus()
+    return status && (status.detected || status.enabled)
+})
 
 function clampToViewport() {
     // 保证面板尺寸和位置不会超出视窗（避免出现横向滚动）
@@ -617,7 +710,31 @@ async function importPlayerWardrobe() {
 }
 
 function escHandler(e) {
-    if (e.key === 'Escape') requestClose()
+    if (e.key === 'Escape') {
+        requestClose()
+        return
+    }
+    if (!(e.ctrlKey || e.metaKey)) return
+
+    if (e.key === '1') {
+        e.preventDefault()
+        setActiveTab('wardrobe')
+        return
+    }
+    if (e.key === '2') {
+        e.preventDefault()
+        setActiveTab('history')
+        return
+    }
+    if (e.key === '3') {
+        e.preventDefault()
+        setActiveTab('studio')
+        return
+    }
+    if (e.key === 'Tab') {
+        e.preventDefault()
+        workbenchStore.switchToNextTab()
+    }
 }
 
 const prevOverflowX = ref('')
@@ -636,6 +753,14 @@ watch(isMobile, (v) => {
     }
 })
 
+watch(
+    () => activeTab.value,
+    async () => {
+        await nextTick()
+        focusActivePanel()
+    }
+)
+
 onMounted(() => {
     hostWindow.addEventListener('pointermove', onPointerMove, { passive: true })
     hostWindow.addEventListener('pointerup', onPointerUp, { passive: true })
@@ -644,6 +769,9 @@ onMounted(() => {
     updateIsMobile()
     // 当组件挂载时确保 panel 不超出（处理首次渲染时）
     ensurePanelDefaults()
+    if (activeTab.value === 'studio') {
+        studioStore.loadAssetData().catch(() => { /* ignore */ })
+    }
 })
 
 onBeforeUnmount(() => {
@@ -725,6 +853,14 @@ function onWindowResize() {
     border-top-right-radius: var(--radius-xl, 12px);
 }
 
+.fm-header-main {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md, 12px);
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
 .fm-title {
     font-size: var(--font-size-xl, 17px);
     font-weight: var(--font-weight-bold, 700);
@@ -737,21 +873,6 @@ function onWindowResize() {
     align-items: center;
     gap: var(--space-sm, 8px);
     margin-right: var(--space-sm, 6px);
-}
-
-.header-btn {
-    background: transparent;
-    border: 1px solid var(--color-border-base, rgba(200, 210, 230, 0.6));
-    padding: var(--space-sm, 6px) 10px;
-    border-radius: var(--radius-md, 8px);
-    color: var(--color-text-primary, #23324a);
-    cursor: pointer;
-    transition: all var(--transition-fast, 0.15s) ease;
-}
-
-.header-btn:hover {
-    background: var(--color-bg-hover, #f1f5f9);
-    border-color: var(--color-border-strong, #cbd5e1);
 }
 
 /* close 按钮 */
@@ -769,6 +890,39 @@ function onWindowResize() {
 .close-btn:hover {
     background: var(--color-error-bg, #fee2e2);
     border-color: var(--color-error, #ef4444);
+}
+
+.fm-tabbar {
+    height: 34px;
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm, 8px);
+    padding: 0;
+    background: transparent;
+    min-width: 0;
+    overflow-x: auto;
+}
+
+.fm-tab {
+    min-width: 72px;
+    height: 32px;
+    border-radius: var(--radius-md, 8px);
+    border: 1px solid var(--color-border-base, rgba(200, 210, 230, 0.7));
+    background: transparent;
+    color: var(--color-text-secondary, #475569);
+    cursor: pointer;
+    font-weight: var(--font-weight-medium, 500);
+    transition: all var(--transition-fast, 0.15s) ease;
+}
+
+.fm-tab:hover {
+    background: var(--color-bg-hover, #e2e8f0);
+}
+
+.fm-tab.active {
+    background: var(--color-primary, #3b82f6);
+    border-color: var(--color-primary, #3b82f6);
+    color: #fff;
 }
 
 /* body layout */
@@ -896,6 +1050,118 @@ function onWindowResize() {
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
     box-sizing: border-box;
+}
+
+.tab-panel {
+    width: 100%;
+    height: 100%;
+}
+
+.tab-panel-studio {
+    display: flex;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.tab-panel-studio > * {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.fm-main.fm-main-studio {
+    overflow-y: hidden;
+}
+
+.settings-panel {
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-start;
+    padding: var(--space-lg, 20px);
+}
+
+.settings-content {
+    width: 100%;
+    max-width: 600px;
+}
+
+.settings-title {
+    font-size: var(--font-size-lg, 16px);
+    font-weight: var(--font-weight-semi-bold, 600);
+    color: var(--color-text-primary, #23324a);
+    margin: 0 0 var(--space-md, 16px) 0;
+}
+
+.theme-selector {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: var(--space-md, 12px);
+    margin-bottom: var(--space-lg, 24px);
+}
+
+.theme-option {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-sm, 8px);
+    padding: var(--space-md, 16px);
+    border: 2px solid var(--color-border-base, rgba(200, 210, 230, 0.6));
+    border-radius: var(--radius-lg, 10px);
+    background: var(--color-bg-base, #ffffff);
+    color: var(--color-text-primary, #23324a);
+    cursor: pointer;
+    transition: all var(--transition-smooth, 0.2s) ease;
+    position: relative;
+}
+
+.theme-option:hover {
+    border-color: var(--color-border-strong, #cbd5e1);
+    background: var(--color-bg-hover, #f8fafc);
+    box-shadow: 0 2px 8px rgba(10, 20, 40, 0.08);
+}
+
+.theme-option.active {
+    border-color: var(--color-primary, #3b82f6);
+    background: var(--color-primary-bg, rgba(59, 130, 246, 0.08));
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.theme-icon {
+    font-size: 32px;
+    line-height: 1;
+}
+
+.theme-label {
+    font-size: var(--font-size-sm, 13px);
+    font-weight: var(--font-weight-medium, 500);
+    text-align: center;
+}
+
+.theme-warning {
+    position: absolute;
+    top: -20px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px;
+    color: var(--color-warning, #f59e0b);
+    background: var(--color-warning-bg, rgba(245, 158, 11, 0.1));
+    padding: 2px 6px;
+    border-radius: 4px;
+    white-space: nowrap;
+}
+
+.theme-info {
+    padding: var(--space-md, 12px) var(--space-md, 16px);
+    background: var(--color-info-bg, rgba(59, 130, 246, 0.05));
+    border-left: 3px solid var(--color-primary, #3b82f6);
+    border-radius: var(--radius-md, 8px);
+    margin-top: var(--space-md, 16px);
+}
+
+.theme-info p {
+    margin: 0;
+    font-size: var(--font-size-sm, 13px);
+    color: var(--color-text-secondary, #475569);
+    line-height: 1.5;
 }
 
 /* right aside */

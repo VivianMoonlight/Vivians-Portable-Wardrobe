@@ -83,6 +83,34 @@ export function applyTagToTargets(state, tag, helpers) {
 }
 
 /**
+ * Apply Tag + HLS offset to active palette targets
+ * @param {Object} state
+ * @param {{tag:string, offset:{h?:number,l?:number,s?:number}}} payload
+ * @param {Function} helpers
+ * @returns {boolean}
+ */
+export function applyTagOffsetToTargets(state, payload = {}, helpers) {
+  const tag = String(payload?.tag || '').trim()
+  if (!tag) return false
+  const ref = Palette.formatTagOffsetRef(tag, payload?.offset || {})
+  if (!ref) return false
+  return applyColorToTargets(state, ref, helpers)
+}
+
+/**
+ * Reset active targets to plain tag (clear offset)
+ * @param {Object} state
+ * @param {{tag:string}} payload
+ * @param {Function} helpers
+ * @returns {boolean}
+ */
+export function clearTagOffsetOnTargets(state, payload = {}, helpers) {
+  const tag = String(payload?.tag || '').trim()
+  if (!tag) return false
+  return applyColorToTargets(state, tag, helpers)
+}
+
+/**
  * Delete palette tag
  * @param {Object} state - Current store state
  * @param {string} tag - Tag to delete
@@ -169,21 +197,18 @@ export function deleteSavedColor(state, idx) {
  * @returns {Object} Updated paletteMap
  */
 export function updatePaletteTag(state, tag, newValue, helpers) {
-  const { paletteMap, stacks, focusedPart, findPartByUid, _buildLayerEntriesWithCache,
-          _scheduleLayerRefresh, _schedulePartUpdate, triggerFocusedPartUpdate,
-          pushHistorySnapshotThrottled } = helpers
+  const { paletteMap } = helpers
 
   if (!tag || !(tag in paletteMap)) return { paletteMap }
 
-  const fp = focusedPart
-  const res = Palette.updatePaletteTagFromStacks(stacks, paletteMap, fp, tag, newValue)
+  const updatedPaletteMap = Palette.updatePaletteTag(paletteMap, tag, newValue)
 
   return {
-    paletteMap: res.paletteMap,
-    _scheduleLayerRefresh: res.removed,
-    _schedulePartUpdate: res.removed,
-    triggerFocusedPartUpdate: res.removed,
-    pushHistorySnapshotThrottled: res.removed
+    paletteMap: updatedPaletteMap,
+    _scheduleLayerRefresh: true,
+    _schedulePartUpdate: true,
+    triggerFocusedPartUpdate: true,
+    pushHistorySnapshotThrottled: true
   }
 }
 
@@ -196,8 +221,7 @@ export function updatePaletteTag(state, tag, newValue, helpers) {
 export function clearPalette(state, helpers) {
   const { paletteMap, _paletteNextCounter, _paletteVersion, pushHistorySnapshot } = helpers
 
-  const tags = Object.keys(paletteMap || {})
-  const newPaletteMap = Palette.clearPalette(paletteMap)
+  const newPaletteMap = {}
   const newPaletteNextCounter = _paletteNextCounter
 
   return {

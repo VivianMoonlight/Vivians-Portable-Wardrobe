@@ -16,18 +16,24 @@ export function detectThemedBC() {
 
     // Check for Themed BC's presence through multiple indicators
     const hasColorsModule = typeof window.ColorsModule !== 'undefined'
-    const hasThemedCSS = !!document.querySelector('style[data-themed-bc]')
+    
+    // Check for Themed BC CSS - support both old and new formats
+    // Old format: data-themed-bc attribute
+    // New format: id="tmd-root"
+    const hasThemedCSS = !!(
+      document.querySelector('style[data-themed-bc]') ||
+      document.querySelector('style#tmd-root')
+    )
+    
+    // Check if Themed BC variables are present with actual values
     const hasThemedVars = checkThemedVariables()
-
+    
+    // Consider installed if any indicator is present
+    // Priority: ColorsModule > themed CSS tag > actual variables
     const installed = hasColorsModule || hasThemedCSS || hasThemedVars
     
-    // Check if Themed BC is enabled (has active theme loaded)
-    let enabled = false
-    if (installed && hasColorsModule && typeof window.ColorsModule.current !== 'undefined') {
-      enabled = window.ColorsModule.current !== null
-    } else if (hasThemedVars) {
-      enabled = true
-    }
+    // Enabled if installed AND has valid color variables
+    const enabled = installed && hasThemedVars
 
     return { installed, enabled }
   } catch (error) {
@@ -38,7 +44,7 @@ export function detectThemedBC() {
 
 /**
  * Checks if Themed BC CSS variables are present in the document
- * @returns {boolean} True if Themed BC variables are detected
+ * @returns {boolean} True if Themed BC variables are detected with valid values
  */
 function checkThemedVariables() {
   try {
@@ -46,9 +52,11 @@ function checkThemedVariables() {
     
     const computedStyle = getComputedStyle(document.documentElement)
     const tmdMain = computedStyle.getPropertyValue('--tmd-main').trim()
+    const tmdAccent = computedStyle.getPropertyValue('--tmd-accent').trim()
+    const tmdText = computedStyle.getPropertyValue('--tmd-text').trim()
     
-    // If --tmd-main has a value, Themed BC variables are likely present
-    return tmdMain !== ''
+    // Must have at least main background, accent, and text colors for a valid theme
+    return tmdMain !== '' && tmdAccent !== '' && tmdText !== ''
   } catch (error) {
     return false
   }
@@ -110,101 +118,40 @@ export function isGUIOverhaulMode() {
 }
 
 /**
- * Maps Themed BC CSS variables to vue-wardrobe color variables
- * @param {boolean} isDarkTheme - Whether the current theme is dark
- * @returns {Object} Mapping of vue-wardrobe variables to Themed BC variables with fallbacks
- */
-export function mapThemedColors(isDarkTheme = false) {
-  // Define fallback colors based on theme
-  const lightFallbacks = {
-    primary: '#2563eb',
-    primaryHover: '#1d4ed8',
-    bgBase: '#ffffff',
-    bgSurface: '#f8fafc',
-    bgHover: '#f1f5f9',
-    textPrimary: '#0f172a',
-    textSecondary: '#475569',
-    textTertiary: '#64748b',
-    borderBase: '#e2e8f0',
-    success: '#10b981',
-    error: '#ef4444',
-  }
-
-  const darkFallbacks = {
-    primary: '#3b82f6',
-    primaryHover: '#60a5fa',
-    bgBase: '#0f172a',
-    bgSurface: '#1e293b',
-    bgHover: '#475569',
-    textPrimary: '#f1f5f9',
-    textSecondary: '#cbd5e1',
-    textTertiary: '#94a3b8',
-    borderBase: '#475569',
-    success: '#34d399',
-    error: '#f87171',
-  }
-
-  const fallbacks = isDarkTheme ? darkFallbacks : lightFallbacks
-
-  // Map Themed BC variables to vue-wardrobe variables with fallbacks
-  return {
-    '--color-primary': { themedVar: '--tmd-accent', fallback: fallbacks.primary },
-    '--color-primary-hover': { themedVar: '--tmd-accent-hover', fallback: fallbacks.primaryHover },
-    '--color-bg-base': { themedVar: '--tmd-main', fallback: fallbacks.bgBase },
-    '--color-bg-surface': { themedVar: '--tmd-element', fallback: fallbacks.bgSurface },
-    '--color-bg-hover': { themedVar: '--tmd-element-hover', fallback: fallbacks.bgHover },
-    '--color-text-primary': { themedVar: '--tmd-text', fallback: fallbacks.textPrimary },
-    '--color-text-secondary': { themedVar: '--tmd-text', fallback: fallbacks.textSecondary },
-    '--color-text-tertiary': { themedVar: '--tmd-text-disabled', fallback: fallbacks.textTertiary },
-    '--color-border-base': { themedVar: '--tmd-accent', fallback: fallbacks.borderBase },
-    '--color-success': { themedVar: '--tmd-equipped', fallback: fallbacks.success },
-    '--color-error': { themedVar: '--tmd-blocked', fallback: fallbacks.error },
-  }
-}
-
-/**
- * Gets the computed value of a Themed BC CSS variable
- * @param {string} varName - CSS variable name (e.g., '--tmd-accent')
- * @returns {string} The computed value or empty string if not found
- */
-export function getThemedCSSVar(varName) {
-  try {
-    if (typeof window === 'undefined' || !document.documentElement) {
-      return ''
-    }
-    return getComputedStyle(document.documentElement).getPropertyValue(varName).trim()
-  } catch (error) {
-    console.debug('[vue-wardrobe] Failed to get Themed BC CSS variable:', varName, error)
-    return ''
-  }
-}
-
-/**
  * Reads all Themed BC colors and returns them as an object
  * @returns {Object} Object with Themed BC color values
  */
 export function readThemedColors() {
   const colors = {}
   
-  const themedVars = [
-    '--tmd-main',
-    '--tmd-element',
-    '--tmd-element-hover',
-    '--tmd-accent',
-    '--tmd-accent-hover',
-    '--tmd-text',
-    '--tmd-text-disabled',
-    '--tmd-border',
-    '--tmd-equipped',
-    '--tmd-blocked',
-  ]
-
-  themedVars.forEach(varName => {
-    const value = getThemedCSSVar(varName)
-    if (value) {
-      colors[varName] = value
+  try {
+    if (typeof window === 'undefined' || !document.documentElement) {
+      return colors
     }
-  })
+
+    const computedStyle = getComputedStyle(document.documentElement)
+    const themedVars = [
+      '--tmd-main',
+      '--tmd-element',
+      '--tmd-element-hover',
+      '--tmd-accent',
+      '--tmd-accent-hover',
+      '--tmd-text',
+      '--tmd-text-disabled',
+      '--tmd-border',
+      '--tmd-equipped',
+      '--tmd-blocked',
+    ]
+
+    themedVars.forEach(varName => {
+      const value = computedStyle.getPropertyValue(varName).trim()
+      if (value) {
+        colors[varName] = value
+      }
+    })
+  } catch (error) {
+    console.debug('[vue-wardrobe] Failed to read Themed colors:', error)
+  }
 
   return colors
 }

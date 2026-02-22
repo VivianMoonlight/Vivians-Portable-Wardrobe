@@ -1,12 +1,7 @@
-import { ref, computed, watch, inject, provide } from 'vue'
-import { detectThemedBC, getThemedVersion, readThemedColors } from '../utils/themedBridge'
-import { useThemedIntegration } from './useThemedIntegration'
+import { ref, computed, inject, provide } from 'vue'
+import { detectThemedBC, getThemedVersion, readThemedColors } from '@/utils/themedBridge'
+import { useThemedIntegration } from '@/services/ThemedIntegrationService'
 
-/**
- * Theme tokens reference
- * Note: These values are defined as CSS variables in src/styles/theme.css
- * This object serves as documentation for available design tokens
- */
 const themeTokensReference = {
   colors: [
     '--color-primary', '--color-primary-hover', '--color-primary-active',
@@ -31,34 +26,24 @@ const themeTokensReference = {
   ]
 }
 
-// Theme context key
 export const THEME_CONTEXT_KEY = Symbol('theme-context')
 
-// Theme state
+// Theme modes: 'light', 'dark', 'themed'
 const currentTheme = ref('light')
 const isInitialized = ref(false)
 
-// Themed BC integration
 let themedIntegration = null
 
-/**
- * Composable for theme management
- * Provides theme switching and persistence functionality
- */
 export function useTheme() {
-  /**
-   * Initialize theme from localStorage or system preference
-   */
   const initTheme = () => {
     if (isInitialized.value) return
-    
+
     try {
-      // Try to get saved theme from localStorage
       const savedTheme = localStorage.getItem('app-theme')
-      if (savedTheme === 'light' || savedTheme === 'dark') {
+      // Support three modes: light, dark, themed
+      if (savedTheme === 'light' || savedTheme === 'dark' || savedTheme === 'themed') {
         currentTheme.value = savedTheme
       } else {
-        // Fall back to system preference
         const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
         currentTheme.value = prefersDark ? 'dark' : 'light'
       }
@@ -66,121 +51,84 @@ export function useTheme() {
       console.warn('Failed to initialize theme:', error)
       currentTheme.value = 'light'
     }
-    
+
     isInitialized.value = true
-    
+
     // Initialize Themed BC integration
     if (!themedIntegration) {
       themedIntegration = useThemedIntegration()
       themedIntegration.initThemedIntegration()
-      
-      // Sync with current theme
-      themedIntegration.syncWithThemed(currentTheme.value === 'dark')
     }
   }
-  
-  /**
-   * Set the current theme
-   * @param {string} theme - 'light' or 'dark'
-   */
+
   const setTheme = (theme) => {
-    if (theme !== 'light' && theme !== 'dark') {
-      console.warn(`Invalid theme: ${theme}. Must be 'light' or 'dark'.`)
+    if (theme !== 'light' && theme !== 'dark' && theme !== 'themed') {
+      console.warn(`Invalid theme: ${theme}. Must be 'light', 'dark', or 'themed'.`)
       return
     }
-    
+
     currentTheme.value = theme
-    
-    // Persist to localStorage
+
     try {
       localStorage.setItem('app-theme', theme)
     } catch (error) {
       console.warn('Failed to save theme to localStorage:', error)
     }
-    
-    // Sync with Themed BC if available
-    if (themedIntegration) {
-      themedIntegration.syncWithThemed(theme === 'dark')
-    }
+
+    // Theme class will be automatically updated via themeClass() computed property
   }
-  
-  /**
-   * Toggle between light and dark themes
-   */
+
   const toggleTheme = () => {
     const newTheme = currentTheme.value === 'light' ? 'dark' : 'light'
     setTheme(newTheme)
   }
-  
-  /**
-   * Get the current theme class name
-   */
+
   const themeClass = () => {
+    if (currentTheme.value === 'themed') {
+      // Themed mode: always use themed classes if available
+      if (themedIntegration && themedIntegration.themedEnabled.value) {
+        return 'theme-themed-light' // Can be enhanced to detect theme mode
+      }
+      // Fallback to light if themed not available
+      console.warn('[vue-wardrobe] Themed mode selected but Themed BC not available, falling back to light')
+      return 'theme-light'
+    }
+    // Light or dark mode: always use independent themes
     return `theme-${currentTheme.value}`
   }
-  
-  /**
-   * Check if current theme is dark
-   */
+
   const isDark = () => {
     return currentTheme.value === 'dark'
   }
-  
-  /**
-   * Get CSS variable value from current theme
-   * @param {string} varName - CSS variable name (e.g., '--color-primary')
-   * @returns {string} The computed value of the CSS variable
-   */
+
+  const isThemed = () => {
+    return currentTheme.value === 'themed'
+  }
+
   const getCSSVar = (varName) => {
     if (typeof window === 'undefined' || !document.documentElement) {
       return ''
     }
     return getComputedStyle(document.documentElement).getPropertyValue(varName).trim()
   }
-  
-  /**
-   * Detect if Themed BC plugin is available
-   * @returns {Object} Detection result with installation and enabled status
-   */
+
   const detectThemedPlugin = () => {
     return detectThemedBC()
   }
-  
-  /**
-   * Get Themed BC colors if available
-   * @returns {Object} Object with Themed BC color values
-   */
+
   const getThemedColors = () => {
     if (themedIntegration) {
       return themedIntegration.getThemedColors()
     }
     return readThemedColors()
   }
-  
-  /**
-   * Synchronize with Themed BC colors
-   * Forces a sync with current Themed BC state
-   */
-  const syncWithThemed = () => {
+
+  const refreshThemedDetection = () => {
     if (themedIntegration) {
-      themedIntegration.syncWithThemed(currentTheme.value === 'dark')
+      themedIntegration.refreshDetection()
     }
   }
-  
-  /**
-   * Toggle Themed BC integration
-   * @param {boolean} enabled - Whether to enable Themed BC integration
-   */
-  const toggleThemedIntegration = (enabled) => {
-    if (themedIntegration) {
-      themedIntegration.toggleThemedIntegration(enabled)
-    }
-  }
-  
-  /**
-   * Get Themed BC integration status
-   * @returns {Object} Integration status object
-   */
+
   const getThemedStatus = () => {
     if (themedIntegration) {
       return themedIntegration.getIntegrationStatus()
@@ -191,78 +139,59 @@ export function useTheme() {
       enabled: detection.enabled,
       version: getThemedVersion(),
       guiOverhaul: false,
-      usingThemedColors: false,
       availableColors: 0,
     }
   }
-  
+
   return {
-    // State
     currentTheme,
     isInitialized,
-    
-    // Methods
     initTheme,
     setTheme,
     toggleTheme,
     themeClass,
     isDark,
+    isThemed,
     getCSSVar,
-    
-    // Themed BC Integration
     detectThemedPlugin,
     getThemedColors,
-    syncWithThemed,
-    toggleThemedIntegration,
+    refreshThemedDetection,
     getThemedStatus,
-    
-    // Token reference (for documentation)
     tokensReference: themeTokensReference,
   }
 }
 
-/**
- * Provide theme context to child components
- * Call this in App.vue setup
- */
 export function provideTheme(themeComposable) {
   provide(THEME_CONTEXT_KEY, themeComposable)
 }
 
-/**
- * Inject theme context from parent
- * Use this in Teleported components to get theme state
- */
 export function injectTheme() {
   const theme = inject(THEME_CONTEXT_KEY, null)
-  
+
   if (!theme) {
-    console.warn('[useTheme] Theme context not provided. Using fallback.')
-    // Return a complete fallback matching the theme composable interface
+    console.warn('[ThemeService] Theme context not provided. Using fallback.')
     return {
       currentTheme: computed(() => 'light'),
       isInitialized: computed(() => false),
       themeClass: () => 'theme-light',
-      toggleTheme: () => console.warn('[useTheme] Cannot toggle theme - not provided'),
-      setTheme: () => console.warn('[useTheme] Cannot set theme - not provided'),
-      initTheme: () => console.warn('[useTheme] Cannot init theme - not provided'),
+      toggleTheme: () => console.warn('[ThemeService] Cannot toggle theme - not provided'),
+      setTheme: () => console.warn('[ThemeService] Cannot set theme - not provided'),
+      initTheme: () => console.warn('[ThemeService] Cannot init theme - not provided'),
       isDark: () => false,
       getCSSVar: () => '',
       detectThemedPlugin: () => ({ installed: false, enabled: false }),
       getThemedColors: () => ({}),
-      syncWithThemed: () => {},
-      toggleThemedIntegration: () => {},
+      refreshThemedDetection: () => {},
       getThemedStatus: () => ({
         detected: false,
         enabled: false,
         version: '',
         guiOverhaul: false,
-        usingThemedColors: false,
         availableColors: 0,
       }),
       tokensReference: {},
     }
   }
-  
+
   return theme
 }

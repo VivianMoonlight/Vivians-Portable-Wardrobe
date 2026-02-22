@@ -2,10 +2,11 @@
 import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFileSystemStore } from '@/stores/fileSystemStore'
+import { useWorkbenchStore } from '@/stores/workbenchStore'
 import FileItem from './FileItem.vue'
 import BaseButton from './ui/BaseButton.vue'
 import { hostWindow, doc, } from '@/utils/host-window.js'
-import { injectTheme } from '@/composables/useTheme'
+import { injectTheme } from '@/services/ThemeService'
 import * as DialogService from '@/services/DialogService.js'
 
 const { t } = useI18n()
@@ -15,14 +16,38 @@ const injectedTheme = injectTheme()
 const themeClass = computed(() => injectedTheme.themeClass())
 
 const props = defineProps({
-  embedded: { type: Boolean, default: false } // 嵌入模式：外层面板负责布局与关闭
+  embedded: { type: Boolean, default: false }, // 嵌入模式：外层面板负责布局与关闭
+  onImportPlayerWardrobe: { type: Function, default: null },
+  onSaveBackup: { type: Function, default: null },
+  onImportBackup: { type: Function, default: null }
 })
 const emit = defineEmits(['close'])
 const fsStore = useFileSystemStore()
+const workbenchStore = useWorkbenchStore()
 
 // local search state
 const searchQuery = ref('')
-const searchScope = ref('current') // 'current' | 'all'
+const searchScope = computed({
+  get: () => workbenchStore.wardrobeUi.searchScope || 'current',
+  set: (value) => workbenchStore.setWardrobeUi({ searchScope: value })
+})
+const sortBy = computed({
+  get: () => workbenchStore.wardrobeUi.sortBy || 'recent',
+  set: (value) => workbenchStore.setWardrobeUi({ sortBy: value })
+})
+const fileViewMode = computed({
+  get: () => workbenchStore.wardrobeUi.fileViewMode || 'large',
+  set: (value) => workbenchStore.setWardrobeUi({ fileViewMode: value })
+})
+
+const sortLabel = computed(() => {
+  const map = {
+    recent: t('fileManager.sortRecent'),
+    name: t('fileManager.sortName'),
+    type: t('fileManager.sortType')
+  }
+  return map[sortBy.value] || t('fileManager.sortRecent')
+})
 
 // items in current folder (raw)
 const items = computed(() => fsStore.currentNode?.children ?? [])
@@ -30,27 +55,36 @@ const items = computed(() => fsStore.currentNode?.children ?? [])
 // Build display list: array of { item, path } so UI can handle both current-folder view and global search results uniformly
 const displayList = computed(() => {
   const q = (searchQuery.value || '').trim()
-  // empty query => show current folder items
-  if (!q) {
-    return (items.value || []).map(it => ({ item: it, path: fsStore.currentPath }))
-  }
-
-  // case-insensitive match helper
   const ql = q.toLowerCase()
-
-  if (searchScope.value === 'current') {
-    return (items.value || [])
+  let baseList = []
+  if (!q) {
+    baseList = (items.value || []).map(it => ({ item: it, path: fsStore.currentPath }))
+  } else if (searchScope.value === 'current') {
+    baseList = (items.value || [])
       .filter(it => (it.name || '').toLowerCase().includes(ql))
       .map(it => ({ item: it, path: fsStore.currentPath }))
   } else {
     // global search via store wrapper (returns array of { item, path })
     try {
-      return fsStore.searchFiles(q)
+      baseList = fsStore.searchFiles(q)
     } catch (e) {
       console.warn('search failed', e)
-      return []
+      baseList = []
     }
   }
+
+  const list = [...baseList]
+  if (sortBy.value === 'name') {
+    return list.sort((a, b) => (a.item?.name || '').localeCompare(b.item?.name || ''))
+  }
+  if (sortBy.value === 'type') {
+    return list.sort((a, b) => {
+      const typeDiff = (a.item?.type || '').localeCompare(b.item?.type || '')
+      if (typeDiff !== 0) return typeDiff
+      return (a.item?.name || '').localeCompare(b.item?.name || '')
+    })
+  }
+  return list.reverse()
 })
 
 // helper: clear search
@@ -61,6 +95,43 @@ function clearSearch() {
 // helper: toggle scope
 function toggleScope() {
   searchScope.value = searchScope.value === 'current' ? 'all' : 'current'
+}
+
+function setSort(value) {
+  sortBy.value = value
+}
+
+function cycleSort() {
+  const order = ['recent', 'name', 'type']
+  const idx = order.indexOf(sortBy.value)
+  const next = order[(idx + 1) % order.length]
+  setSort(next)
+}
+
+function setFileViewMode(value) {
+  fileViewMode.value = value
+}
+
+function switchToGlobalSearch() {
+  searchScope.value = 'all'
+}
+
+function onImportPlayerWardrobeClick() {
+  if (typeof props.onImportPlayerWardrobe === 'function') {
+    props.onImportPlayerWardrobe()
+  }
+}
+
+function onSaveBackupClick() {
+  if (typeof props.onSaveBackup === 'function') {
+    props.onSaveBackup()
+  }
+}
+
+function onImportBackupClick() {
+  if (typeof props.onImportBackup === 'function') {
+    props.onImportBackup()
+  }
 }
 
 // existing methods
@@ -233,30 +304,18 @@ function onBreadcrumbDrop(e, idx) {
         </div>
 
         <div class="top-actions">
-          <BaseButton 
-            variant="ghost" 
-            icon-only 
-            size="sm"
-            @click.stop="onAddFolder" 
-            :title="t('fileManager.newFolderTitle')"
-            :aria-label="t('fileManager.newFolderTitle')"
-          >
-            📁+
-          </BaseButton>
-          <!--button class="batch" @click.stop="fsStore.saveAll" title="保存">💾 保存</button>
-          <button class="batch" @click.stop="fsStore.loadAll" :title="t('fileManager.restoreTitle')">🔄</button-->
-
-          <!-- 新增：刷新当前显示的缩略图 -->
-          <BaseButton 
-            variant="ghost" 
-            icon-only 
-            size="sm"
-            @click.stop="onRefreshThumbnails" 
-            :title="t('fileManager.refreshThumbnails')"
-            :aria-label="t('fileManager.refreshThumbnails')"
-          >
-            🔄
-          </BaseButton>
+          <button class="text-btn" @click.stop="onImportPlayerWardrobeClick">
+            {{ t('fileManagerPanel.importPlayerWardrobe') }}
+          </button>
+          <button class="text-btn" @click.stop="onSaveBackupClick">
+            {{ t('fileManagerPanel.saveBackup') }}
+          </button>
+          <button class="text-btn" @click.stop="onImportBackupClick">
+            {{ t('fileManagerPanel.importBackup') }}
+          </button>
+          <button class="text-btn" @click.stop="onRefreshThumbnails">
+            {{ t('fileManager.refreshThumbnails') }}
+          </button>
 
           <!--button class="panel-close" @click="$emit('close')" :aria-label="t('fileManager.closePanel')">×</button-->
         </div>
@@ -311,22 +370,70 @@ function onBreadcrumbDrop(e, idx) {
             >
               {{ searchScope === 'current' ? '🔍' : '🌐' }}
             </BaseButton>
+            <span class="scope-chip">{{ searchScope === 'current' ? t('fileManager.scopeCurrent') : t('fileManager.scopeAll') }}</span>
+          </div>
+          <button class="text-btn" @click.stop="onAddFolder">
+            {{ t('fileManager.newFolderTitle') }}
+          </button>
+        </div>
+
+        <div class="toolbar-row split">
+          <button class="sort-toggle" @click="cycleSort" :aria-label="t('fileManager.sortToggleAria')">
+            <span class="sort-label">{{ t('fileManager.sortToggle') }}</span>
+            <span class="sort-value">{{ sortLabel }}</span>
+          </button>
+          <div class="view-toggle" role="group" :aria-label="t('fileManager.viewMode')">
+            <button class="view-btn" :class="{ active: fileViewMode === 'large' }" @click="setFileViewMode('large')" :aria-label="t('fileManager.viewLarge')">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="3" y="4" width="18" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="1.5" />
+                <rect x="6" y="7" width="12" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.5" />
+              </svg>
+            </button>
+            <button class="view-btn" :class="{ active: fileViewMode === 'small' }" @click="setFileViewMode('small')" :aria-label="t('fileManager.viewSmall')">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="4" y="5" width="7" height="6" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5" />
+                <rect x="13" y="5" width="7" height="6" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5" />
+                <rect x="4" y="13" width="7" height="6" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5" />
+                <rect x="13" y="13" width="7" height="6" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5" />
+              </svg>
+            </button>
+            <button class="view-btn" :class="{ active: fileViewMode === 'list' }" @click="setFileViewMode('list')" :aria-label="t('fileManager.viewList')">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <line x1="6" y1="7" x2="19" y2="7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+                <line x1="6" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+                <line x1="6" y1="17" x2="19" y2="17" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+                <circle cx="4" cy="7" r="1" fill="currentColor" />
+                <circle cx="4" cy="12" r="1" fill="currentColor" />
+                <circle cx="4" cy="17" r="1" fill="currentColor" />
+              </svg>
+            </button>
+            <span class="view-slider" :class="`pos-${fileViewMode}`"></span>
           </div>
         </div>
       </div>
 
-      <div class="file-list scrollable">
+      <div class="file-list scrollable" :class="[`view-${fileViewMode}`]">
         <template v-if="displayList.length > 0">
           <FileItem
             v-for="entry in displayList"
             :key="(entry.path ? entry.path.join('/') : '') + '/' + entry.item.name"
             :item="entry.item"
+            :view-mode="fileViewMode"
             @open-folder="() => { if (entry.item.type === 'folder') fsStore.moveTo([...entry.path, entry.item.name]) }"
             @remove="() => fsStore.removeFile(entry.item, entry.path)"
             @rename="newName => (entry.item.name = newName, fsStore.saveAll())"
           />
         </template>
-        <div v-else class="empty-tip">{{ t('fileManager.emptyTip') }}</div>
+        <div v-else class="empty-tip-wrap">
+          <div class="empty-tip">{{ t('fileManager.emptyTip') }}</div>
+          <div class="empty-actions" v-if="searchQuery">
+            <button class="chip-btn" @click="clearSearch">{{ t('fileManager.clearSearch') }}</button>
+            <button v-if="searchScope === 'current'" class="chip-btn" @click="switchToGlobalSearch">{{ t('fileManager.switchToGlobalSearch') }}</button>
+          </div>
+          <div class="empty-actions" v-else>
+            <button class="chip-btn" @click="onAddFolder">{{ t('fileManager.newFolderTitle') }}</button>
+          </div>
+        </div>
       </div>
 
       <!-- 嵌入模式下隐藏 resize handle -->
@@ -481,6 +588,15 @@ function onBreadcrumbDrop(e, idx) {
 .toolbar { margin-top: var(--space-sm, 6px); }
 .search-row { display:flex; gap: var(--space-md, 12px); align-items:center; width:100%; }
 .search-box { display:flex; align-items:center; gap: var(--space-sm, 8px); flex:1; }
+.scope-chip {
+  padding: var(--space-xs, 4px) var(--space-sm, 8px);
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--color-border-base, #e2e8f0);
+  background: var(--color-bg-panel, #f1f5f9);
+  color: var(--color-text-secondary, #475569);
+  font-size: var(--font-size-sm, 12px);
+  white-space: nowrap;
+}
 .search-input {
   width: 100%;
   padding: var(--space-sm, 8px) 10px;
@@ -508,16 +624,166 @@ function onBreadcrumbDrop(e, idx) {
   background: var(--color-bg-hover, #e2e8f0);
 }
 
+.toolbar-row {
+  margin-top: var(--space-sm, 8px);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm, 8px);
+}
+
+.toolbar-row.split {
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: nowrap;
+}
+
+.chip-group {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-xs, 6px);
+}
+
+.text-btn {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--color-border-base, #e2e8f0);
+  background: var(--color-bg-base, #fff);
+  color: var(--color-text-primary, #23324a);
+  font-size: var(--font-size-sm, 12px);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--transition-fast, 0.15s);
+}
+
+.text-btn:hover {
+  background: var(--color-bg-hover, #f0f4f8);
+}
+
+.sort-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--color-border-base, #d6dbe2);
+  background: var(--color-bg-base, #fff);
+  color: var(--color-text-primary, #23324a);
+  cursor: pointer;
+}
+
+.sort-label {
+  color: var(--color-text-muted, #94a3b8);
+  font-size: var(--font-size-sm, 12px);
+}
+
+.sort-value {
+  font-size: var(--font-size-sm, 12px);
+  font-weight: var(--font-weight-semibold, 600);
+}
+
+.view-toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--color-border-base, #d6dbe2);
+  border-radius: var(--radius-md, 8px);
+  background: var(--color-bg-base, #fff);
+  padding: 2px;
+  gap: 2px;
+}
+
+.view-btn {
+  width: 32px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary, #64748b);
+  cursor: pointer;
+  border-radius: var(--radius-sm, 6px);
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.view-btn svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+.view-btn.active {
+  color: var(--color-text-primary, #23324a);
+}
+
+.view-slider {
+  position: absolute;
+  bottom: 2px;
+  left: 2px;
+  width: 32px;
+  height: 2px;
+  background: var(--color-primary, #3b82f6);
+  border-radius: 2px;
+  transition: transform var(--transition-fast, 0.15s) ease;
+}
+
+.view-slider.pos-large {
+  transform: translateX(0);
+}
+
+.view-slider.pos-small {
+  transform: translateX(34px);
+}
+
+.view-slider.pos-list {
+  transform: translateX(68px);
+}
+
+.chip-btn {
+  border: 1px solid var(--color-border-base, #d6dbe2);
+  background: var(--color-bg-base, #fff);
+  color: var(--color-text-secondary, #475569);
+  border-radius: var(--radius-md, 8px);
+  padding: 6px 10px;
+  font-size: var(--font-size-sm, 12px);
+  cursor: pointer;
+}
+
+.chip-btn.active {
+  border-color: var(--color-primary, #3b82f6);
+  color: var(--color-primary, #3b82f6);
+  background: var(--color-primary-bg, rgba(59, 130, 246, 0.1));
+}
+
 /* file list grid */
 .file-list {
   padding: var(--space-fluid-md, 12px);
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px,1fr));
-  gap: var(--space-fluid-sm, 12px);
+  gap: 12px;
   overflow-y:auto;
   min-height: 200px;
   max-height: var(--panel-max-height-safe, calc(100dvh - 140px));
   -webkit-overflow-scrolling: touch;
+}
+
+.file-list.view-large {
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 14px;
+}
+
+.file-list.view-small {
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.file-list.view-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 .empty-tip { 
   color: var(--color-text-muted, #94a3b8); 
@@ -525,6 +791,19 @@ function onBreadcrumbDrop(e, idx) {
   font-size: var(--font-size-lg, 17px); 
   grid-column:1/-1; 
   margin: 42px 0 24px 0; 
+}
+
+.empty-tip-wrap {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.empty-actions {
+  display: flex;
+  gap: var(--space-sm, 8px);
+  margin-bottom: 16px;
 }
 
 /* resize handle */

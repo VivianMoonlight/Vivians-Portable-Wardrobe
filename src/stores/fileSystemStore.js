@@ -9,6 +9,26 @@ import { AssetApi } from '@/utils/AssetApi'
 import { classifyToGroup, getGroupMeta, isHiddenGroup } from '@/config/filterGroupConfig'
 import { hostWindow } from '@/utils/host-window.js'
 import { HistoryRecord } from '@/utils/history_record.js'
+import { ExternalAdapter } from '@/utils/external_adapters.js'
+
+function getGroupNameFromPart(part) {
+  if (!part) return ''
+  return part.Group || part.Asset?.Group?.Name || part.Asset?.Group?.name || ''
+}
+
+function buildSlotPresenceMap(characterData = [], hoverData = []) {
+  const inCharacter = new Set((characterData || []).map(getGroupNameFromPart).filter(Boolean))
+  const inHover = new Set((hoverData || []).map(getGroupNameFromPart).filter(Boolean))
+  const keys = new Set([...inCharacter, ...inHover])
+  const map = {}
+  for (const key of keys) {
+    map[key] = {
+      inCharacter: inCharacter.has(key),
+      inHover: inHover.has(key)
+    }
+  }
+  return map
+}
 
 export const useFileSystemStore = defineStore('fs', {
   state: () => ({
@@ -43,6 +63,9 @@ export const useFileSystemStore = defineStore('fs', {
 
     // filters: store the activeFilters array (names) for other consumers
     activeFilters: [],
+
+    // outfit apply mode for selected filters
+    applyMode: 'merge-replace', // 'fill-empty' | 'merge-replace' | 'full-replace'
 
 
     // FilterService instance (not serialized) and a reactive snapshot for UI
@@ -81,6 +104,12 @@ export const useFileSystemStore = defineStore('fs', {
       return state.filterSnapshot.groups ?? []
     },
 
+    slotPresenceMap: (state) => {
+      const characterData = Array.isArray(state.characterItem) ? state.characterItem : []
+      const hoverData = Array.isArray(state.activeItem?.data) ? state.activeItem.data : []
+      return buildSlotPresenceMap(characterData, hoverData)
+    },
+
     // 兼容性的直接访问 renderer canvas（如果需要）
     previewCanvas: state => state.renderer.getCanvas(state.previewItem),
     _previewCanvas: state => state.renderer._getCanvas(state.previewItem)
@@ -114,11 +143,11 @@ export const useFileSystemStore = defineStore('fs', {
       if (typeof this.renderer.renderPreviewWithItem === 'function') {
         this.previewItem = { data: [] } // 清理旧的
         const filterSet = new Set(this.activeFilters || [])
-        this.previewItem.data = AssetApi.assembleBundle({
-          baseCharacter: this.character,
-          outfitData: this.activeItem.data,
-          filterSet: filterSet
-        })
+        const characterData = Array.isArray(this.characterItem) ? this.characterItem.slice() : []
+        const sourceData = Array.isArray(this.activeItem?.data) ? this.activeItem.data : []
+        const resolvedMode = this.applyMode || 'merge-replace'
+
+        this.previewItem.data = this._buildBundleByMode(characterData, sourceData, filterSet, resolvedMode)
         this.renderer.renderPreviewWithItem(this.previewItem)
       }
     },
@@ -232,6 +261,74 @@ export const useFileSystemStore = defineStore('fs', {
     setActiveFilters(listOrSet) {
       const arr = Array.isArray(listOrSet) ? listOrSet : Array.from(listOrSet || [])
       this.activeFilters = arr
+    },
+
+    setApplyMode(mode) {
+      const allowed = new Set(['fill-empty', 'merge-replace', 'full-replace'])
+      this.applyMode = allowed.has(mode) ? mode : 'merge-replace'
+      this.updatePreviewItem()
+    },
+
+    _buildBundleByMode(characterData, outfitData, filterSet, mode) {
+      const selectedGroups = new Set(Array.from(filterSet || []).filter(Boolean))
+      if (selectedGroups.size === 0) return Array.isArray(characterData) ? characterData.slice() : []
+
+      const base = Array.isArray(characterData) ? characterData.slice() : []
+      const incoming = Array.isArray(outfitData)
+        ? outfitData.filter(part => selectedGroups.has(getGroupNameFromPart(part)))
+        : []
+
+      if (mode === 'fill-empty') {
+        const existing = new Set(base.map(getGroupNameFromPart).filter(Boolean))
+        const toAdd = incoming.filter(part => !existing.has(getGroupNameFromPart(part)))
+        return base.concat(toAdd)
+      }
+
+      if (mode === 'full-replace') {
+        const preserved = base.filter(part => !selectedGroups.has(getGroupNameFromPart(part)))
+        return preserved.concat(incoming)
+      }
+
+      const incomingGroups = new Set(incoming.map(getGroupNameFromPart).filter(Boolean))
+      const preserved = base.filter(part => !incomingGroups.has(getGroupNameFromPart(part)))
+      return preserved.concat(incoming)
+    },
+
+    applyFilteredOutfitToCharacter({ outfitData = null, mode = null } = {}) {
+      const target = this.character || hostWindow.CurrentCharacter || hostWindow.Player
+      if (!target) return false
+
+      const characterData = AssetApi.collectOutfitData(target)
+      const sourceData = Array.isArray(outfitData)
+        ? outfitData
+        : (Array.isArray(this.activeItem?.data) ? this.activeItem.data : [])
+      const filterSet = new Set(this.activeFilters || [])
+      const resolvedMode = mode || this.applyMode || 'merge-replace'
+
+      const bundle = this._buildBundleByMode(characterData, sourceData, filterSet, resolvedMode)
+      const ok = ExternalAdapter.applyOutfitToCharacter(target, bundle)
+      if (ok) {
+        this.characterItem = AssetApi.collectOutfitData(target)
+        this.updatePreviewItem()
+      }
+      return !!ok
+    },
+
+    removeSelectedSlotsFromCharacter() {
+      const target = this.character || hostWindow.CurrentCharacter || hostWindow.Player
+      if (!target) return false
+
+      const selectedGroups = new Set((this.activeFilters || []).filter(Boolean))
+      if (selectedGroups.size === 0) return false
+
+      const characterData = AssetApi.collectOutfitData(target)
+      const next = (characterData || []).filter(part => !selectedGroups.has(getGroupNameFromPart(part)))
+      const ok = ExternalAdapter.applyOutfitToCharacter(target, next)
+      if (ok) {
+        this.characterItem = AssetApi.collectOutfitData(target)
+        this.updatePreviewItem()
+      }
+      return !!ok
     },
 
     // ---------------------

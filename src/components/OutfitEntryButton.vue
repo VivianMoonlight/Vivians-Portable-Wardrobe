@@ -28,7 +28,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import OutfitPanel from './OutfitPanel.vue'
-import { injectTheme } from '@/composables/useTheme'
+import { injectTheme } from '@/services/ThemeService'
 
 const showPanel = ref(false)
 const emit = defineEmits(['import', 'export', 'save'])

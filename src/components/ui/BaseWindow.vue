@@ -5,7 +5,7 @@
  * Created for P0.1 modernization
  */
 import { computed } from 'vue'
-import { useWindowDragResize } from '@/composables/useWindowDragResize.js'
+import { useWindowDragResize } from '@/services/WindowLayoutService'
 
 const props = defineProps({
   visible: {

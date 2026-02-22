@@ -25,13 +25,40 @@
     "clearSearch": "Clear search",
     "switchToGlobalSearch": "Switch to global search",
     "switchToCurrentSearch": "Switch to current-folder search",
-    "emptyTip": "No matching files or folders"
+    "emptyTip": "No matching files or folders",
+    "scopeCurrent": "Current folder",
+    "scopeAll": "Global",
+    "sortBy": "Sort by",
+    "sortToggle": "Sort",
+    "sortToggleAria": "Cycle sort mode",
+    "viewMode": "View mode",
+    "viewLarge": "Large icons",
+    "viewSmall": "Small icons",
+    "viewList": "List",
+    "sortRecent": "Recent",
+    "sortName": "Name",
+    "sortType": "Type",
+    "filterAll": "All",
+    "filterFolder": "Folders",
+    "filterOutfit": "Outfits",
+    "filterCharacter": "Character snapshots"
   },
   "filterManager": {
     "ariaLabel": "Filter panel",
     "allOn": "All On",
     "allOff": "All Off",
     "invert": "Invert selection",
+    "applyModeLabel": "Apply mode",
+    "modeFillEmpty": "Add to empty slots",
+    "modeMergeReplace": "Add & replace",
+    "modeFullReplace": "Full replace",
+    "applyCurrent": "Apply with mode",
+    "removeSelected": "Remove selected slots",
+    "slotLegendAria": "Slot state legend",
+    "inCharacter": "On character",
+    "inHover": "In hovered outfit",
+    "applyFailed": "Apply failed: make sure an outfit is hovered and target character can be dressed.",
+    "removeFailed": "Remove failed: make sure slots are selected and target character can be dressed.",
     "showHiddenGroups": "Show hidden groups",
     "hiddenBadge": "Hidden",
     "groupAllOn": "Group All On",
@@ -79,7 +106,10 @@
     "subLayer": "SubLayer",
     "unknown": "(unknown)",
     "unnamed": "(unnamed)",
-    "visualMoveTitle": "Enable visual move for this layer"
+    "visualMoveTitle": "Enable visual move for this layer",
+    "collapse": "Collapse",
+    "expand": "Expand",
+    "selectLayer": "Select layer"
   },
   "palette": {
     "ariaLabelPanel": "Color Palette panel",
@@ -110,27 +140,68 @@
       "copy": "Copy",
       "rename": "Rename",
       "cancel": "Cancel",
-      "confirm": "Confirm"
+      "confirm": "Confirm",
+      "apply": "Apply"
     },
     "messages": {
       "createTagFailed": "Create tag failed — see console for details",
       "tagNameEmpty": "Tag name cannot be empty",
       "tagNameExists": "A tag with the same name already exists",
-      "renameFailed": "Rename failed — see console for details"
+      "renameFailed": "Rename failed — see console for details",
+      "tagDeleted": "Tag '<strong>{tag}</strong>' deleted",
+      "colorDeleted": "Color deleted",
+      "allColorsDeletd": "All saved colors cleared"
+    },
+    "modeIndicator": {
+      "browse": "Browse Mode",
+      "editingTag": "Editing Tag"
+    },
+    "saved": {
+      "title": "Quick Palette",
+      "description": "Temporary saved colors for quick access",
+      "emptyText": "Save frequently used colors here",
+      "emptyCTA": "Save Current Color",
+      "editTitle": "Edit Saved Colors",
+      "saveTitle": "Save current color",
+      "clearTitle": "Clear all saved colors",
+      "none": "No saved colors",
+      "copy": "Copy",
+      "delete": "Delete",
+      "deleteConfirm": "Confirm delete"
+    },
+    "tags": {
+      "title": "Color Tags",
+      "description": "Named color library for global use. Rename or delete tags here.",
+      "emptyText": "Create named tags for key colors you'll reuse across layers",
+      "emptyCTA": "Create First Tag",
+      "editTitle": "Edit Color Tags",
+      "createFromCurrent": "Create tag from current color",
+      "clearTitle": "Clear palette",
+      "none": "No tags (automatically generated when adding items with duplicate colors)"
+    },
+    "actions": {
+      "copy": "Copy",
+      "rename": "Rename",
+      "cancel": "Cancel",
+      "confirm": "Confirm",
+      "apply": "Apply",
+      "disabledInEditMode": "Disabled in edit mode — click Done to exit"
+    },
+    "advanced": {
+      "title": "Advanced Coloring",
+      "summary": "Apply H/L/S offsets on top of a base Tag color for consistent but flexible batch styling.",
+      "targetType": "Current Target",
+      "baseTag": "Base Tag",
+      "selectTag": "Select a tag",
+      "suggest": "Set HLS from current",
+      "apply": "Apply",
+      "reset": "Reset Offset",
+      "toHls": "Convert to HLS",
+      "detach": "Detach to Raw",
+      "kindTag": "Plain Tag",
+      "kindTagOffset": "Tag + Offset",
+      "kindRaw": "Raw Color"
     }
-  },
-  "partInspector": {
-    "ariaLabel": "Part Inspector panel",
-    "title": "Part Inspector",
-    "noPartPlaceholder": "Click a part to view details",
-    "descriptionLabel": "Description",
-    "groupLabel": "Group",
-    "colorLabel": "Color",
-    "propertyLabel": "Property",
-    "typeRecordLabel": "TypeRecord",
-    "craftLabel": "Craft (summary)",
-    "unnamed": "(unnamed)",
-    "noGroup": "-"
   },
   "partList": {
     "ariaLabel": "Parts list panel",
@@ -204,7 +275,10 @@
     "paletteImportFailed": "Failed to import palette from selected file.",
     "targetDefault": "target",
     "importCharacterTitle": "Import Character",
-    "savesManager": "Manage Saves"
+    "savesManager": "Manage saves",
+    "layersSelected": "{count} layers selected",
+    "replaceMode": "Replace mode",
+    "visualMoveMode": "Visual Move mode"
   },
   "history": {
     "title": "History",
@@ -244,7 +318,19 @@
     "saveCharacter": "Save Character to Current Folder",
     "importBCX": "Import from BCX",
     "importPlayerWardrobe": "Import Player Wardrobe",
-    "toggleTheme": "Toggle Theme"
+    "settings": "Settings",
+    "lightMode": "Light mode",
+    "darkMode": "Dark mode",
+    "themedMode": "Themed mode",
+    "toggleTheme": "Toggle Theme",
+    "tabAriaLabel": "Workbench tabs",
+    "tabWardrobe": "Wardrobe",
+    "tabHistory": "History",
+    "tabStudio": "Studio",
+    "tabSettings": "Settings",
+    "themeSettings": "Theme Settings",
+    "themedNotAvailable": "Themed BC not detected, using default light theme",
+    "themedModeDesc": "Themed mode uses colors from Themed BC plugin. Themed BC must be installed and enabled."
   },
   "historyViewer": {
     "title": "History",
@@ -254,7 +340,17 @@
     "clearAllConfirm": "Are you sure you want to clear all history? This cannot be undone.",
     "deleteRecord": "Delete",
     "deleteConfirm": "Delete this history record?",
+    "delete": "Delete",
+    "searchPlaceholder": "Search history records...",
+    "clearSearch": "Clear",
+    "timeFilter": "Time filters",
+    "filterAll": "All",
+    "filterToday": "Today",
+    "filterWeek": "Last 7 days",
     "loadRecord": "Load this record",
+    "apply": "Apply",
+    "cancel": "Cancel",
+    "loadToPreview": "Load to preview",
     "recordedAt": "Recorded at",
     "emptyState": "No history records yet. Your outfit changes will be automatically recorded here.",
     "recordCount": "{count} records"
@@ -320,6 +416,11 @@
     "emptyTip": "No layers available",
     "layersBadge": "layers"
   },
+  "layerGroup": {
+    "collapse": "Collapse",
+    "expand": "Expand",
+    "selectAll": "Select All"
+  },
   "batchEdit": {
     "title": "Batch Edit",
     "layersSelected": "layers selected",
@@ -339,6 +440,7 @@
     "failed": "Operation failed",
     "error": "An error occurred",
     "noColorableLayers": "No colorable layers selected",
+    "skipped": "Skipped",
     "visualMove": "Visual Move",
     "visualMoveSingle": "Drag on canvas to move this layer",
     "visualMoveMultiple": "Drag on canvas to move all {count} selected layers together"
@@ -362,7 +464,13 @@
     "clearSelection": "Clear Selection (Ctrl+D)",
     "clearBtn": "Clear",
     "viewMode": "View mode (pan & zoom)",
-    "moveMode": "Move mode (drag layers)"
+    "moveMode": "Move mode (drag layers)",
+    "corePropertiesTitle": "Core Properties",
+    "advancedPropertiesTitle": "Advanced Properties",
+    "layers": "Layers",
+    "selectType": "Select type",
+    "applyTo": "Apply to",
+    "applyToCurrentLayer": "Apply to current layer"
   },
   "dialog": {
     "ok": "OK",

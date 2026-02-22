@@ -16,6 +16,7 @@
 
 import { hostWindow, doc } from '@/utils/host-window';
 import { deepClone } from '@/utils/clone.js'
+import { parseTagOffsetRef, resolveTagOffsetColor } from '@/services/PaletteService'
 
 function looksLikeCssColor(s) {
   if (!s || typeof s !== 'string') return false
@@ -249,6 +250,11 @@ export function buildLayerEntriesForPart(part, deps = {}) {
     if (text in paletteSnapshot) {
       const v = paletteSnapshot[text]
       return extractPrimaryCssColor(v)
+    }
+    const parsed = parseTagOffsetRef(text)
+    if (parsed.isTagOffsetRef) {
+      const resolved = resolveTagOffsetColor(text, paletteSnapshot)
+      if (resolved.ok) return resolved.color
     }
     return null
   }
@@ -677,6 +683,26 @@ export function reconstructPartFromLayerEntries(entries, originalPart, extra = {
   }
   if (originalPart.Property && originalPart.Property.TypeRecord) {
     propOut.TypeRecord = deepClone(originalPart.Property.TypeRecord)
+  }
+  // Preserve TextItem fields (Text, Text2, Text3, ...)
+  if (originalPart.Property) {
+    for (const key in originalPart.Property) {
+      if (key === 'Text' || /^Text\d+$/.test(key)) {
+        propOut[key] = originalPart.Property[key]
+      }
+    }
+  }
+  // Preserve VibratingItem fields (Mode, Intensity, Effect)
+  if (originalPart.Property) {
+    if (originalPart.Property.Mode !== undefined) {
+      propOut.Mode = originalPart.Property.Mode
+    }
+    if (originalPart.Property.Intensity !== undefined) {
+      propOut.Intensity = originalPart.Property.Intensity
+    }
+    if (originalPart.Property.Effect !== undefined) {
+      propOut.Effect = deepClone(originalPart.Property.Effect)
+    }
   }
 
   // Assemble output part

@@ -1,25 +1,5 @@
 <template>
-  <div class="batch-edit-panel" v-if="true">
-    <div class="panel-header" @click="toggleCollapse">
-      <div class="title-section">
-        <span class="title">{{ t('batchEdit.title') || 'Batch Edit' }}</span>
-        <span class="selected-count">{{ selectedCount }} {{ t('batchEdit.layersSelected') || 'layers selected' }}</span>
-      </div>
-      <span class="collapse-icon" :class="{ collapsed }">{{ collapsed ? '▼' : '▲' }}</span>
-    </div>
-
-    <transition name="panel-collapse">
-      <div v-show="!collapsed" class="panel-body">
-        <div class="scope-banner">
-          {{ t('batchEdit.applyTo') || 'Apply to' }} {{ selectedCount }} {{ t('batchEdit.layers') || 'layers' }}
-        </div>
-
-        <div class="workflow-steps">
-          <span>1. {{ t('batchEdit.stepProperty') || 'Property' }}</span>
-          <span>2. {{ t('batchEdit.stepMode') || 'Mode' }}</span>
-          <span>3. {{ t('batchEdit.stepValue') || 'Value' }}</span>
-          <span>4. {{ t('batchEdit.stepApply') || 'Apply' }}</span>
-        </div>
+  <div class="batch-edit-controls" v-if="true">
 
         <div class="property-tabs">
           <button class="tab-btn" :class="{ active: activeProperty === 'opacity' }" @click="activeProperty = 'opacity'">{{ t('batchEdit.opacity') || 'Opacity' }}</button>
@@ -37,10 +17,9 @@
             </div>
           </div>
           <div class="control-group">
-            <input type="range" class="slider-input" v-model.number="opacityValue" :min="opacityMode === 'relative' ? -100 : 0" :max="100" />
-            <input v-model.number="opacityValue" class="num-input" type="number" :min="opacityMode === 'relative' ? -100 : 0" :max="100" step="1" />
+            <input type="range" class="slider-input" v-model.number="opacityValue" :min="opacityMode === 'relative' ? -100 : 0" :max="100" @input="applyOpacity" />
+            <input v-model.number="opacityValue" class="num-input" type="number" :min="opacityMode === 'relative' ? -100 : 0" :max="100" step="1" @input="applyOpacity" />
             <span class="unit">%</span>
-            <button class="apply-btn" @click="applyOpacity" :disabled="selectedCount === 0" :title="t('batchEdit.apply') || 'Apply'">{{ t('batchEdit.apply') || 'Apply' }}</button>
           </div>
         </div>
 
@@ -64,13 +43,12 @@
           <div class="control-group">
             <div class="offset-input-group">
               <span class="input-label">X</span>
-              <input v-model.number="offsetX" class="num-input" type="number" step="1" :placeholder="offsetMode === 'relative' ? '0' : 'X'" />
+              <input v-model.number="offsetX" class="num-input" type="number" step="1" :placeholder="offsetMode === 'relative' ? '0' : 'X'" @input="applyOffset" />
             </div>
             <div class="offset-input-group">
               <span class="input-label">Y</span>
-              <input v-model.number="offsetY" class="num-input" type="number" step="1" :placeholder="offsetMode === 'relative' ? '0' : 'Y'" />
+              <input v-model.number="offsetY" class="num-input" type="number" step="1" :placeholder="offsetMode === 'relative' ? '0' : 'Y'" @input="applyOffset" />
             </div>
-            <button class="apply-btn" @click="applyOffset" :disabled="selectedCount === 0" :title="t('batchEdit.apply') || 'Apply'">{{ t('batchEdit.apply') || 'Apply' }}</button>
           </div>
         </div>
 
@@ -83,8 +61,7 @@
             </div>
           </div>
           <div class="control-group">
-            <input v-model.number="priorityValue" class="num-input" type="number" step="1" :placeholder="priorityMode === 'relative' ? '0' : 'Priority'" />
-            <button class="apply-btn" @click="applyPriority" :disabled="selectedCount === 0" :title="t('batchEdit.apply') || 'Apply'">{{ t('batchEdit.apply') || 'Apply' }}</button>
+            <input v-model.number="priorityValue" class="num-input" type="number" step="1" :placeholder="priorityMode === 'relative' ? '0' : 'Priority'" @input="applyPriority" />
           </div>
         </div>
 
@@ -115,8 +92,6 @@
         <div v-if="feedbackMessage" class="feedback-message" :class="feedbackType">
           {{ feedbackMessage }}
         </div>
-      </div>
-    </transition>
   </div>
 </template>
 
@@ -124,12 +99,12 @@
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useStudioStore } from '@/stores/studioStore.js'
+import { throttle } from '@/utils/performance.js'
 
 const { t } = useI18n()
 const store = useStudioStore()
 
 // UI State
-const collapsed = ref(false)
 const feedbackMessage = ref('')
 const feedbackType = ref('success') // 'success' | 'warning' | 'error'
 const activeProperty = ref('opacity')
@@ -161,9 +136,6 @@ const colorableCount = computed(() => {
 })
 
 // Methods
-function toggleCollapse() {
-  collapsed.value = !collapsed.value
-}
 
 function showFeedback(message, type = 'success') {
   feedbackMessage.value = message
@@ -201,8 +173,14 @@ function setResultSummary(result) {
   }
 }
 
-function applyOpacity() {
+// Throttled apply functions
+const applyOpacity = throttle(function() {
   try {
+    if (selectedCount.value === 0) return
+    
+    // Set property focus to indicate batch editing mode
+    store.setPropertyFocus('opacity')
+    
     const result = store.batchUpdateOpacity(opacityValue.value, opacityMode.value)
     setResultSummary(result)
     if (result.success) {
@@ -214,10 +192,15 @@ function applyOpacity() {
     console.error('[BatchEditPanel] applyOpacity error:', e)
     showFeedback(t('batchEdit.error') || 'An error occurred', 'error')
   }
-}
+}, 100, { leading: true, trailing: true })
 
-function applyOffset() {
+const applyOffset = throttle(function() {
   try {
+    if (selectedCount.value === 0) return
+    
+    // Set property focus to indicate batch editing mode
+    store.setPropertyFocus('drawing')
+    
     const x = offsetX.value || 0
     const y = offsetY.value || 0
     const result = store.batchUpdateOffset(x, y, offsetMode.value)
@@ -231,10 +214,15 @@ function applyOffset() {
     console.error('[BatchEditPanel] applyOffset error:', e)
     showFeedback(t('batchEdit.error') || 'An error occurred', 'error')
   }
-}
+}, 100, { leading: true, trailing: true })
 
-function applyPriority() {
+const applyPriority = throttle(function() {
   try {
+    if (selectedCount.value === 0) return
+    
+    // Set property focus to indicate batch editing mode
+    store.setPropertyFocus('priority')
+    
     const result = store.batchUpdatePriority(priorityValue.value, priorityMode.value)
     setResultSummary(result)
     if (result.success) {
@@ -246,20 +234,14 @@ function applyPriority() {
     console.error('[BatchEditPanel] applyPriority error:', e)
     showFeedback(t('batchEdit.error') || 'An error occurred', 'error')
   }
-}
+}, 100, { leading: true, trailing: true })
 
 function openPaletteForBatch() {
   try {
-    const data = store.getSelectedLayersData()
-    const colorableTargets = data
-      .filter(d => d.layer && d.layer.isColorable)
-      .map(d => ({
-        uid: d.part._uid,
-        stackIndex: d.selection.stackIndex,
-        partIndex: d.selection.partIndex,
-        layerIndex: d.layer.colorableIndex !== undefined ? d.layer.colorableIndex : d.selection.layerIndex,
-        currentColorText: d.layer.colorText || null
-      }))
+    // Set property focus to indicate batch editing mode
+    store.setPropertyFocus('color')
+
+    const colorableTargets = store.getPaletteTargetsForCurrentSelection()
     
     if (colorableTargets.length === 0) {
       setResultSummary({ success: true, updatedCount: 0, skippedCount: selectedCount.value })
@@ -282,6 +264,8 @@ function clearSelection() {
 function toggleVisualMove() {
   visualMoveEnabled.value = !visualMoveEnabled.value
   if (visualMoveEnabled.value) {
+    // Set property focus to drawing when enabling visual move
+    store.setPropertyFocus('drawing')
     store.setPreviewTool('move')
   } else {
     store.setPreviewTool('view')
@@ -312,86 +296,15 @@ watch(() => store.previewTool, (newTool) => {
 </script>
 
 <style scoped>
-.batch-edit-panel {
-  background: var(--color-panel-glassmorphism-bg);
-  border: 1px solid var(--color-panel-glassmorphism-border);
-  border-radius: var(--radius-lg, 10px);
-  margin-bottom: 12px;
-  backdrop-filter: blur(8px);
-  box-shadow: 0 2px 8px var(--color-panel-glassmorphism-shadow);
-  overflow: hidden;
-}
-
-.panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 14px;
-  background: linear-gradient(135deg, var(--color-panel-glassmorphism-gradient-start), var(--color-panel-glassmorphism-gradient-end));
-  cursor: pointer;
-  user-select: none;
-  border-bottom: 1px solid var(--color-panel-glassmorphism-border);
-}
-
-.panel-header:hover {
-  background: linear-gradient(135deg, var(--color-selection-multi-hover), var(--color-panel-glassmorphism-gradient-end));
-}
-
-.title-section {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: 1;
-}
-
-.title {
-  font-weight: 700;
-  color: var(--color-accent-purple-dark);
-  font-size: 14px;
-}
-
-.selected-count {
-  font-size: 12px;
-  color: var(--color-accent-purple);
-  background: var(--color-accent-purple-bg-light);
-  padding: 2px 8px;
-  border-radius: var(--radius-xl, 12px);
-  font-weight: 600;
-}
-
-.collapse-icon {
-  font-size: 11px;
-  color: var(--color-accent-purple-light);
-  transition: transform 0.2s;
-}
-
-.collapse-icon.collapsed {
-  transform: rotate(180deg);
-}
-
-.panel-body {
-  padding: 12px 14px;
+.batch-edit-controls {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-}
-
-.scope-banner {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--color-accent-purple-dark);
-  border: 1px solid var(--color-accent-purple-light);
-  background: var(--color-accent-purple-bg-subtle);
-  padding: 6px 10px;
-  border-radius: var(--radius-sm, 6px);
-}
-
-.workflow-steps {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  font-size: 11px;
-  color: var(--color-accent-purple-light);
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 12px;
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--color-border-base);
+  background: var(--color-bg-surface);
 }
 
 .property-tabs {
@@ -689,19 +602,5 @@ watch(() => store.previewTool, (newTool) => {
   background: var(--color-error-bg);
   color: var(--color-error);
   border: 1px solid var(--color-error);
-}
-
-/* Transitions */
-.panel-collapse-enter-active,
-.panel-collapse-leave-active {
-  transition: all 0.3s ease;
-  max-height: 600px;
-  overflow: hidden;
-}
-
-.panel-collapse-enter-from,
-.panel-collapse-leave-to {
-  max-height: 0;
-  opacity: 0;
 }
 </style>

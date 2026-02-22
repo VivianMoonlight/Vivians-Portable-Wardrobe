@@ -172,7 +172,7 @@ export function moveElementInStacks(state, fromIdx, toIdx, helpers) {
  * @returns {Object} Updated state
  */
 export function selectElementInStacks(state, idx, helpers) {
-  const { clearFocusedProperty, focusedPartIndex } = helpers
+  const { focusedPartIndex } = helpers
 
   if (idx === -1) {
     return {
@@ -188,7 +188,7 @@ export function selectElementInStacks(state, idx, helpers) {
   return {
     selectedIndex: idx,
     focusedPartIndex: { stackIndex: null, partIndex: null },
-    clearFocusedProperty: true
+    clearPropertyFocus: true
   }
 }
 
@@ -199,7 +199,7 @@ export function selectElementInStacks(state, idx, helpers) {
  * @returns {Object} Updated state
  */
 export function clearAllStacks(state, helpers) {
-  const { renderer, clearFocusedProperty, focusedPartIndex } = helpers
+  const { renderer, focusedPartIndex } = helpers
 
   try {
     state.stacks.forEach(it => { renderer.removeCanvas({ data: it.data, type: 'outfit' }) })
@@ -210,6 +210,6 @@ export function clearAllStacks(state, helpers) {
     selectedIndex: -1,
     mergedAppearanceData: [],
     focusedPartIndex: { stackIndex: null, partIndex: null },
-    clearFocusedProperty: true
+    clearPropertyFocus: true
   }
 }

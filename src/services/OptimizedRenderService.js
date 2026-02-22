@@ -90,6 +90,151 @@ export class OptimizedRenderService {
         return get2DContext(canvas, willReadFrequently ? { willReadFrequently: true } : {});
     }
 
+    _getBundleGroupName(bundleItem) {
+        return bundleItem?.Group || bundleItem?.Asset?.Group?.Name || null;
+    }
+
+    _getOpacityValue(bundleItem) {
+        const rawOpacity = bundleItem?.Property?.Opacity;
+        if (rawOpacity === undefined || rawOpacity === null) {
+            return 1;
+        }
+        const numericOpacity = Number(rawOpacity);
+        return Number.isFinite(numericOpacity) ? numericOpacity : 1;
+    }
+
+    _isSafeGeneralParamUpdate(previousBundleItem, nextBundleItem) {
+        if (!previousBundleItem || !nextBundleItem) {
+            return false;
+        }
+
+        if (this._getBundleGroupName(previousBundleItem) !== this._getBundleGroupName(nextBundleItem)) {
+            return false;
+        }
+
+        if ((previousBundleItem.Name || null) !== (nextBundleItem.Name || null)) {
+            return false;
+        }
+
+        const previousOpacity = this._getOpacityValue(previousBundleItem);
+        const nextOpacity = this._getOpacityValue(nextBundleItem);
+        if (previousOpacity === 1 && nextOpacity < 1) {
+            return false;
+        }
+
+        const { Color: previousColor, Property: previousProperty = {}, ...previousRest } = previousBundleItem;
+        const { Color: nextColor, Property: nextProperty = {}, ...nextRest } = nextBundleItem;
+
+        if (!isEqual(previousRest, nextRest)) {
+            return false;
+        }
+
+        const {
+            Shift: previousShift,
+            Opacity: previousOpacityProperty,
+            ...previousPropertyRest
+        } = previousProperty || {};
+        const {
+            Shift: nextShift,
+            Opacity: nextOpacityProperty,
+            ...nextPropertyRest
+        } = nextProperty || {};
+
+        if (!isEqual(previousPropertyRest, nextPropertyRest)) {
+            return false;
+        }
+
+        if (!isEqual(previousColor, nextColor)) {
+            return true;
+        }
+        if (!isEqual(previousShift, nextShift)) {
+            return true;
+        }
+        if (!isEqual(previousOpacityProperty, nextOpacityProperty)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    _tryApplyGeneralParamUpdate(newBundleData) {
+        if (!Array.isArray(newBundleData) || !Array.isArray(this.previousDataCache)) {
+            return false;
+        }
+
+        if (!Array.isArray(this.displayCharacter?.Appearance)) {
+            return false;
+        }
+
+        if (this.previousDataCache.length === 0 || this.previousDataCache.length !== newBundleData.length) {
+            return false;
+        }
+
+        const previousMap = new Map();
+        const nextMap = new Map();
+
+        for (const previousItem of this.previousDataCache) {
+            const groupName = this._getBundleGroupName(previousItem);
+            if (!groupName || previousMap.has(groupName)) {
+                return false;
+            }
+            previousMap.set(groupName, previousItem);
+        }
+
+        for (const nextItem of newBundleData) {
+            const groupName = this._getBundleGroupName(nextItem);
+            if (!groupName || nextMap.has(groupName)) {
+                return false;
+            }
+            nextMap.set(groupName, nextItem);
+        }
+
+        if (previousMap.size !== nextMap.size) {
+            return false;
+        }
+
+        const changedItems = [];
+        for (const [groupName, nextItem] of nextMap.entries()) {
+            const previousItem = previousMap.get(groupName);
+            if (!previousItem) {
+                return false;
+            }
+            if (!isEqual(previousItem, nextItem)) {
+                changedItems.push({ groupName, previousItem, nextItem });
+            }
+        }
+
+        if (changedItems.length === 0) {
+            return true;
+        }
+
+        if (!changedItems.every(({ previousItem, nextItem }) => this._isSafeGeneralParamUpdate(previousItem, nextItem))) {
+            return false;
+        }
+
+        for (const { groupName, nextItem } of changedItems) {
+            const appearanceItem = this.displayCharacter.Appearance.find(current => current?.Asset?.Group?.Name === groupName);
+            if (!appearanceItem) {
+                return false;
+            }
+
+            appearanceItem.Color = structuredClone(toRaw(nextItem.Color));
+            if (!appearanceItem.Property) {
+                appearanceItem.Property = {};
+            }
+
+            if (Object.prototype.hasOwnProperty.call(nextItem.Property || {}, 'Shift')) {
+                appearanceItem.Property.Shift = structuredClone(toRaw(nextItem.Property.Shift));
+            }
+
+            if (Object.prototype.hasOwnProperty.call(nextItem.Property || {}, 'Opacity')) {
+                appearanceItem.Property.Opacity = nextItem.Property.Opacity;
+            }
+        }
+
+        return true;
+    }
+
     /**
      * Render preview with optimized character reuse
      */
@@ -132,11 +277,7 @@ export class OptimizedRenderService {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         try {
-            //find changed items compared to previous data cache
-            const changeditems = toRaw(item.data).filter(newItem => {
-                return !this.previousDataCache.find(prevItem => isEqual(newItem, prevItem));
-            });
-
+            const rawItemData = toRaw(item.data);
 
             // Update character appearance using persistent instance
             const family = this.displayCharacter.AssetFamily || 'Female3DCG';
@@ -148,13 +289,34 @@ export class OptimizedRenderService {
                 hostWindow.ServerAppearanceLoadFromBundle(
                     toRaw(this.displayCharacter),
                     family,
-                    toRaw(item.data),
+                    rawItemData,
                     memberNumber
                 );
             } else {
+                const usedFastPath = this._tryApplyGeneralParamUpdate(rawItemData);
+                if (usedFastPath) {
+                    this.previousDataCache = structuredClone(rawItemData).sort((a, b) => a.Group.localeCompare(b.Group));
+                    hostWindow.CharacterRefresh(toRaw(this.displayCharacter));
+
+                    this.drawCallbacks.drawPreview({
+                        data: rawItemData,
+                        ctx: ctx,
+                        canvas: canvas,
+                        width: canvas.width,
+                        height: canvas.height,
+                        character: toRaw(this.displayCharacter)
+                    });
+                    return;
+                }
+
+                //find changed items compared to previous data cache
+                const changeditems = rawItemData.filter(newItem => {
+                    return !this.previousDataCache.find(prevItem => isEqual(newItem, prevItem));
+                });
+
                 //use hostWindow.ServerBundledItemToAppearanceItem
 
-                const newItems = toRaw(item.data).map(bundleItem =>
+                const newItems = rawItemData.map(bundleItem =>
                     hostWindow.ServerBundledItemToAppearanceItem(
                         family,
                         toRaw(bundleItem))
@@ -220,14 +382,14 @@ export class OptimizedRenderService {
                 //update Cache
 
             }
-            this.previousDataCache = structuredClone(toRaw(item.data)).sort((a, b) => a.Group.localeCompare(b.Group));
+            this.previousDataCache = structuredClone(rawItemData).sort((a, b) => a.Group.localeCompare(b.Group));
 
             // Refresh only once
             hostWindow.CharacterRefresh(toRaw(this.displayCharacter));
 
             // Draw with callback
             this.drawCallbacks.drawPreview({
-                data: toRaw(item.data),
+                data: rawItemData,
                 ctx: ctx,
                 canvas: canvas,
                 width: canvas.width,

@@ -76,39 +76,12 @@ export function focusOnPart(state, part, helpers) {
  * @returns {Object} Updated state
  */
 export function clearFocusState(helpers) {
-  const { clearFocusedProperty, focusedPartIndex, clearLayerSelection } = helpers
+  const { focusedPartIndex, clearLayerSelection } = helpers
 
   return {
     focusedPartIndex: { stackIndex: null, partIndex: null },
-    clearFocusedProperty: true,
+    clearPropertyFocus: true,
     clearLayerSelection: true
-  }
-}
-
-/**
- * Set focused property
- * @param {Object} state - Current store state
- * @param {Object} payload - Property to focus
- * @returns {Object} Updated state
- */
-export function setFocusedProperty(state, payload, helpers) {
-  const { focusedPartIndex, triggerFocusedPartUpdate } = helpers
-
-  const newFocusedProperty = payload && Object.keys(payload).length > 0 ? payload : null
-
-  return {
-    focusedProperty: newFocusedProperty,
-    triggerFocusedPartUpdate: true
-  }
-}
-
-/**
- * Clear focused property
- * @returns {Object} Updated state
- */
-export function clearFocusedPropertyState() {
-  return {
-    focusedProperty: null
   }
 }
 

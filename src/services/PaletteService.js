@@ -17,6 +17,7 @@
  */
 
 import { deepClone, shallowClone } from '@/utils/clone.js'
+import { applyHlsOffsetToColor, normalizeHlsOffset } from '@/utils/color-hls.js'
 
 /**
  * Fast string hash for caching comparisons
@@ -61,6 +62,113 @@ function looksLikeCssColor(s) {
   if (str.startsWith('rgb') || str.startsWith('hsl')) return true
   const basic = ['red', 'blue', 'green', 'black', 'white', 'gray', 'grey', 'yellow', 'orange', 'purple', 'pink', 'brown', 'transparent']
   return basic.includes(str)
+}
+
+function normalizeTagOffsetInput(offset = {}) {
+  return normalizeHlsOffset(offset)
+}
+
+export function parseTagOffsetRef(value) {
+  if (typeof value !== 'string') {
+    return {
+      isTagOffsetRef: false,
+      tag: null,
+      offset: { h: 0, l: 0, s: 0 },
+      valid: false,
+      raw: value
+    }
+  }
+
+  const input = value.trim()
+  if (!input || !input.includes('|')) {
+    return {
+      isTagOffsetRef: false,
+      tag: null,
+      offset: { h: 0, l: 0, s: 0 },
+      valid: false,
+      raw: value
+    }
+  }
+
+  const [tagRaw, exprRaw] = input.split('|')
+  const tag = String(tagRaw || '').trim()
+  if (!tag) {
+    return {
+      isTagOffsetRef: true,
+      tag: null,
+      offset: { h: 0, l: 0, s: 0 },
+      valid: false,
+      raw: value
+    }
+  }
+
+  const expr = String(exprRaw || '').trim()
+  const parsed = { h: 0, l: 0, s: 0 }
+
+  if (expr) {
+    const chunks = expr.split(',').map(v => v.trim()).filter(Boolean)
+    for (const chunk of chunks) {
+      const [kRaw, vRaw] = chunk.split(':')
+      const key = String(kRaw || '').trim().toLowerCase()
+      const valueStr = String(vRaw || '').trim()
+      if (!['h', 'l', 's'].includes(key)) continue
+      if (!valueStr) continue
+      const n = Number.parseInt(valueStr, 10)
+      if (!Number.isFinite(n)) continue
+      parsed[key] = n
+    }
+  }
+
+  const offset = normalizeTagOffsetInput(parsed)
+  return {
+    isTagOffsetRef: true,
+    tag,
+    offset,
+    valid: true,
+    raw: value
+  }
+}
+
+export function formatTagOffsetRef(tag, offset = {}) {
+  const normalizedTag = String(tag || '').trim()
+  if (!normalizedTag) return ''
+
+  const normalizedOffset = normalizeTagOffsetInput(offset)
+  const parts = []
+  if (normalizedOffset.h !== 0) parts.push(`h:${normalizedOffset.h >= 0 ? '+' : ''}${normalizedOffset.h}`)
+  if (normalizedOffset.l !== 0) parts.push(`l:${normalizedOffset.l >= 0 ? '+' : ''}${normalizedOffset.l}`)
+  if (normalizedOffset.s !== 0) parts.push(`s:${normalizedOffset.s >= 0 ? '+' : ''}${normalizedOffset.s}`)
+
+  if (!parts.length) return normalizedTag
+  return `${normalizedTag}|${parts.join(',')}`
+}
+
+export function resolveTagOffsetColor(ref, paletteMap = {}) {
+  const parsed = parseTagOffsetRef(ref)
+  if (!parsed.isTagOffsetRef || !parsed.valid || !parsed.tag) {
+    return { ok: false, color: null, reason: 'invalid-ref', parsed }
+  }
+
+  if (!(parsed.tag in (paletteMap || {}))) {
+    return { ok: false, color: null, reason: 'tag-not-found', parsed }
+  }
+
+  const baseValue = paletteMap[parsed.tag]
+  if (typeof baseValue !== 'string') {
+    return { ok: false, color: null, reason: 'unsupported-tag-base', parsed, baseValue }
+  }
+
+  const applied = applyHlsOffsetToColor(baseValue, parsed.offset)
+  if (!applied.ok) {
+    return { ok: false, color: null, reason: applied.reason || 'resolve-failed', parsed, baseValue }
+  }
+
+  return {
+    ok: true,
+    color: applied.color,
+    parsed,
+    baseValue
+  }
 }
 
 // =============================================
@@ -342,6 +450,18 @@ export function expandTagsInAppearance(apArr = [], paletteMap = {}) {
       continue
     }
 
+    // Handle string Color that is a tag+offset ref
+    if (typeof p.Color === 'string') {
+      const resolved = resolveTagOffsetColor(p.Color, paletteMap)
+      if (resolved.ok) {
+        p.Color = resolved.color
+        continue
+      }
+      if (parseTagOffsetRef(p.Color).isTagOffsetRef) {
+        console.warn('[PaletteService] Failed to resolve tag+offset ref:', p.Color, resolved.reason)
+      }
+    }
+
     // Handle array Color
     if (Array.isArray(p.Color)) {
       const out = []
@@ -352,6 +472,16 @@ export function expandTagsInAppearance(apArr = [], paletteMap = {}) {
             for (const vv of v) out.push(deepClone(vv))
           } else {
             out.push(deepClone(v))
+          }
+        } else if (typeof el === 'string') {
+          const resolved = resolveTagOffsetColor(el, paletteMap)
+          if (resolved.ok) {
+            out.push(resolved.color)
+          } else {
+            if (parseTagOffsetRef(el).isTagOffsetRef) {
+              console.warn('[PaletteService] Failed to resolve tag+offset ref in array:', el, resolved.reason)
+            }
+            out.push(el)
           }
         } else {
           out.push(el)
@@ -412,6 +542,20 @@ export function deletePaletteTagFromStacks(stacks = [], paletteMap = {}, focused
 
   const value = pm[tag]
   const isArrayValue = Array.isArray(value)
+  const replaceTagString = (colorText) => {
+    if (typeof colorText !== 'string') return colorText
+    if (colorText === tag) {
+      return deepClone(value)
+    }
+
+    const parsed = parseTagOffsetRef(colorText)
+    if (parsed.isTagOffsetRef && parsed.tag === tag) {
+      const resolved = resolveTagOffsetColor(colorText, paletteMap)
+      if (resolved.ok) return resolved.color
+    }
+
+    return colorText
+  }
 
   // Process stacks
   const newStacks = (stacks || []).map(el => {
@@ -424,11 +568,18 @@ export function deletePaletteTagFromStacks(stacks = [], paletteMap = {}, focused
     for (const p of el.data) {
       if (!p) continue
       if (Array.isArray(p.Color)) {
-        if (p.Color.includes(tag)) {
+        if (p.Color.includes(tag) || p.Color.some(c => {
+          if (typeof c !== 'string') return false
+          const parsed = parseTagOffsetRef(c)
+          return parsed.isTagOffsetRef && parsed.tag === tag
+        })) {
           needsClone = true
           break
         }
-      } else if (p.Color === tag) {
+      } else if (p.Color === tag || (typeof p.Color === 'string' && (() => {
+        const parsed = parseTagOffsetRef(p.Color)
+        return parsed.isTagOffsetRef && parsed.tag === tag
+      })())) {
         needsClone = true
         break
       }
@@ -452,6 +603,8 @@ export function deletePaletteTagFromStacks(stacks = [], paletteMap = {}, focused
             } else {
               out.push(deepClone(value))
             }
+          } else if (typeof elc === 'string') {
+            out.push(replaceTagString(elc))
           } else {
             out.push(elc)
           }
@@ -459,6 +612,8 @@ export function deletePaletteTagFromStacks(stacks = [], paletteMap = {}, focused
         p.Color = out
       } else if (p.Color === tag) {
         p.Color = deepClone(value)
+      } else if (typeof p.Color === 'string') {
+        p.Color = replaceTagString(p.Color)
       }
       return p
     })
@@ -471,9 +626,16 @@ export function deletePaletteTagFromStacks(stacks = [], paletteMap = {}, focused
     let needsFocusedClone = false
 
     if (Array.isArray(focusedPart.Color)) {
-      needsFocusedClone = focusedPart.Color.includes(tag)
+      needsFocusedClone = focusedPart.Color.includes(tag) || focusedPart.Color.some(c => {
+        if (typeof c !== 'string') return false
+        const parsed = parseTagOffsetRef(c)
+        return parsed.isTagOffsetRef && parsed.tag === tag
+      })
     } else {
-      needsFocusedClone = focusedPart.Color === tag
+      needsFocusedClone = focusedPart.Color === tag || (typeof focusedPart.Color === 'string' && (() => {
+        const parsed = parseTagOffsetRef(focusedPart.Color)
+        return parsed.isTagOffsetRef && parsed.tag === tag
+      })())
     }
 
     if (needsFocusedClone) {
@@ -488,6 +650,8 @@ export function deletePaletteTagFromStacks(stacks = [], paletteMap = {}, focused
             } else {
               out.push(deepClone(value))
             }
+          } else if (typeof elc === 'string') {
+            out.push(replaceTagString(elc))
           } else {
             out.push(elc)
           }
@@ -495,6 +659,8 @@ export function deletePaletteTagFromStacks(stacks = [], paletteMap = {}, focused
         newFocusedPart.Color = out
       } else if (newFocusedPart.Color === tag) {
         newFocusedPart.Color = deepClone(value)
+      } else if (typeof newFocusedPart.Color === 'string') {
+        newFocusedPart.Color = replaceTagString(newFocusedPart.Color)
       }
     } else {
       newFocusedPart = shallowClone(focusedPart)
@@ -564,6 +730,9 @@ export function paletteSnapshot(paletteMap = {}) {
 export default {
   findTagForValue,
   createTagForValue,
+  parseTagOffsetRef,
+  formatTagOffsetRef,
+  resolveTagOffsetColor,
   replaceValueInPart,
   replaceValueInStacks,
   applyPaletteToElement,

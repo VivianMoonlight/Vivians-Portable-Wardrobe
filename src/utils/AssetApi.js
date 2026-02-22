@@ -117,6 +117,29 @@ export function getTypedAssetOptions(group, name) {
 }
 
 /**
+ * Get vibrating asset mode options from Group + Name of the asset
+ * @param {string} group - The asset group name
+ * @param {string} name - The asset name
+ * @returns {Array<Object>|null} Array of vibrator mode options, or null if not found
+ */
+export function getVibratingAssetOptions(group, name) {
+  const keyDict = group + name;
+  if (typeof VibratorModeDataLookup === 'undefined' || typeof hostWindow.AssetTextGet === 'undefined') return null;
+  const VibratorModeData = VibratorModeDataLookup[keyDict];
+  if (!VibratorModeData) return null;
+  const vibratorPrefix = VibratorModeData.dialogPrefix?.option || "";
+  const options = VibratorModeData.options; // array of option objects
+  if (!Array.isArray(options)) return null;
+
+  const modeList = options.map(opt => ({
+    Name: opt.Name,
+    Description: hostWindow.AssetTextGet(vibratorPrefix + opt.Name) || opt.Name,
+    Property: opt.Property ? JSON.parse(JSON.stringify(opt.Property)) : null
+  }));
+  return modeList;
+}
+
+/**
  * Get modular asset definition including modules and options
  * @param {string} group - Asset group name
  * @param {string} name - Asset name
@@ -153,6 +176,89 @@ export function getModularAssetData(group, name) {
       }))
     };
   });
+}
+
+/**
+ * Get text item definitions for an asset, including self text archetype and active modular-option text archetype
+ * @param {string} group - Asset group name
+ * @param {string} name - Asset name
+ * @param {Object} partProperty - Current part property (used for active modular TypeRecord)
+ * @returns {Array<Object>} Array of text definitions
+ * Structure: [{ source, lookupKey, textFields: [{ key, maxLength }], parentModuleKey?, parentOptionIndex? }]
+ */
+export function getTextItemDefinitionsForPart(group, name, partProperty = {}) {
+  const keyDict = group + name;
+  if (typeof TextItemDataLookup === 'undefined') return [];
+
+  const toTextFields = (textData) => {
+    const textNames = Array.isArray(textData?.textNames) ? textData.textNames : [];
+    const maxLengthMap = textData?.maxLength && typeof textData.maxLength === 'object' ? textData.maxLength : {};
+    return textNames
+      .filter(k => typeof k === 'string' && k)
+      .map(k => {
+        const limitRaw = Number(maxLengthMap[k]);
+        const maxLength = Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : 255;
+        return { key: k, maxLength };
+      });
+  };
+
+  const results = [];
+  const seen = new Set();
+
+  const pushTextDef = (source, lookupKey, textData, extra = {}) => {
+    if (!lookupKey || !textData) return;
+    const textFields = toTextFields(textData);
+    if (!textFields.length) return;
+    const dedupeKey = `${source}:${lookupKey}:${extra.parentModuleKey ?? ''}:${extra.parentOptionIndex ?? ''}`;
+    if (seen.has(dedupeKey)) return;
+    seen.add(dedupeKey);
+    results.push({
+      source,
+      lookupKey,
+      textFields,
+      ...extra
+    });
+  };
+
+  const selfTextData = TextItemDataLookup[keyDict];
+  if (selfTextData && selfTextData.archetype === 'text') {
+    pushTextDef('self', keyDict, selfTextData);
+  }
+
+  if (typeof ModularItemDataLookup !== 'undefined') {
+    const modularData = ModularItemDataLookup[keyDict];
+    const typeRecord = partProperty?.TypeRecord && typeof partProperty.TypeRecord === 'object'
+      ? partProperty.TypeRecord
+      : {};
+
+    if (modularData && Array.isArray(modularData.modules)) {
+      for (const mod of modularData.modules) {
+        const moduleKey = mod?.Key;
+        if (!moduleKey) continue;
+
+        const selectedRaw = Number(typeRecord[moduleKey]);
+        const selectedIndex = Number.isFinite(selectedRaw) ? selectedRaw : 0;
+        const options = Array.isArray(mod?.Options) ? mod.Options : [];
+        const selectedOption = options.find(opt => Number(opt?.Index) === selectedIndex)
+          || options[selectedIndex]
+          || null;
+        if (!selectedOption) continue;
+
+        const archetypeData = selectedOption?.ArchetypeData;
+        if (!archetypeData || archetypeData.archetype !== 'text' || !archetypeData.key) continue;
+
+        const optionTextData = TextItemDataLookup[archetypeData.key];
+        if (!optionTextData || optionTextData.archetype !== 'text') continue;
+
+        pushTextDef('modular-option', archetypeData.key, optionTextData, {
+          parentModuleKey: moduleKey,
+          parentOptionIndex: selectedIndex
+        });
+      }
+    }
+  }
+
+  return results;
 }
 
 
@@ -329,6 +435,8 @@ export const AssetApi = {
   fetchAssetData,
   applyToCharacter,
   getTypedAssetOptions,
+  getVibratingAssetOptions,
   compareTypedAssetOptions,
-  getModularAssetData
+  getModularAssetData,
+  getTextItemDefinitionsForPart
 };

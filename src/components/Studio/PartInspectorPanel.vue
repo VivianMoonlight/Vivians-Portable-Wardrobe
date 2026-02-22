@@ -2,63 +2,21 @@
   <div class="inspector-panel" role="region" :aria-label="t('partInspector.ariaLabel')" @keydown="handleKeydown">
     <div class="header">
       <h4>{{ t('partInspector.title') }}</h4>
-      <div class="actions">
-        <!-- Preview tool toggle >
-        <button 
-          v-if="hasPart"
-          class="mode-toggle-btn" 
-          :class="{ active: isMoveTool }"
-          @click="togglePreviewTool" 
-          :disabled="!canUseMoveTool"
-          :title="isMoveTool ? t('partInspector.viewMode') : t('partInspector.moveMode')"
-        >
-          <span v-if="isMoveTool">✥</span>
-          <span v-else>✋</span>
-        </button>
-        
-        <!-- Multi-selection mode toggle -->
-        <button 
-          v-if="hasPart"
-          class="mode-toggle-btn" 
-          :class="{ active: isMultiMode }"
-          @click="toggleSelectionMode" 
-          :title="isMultiMode ? (t('partInspector.singleMode') || 'Single mode') : (t('partInspector.multiMode') || 'Multi-select mode')"
-        >
-          <span v-if="isMultiMode">☑</span>
-          <span v-else>☐</span>
-        </button>
-        
-        <!-- Multi-mode actions -->
-        <template v-if="isMultiMode && hasPart">
-          <button 
-            class="small" 
-            @click="selectAll" 
-            :title="t('partInspector.selectAll') || 'Select All (Ctrl+A)'"
-          >
-            {{ t('partInspector.selectAllBtn') || 'All' }}
-          </button>
-          <button 
-            class="small" 
-            @click="clearSelection" 
-            :title="t('partInspector.clearSelection') || 'Clear Selection (Ctrl+D)'"
-            :disabled="!hasSelections"
-          >
-            {{ t('partInspector.clearBtn') || 'Clear' }}
-          </button>
-        </template>
-      </div>
     </div>
 
     <div class="mode-bar" v-if="hasPart">
-      <div class="mode-chip" :class="{ active: !isMultiMode }">
+      <button class="mode-chip" :class="{ active: !isMultiMode }" @click="toggleSelectionMode" :disabled="isMultiMode === false"
+        :title="t('partInspector.singleMode') || 'Single selection mode'">
         {{ t('partInspector.singleMode') || 'Single' }}
-      </div>
-      <div class="mode-chip" :class="{ active: isMultiMode }">
+      </button>
+      <button class="mode-chip" :class="{ active: isMultiMode }" @click="toggleSelectionMode" :disabled="isMultiMode === true"
+        :title="t('partInspector.multiMode') || 'Multi-select mode'">
         {{ t('partInspector.multiMode') || 'Multi' }}
-      </div>
-      <div class="mode-chip" :class="{ active: isMoveTool }">
+      </button>
+      <button class="mode-chip" :class="{ active: isMoveTool }" @click="togglePreviewTool" :disabled="!canUseMoveTool"
+        :title="isMoveTool ? (t('partInspector.viewMode') || 'Switch to View mode') : (t('partInspector.moveMode') || 'Switch to Move mode')">
         {{ isMoveTool ? (t('partInspector.moveMode') || 'Move') : (t('partInspector.viewMode') || 'View') }}
-      </div>
+      </button>
       <div class="mode-chip scope">
         {{ scopeLabel }}
       </div>
@@ -68,18 +26,15 @@
       <div v-if="!hasPart" class="placeholder">{{ t('partInspector.noPartPlaceholder') }}</div>
 
       <div v-else class="content">
-        <div class="workflow-summary">
-          <div class="workflow-title">{{ t('partInspector.workflowTitle') || 'Workflow' }}</div>
-          <div class="workflow-steps">
-            <span>1. {{ t('partInspector.workflowScope') || 'Scope' }}</span>
-            <span>2. {{ t('partInspector.workflowProperty') || 'Property' }}</span>
-            <span>3. {{ t('partInspector.workflowValue') || 'Value' }}</span>
-            <span>4. {{ t('partInspector.workflowApply') || 'Apply' }}</span>
-          </div>
+        <div v-if="isReplaceStage" class="stage-hint stage-hint-replace">
+          <div class="stage-hint-title">{{ t('partInspector.replaceStageTitle') || '当前处于替换阶段' }}</div>
+          <div class="stage-hint-text">{{ t('partInspector.replaceStageDesc') || '请在 Asset 面板选择并应用资源，应用后会自动回到精修。' }}</div>
+          <button class="stage-hint-btn" @click="goToAssetPanel">{{ t('partInspector.goToAsset') || '前往替换面板' }}</button>
         </div>
 
-        <!-- Batch Edit Panel (shown when multiple layers selected) -->
-        <BatchEditPanel v-if="isMultiMode" />
+        <template v-else>
+          <!-- Batch Edit Panel (shown when multiple layers selected) -->
+          <BatchEditPanel v-if="isMultiMode && hasSelections" />
         
         <!-- Core Properties Section -->
         <CollapsibleSection 
@@ -103,7 +58,7 @@
           </div>
 
           <!-- Modular Asset Logic (New) -->
-          <template v-if="modularOptions && modularOptions.length > 0">
+          <template v-if="showStructureFields && modularOptions && modularOptions.length > 0">
             <div v-for="mod in modularOptions" :key="mod.Key" class="row">
               <label>{{ mod.Description || mod.Name }}</label>
               <div class="val edit-box">
@@ -117,7 +72,7 @@
           </template>
 
           <!-- Typed Asset Type Selector (Standard Typed) -->
-          <div v-if="typedOptions.length > 0" class="row">
+          <div v-if="showStructureFields && typedOptions.length > 0" class="row">
             <label>{{ t('partInspector.typeRecordLabel') || 'Type' }}</label>
             <div class="val edit-box">
               <select class="edit-input" :value="currentTypeIndex" @change="onTypeChange">
@@ -128,49 +83,90 @@
               </select>
             </div>
           </div>
+
+          <!-- Vibrating Item Mode Selector -->
+          <div v-if="showStructureFields && vibratingOptions.length > 0" class="row">
+            <label>{{ t('partInspector.vibratorModeLabel') || 'Vibrator Mode' }}</label>
+            <div class="val edit-box">
+              <select class="edit-input" :value="currentVibratorModeIndex" @change="onVibratorModeChange">
+                <option class="edit-option" v-if="currentVibratorModeIndex === -1" :value="-1" disabled>{{ t('partInspector.selectVibratorMode') || 'Select...' }}</option>
+                <option class="edit-option" v-for="(opt, idx) in vibratingOptions" :key="idx" :value="idx">
+                  {{ opt.Description || opt.Name }}
+                </option>
+              </select>
+            </div>
+          </div>
+
+          <template v-if="showStructureFields && textFields.length > 0">
+            <div v-for="field in textFields" :key="field.key" class="row">
+              <label>{{ field.key }}</label>
+              <div class="val edit-box">
+                <input
+                  class="edit-input"
+                  type="text"
+                  :value="getTextFieldValue(field.key)"
+                  :maxlength="field.maxLength"
+                  @input="(e) => onTextFieldInput(field.key, field.maxLength, e)"
+                />
+                <span class="text-limit">{{ getTextFieldValue(field.key).length }}/{{ field.maxLength }}</span>
+              </div>
+            </div>
+          </template>
         </CollapsibleSection>
 
-        <!-- Layer Edits Section -->
-        <CollapsibleSection 
-          :title="t('partInspector.layerEditsTitle') || 'Layer Edits'"
-          :default-collapsed="false"
-        >
-          <!-- Layers: 使用子组件展示每个 main layer（基于 local 副本） -->
-          <div class="colorgroup-list">
-            <template v-if="layerEntriesLocal && layerEntriesLocal.length">
-              <ColorableLayer v-for="(m, mi) in layerEntriesLocal"
-                :key="m._key || (m.name || mi)"
-                :layer="m"
-                :part="part"
-                :stackIndex="store.focusedPartIndex?.stackIndex ?? 0"
-                :partIndex="store.focusedPartIndex?.partIndex ?? 0"
-                :selectionMode="store.selectionMode"
-                @save-layer="onSaveLayer" />
-            </template>
-
-            <!-- fallback: 没有 layerEntries 时原色展示 -->
-            <template v-else>
-              <div class="row">
-                <label>{{ t('partInspector.colorLabel') }}</label>
-                <div class="val">
-                  <template v-if="Array.isArray(part.Color) && part.Color.length">
-                    <div class="color-list">
-                      <div v-for="(c, i) in part.Color" :key="i" class="color-item">{{ c }}</div>
-                    </div>
-                  </template>
-                  <template v-else-if="part.Color">
-                    <div class="color-item">{{ part.Color }}</div>
-                  </template>
-                  <template v-else><span class="muted">—</span></template>
-                </div>
+        <!-- Layers: 支持分组展示 -->
+        <div class="colorgroup-list">
+          <template v-if="organizedLayers && organizedLayers.length">
+            <template v-for="item in organizedLayers" :key="item.type === 'group' ? `group-${item.groupName}` : `layer-${item.layer._key || item.layer.name}`">
+              <!-- Group Container -->
+              <div v-if="item.type === 'group'" class="layer-hover-wrap"
+                @mouseenter="onLayerGroupMouseEnter(item.layers)" @mouseleave="onLayerHoverLeave">
+                <LayerGroup
+                  :groupName="item.groupName"
+                  :layers="item.layers"
+                  :part="part"
+                  :stackIndex="store.focusedPartIndex?.stackIndex ?? 0"
+                  :partIndex="store.focusedPartIndex?.partIndex ?? 0"
+                  :selectionMode="store.selectionMode"
+                  @save-layer="onSaveLayer" />
+              </div>
+              
+              <!-- Individual Layer -->
+              <div v-else-if="item.type === 'layer'" class="layer-hover-wrap"
+                @mouseenter="onSingleLayerMouseEnter(item.layer)" @mouseleave="onLayerHoverLeave">
+                <ColorableLayer
+                  :layer="item.layer"
+                  :part="part"
+                  :stackIndex="store.focusedPartIndex?.stackIndex ?? 0"
+                  :partIndex="store.focusedPartIndex?.partIndex ?? 0"
+                  :selectionMode="store.selectionMode"
+                  @save-layer="onSaveLayer" />
               </div>
             </template>
-          </div>
-        </CollapsibleSection>
+          </template>
+
+          <!-- fallback: 没有 layerEntries 时原色展示 -->
+          <template v-else>
+            <div class="row">
+              <label>{{ t('partInspector.colorLabel') }}</label>
+              <div class="val">
+                <template v-if="Array.isArray(part.Color) && part.Color.length">
+                  <div class="color-list">
+                    <div v-for="(c, i) in part.Color" :key="i" class="color-item">{{ c }}</div>
+                  </div>
+                </template>
+                <template v-else-if="part.Color">
+                  <div class="color-item">{{ part.Color }}</div>
+                </template>
+                <template v-else><span class="muted">—</span></template>
+              </div>
+            </div>
+          </template>
+        </div>
 
         <!-- Advanced Properties Section (collapsed by default) -->
         <CollapsibleSection 
-          v-if="part.Property || part.Craft"
+          v-if="showAdvancedSection && (part.Property || part.Craft)"
           :title="t('partInspector.advancedPropertiesTitle') || 'Advanced Properties'"
           :default-collapsed="true"
           variant="subtle"
@@ -193,20 +189,24 @@
             <pre class="craft-json">{{ shortJson(part.Craft) }}</pre>
           </div>
         </CollapsibleSection>
+        </template>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed, ref, watch, nextTick } from 'vue'
+import { computed, ref, watch, nextTick, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useStudioStore } from '@/stores/studioStore'
 import ColorableLayer from './ColorableLayer.vue'
+import LayerGroup from './LayerGroup.vue'
 import BatchEditPanel from './BatchEditPanel.vue'
 import CollapsibleSection from '../ui/CollapsibleSection.vue'
 import { hostWindow, setTimeoutHost, doc } from '@/utils/host-window.js'
 import { AssetApi } from '@/utils/AssetApi'
+import * as Palette from '@/services/PaletteService'
+import * as LayerTranslator from '@/services/LayerTranslator'
 
 const { t } = useI18n()
 
@@ -218,6 +218,11 @@ const hasPart = computed(() => !!part.value)
 // Multi-selection state
 const isMultiMode = computed(() => store.selectionMode === 'multiple')
 const hasSelections = computed(() => store.selectedLayers && store.selectedLayers.length > 0)
+const taskStage = computed(() => store.taskStage || 'assemble')
+const isReplaceStage = computed(() => taskStage.value === 'replace')
+const isPolishStage = computed(() => taskStage.value === 'polish')
+const showStructureFields = computed(() => !isPolishStage.value)
+const showAdvancedSection = computed(() => !isPolishStage.value)
 const scopeLabel = computed(() => {
   if (!hasPart.value) return ''
   if (isMultiMode.value) {
@@ -235,6 +240,11 @@ function togglePreviewTool() {
   store.togglePreviewTool()
 }
 
+function goToAssetPanel() {
+  store.setTaskStage('replace')
+  store.openContextPanel('asset', 'inspector-goto-asset')
+}
+
 /*
   Key fix:
   - maintain layerEntriesLocal per focusedPart snapshot
@@ -242,6 +252,8 @@ function togglePreviewTool() {
 */
 const layerEntriesLocal = ref([])            // local deep-cloned copy used by children
 const focusedPartKey = ref(null)             // snapshot key for current focusedPart
+const layerHoverBlinkTimerId = ref(null)
+const layerHoverBlinkState = ref(null)
 
 // helper to build a stable key for focusedPart snapshot
 function buildPartKey(p) {
@@ -286,7 +298,62 @@ const refreshFunction = async (p) => {
 // initialize local entries when focusedPart changes
 watch(part, refreshFunction, { immediate: true, deep: true })
 watch(updateFlag, () => {
+  stopLayerHoverBlink()
   refreshFunction(part.value)
+})
+
+watch(part, () => {
+  stopLayerHoverBlink()
+})
+
+watch(() => `${store.focusedPartIndex?.stackIndex ?? 'n'}:${store.focusedPartIndex?.partIndex ?? 'n'}`, () => {
+  stopLayerHoverBlink()
+})
+
+watch(() => (store.selectedLayers || []).map(s => `${s.stackIndex}:${s.partIndex}:${s.layerIndex}`).join('|'), () => {
+  stopLayerHoverBlink()
+})
+
+// Organize layers by group
+const organizedLayers = computed(() => {
+  const layers = layerEntriesLocal.value || []
+  if (!layers.length) return []
+
+  // Group layers by groupDisplayName
+  const groupMap = new Map()
+  const ungrouped = []
+
+  for (const layer of layers) {
+    const groupName = layer.groupDisplayName
+    if (groupName) {
+      if (!groupMap.has(groupName)) {
+        groupMap.set(groupName, [])
+      }
+      groupMap.get(groupName).push(layer)
+    } else {
+      ungrouped.push(layer)
+    }
+  }
+
+  // Build organized array: groups first, then ungrouped layers
+  const result = []
+  
+  // Add groups (with >1 layer in each group)
+  for (const [groupName, groupLayers] of groupMap.entries()) {
+    if (groupLayers.length > 1) {
+      result.push({ type: 'group', groupName, layers: groupLayers })
+    } else {
+      // Single-layer groups are treated as ungrouped
+      ungrouped.push(groupLayers[0])
+    }
+  }
+  
+  // Add ungrouped layers
+  for (const layer of ungrouped) {
+    result.push({ type: 'layer', layer })
+  }
+
+  return result
 })
 
 /* ------- Typed Asset Logic (Standard) ------- */
@@ -345,8 +412,66 @@ function onTypeChange(e) {
   store.refreshMergedAppearanceData()
 }
 
+/* ------- Vibrating Item Logic ------- */
+const vibratingOptions = ref([])
+
+function refreshVibratingOptions() {
+  vibratingOptions.value = []
+  const p = part.value
+  if (!p) return
+
+  // Resolve Group and Name
+  const groupName = p.Group || p.Asset?.Group?.Name
+  const assetName = p.Name || p.Asset?.Name
+
+  if (groupName && assetName) {
+    const opts = AssetApi.getVibratingAssetOptions(groupName, assetName)
+    if (Array.isArray(opts)) {
+      vibratingOptions.value = opts
+    }
+  }
+}
+
+watch(part, refreshVibratingOptions, { immediate: true })
+
+const currentVibratorModeIndex = computed(() => {
+  if (!vibratingOptions.value.length) return -1
+  const currentMode = part.value?.Property?.Mode
+  
+  return vibratingOptions.value.findIndex(opt => {
+    return opt.Property?.Mode === currentMode
+  })
+})
+
+function onVibratorModeChange(e) {
+  const idx = Number(e.target.value)
+  if (idx < 0 || idx >= vibratingOptions.value.length) return
+  const opt = vibratingOptions.value[idx]
+
+  // Clone existing properties
+  const newProp = { ...(part.value.Property || {}) }
+
+  // Update vibrating-related properties (Mode, Intensity, Effect, etc.)
+  if (opt.Property) {
+    if (opt.Property.Mode !== undefined) newProp.Mode = opt.Property.Mode
+    if (opt.Property.Intensity !== undefined) newProp.Intensity = opt.Property.Intensity
+    if (opt.Property.Effect !== undefined) newProp.Effect = JSON.parse(JSON.stringify(opt.Property.Effect))
+    if (opt.Property.TypeRecord !== undefined) {
+      newProp.TypeRecord = JSON.parse(JSON.stringify(opt.Property.TypeRecord))
+    }
+  }
+
+  // Use the store's property update method which handles refresh
+  store._updateFocusedPartProperty('Property', newProp)
+  
+  // Force a full update cycle to ensure layers and preview catch up
+  store.RebuildAllStacksLayerEntriesFromParts()
+  store.refreshMergedAppearanceData()
+}
+
 /* ------- Modular Asset Logic (New) ------- */
 const modularOptions = ref(null)
+const textDefinitions = ref([])
 
 function refreshModularOptions() {
   modularOptions.value = null
@@ -386,6 +511,77 @@ function onModularChange(moduleKey, e) {
   // Update store and trigger refresh
   store._updateFocusedPartProperty('Property', newProp)
   store.RebuildAllStacksLayerEntriesFromParts()
+  store.refreshMergedAppearanceData()
+}
+
+/* ------- Text Item Logic ------- */
+function refreshTextDefinitions() {
+  textDefinitions.value = []
+  const p = part.value
+  if (!p) return
+
+  const group = p.Group || p.Asset?.Group?.Name
+  const name = p.Name || p.Asset?.Name
+  if (!group || !name) return
+
+  const data = AssetApi.getTextItemDefinitionsForPart(group, name, p.Property || {})
+  if (Array.isArray(data)) {
+    textDefinitions.value = data
+  }
+}
+
+watch(part, refreshTextDefinitions, { immediate: true })
+watch(updateFlag, refreshTextDefinitions)
+
+const textFields = computed(() => {
+  const merged = []
+  const indexByKey = new Map()
+
+  for (const def of (textDefinitions.value || [])) {
+    for (const field of (def?.textFields || [])) {
+      const key = field?.key
+      if (!key) continue
+      const maxLengthRaw = Number(field?.maxLength)
+      const maxLength = Number.isFinite(maxLengthRaw) && maxLengthRaw > 0 ? maxLengthRaw : 255
+
+      if (!indexByKey.has(key)) {
+        indexByKey.set(key, merged.length)
+        merged.push({ key, maxLength })
+      } else {
+        const idx = indexByKey.get(key)
+        merged[idx].maxLength = Math.min(merged[idx].maxLength, maxLength)
+      }
+    }
+  }
+
+  return merged
+})
+
+function getTextFieldValue(fieldKey) {
+  if (!fieldKey) return ''
+  const val = part.value?.Property?.[fieldKey]
+  if (val === undefined || val === null) return ''
+  return String(val)
+}
+
+function onTextFieldInput(fieldKey, maxLength, e) {
+  if (!fieldKey || !part.value) return
+
+  const raw = typeof e?.target?.value === 'string' ? e.target.value : ''
+  const limitRaw = Number(maxLength)
+  const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : 255
+  const nextVal = raw.slice(0, limit)
+
+  if (e?.target && e.target.value !== nextVal) {
+    e.target.value = nextVal
+  }
+
+  const oldVal = getTextFieldValue(fieldKey)
+  if (oldVal === nextVal) return
+
+  const newProp = { ...(part.value.Property || {}) }
+  newProp[fieldKey] = nextVal
+  store._updateFocusedPartProperty('Property', newProp)
   store.refreshMergedAppearanceData()
 }
 
@@ -489,6 +685,170 @@ function onSaveLayer(payload) {
   }
 }
 
+/* ------- Layer hover blink (non-focused only) ------- */
+function _cloneLayerEntries(entries) {
+  try { return JSON.parse(JSON.stringify(entries || [])) } catch (e) { return [] }
+}
+
+function _collectLayerIndices(layers) {
+  if (!Array.isArray(layers)) return []
+  const out = []
+  for (const layer of layers) {
+    const idx = Number(layer?.layerIndex)
+    if (Number.isFinite(idx)) out.push(idx)
+  }
+  return Array.from(new Set(out))
+}
+
+function _isAnyLayerFocused(layerIndices, stackIndex, partIndex) {
+  for (const idx of layerIndices) {
+    if (store.isLayerFocused({ stackIndex, partIndex, layerIndex: idx })) {
+      return true
+    }
+  }
+  return false
+}
+
+function _applyLayerBlinkOpacity(entries, indicesSet, visible, opacityMap) {
+  for (const entry of entries || []) {
+    const targetIdx = Number(entry?.layerIndex)
+    if (Number.isFinite(targetIdx) && indicesSet.has(targetIdx)) {
+      if (!opacityMap.has(targetIdx)) {
+        opacityMap.set(targetIdx, entry?.opacity ?? 1)
+      }
+      entry.opacity = visible ? (opacityMap.get(targetIdx) ?? 1) : 0
+    }
+    if (Array.isArray(entry?.subLayers)) {
+      for (const sub of entry.subLayers) {
+        const subIdx = Number(sub?.layerIndex)
+        if (Number.isFinite(subIdx) && indicesSet.has(subIdx)) {
+          if (!opacityMap.has(subIdx)) {
+            opacityMap.set(subIdx, sub?.opacity ?? 1)
+          }
+          sub.opacity = visible ? (opacityMap.get(subIdx) ?? 1) : 0
+        }
+      }
+    }
+  }
+}
+
+function _buildLayerHoverBlinkAppearance(context, visible) {
+  if (!context) return null
+  const { stackIndex, partIndex, layerIndices, sourceLayerEntries } = context
+  if (!Number.isFinite(stackIndex) || !Number.isFinite(partIndex)) return null
+  const indicesSet = new Set(layerIndices || [])
+  if (indicesSet.size === 0) return null
+
+  const renderStacks = (store.stacks || []).map((el, si) => {
+    const data = Array.isArray(el?.data) ? el.data : []
+    const nextData = data.map((p, pi) => {
+      if (si !== stackIndex || pi !== partIndex) return p
+      const baseEntries = _cloneLayerEntries(sourceLayerEntries)
+      _applyLayerBlinkOpacity(baseEntries, indicesSet, visible, context.originalOpacityMap)
+      const asset = (typeof store.resolveAssetForPart === 'function') ? store.resolveAssetForPart(p) : null
+      const rebuilt = LayerTranslator.reconstructPartFromLayerEntries(baseEntries, p, { originalAsset: asset })
+      return rebuilt || p
+    })
+    return { data: nextData, filterList: Array.isArray(el?.filterList) ? el.filterList : [] }
+  })
+
+  const unexpanded = {
+    data: AssetApi.stackOutfitData(renderStacks),
+    type: 'outfit'
+  }
+  return Palette.expandedAppearanceForRendering(unexpanded, store.paletteMap)
+}
+
+function _applyLayerHoverBlinkFrame(context, visible) {
+  const appearance = _buildLayerHoverBlinkAppearance(context, visible)
+  if (!appearance) return
+  const activeRenderer = store.useOptimizedRenderer ? store.previewRenderer : store.renderer
+  store.mergedAppearanceData = appearance
+  try { activeRenderer.renderPreviewWithItem(appearance) } catch (e) { /* ignore */ }
+}
+
+function startLayerHoverBlink(layerIndices) {
+  if (!hasPart.value || !Array.isArray(layerIndices) || layerIndices.length === 0) return
+  const stackIndex = Number(store.focusedPartIndex?.stackIndex)
+  const partIndex = Number(store.focusedPartIndex?.partIndex)
+  if (!Number.isFinite(stackIndex) || !Number.isFinite(partIndex)) return
+
+  const uniqueIndices = Array.from(new Set(layerIndices.filter(v => Number.isFinite(Number(v))).map(Number)))
+  if (uniqueIndices.length === 0) return
+  if (_isAnyLayerFocused(uniqueIndices, stackIndex, partIndex)) return
+
+  const current = layerHoverBlinkState.value
+  if (current && current.stackIndex === stackIndex && current.partIndex === partIndex) {
+    const same = (current.layerIndices || []).length === uniqueIndices.length &&
+      (current.layerIndices || []).every((v, i) => v === uniqueIndices[i])
+    if (same) return
+  }
+
+  stopLayerHoverBlink()
+
+  const sourceEntries = Array.isArray(layerEntriesLocal.value) ? layerEntriesLocal.value : []
+  const context = {
+    stackIndex,
+    partIndex,
+    layerIndices: uniqueIndices,
+    sourceLayerEntries: _cloneLayerEntries(sourceEntries),
+    originalOpacityMap: new Map(),
+    visible: true
+  }
+  layerHoverBlinkState.value = context
+
+  context.visible = false
+  _applyLayerHoverBlinkFrame(context, context.visible)
+
+  layerHoverBlinkTimerId.value = hostWindow.setInterval(() => {
+    const latest = layerHoverBlinkState.value
+    if (!latest) return
+    latest.visible = !latest.visible
+    _applyLayerHoverBlinkFrame(latest, latest.visible)
+  }, 260)
+}
+
+function stopLayerHoverBlink() {
+  const timerId = layerHoverBlinkTimerId.value
+  if (timerId !== null) {
+    hostWindow.clearInterval(timerId)
+    layerHoverBlinkTimerId.value = null
+  }
+  const context = layerHoverBlinkState.value
+  layerHoverBlinkState.value = null
+  if (!context) return
+  try { store.refreshMergedAppearanceData() } catch (e) { /* ignore */ }
+}
+
+function onSingleLayerMouseEnter(layer) {
+  const idx = Number(layer?.layerIndex)
+  if (!Number.isFinite(idx)) return
+  const stackIndex = Number(store.focusedPartIndex?.stackIndex)
+  const partIndex = Number(store.focusedPartIndex?.partIndex)
+  if (Number.isFinite(stackIndex) && Number.isFinite(partIndex) &&
+      store.isLayerFocused({ stackIndex, partIndex, layerIndex: idx })) {
+    stopLayerHoverBlink()
+    return
+  }
+  startLayerHoverBlink([idx])
+}
+
+function onLayerGroupMouseEnter(layers) {
+  const indices = _collectLayerIndices(layers)
+  if (!indices.length) return
+  const stackIndex = Number(store.focusedPartIndex?.stackIndex)
+  const partIndex = Number(store.focusedPartIndex?.partIndex)
+  if (Number.isFinite(stackIndex) && Number.isFinite(partIndex) && _isAnyLayerFocused(indices, stackIndex, partIndex)) {
+    stopLayerHoverBlink()
+    return
+  }
+  startLayerHoverBlink(indices)
+}
+
+function onLayerHoverLeave() {
+  stopLayerHoverBlink()
+}
+
 /* ------- Utilities / misc actions ------- */
 function ensureArray(v) { if (v === undefined || v === null) return []; return Array.isArray(v) ? v : [v] }
 function shortJson(obj) { try { return JSON.stringify(obj, null, 2) } catch (e) { return String(obj) } }
@@ -557,6 +917,10 @@ function handleKeydown(e) {
     }
   }
 }
+
+onBeforeUnmount(() => {
+  stopLayerHoverBlink()
+})
 </script>
 
 <style scoped>
@@ -658,6 +1022,18 @@ function handleKeydown(e) {
   font-size: 12px;
   color: var(--color-text-secondary);
   background: var(--color-bg-surface);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.mode-chip:not(.scope):hover:not(:disabled) {
+  background: var(--color-bg-hover);
+  border-color: var(--color-border-base);
+}
+
+.mode-chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .mode-chip.active {
@@ -671,6 +1047,7 @@ function handleKeydown(e) {
   color: var(--color-text-primary);
   border-color: var(--color-selection-multi-border);
   background: var(--color-selection-multi-bg);
+  cursor: default;
 }
 
 /* Body */
@@ -691,27 +1068,45 @@ function handleKeydown(e) {
   font-size: 14px;
 }
 
-.workflow-summary {
-  margin-bottom: 10px;
-  padding: 10px;
+.stage-hint {
+  margin-bottom: 12px;
+  border: 1px solid var(--color-border-base, #e2e8f0);
   border-radius: var(--radius-md, 8px);
-  border: 1px solid var(--color-border-base);
-  background: var(--color-bg-surface);
+  padding: 10px;
+  background: var(--color-bg-surface, #f8fafc);
 }
 
-.workflow-title {
-  font-size: 12px;
+.stage-hint-replace {
+  border-color: var(--color-selection-single, #417aed);
+  background: var(--color-selection-single-bg, #edf4ff);
+}
+
+.stage-hint-title {
+  font-size: 13px;
   font-weight: 700;
-  color: var(--color-text-secondary);
-  margin-bottom: 6px;
+  color: var(--color-text-primary, #0f172a);
 }
 
-.workflow-steps {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
+.stage-hint-text {
+  margin-top: 4px;
   font-size: 12px;
-  color: var(--color-text-primary);
+  color: var(--color-text-secondary, #475569);
+}
+
+.stage-hint-btn {
+  margin-top: 8px;
+  height: 30px;
+  border-radius: var(--radius-sm, 6px);
+  border: 1px solid var(--color-selection-single, #417aed);
+  background: var(--color-bg-base, #fff);
+  color: var(--color-selection-single, #417aed);
+  padding: 0 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.stage-hint-btn:hover {
+  background: var(--color-bg-hover, #f1f5f9);
 }
 
 /* Rows */
@@ -772,6 +1167,12 @@ function handleKeydown(e) {
   border-color: var(--color-border-focus);
   background: linear-gradient(180deg, var(--color-bg-base), var(--color-bg-surface));
   box-shadow: 0 0 0 4px var(--color-selection-single-bg);
+}
+
+.text-limit {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 1;
 }
 
 /* tiny action buttons: consistent with ColorableLayer */

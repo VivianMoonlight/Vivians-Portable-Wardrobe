@@ -54,105 +54,113 @@
     <div class="body scrollable">
       <div v-if="!hasSelected" class="placeholder">{{ t('partList.noSelectionPlaceholder') }}</div>
 
-      <div v-else class="groups">
-        <div v-for="(groupData, gid) in displayGrouped" :key="gid" class="group-card"
-          :class="{ 'hidden-group': isHiddenGroup(gid) }">
-          <div class="group-header">
-            <div class="title" @click="toggleGroup(gid)">
-              <button class="chev" :aria-expanded="!isCollapsed(gid)">{{ isCollapsed(gid) ? '▸' : '▾' }}</button>
-              <span class="gid">{{ getGroupDisplayName(gid) }}</span>
-              <span v-if="isHiddenGroup(gid)" class="hidden-badge">{{ t('partList.hiddenBadge') }}</span>
-              <span class="count">({{ groupData.parts.length }} / {{ groupData.totalSlots }})</span>
+      <div v-else class="groups modern-layout">
+        <aside class="group-rail">
+          <button
+            v-for="entry in groupEntries"
+            :key="entry.gid"
+            class="group-rail-item"
+            :class="{ active: entry.gid === activeGroupId, hidden: isHiddenGroup(entry.gid) }"
+            @click="setActiveGroup(entry.gid)"
+          >
+            <span class="group-rail-label">{{ getGroupDisplayName(entry.gid) }}</span>
+            <span class="group-rail-count">{{ entry.groupData.parts.length }}/{{ entry.groupData.totalSlots }}</span>
+          </button>
+        </aside>
+
+        <section class="group-detail" v-if="activeGroupData">
+          <div class="group-header sticky">
+            <div class="title">
+              <span class="gid">{{ getGroupDisplayName(activeGroupId) }}</span>
+              <span v-if="isHiddenGroup(activeGroupId)" class="hidden-badge">{{ t('partList.hiddenBadge') }}</span>
+              <span class="count">({{ activeGroupData.parts.length }} / {{ activeGroupData.totalSlots }})</span>
             </div>
 
-            <!-- Group-level controls: eye & delete -->
             <div class="group-controls">
               <button
                 class="icon-btn eye-btn"
-                :class="{ active: isGroupVisible(gid) }"
+                :class="{ active: isGroupVisible(activeGroupId) }"
                 :disabled="!hasSelected"
-                @click.stop="toggleGroupVisibility(gid)"
+                @click.stop="toggleGroupVisibility(activeGroupId)"
                 :title="t('partList.groupToggleVisibilityTitle')"
-              >{{ isGroupVisible(gid) ? '👁' : '—' }}</button>
+              >{{ isGroupVisible(activeGroupId) ? '👁' : '—' }}</button>
 
               <button
                 class="icon-btn delete-btn"
-                :class="{ armed: isGroupArmed(gid) }"
+                :class="{ armed: isGroupArmed(activeGroupId) }"
                 :disabled="!hasSelected"
-                @click.stop="armGroupDelete(gid)"
+                @click.stop="armGroupDelete(activeGroupId)"
                 data-delete-button
-                :data-delete-key="`GROUP::${gid}`"
+                :data-delete-key="`GROUP::${activeGroupId}`"
                 :title="t('partList.groupDeleteTitle')"
-              >{{ isGroupArmed(gid) ? '⚠' : '✖' }}</button>
+              >{{ isGroupArmed(activeGroupId) ? '⚠' : '✖' }}</button>
             </div>
           </div>
 
-          <transition name="fade">
-            <div v-show="!isCollapsed(gid)" class="group-body">
-              <!-- 显示已有的 parts -->
-              <div v-for="(p, idx) in groupData.parts" :key="gid + '::part::' + (p.Name || idx)" class="part-row"
-                :class="{ active: isFocused(p) }" @click="focusPart(p)">
-                <div class="row-content">
-                  <div class="left-col">
-                    <div class="slot-name">{{ partGroupDescription(p) }}</div>
-                    <div class="item-name" :title="partDescription(p)">{{ partDescription(p) }}</div>
-                  </div>
+          <div class="breadcrumb" v-if="breadcrumbText">{{ breadcrumbText }}</div>
 
-                  <!-- per-part control buttons -->
-                  <div class="part-controls">
-                    <!-- replace (mutually exclusive with focus) -->
-                    <button
-                      class="icon-btn replace-btn"
-                      :class="{ active: isPartReplaceArmed(p, idx, gid) }"
-                      @click.stop="toggleReplaceForPart(p, idx, gid)"
-                      :title="t('partList.partReplaceTitle')"
-                    >⇄</button>
+          <div class="recent-strip" v-if="recentSlots.length > 0">
+            <button
+              v-for="recent in recentSlots"
+              :key="recent.key"
+              class="recent-chip"
+              @click="jumpToResult(recent, true)"
+            >{{ recent.groupLabel }} / {{ recent.slotLabel }}</button>
+          </div>
 
-                    <!-- eye: toggle visibility for this part (group name) -->
-                    <button
-                      class="icon-btn eye-btn"
-                      :class="{ active: isPartVisible(p) }"
-                      @click.stop="togglePartVisibility(p)"
-                      :disabled="!hasSelected"
-                      :title="t('partList.partVisibilityTitle')"
-                    >{{ isPartVisible(p) ? '👁' : '—' }}</button>
-
-                    <!-- delete: single click arm, single click again confirm -->
-                    <button
-                      class="icon-btn delete-btn"
-                      :class="{ armed: isPartArmed(p, idx, gid) }"
-                      @click.stop="armPartDelete(p, idx, gid)"
-                      data-delete-button
-                      :data-delete-key="partUniqueKey(p, idx, gid)"
-                      :title="t('partList.partDeleteTitle')"
-                    >{{ isPartArmed(p, idx, gid) ? '⚠' : '✖' }}</button>
-                  </div>
-                </div>
+          <div
+            v-for="row in activeGroupRows"
+            :key="row.key"
+            class="part-row"
+            :data-slot-key="row.key"
+            :class="{
+              active: row.type === 'part' ? isFocused(row.part) : isFocusedSlot(row.slot),
+              'empty-slot': row.type === 'empty',
+              clickable: row.type === 'empty',
+              highlighted: highlightedSlotKey === row.key
+            }"
+            @click="row.type === 'part' ? focusPart(row.part) : enterReplaceForEmptySlot(row.slot, activeGroupId)"
+            @mouseenter="row.type === 'part' ? onPartRowMouseEnter(row.part) : null"
+            @mouseleave="row.type === 'part' ? onPartRowMouseLeave() : null"
+          >
+            <div class="row-content">
+              <div class="left-col">
+                <div class="slot-name">{{ row.slotLabel }}</div>
+                <div class="item-name" :class="{ empty: row.type === 'empty' }" :title="row.itemLabel">{{ row.itemLabel }}</div>
               </div>
 
-              <!-- 显示空槽位：现在点击直接进入替换模式 -->
-              <div v-if="showEmptySlots" v-for="slot in groupData.emptySlots" :key="gid + '::empty::' + slot.Name"
-                class="part-row empty-slot clickable" :class="{ active: isFocusedSlot(slot) }"
-                @click="enterReplaceForEmptySlot(slot, gid)">
-                <div class="row-content">
-                  <div class="left-col">
-                    <div class="slot-name">{{ slot.Description || slot.Name }}</div>
-                    <div class="item-name empty">{{ t('partList.emptySlotLabel') }}</div>
-                  </div>
+              <div class="part-controls" v-if="row.type === 'part'" @mouseenter="onPartControlsMouseEnter" @mouseleave="onPartControlsMouseLeave">
+                <button
+                  class="icon-btn replace-btn"
+                  :class="{ active: isPartReplaceArmed(row.part, row.idx, activeGroupId) }"
+                  @click.stop="toggleReplaceForPart(row.part, row.idx, activeGroupId)"
+                  :title="t('partList.partReplaceTitle')"
+                >⇄</button>
 
-                  <div class="part-controls">
-                    <!-- no extra replace button for empty slots; clicking the row enters replace mode -->
-                  </div>
-                </div>
+                <button
+                  class="icon-btn eye-btn"
+                  :class="{ active: isPartVisible(row.part) }"
+                  @click.stop="togglePartVisibility(row.part)"
+                  :disabled="!hasSelected"
+                  :title="t('partList.partVisibilityTitle')"
+                >{{ isPartVisible(row.part) ? '👁' : '—' }}</button>
+
+                <button
+                  class="icon-btn delete-btn"
+                  :class="{ armed: isPartArmed(row.part, row.idx, activeGroupId) }"
+                  @click.stop="armPartDelete(row.part, row.idx, activeGroupId)"
+                  data-delete-button
+                  :data-delete-key="partUniqueKey(row.part, row.idx, activeGroupId)"
+                  :title="t('partList.partDeleteTitle')"
+                >{{ isPartArmed(row.part, row.idx, activeGroupId) ? '⚠' : '✖' }}</button>
               </div>
-
-              <div v-if="groupData.parts.length === 0 && (!showEmptySlots || groupData.emptySlots.length === 0)"
-                class="muted">{{ t('partList.emptyGroupLabel') }}</div>
             </div>
-          </transition>
-        </div>
+          </div>
 
-        <div v-if="Object.keys(displayGrouped).length === 0" class="placeholder">{{ t('partList.noMatch') }}</div>
+          <div v-if="activeGroupRows.length === 0" class="muted">{{ t('partList.emptyGroupLabel') }}</div>
+        </section>
+
+        <div v-if="groupEntries.length === 0" class="placeholder">{{ t('partList.noMatch') }}</div>
       </div>
 
     </div>
@@ -170,6 +178,7 @@ import {
   getAllGroupIDs
 } from '@/config/filterGroupConfig'
 import { AssetApi } from '@/utils/AssetApi'
+import * as Palette from '@/services/PaletteService'
 import { hostWindow, doc } from '@/utils/host-window.js'
 
 const { t } = useI18n()
@@ -186,11 +195,24 @@ const searchTerm = searchQueryRaw // keep original var name used by template
 const collapsed = ref(new Set()) // set of groupIDs that are collapsed
 const showHiddenGroups = ref(false) // 是否显示隐藏分组
 const showEmptySlots = ref(true) // 是否显示空槽位
+const activeGroupId = ref(null)
+const activeSlotKey = ref(null)
+const highlightedSlotKey = ref(null)
+const highlightTimerId = ref(null)
+const recentSlotKeys = ref([])
 
 // Armed / UI states for delete actions (delete arms kept local)
 const armedParts = ref(new Set()) // keys for parts prepared to delete (only one active at a time by behavior)
 const armedGroups = ref(new Set()) // groupIDs prepared to delete (only one)
 const armedAll = ref(false)        // prepared to delete entire selection
+
+// hover blink state (part list -> preview visibility flashing)
+const partHoverBlinkTimerId = ref(null)
+const partHoverBlinkState = ref(null)
+const hoveredPartForBlink = ref(null)
+const partHoverBlinkSuppressedByControls = ref(false)
+const partHoverBlinkSuppressUntil = ref(0)
+const partHoverBlinkResumeTimerId = ref(null)
 
 /* ----------------------
    Helpers for keys
@@ -210,12 +232,17 @@ function emptySlotKey(slot, gid) {
    ---------------------- */
 function onSearchInput() {
   if (!searchTerm.value) return
-  for (const gid of Object.keys(grouped.value)) {
-    const groupData = grouped.value[gid]
+  for (const gid of Object.keys(displayGrouped.value || {})) {
+    const groupData = displayGrouped.value[gid]
     if (!groupData) continue
     const parts = groupData.parts || []
-    const matched = parts.some(p => store.matchesSearchForPart ? store.matchesSearchForPart(p, searchTerm.value) : true)
-    if (matched) collapsed.value.delete(gid)
+    const slots = groupData.emptySlots || []
+    const matchedPart = parts.some(p => store.matchesSearchForPart ? store.matchesSearchForPart(p, searchTerm.value) : true)
+    const matchedSlot = slots.some(slot => `${slot?.Description || ''} ${slot?.Name || ''}`.toLowerCase().includes(String(searchTerm.value).toLowerCase()))
+    if ((matchedPart || matchedSlot) && !activeGroupId.value) {
+      activeGroupId.value = gid
+      break
+    }
   }
 }
 
@@ -281,8 +308,6 @@ function getPartSlotName(part) {
   }
   return ''
 }
-
-const hasGroups = computed(() => Object.keys(grouped.value).length > 0)
 
 const grouped = computed(() => {
   const out = {}
@@ -407,6 +432,222 @@ const filteredGrouped = computed(() => {
 
 // 最终用于显示的分组
 const displayGrouped = computed(() => filteredGrouped.value)
+const groupEntries = computed(() => Object.entries(displayGrouped.value || {}).map(([gid, groupData]) => ({ gid, groupData })))
+const hasGroups = computed(() => groupEntries.value.length > 0)
+
+function slotKeyByNames(gid, slotName) {
+  return `${gid}::slot::${slotName || ''}`
+}
+
+function parseSlotKey(slotKey) {
+  const [gid, , slotName] = String(slotKey || '').split('::')
+  return { gid: gid || '', slotName: slotName || '' }
+}
+
+const activeGroupData = computed(() => {
+  const gid = activeGroupId.value
+  if (!gid) return null
+  return displayGrouped.value?.[gid] || null
+})
+
+const activeGroupRows = computed(() => {
+  const gid = activeGroupId.value
+  const groupData = activeGroupData.value
+  if (!gid || !groupData) return []
+
+  const rows = []
+  for (let idx = 0; idx < (groupData.parts || []).length; idx++) {
+    const part = groupData.parts[idx]
+    const slotName = getPartSlotName(part)
+    rows.push({
+      key: slotKeyByNames(gid, slotName || `part-${idx}`),
+      gid,
+      type: 'part',
+      idx,
+      part,
+      slot: null,
+      slotName,
+      slotLabel: partGroupDescription(part),
+      itemLabel: partDescription(part),
+      groupLabel: getGroupDisplayName(gid)
+    })
+  }
+
+  if (showEmptySlots.value) {
+    for (const slot of (groupData.emptySlots || [])) {
+      const slotName = slot?.Name || ''
+      rows.push({
+        key: slotKeyByNames(gid, slotName),
+        gid,
+        type: 'empty',
+        idx: -1,
+        part: null,
+        slot,
+        slotName,
+        slotLabel: slot.Description || slot.Name || t('partList.emptySlotLabel'),
+        itemLabel: t('partList.emptySlotLabel'),
+        groupLabel: getGroupDisplayName(gid)
+      })
+    }
+  }
+
+  return rows
+})
+
+const breadcrumbText = computed(() => {
+  const gid = activeGroupId.value
+  if (!gid) return ''
+  const groupLabel = getGroupDisplayName(gid)
+  const slotKey = activeSlotKey.value
+  if (!slotKey) return `${groupLabel}`
+  const row = activeGroupRows.value.find(r => r.key === slotKey)
+  if (!row) return `${groupLabel}`
+  return `${groupLabel} > ${row.slotLabel} > ${row.itemLabel}`
+})
+
+const slotJumpIndex = computed(() => {
+  const entries = []
+  for (const [gid, groupData] of Object.entries(grouped.value || {})) {
+    if (!showHiddenGroups.value && checkIsHiddenGroup(gid)) continue
+
+    for (let idx = 0; idx < (groupData.parts || []).length; idx++) {
+      const part = groupData.parts[idx]
+      const slotName = getPartSlotName(part)
+      entries.push({
+        key: slotKeyByNames(gid, slotName || `part-${idx}`),
+        gid,
+        type: 'part',
+        idx,
+        part,
+        slot: null,
+        slotName,
+        slotLabel: partGroupDescription(part),
+        itemLabel: partDescription(part),
+        groupLabel: getGroupDisplayName(gid),
+        searchText: `${getGroupDisplayName(gid)} ${partGroupDescription(part)} ${partDescription(part)} used`.toLowerCase()
+      })
+    }
+
+    if (showEmptySlots.value) {
+      for (const slot of (groupData.emptySlots || [])) {
+        const slotName = slot?.Name || ''
+        const slotLabel = slot.Description || slot.Name || t('partList.emptySlotLabel')
+        entries.push({
+          key: slotKeyByNames(gid, slotName),
+          gid,
+          type: 'empty',
+          idx: -1,
+          part: null,
+          slot,
+          slotName,
+          slotLabel,
+          itemLabel: t('partList.emptySlotLabel'),
+          groupLabel: getGroupDisplayName(gid),
+          searchText: `${getGroupDisplayName(gid)} ${slotLabel} ${slotName} empty`.toLowerCase()
+        })
+      }
+    }
+  }
+  return entries
+})
+
+
+
+const recentSlots = computed(() => {
+  const map = new Map(slotJumpIndex.value.map(item => [item.key, item]))
+  return recentSlotKeys.value.map(key => map.get(key)).filter(Boolean).slice(0, 10)
+})
+
+function setActiveGroup(gid) {
+  if (!gid) return
+  activeGroupId.value = gid
+}
+
+function setHighlightedSlot(slotKey) {
+  highlightedSlotKey.value = slotKey || null
+  if (highlightTimerId.value !== null) {
+    hostWindow.clearTimeout(highlightTimerId.value)
+  }
+  if (!slotKey) return
+  highlightTimerId.value = hostWindow.setTimeout(() => {
+    highlightedSlotKey.value = null
+    highlightTimerId.value = null
+  }, 1300)
+}
+
+function rememberRecentSlot(slotKey) {
+  if (!slotKey) return
+  const next = [slotKey, ...recentSlotKeys.value.filter(key => key !== slotKey)]
+  recentSlotKeys.value = next.slice(0, 12)
+}
+
+function ensureSlotVisible(slotKey) {
+  if (!rootEl.value || !slotKey) return
+  hostWindow.requestAnimationFrame(() => {
+    const target = rootEl.value.querySelector(`[data-slot-key="${slotKey}"]`)
+    if (target && target.scrollIntoView) {
+      target.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    }
+  })
+}
+
+function jumpToResult(result, markRecent = false) {
+  if (!result) return
+  if (checkIsHiddenGroup(result.gid) && !showHiddenGroups.value) {
+    showHiddenGroups.value = true
+  }
+  activeGroupId.value = result.gid
+  activeSlotKey.value = result.key
+  if (result.type === 'part') {
+    focusPart(result.part)
+  } else {
+    enterReplaceForEmptySlot(result.slot, result.gid)
+  }
+  setHighlightedSlot(result.key)
+  ensureSlotVisible(result.key)
+  if (markRecent) rememberRecentSlot(result.key)
+}
+
+function jumpByGroupStep(step) {
+  const entries = groupEntries.value
+  if (entries.length === 0) return
+  const currentIndex = Math.max(0, entries.findIndex(item => item.gid === activeGroupId.value))
+  const nextIndex = Math.min(entries.length - 1, Math.max(0, currentIndex + step))
+  activeGroupId.value = entries[nextIndex].gid
+}
+
+function jumpByRowStep(step) {
+  const rows = activeGroupRows.value
+  if (rows.length === 0) return
+  const currentIndex = Math.max(0, rows.findIndex(item => item.key === activeSlotKey.value))
+  const nextIndex = Math.min(rows.length - 1, Math.max(0, currentIndex + step))
+  jumpToResult(rows[nextIndex], true)
+}
+
+function onPanelKeydown(event) {
+  if (!hasSelected.value) return
+  const key = event.key
+
+  if (key === '[') {
+    event.preventDefault()
+    jumpByGroupStep(-1)
+    return
+  }
+  if (key === ']') {
+    event.preventDefault()
+    jumpByGroupStep(1)
+    return
+  }
+  if (event.altKey && key === 'ArrowUp') {
+    event.preventDefault()
+    jumpByRowStep(-1)
+    return
+  }
+  if (event.altKey && key === 'ArrowDown') {
+    event.preventDefault()
+    jumpByRowStep(1)
+  }
+}
 
 function partDescription(p) {
   if (!p) return t('partList.unnamed')
@@ -428,6 +669,7 @@ function partGroupDescription(p) {
 
 // focus handling
 function focusPart(part) {
+  clearPartHoverBlinkState()
   // focusing a part cancels replace mode (mutual exclusivity)
   if (store.focusPart) {
     store.focusPart(part)
@@ -502,8 +744,190 @@ function isPartVisible(part) {
   return sel.filterList.includes(slotName)
 }
 
+function _buildBlinkFilterList(baseList, slotName, visible) {
+  const next = Array.isArray(baseList) ? baseList.slice() : []
+  const idx = next.indexOf(slotName)
+  if (visible && idx === -1) next.push(slotName)
+  if (!visible && idx !== -1) next.splice(idx, 1)
+  return next
+}
+
+function _collectVisibleSlotNamesForElement(element) {
+  if (!element || !Array.isArray(element.data)) return []
+  const names = new Set()
+  for (const p of element.data) {
+    const n = getPartSlotName(p)
+    if (n) names.add(n)
+  }
+  return Array.from(names)
+}
+
+function _buildHoverBlinkAppearance(context, visible) {
+  if (!context) return null
+  const { stackIndex, slotName } = context
+  if (typeof stackIndex !== 'number' || stackIndex < 0 || stackIndex >= store.stacks.length) return null
+
+  const renderStacks = (store.stacks || []).map((el, idx) => {
+    const baseFilterList = Array.isArray(el?.filterList)
+      ? el.filterList.slice()
+      : _collectVisibleSlotNamesForElement(el)
+    const nextFilterList = idx === stackIndex
+      ? _buildBlinkFilterList(baseFilterList, slotName, visible)
+      : baseFilterList
+    return {
+      data: Array.isArray(el?.data) ? el.data : [],
+      filterList: nextFilterList
+    }
+  })
+
+  const unexpanded = {
+    data: AssetApi.stackOutfitData(renderStacks),
+    type: 'outfit'
+  }
+  return Palette.expandedAppearanceForRendering(unexpanded, store.paletteMap)
+}
+
+function _applyPartHoverBlinkFrame(context, visible) {
+  const appearance = _buildHoverBlinkAppearance(context, visible)
+  if (!appearance) return
+  const activeRenderer = store.useOptimizedRenderer ? store.previewRenderer : store.renderer
+  store.mergedAppearanceData = appearance
+  try { activeRenderer.renderPreviewWithItem(appearance) } catch (e) { /* ignore */ }
+}
+
+function _clearPartHoverBlinkResumeTimer() {
+  const timerId = partHoverBlinkResumeTimerId.value
+  if (timerId !== null) {
+    hostWindow.clearTimeout(timerId)
+    partHoverBlinkResumeTimerId.value = null
+  }
+}
+
+function _isPartHoverBlinkSuppressed() {
+  return partHoverBlinkSuppressedByControls.value || Date.now() < partHoverBlinkSuppressUntil.value
+}
+
+function _schedulePartHoverBlinkResumeIfNeeded() {
+  _clearPartHoverBlinkResumeTimer()
+  if (partHoverBlinkSuppressedByControls.value) return
+  if (!hoveredPartForBlink.value) return
+
+  const remain = partHoverBlinkSuppressUntil.value - Date.now()
+  if (remain <= 0) {
+    startPartHoverBlink(hoveredPartForBlink.value)
+    return
+  }
+
+  partHoverBlinkResumeTimerId.value = hostWindow.setTimeout(() => {
+    partHoverBlinkResumeTimerId.value = null
+    if (!hoveredPartForBlink.value) return
+    if (_isPartHoverBlinkSuppressed()) {
+      _schedulePartHoverBlinkResumeIfNeeded()
+      return
+    }
+    startPartHoverBlink(hoveredPartForBlink.value)
+  }, remain)
+}
+
+function suspendPartHoverBlink(durationMs = 700) {
+  const until = Date.now() + Math.max(0, durationMs)
+  if (until > partHoverBlinkSuppressUntil.value) {
+    partHoverBlinkSuppressUntil.value = until
+  }
+  stopPartHoverBlink()
+  _schedulePartHoverBlinkResumeIfNeeded()
+}
+
+function onPartRowMouseEnter(part) {
+  if (isFocused(part)) {
+    clearPartHoverBlinkState()
+    return
+  }
+  hoveredPartForBlink.value = part || null
+  if (!hoveredPartForBlink.value) return
+  if (_isPartHoverBlinkSuppressed()) {
+    _schedulePartHoverBlinkResumeIfNeeded()
+    return
+  }
+  startPartHoverBlink(hoveredPartForBlink.value)
+}
+
+function onPartRowMouseLeave() {
+  hoveredPartForBlink.value = null
+  _clearPartHoverBlinkResumeTimer()
+  stopPartHoverBlink()
+}
+
+function onPartControlsMouseEnter() {
+  partHoverBlinkSuppressedByControls.value = true
+  stopPartHoverBlink()
+  _clearPartHoverBlinkResumeTimer()
+}
+
+function onPartControlsMouseLeave() {
+  partHoverBlinkSuppressedByControls.value = false
+  if (!hoveredPartForBlink.value) return
+  if (_isPartHoverBlinkSuppressed()) {
+    _schedulePartHoverBlinkResumeIfNeeded()
+    return
+  }
+  startPartHoverBlink(hoveredPartForBlink.value)
+}
+
+function startPartHoverBlink(part) {
+  if (!hasSelected.value || !part) return
+  const slotName = getPartSlotName(part)
+  const stackIndex = store.selectedIndex
+  if (!slotName || stackIndex < 0) return
+
+  const current = partHoverBlinkState.value
+  if (current && current.stackIndex === stackIndex && current.slotName === slotName) return
+
+  stopPartHoverBlink()
+
+  const context = {
+    stackIndex,
+    slotName,
+    visible: true
+  }
+  partHoverBlinkState.value = context
+
+  // first frame: hide, then toggle show/hide periodically
+  context.visible = false
+  _applyPartHoverBlinkFrame(context, context.visible)
+
+  partHoverBlinkTimerId.value = hostWindow.setInterval(() => {
+    const latest = partHoverBlinkState.value
+    if (!latest) return
+    latest.visible = !latest.visible
+    _applyPartHoverBlinkFrame(latest, latest.visible)
+  }, 260)
+}
+
+function stopPartHoverBlink() {
+  const timerId = partHoverBlinkTimerId.value
+  if (timerId !== null) {
+    hostWindow.clearInterval(timerId)
+    partHoverBlinkTimerId.value = null
+  }
+
+  const context = partHoverBlinkState.value
+  partHoverBlinkState.value = null
+  if (!context) return
+  try { store.refreshMergedAppearanceData() } catch (e) { /* ignore */ }
+}
+
+function clearPartHoverBlinkState() {
+  hoveredPartForBlink.value = null
+  partHoverBlinkSuppressedByControls.value = false
+  partHoverBlinkSuppressUntil.value = 0
+  _clearPartHoverBlinkResumeTimer()
+  stopPartHoverBlink()
+}
+
 function togglePartVisibility(part) {
   if (!hasSelected.value || !part) return
+  suspendPartHoverBlink(700)
   const idx = store.selectedIndex
   if (idx < 0) return
   const slotName = getPartSlotName(part)
@@ -535,6 +959,7 @@ function isGroupVisible(gid) {
 
 function toggleGroupVisibility(gid) {
   if (!hasSelected.value) return
+  suspendPartHoverBlink(700)
   const idx = store.selectedIndex
   if (idx < 0) return
   let fl = selected.value.filterList
@@ -570,6 +995,7 @@ const isAllVisible = computed(() => {
 
 function toggleAllVisibility() {
   if (!hasSelected.value) return
+  suspendPartHoverBlink(700)
   const idx = store.selectedIndex
   if (idx < 0) return
   const sel = selected.value
@@ -723,6 +1149,12 @@ function toggleReplaceForPart(part, idx, gid) {
   }
 }
 
+function returnToPolish() {
+  store.clearReplaceTarget()
+  store.setTaskStage('polish')
+  store.openContextPanel('inspector', 'partlist-return-polish')
+}
+
 function isPartReplaceArmed(part, idx, gid) {
   const key = partUniqueKey(part, idx, gid)
   const current = store.replaceTarget
@@ -736,16 +1168,65 @@ function isPartReplaceArmed(part, idx, gid) {
 // Watch for index changes (switching between different outfits/stacks)
 // Only reset the view state (collapsed groups, search) when the user actively switches stacks.
 watch(() => store.selectedIndex, () => {
+  clearPartHoverBlinkState()
   searchTerm.value = ''
+  activeSlotKey.value = null
+  highlightedSlotKey.value = null
   collapsed.value = new Set()
+})
+
+watch(() => `${store.focusedPartIndex?.stackIndex ?? 'n'}:${store.focusedPartIndex?.partIndex ?? 'n'}`, () => {
+  clearPartHoverBlinkState()
+  const part = store.focusedPart
+  if (!part) return
+  const gid = classifyGroup(part)
+  const slotName = getPartSlotName(part)
+  if (gid) activeGroupId.value = gid
+  if (gid && slotName) {
+    const key = slotKeyByNames(gid, slotName)
+    activeSlotKey.value = key
+    setHighlightedSlot(key)
+    ensureSlotVisible(key)
+    rememberRecentSlot(key)
+  }
 })
 
 // Watch for data changes (content updates within same stack OR stack switch)
 // Clear transient interaction states (delete confirmation, replace target) to ensure safety.
 watch(selected, () => {
+  clearPartHoverBlinkState()
   clearArmedStates()
   store.clearReplaceTarget()
 })
+
+watch(groupEntries, (entries) => {
+  if (!Array.isArray(entries) || entries.length === 0) {
+    activeGroupId.value = null
+    return
+  }
+  const exists = entries.some(item => item.gid === activeGroupId.value)
+  if (!exists) {
+    activeGroupId.value = entries[0].gid
+  }
+}, { immediate: true })
+
+
+
+watch(() => store.replaceTarget, (nextTarget) => {
+  if (!nextTarget || !nextTarget.active) return
+  const item = nextTarget.item
+  if (!item) return
+  const gid = classifyGroup(item)
+  const slotName = item.Group || item.Name || getPartSlotName(item)
+  if (gid) activeGroupId.value = gid
+  if (gid && slotName) {
+    const key = slotKeyByNames(gid, slotName)
+    activeSlotKey.value = key
+    setHighlightedSlot(key)
+    ensureSlotVisible(key)
+    rememberRecentSlot(key)
+  }
+}, { deep: true })
 
 /* -------------------------
    Global click handling to disarm when clicking elsewhere
@@ -770,10 +1251,17 @@ function onDocumentClick(e) {
 
 onMounted(() => {
   doc.addEventListener('click', onDocumentClick, true) // use capture to be more robust
+  doc.addEventListener('keydown', onPanelKeydown, true)
 })
 
 onBeforeUnmount(() => {
+  clearPartHoverBlinkState()
+  if (highlightTimerId.value !== null) {
+    hostWindow.clearTimeout(highlightTimerId.value)
+    highlightTimerId.value = null
+  }
   doc.removeEventListener('click', onDocumentClick, true)
+  doc.removeEventListener('keydown', onPanelKeydown, true)
 })
 </script>
 
@@ -785,6 +1273,7 @@ onBeforeUnmount(() => {
   gap: 8px;
   box-sizing: border-box;
   padding: 8px;
+  min-width: 0;
 }
 
 /* header */
@@ -942,6 +1431,95 @@ button:focus,
   box-sizing: border-box;
 }
 
+.modern-layout {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 12px;
+  min-height: 0;
+}
+
+.group-rail {
+  border-right: 1px solid var(--color-border-base);
+  padding-right: 8px;
+  overflow: auto;
+  min-height: 0;
+}
+
+.group-rail-item {
+  width: 100%;
+  border: 1px solid var(--color-border-light, #f1f5f9);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--color-bg-base, #fff);
+  padding: 8px;
+  margin-bottom: 6px;
+  cursor: pointer;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.group-rail-item.active {
+  border-color: var(--color-border-focus, #94a3b8);
+  background: var(--color-bg-hover, #f1f5f9);
+}
+
+.group-rail-item.hidden {
+  opacity: 0.65;
+}
+
+.group-rail-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-primary, #0f172a);
+}
+
+.group-rail-count {
+  font-size: 11px;
+  color: var(--color-text-tertiary, #64748b);
+}
+
+.group-detail {
+  min-height: 0;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.group-header.sticky {
+  position: sticky;
+  top: 0;
+  background: var(--color-bg-base, #fff);
+  z-index: 1;
+  padding-bottom: 6px;
+}
+
+.breadcrumb {
+  font-size: 12px;
+  color: var(--color-text-secondary, #475569);
+  margin: 2px 0 8px;
+}
+
+.recent-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.recent-chip {
+  border: 1px solid var(--color-border-light, #f1f5f9);
+  border-radius: 999px;
+  background: var(--color-bg-base, #fff);
+  color: var(--color-text-secondary, #475569);
+  font-size: 11px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.recent-chip:hover {
+  background: var(--color-bg-hover, #f1f5f9);
+}
+
 /* group card: 保持平面化 */
 .group-card {
   border-radius: var(--radius-sm, 6px);
@@ -1042,6 +1620,11 @@ button:focus,
   background: var(--color-selection-single-bg);
   padding-left: 9px;
   /* 保持内容对齐（minimize shift: 9 = 12 - 3） */
+}
+
+.part-row.highlighted {
+  box-shadow: inset 0 0 0 1px var(--color-border-focus, #94a3b8);
+  background: var(--color-bg-hover, #f1f5f9);
 }
 
 /* empty slot 行同样处理 */

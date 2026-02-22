@@ -4,12 +4,14 @@ import { useI18n } from 'vue-i18n'
 import FileThumbnail from "./FileThumbnail.vue";
 import { useFileSystemStore } from '@/stores/fileSystemStore'
 import { useStudioStore } from '@/stores/studioStore'
-import { ExternalAdapter } from '@/utils/external_adapters.js'
 import { hostWindow, doc } from '@/utils/host-window.js'
-import { injectTheme } from '@/composables/useTheme'
+import { injectTheme } from '@/services/ThemeService'
 import * as DialogService from '@/services/DialogService.js'
 
-const props = defineProps({ item: Object });
+const props = defineProps({
+  item: Object,
+  viewMode: { type: String, default: 'large' }
+});
 const emit = defineEmits(["open-folder", "remove", "rename", "sent-to-studio"]);
 
 const fsStore = useFileSystemStore();
@@ -134,20 +136,13 @@ function sendToStudio() {
 function applyActiveToCharacter() {
   closeContextMenu();
 
-  const active = fsStore.previewItem;
-  if (!active || !active.data || !Array.isArray(active.data) || active.data.length === 0) {
-    return;
-  }
-
-  const target = fsStore.character || hostWindow.CurrentCharacter || hostWindow.Player;
-  if (!target) {
-    console.error('target character not found');
+  const data = props.item?.data;
+  if (!Array.isArray(data) || data.length === 0) {
     return;
   }
 
   try {
-    // ExternalAdapter 接口： applyOutfitToCharacter(character, outfitData)
-    ExternalAdapter.applyOutfitToCharacter(toRaw(target), toRaw(active.data));
+    fsStore.applyFilteredOutfitToCharacter({ outfitData: toRaw(data) });
   } catch (e) {
     console.error('applyActiveToCharacter failed', e);
   }
@@ -178,14 +173,8 @@ function applyThisItemToCharacter() {
     return;
   }
 
-  const target = fsStore.character || hostWindow.CurrentCharacter || hostWindow.Player;
-  if (!target) {
-    console.error('target character not found');
-    return;
-  }
-
   try {
-    ExternalAdapter.applyOutfitToCharacter(toRaw(target), toRaw(data));
+    fsStore.applyFilteredOutfitToCharacter({ outfitData: toRaw(data) });
   } catch (e) {
     console.error('applyThisItemToCharacter failed', e);
   }
@@ -306,12 +295,22 @@ const draggable = !!props.item
 </script>
 
 <template>
-  <div ref="rootEl" class="file-item-card" :class="[themeClass, { 'drop-target': isDragOver }]" @click="onClick"
+  <div ref="rootEl" class="file-item-card" :class="[themeClass, `view-${viewMode}`, { 'drop-target': isDragOver }]" @click="onClick"
     @dblclick="onDoubleClick" @contextmenu.capture="onContextMenu" @mouseenter="onMouseEnter" @mouseleave="onMouseLeave"
     :draggable="draggable" @dragstart="onDragStart" @dragend="onDragEnd" @dragover="onDragOver" @dragleave="onDragLeave"
     @drop="onDrop">
     <div class="thumb-wrap">
-      <FileThumbnail :item="item" />
+      <FileThumbnail v-if="viewMode !== 'list'" :item="item" />
+      <div v-else class="list-icon" aria-hidden="true">
+        <svg v-if="item && item.type === 'folder'" viewBox="0 0 24 24" class="icon-folder">
+          <path d="M3 6.5A2.5 2.5 0 0 1 5.5 4h4l2 2H18.5A2.5 2.5 0 0 1 21 8.5v8A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" />
+        </svg>
+        <svg v-else viewBox="0 0 24 24" class="icon-outfit">
+          <rect x="5" y="3" width="14" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="1.6" />
+          <circle cx="12" cy="7" r="1.5" fill="currentColor" />
+          <path d="M9 10 L8.5 14 Q8.5 16.5 10 18 L14 18 Q15.5 16.5 15.5 14 L15 10 Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      </div>
     </div>
     <div class="file-info">
       <span class="file-name" :title="item.name">{{ item.name }}</span>
@@ -348,15 +347,14 @@ const draggable = !!props.item
   background: var(--color-bg-surface, #f6f7fa);
   border-radius: var(--radius-lg, 16px);
   box-shadow: var(--shadow-sm, 0 2px 8px #dde1ee33);
-  padding: 18px 15px 16px 15px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
   min-width: 120px;
-  width: 200px;
-  min-height: 220px;
-  height: 400px;
+  width: 100%;
+  height: auto;
   transition: box-shadow var(--transition-fast, 0.15s), transform 0.12s;
   cursor: pointer;
   border: 1px solid var(--color-border-base, #e4e9ee);
@@ -370,14 +368,14 @@ const draggable = !!props.item
 
 .thumb-wrap {
   width: 100%;
-  height: 500px;
+  aspect-ratio: 9 / 16;
   background: var(--color-bg-panel, #f0f2f6);
   border-radius: var(--radius-xl, 12px);
   display: flex;
   align-items: center;
   justify-content: center;
   border: 1.2px solid var(--color-border-light, #e6e8ec);
-  margin-bottom: 10px;
+  margin-bottom: 8px;
   overflow: hidden;
   position: relative;
 }
@@ -390,7 +388,7 @@ const draggable = !!props.item
   font-weight: var(--font-weight-medium, 500);
   font-size: var(--font-size-md, 14px);
   color: var(--color-text-primary, #343952);
-  margin-bottom: var(--space-sm, 8px);
+  margin-bottom: 0;
   word-break: break-all;
   min-height: 24px;
 }
@@ -402,6 +400,86 @@ const draggable = !!props.item
   text-overflow: ellipsis;
   white-space: nowrap;
   display: inline-block;
+}
+
+.file-item-card.view-small {
+  padding: 8px;
+}
+
+.file-item-card.view-small .thumb-wrap {
+  aspect-ratio: 9 / 16;
+  margin-bottom: 6px;
+}
+
+.file-item-card.view-small .file-name {
+  font-size: var(--font-size-sm, 12px);
+}
+
+.file-item-card.view-list {
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: 72px;
+  height: auto;
+  padding: 8px 10px;
+  border-radius: var(--radius-md, 10px);
+  gap: 10px;
+}
+
+.file-item-card.view-list .thumb-wrap {
+  width: 52px;
+  min-width: 52px;
+  aspect-ratio: 9 / 16;
+  margin-bottom: 0;
+}
+
+.file-item-card.view-list .thumb-wrap {
+  aspect-ratio: auto;
+  height: 52px;
+  background: var(--color-bg-panel, #f0f2f6);
+}
+
+.file-item-card.view-list .list-icon {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-secondary, #64748b);
+}
+
+.file-item-card.view-list .list-icon svg {
+  width: 22px;
+  height: 22px;
+  display: block;
+}
+
+.file-item-card.view-list .list-icon .icon-folder {
+  background: var(--color-info-bg, rgba(59, 130, 246, 0.12));
+  padding: 3px;
+  border-radius: 5px;
+  color: var(--color-info, #3b82f6);
+}
+
+.file-item-card.view-list .list-icon .icon-outfit {
+  background: var(--color-accent-purple-bg, rgba(168, 85, 247, 0.12));
+  padding: 3px;
+  border-radius: 5px;
+  color: var(--color-accent-purple, #a855f7);
+}
+
+.file-item-card.view-list .file-name {
+  line-height: 1.2;
+}
+
+.file-item-card.view-list .file-info {
+  justify-content: flex-start;
+  margin-bottom: 0;
+  padding-left: 0;
+}
+
+.file-item-card.view-list .file-name {
+  max-width: none;
 }
 
 /* 右键菜单样式（fixed 定位，基于 left/top） */

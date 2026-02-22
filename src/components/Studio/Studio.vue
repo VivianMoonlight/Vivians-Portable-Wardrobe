@@ -1,21 +1,21 @@
 <template>
-  <teleport to="body">
-    <div v-if="visible" class="studio-container">
-      <div :class="themeClass">
-        <div class="studio-window" role="dialog" :aria-label="t('studio.ariaLabel')" :style="panelStyle">
+  <component :is="props.embedded ? 'div' : 'teleport'" v-bind="props.embedded ? {} : { to: 'body' }">
+    <div v-if="props.embedded || visible" class="studio-container" :class="{ embedded: props.embedded }">
+      <div class="studio-theme-root" :class="themeClass">
+        <div class="studio-window" :class="{ embedded: props.embedded }" :role="props.embedded ? 'region' : 'dialog'" :aria-label="t('studio.ariaLabel')" :style="panelStyle">
           <!-- Resize handles -->
-          <div class="resize-handle top" @pointerdown.stop.prevent="startResize('top', $event)"></div>
-          <div class="resize-handle right" @pointerdown.stop.prevent="startResize('right', $event)"></div>
-          <div class="resize-handle bottom" @pointerdown.stop.prevent="startResize('bottom', $event)"></div>
-          <div class="resize-handle left" @pointerdown.stop.prevent="startResize('left', $event)"></div>
-          <div class="resize-handle corner top-left" @pointerdown.stop.prevent="startResize('top-left', $event)"></div>
-          <div class="resize-handle corner top-right" @pointerdown.stop.prevent="startResize('top-right', $event)"></div>
-          <div class="resize-handle corner bottom-right" @pointerdown.stop.prevent="startResize('bottom-right', $event)">
+          <div v-if="!props.embedded" class="resize-handle top" @pointerdown.stop.prevent="startResize('top', $event)"></div>
+          <div v-if="!props.embedded" class="resize-handle right" @pointerdown.stop.prevent="startResize('right', $event)"></div>
+          <div v-if="!props.embedded" class="resize-handle bottom" @pointerdown.stop.prevent="startResize('bottom', $event)"></div>
+          <div v-if="!props.embedded" class="resize-handle left" @pointerdown.stop.prevent="startResize('left', $event)"></div>
+          <div v-if="!props.embedded" class="resize-handle corner top-left" @pointerdown.stop.prevent="startResize('top-left', $event)"></div>
+          <div v-if="!props.embedded" class="resize-handle corner top-right" @pointerdown.stop.prevent="startResize('top-right', $event)"></div>
+          <div v-if="!props.embedded" class="resize-handle corner bottom-right" @pointerdown.stop.prevent="startResize('bottom-right', $event)">
           </div>
-          <div class="resize-handle corner bottom-left" @pointerdown.stop.prevent="startResize('bottom-left', $event)">
+          <div v-if="!props.embedded" class="resize-handle corner bottom-left" @pointerdown.stop.prevent="startResize('bottom-left', $event)">
           </div>
 
-          <header class="studio-header" @pointerdown.stop.prevent="startDrag">
+          <header class="studio-header" @pointerdown.stop.prevent="!props.embedded && startDrag($event)">
             <div class="header-title">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                 stroke-linecap="round" stroke-linejoin="round">
@@ -26,94 +26,6 @@
             </div>
 
             <div class="studio-toolbar">
-              <!-- Group 1: Stack IO (Standard File Icons) -->
-              <div class="tool-group">
-                <BaseButton 
-                  variant="ghost" 
-                  icon-only 
-                  size="sm"
-                  @pointerdown.stop.prevent 
-                  @click="onSaveStacks"
-                  :title="t('studio.saveStacksTitle')"
-                  :aria-label="t('studio.saveStacksTitle')"
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v13a2 2 0 0 1-2 2z"></path>
-                    <polyline points="17 21 17 13 7 13 7 21"></polyline>
-                    <polyline points="7 3 7 8 15 8"></polyline>
-                  </svg>
-                </BaseButton>
-                <BaseButton 
-                  variant="ghost" 
-                  icon-only 
-                  size="sm"
-                  @pointerdown.stop.prevent 
-                  @click="onLoadStacksClick"
-                  :title="t('studio.loadStacksTitle')"
-                  :aria-label="t('studio.loadStacksTitle')"
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-                  </svg>
-                </BaseButton>
-              </div>
-
-              <div class="divider"></div>
-
-              <!-- Group 2: Palette IO & Toggle -->
-              <div class="tool-group">
-                <!-- Save Palette: Floppy with Swatch Grid -->
-                <BaseButton 
-                  variant="ghost" 
-                  icon-only 
-                  size="sm"
-                  @pointerdown.stop.prevent 
-                  @click="onSavePalette"
-                  :title="t('studio.savePaletteTitle')"
-                  :aria-label="t('studio.savePaletteTitle')"
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round">
-                    <!-- Floppy Disk Base -->
-                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v13a2 2 0 0 1-2 2z"></path>
-                    <polyline points="17 21 17 13 7 13 7 21"></polyline>
-                    <polyline points="7 3 7 8 15 8"></polyline>
-                    <!-- 2x2 Grid representing Palette/Swatches inside the label area -->
-                    <rect x="9" y="15" width="2" height="2" fill="currentColor" stroke="none"></rect>
-                    <rect x="13" y="15" width="2" height="2" fill="currentColor" stroke="none"></rect>
-                    <rect x="9" y="18" width="2" height="2" fill="currentColor" stroke="none"></rect>
-                    <rect x="13" y="18" width="2" height="2" fill="currentColor" stroke="none"></rect>
-                  </svg>
-                </BaseButton>
-
-                <!-- Load Palette: Folder with Swatch Grid -->
-                <BaseButton 
-                  variant="ghost" 
-                  icon-only 
-                  size="sm"
-                  @pointerdown.stop.prevent 
-                  @click="onLoadPaletteClick"
-                  :title="t('studio.loadPaletteTitle')"
-                  :aria-label="t('studio.loadPaletteTitle')"
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round">
-                    <!-- Folder Base -->
-                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-                    <!-- 2x2 Grid representing Palette/Swatches on the folder body -->
-                    <rect x="9" y="11" width="2" height="2" fill="currentColor" stroke="none"></rect>
-                    <rect x="13" y="11" width="2" height="2" fill="currentColor" stroke="none"></rect>
-                    <rect x="9" y="14" width="2" height="2" fill="currentColor" stroke="none"></rect>
-                    <rect x="13" y="14" width="2" height="2" fill="currentColor" stroke="none"></rect>
-                  </svg>
-                </BaseButton>
-
-              </div>
-
-              <div class="divider"></div>
-
               <!-- Group 3: Layer Manager -->
               <div class="tool-group">
                 <BaseButton 
@@ -179,7 +91,7 @@
                   @click="toggleSavesManager"
                   :title="t('studio.savesManager') || 'Manage Saves'"
                   :aria-label="t('studio.savesManager') || 'Manage Saves'"
-                  :class="{ active: savesManagerActive }"
+                  :class="{ active: showSavesManager }"
                 >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                     stroke-linecap="round" stroke-linejoin="round">
@@ -374,6 +286,7 @@
 
               <!-- Close Button -->
               <BaseButton
+                v-if="!props.embedded"
                 variant="ghost"
                 icon-only
                 size="sm"
@@ -421,55 +334,63 @@
           <div class="studio-body" :class="{ 'is-mobile': isMobile }">
             <!-- Mobile tab switcher -->
             <div v-if="isMobile" class="mobile-tabs u-show-mobile">
-              <button @click="mobileTab = 'preview'" :class="{ active: mobileTab === 'preview' }">Preview</button>
-              <button @click="mobileTab = 'stacks'" :class="{ active: mobileTab === 'stacks' }">Stacks</button>
-              <button @click="mobileTab = 'parts'" :class="{ active: mobileTab === 'parts' }">Parts</button>
-              <button v-if="!isReplaceMode" @click="mobileTab = 'inspector'" :class="{ active: mobileTab === 'inspector' }">Inspector</button>
-              <button v-if="isReplaceMode" @click="mobileTab = 'assets'" :class="{ active: mobileTab === 'assets' }">Assets</button>
+              <button @click="mobileTab = 'structure'" :class="{ active: mobileTab === 'structure' }">结构</button>
+              <button @click="mobileTab = 'replace'" :class="{ active: mobileTab === 'replace' }">替换</button>
+              <button @click="mobileTab = 'property'" :class="{ active: mobileTab === 'property' }">属性</button>
+              <button @click="mobileTab = 'history'" :class="{ active: mobileTab === 'history' }">历史</button>
             </div>
 
-            <!-- 左侧：Preview -->
-            <aside v-if="!isMobile || mobileTab === 'preview'" class="panel-section studio-left">
+            <aside v-if="!isMobile || mobileTab === 'structure'" class="panel-section studio-structure">
+              <div class="structure-panels">
+                <div class="structure-folio-rail" @pointerdown.stop>
+                  <button class="folio-step" :class="{ active: activeLeftSheet === 'stack' }" :title="leftSheetLabels.stack" @click="setActiveLeftSheet('stack')">{{ leftSheetLabels.stack }}</button>
+                  <span class="folio-sep">→</span>
+                  <button class="folio-step" :class="{ active: activeLeftSheet === 'part' }" :title="leftSheetLabels.part" @click="setActiveLeftSheet('part')">{{ leftSheetLabels.part }}</button>
+                  <span class="folio-sep">→</span>
+                  <button class="folio-step" :class="{ active: activeLeftSheet === 'layer' }" :title="leftSheetLabels.layer" @click="setActiveLeftSheet('layer')">{{ leftSheetLabels.layer }}</button>
+                </div>
+
+                <div v-show="activeLeftSheet === 'stack'" class="structure-stack"><StackList /></div>
+                <div v-show="activeLeftSheet === 'part'" class="structure-parts"><PartListPanel /></div>
+                <div v-show="activeLeftSheet === 'layer'" class="structure-layers"><PartInspectorPanel /></div>
+              </div>
+            </aside>
+
+            <aside v-if="!isMobile || mobileTab === 'property'" class="panel-section studio-center">
               <PreviewWidget />
             </aside>
 
-            <!-- 中间：StackList (窄) + PartList (宽) -->
-            <aside v-if="!isMobile || mobileTab === 'stacks'" class="panel-section stack-column">
-              <StackList />
-            </aside>
-            <aside v-if="!isMobile || mobileTab === 'parts'" class="panel-section parts-column">
-              <PartListPanel />
+            <aside v-if="!isMobile || mobileTab === 'property'" class="panel-section studio-context">
+              <PartInspectorPanel v-if="isMobile && store.activeContextPanel === 'inspector'" />
+              <AssetSelectorPanel v-else-if="store.activeContextPanel === 'asset'" />
+              <PalettePanel v-else-if="store.activeContextPanel === 'palette'" />
             </aside>
 
-            <!-- Inspector 列：只在非替换模式显示 -->
-            <aside v-if="(!isMobile || mobileTab === 'inspector') && !isReplaceMode" class="panel-section studio-right">
-              <PartInspectorPanel />
-            </aside>
-
-            <!-- Asset selector 列：只在替换模式显示 -->
-            <aside v-if="(!isMobile || mobileTab === 'assets') && isReplaceMode" class="panel-section studio-assets">
+            <aside v-if="isMobile && mobileTab === 'replace'" class="panel-section studio-context">
               <AssetSelectorPanel />
             </aside>
 
-            <!-- Palette 单独列 -->
-            <aside v-if="store.palettePanelVisible" class="panel-section studio-palette">
-              <PalettePanel @close="onPaletteClose" />
-            </aside>
-
-            <!-- Layer Manager 单独列 -->
-            <aside v-if="store.layerManagerActive" class="panel-section studio-layer-manager">
-              <LayerManagerWidget />
-            </aside>
-
-            <!-- History Panel 单独列 -->
-            <aside v-if="store.historyPanelVisible" class="panel-section studio-history">
+            <aside v-if="isMobile && mobileTab === 'history'" class="panel-section studio-history">
               <HistoryPanel />
             </aside>
 
-            <!-- Saves Manager Panel 单独列 -->
-            <aside v-if="savesManagerActive" class="panel-section saves-manager-panel">
+            <aside v-if="showLayerManager" class="panel-section studio-layer-manager">
+              <LayerManagerWidget />
+            </aside>
+
+            <aside v-if="showFullHistory" class="panel-section studio-history">
+              <HistoryPanel />
+            </aside>
+
+            <aside v-if="showSavesManager" class="panel-section saves-manager-panel">
               <SavesManager @close="toggleSavesManager" />
             </aside>
+          </div>
+
+          <div v-if="showMiniHistory" class="mini-history-bar" @pointerdown.stop>
+            <BaseButton variant="ghost" size="sm" @click="doUndo" :disabled="!canUndo">Undo</BaseButton>
+            <BaseButton variant="ghost" size="sm" @click="doRedo" :disabled="!canRedo">Redo</BaseButton>
+            <BaseButton variant="ghost" size="sm" @click="jumpToLatest" :disabled="!canRedo">Jump Latest</BaseButton>
           </div>
         </div>
       </div>
@@ -480,7 +401,7 @@
       @change="onStacksFileSelected" />
     <input ref="paletteFileInput" type="file" accept="application/json" style="display:none"
       @change="onPaletteFileSelected" />
-  </teleport>
+  </component>
 </template>
 
 <script setup>
@@ -501,9 +422,9 @@ import { useStudioStore } from '@/stores/studioStore'
 import { useFileSystemStore } from '@/stores/fileSystemStore'
 import { ExternalAdapter } from '@/utils/external_adapters'
 import { hostWindow, doc } from '@/utils/host-window.js'
-import { injectTheme } from '@/composables/useTheme'
-import { useUndoRedo } from '@/composables/useUndoRedo'
-import { useAutoSave } from '@/composables/useAutoSave'
+import { injectTheme } from '@/services/ThemeService'
+import { useUndoRedo } from '@/services/UndoRedoService'
+import { useAutoSave } from '@/services/AutoSaveService'
 import * as DialogService from '@/services/DialogService.js'
 
 const { t } = useI18n()
@@ -537,15 +458,13 @@ const autoSaveControls = useAutoSave(store, {
 const showRestoreBanner = ref(false)
 const restoreInfo = ref(null)
 
-// Saves Manager state
-const savesManagerActive = ref(false)
-
 // Inject theme
 const injectedTheme = injectTheme()
 const themeClass = computed(() => injectedTheme.themeClass())
 
 const props = defineProps({
-  visible: { type: Boolean, default: false }
+  visible: { type: Boolean, default: false },
+  embedded: { type: Boolean, default: false }
 })
 const emit = defineEmits(['close'])
 function close() { emit('close') }
@@ -562,9 +481,103 @@ const startRect = ref({ x: 0, y: 0, w: 0, h: 0 })
 
 const MOBILE_BREAKPOINT = 900
 const isMobile = ref(false)
-const mobileTab = ref('preview') // 'preview', 'stacks', 'parts', 'inspector'
+const mobileTab = computed({
+  get: () => store.mobileTab,
+  set: (value) => {
+    store.mobileTab = value
+    store.persistUiLayout()
+  }
+})
+
+const showLayerManager = computed(() => store.workspaceMode === 'pro' && store.panelStates.layer !== 'hidden')
+const showFullHistory = computed(() => store.panelStates.history !== 'hidden' && !isMobile.value)
+const showMiniHistory = computed(() => !isMobile.value && !showFullHistory.value)
+const showSavesManager = computed(() => store.workspaceMode === 'pro' && store.panelStates.saves !== 'hidden')
+const canUndo = computed(() => !!store.canUndo && store.canUndo())
+const canRedo = computed(() => !!store.canRedo && store.canRedo())
+const activeLeftSheet = ref('part')
+const hasSelectedStack = computed(() => typeof store.selectedIndex === 'number' && store.selectedIndex >= 0)
+const hasFocusedPart = computed(() => typeof store.focusedPartIndex?.stackIndex === 'number' && typeof store.focusedPartIndex?.partIndex === 'number')
+const selectedStackName = computed(() => {
+  const stack = store.selectedElement
+  const raw = stack?.name || stack?.Name
+  return (typeof raw === 'string' && raw.trim()) ? raw.trim() : 'stack'
+})
+const focusedPartName = computed(() => {
+  const part = store.focusedPart
+  if (!part) return 'part'
+  const asset = store.resolveAssetForPart ? store.resolveAssetForPart(part) : null
+  const raw =
+    asset?.Description ||
+    asset?.Desc ||
+    asset?.description ||
+    (store.getGroupDescriptionForPart ? store.getGroupDescriptionForPart(part) : null) ||
+    part?.Asset?.Description ||
+    part?.Asset?.Group?.Description ||
+    part?.Name ||
+    part?.name ||
+    part?.Asset?.Name
+  return (typeof raw === 'string' && raw.trim()) ? raw.trim() : 'part'
+})
+const leftSheetLabels = computed(() => ({
+  stack: 'stacks',
+  part: selectedStackName.value,
+  layer: focusedPartName.value
+}))
+
+function setActiveLeftSheet(sheet) {
+  if (!['stack', 'part', 'layer'].includes(sheet)) return
+  activeLeftSheet.value = sheet
+}
+
+watch(() => store.activeContextPanel, (panel) => {
+  if (panel === 'inspector') activeLeftSheet.value = 'layer'
+  if (panel === 'asset') activeLeftSheet.value = 'part'
+})
+
+watch(() => store.taskStage, (stage) => {
+  if (stage === 'assemble' && !hasSelectedStack.value) {
+    activeLeftSheet.value = 'stack'
+    return
+  }
+  if (stage === 'replace') {
+    activeLeftSheet.value = 'part'
+    return
+  }
+  if (stage === 'polish' || stage === 'commit') {
+    activeLeftSheet.value = hasFocusedPart.value ? 'layer' : 'part'
+  }
+})
+
+watch(() => store.selectedIndex, (idx) => {
+  if (typeof idx !== 'number' || idx < 0) {
+    activeLeftSheet.value = 'stack'
+    return
+  }
+  if (activeLeftSheet.value === 'stack') {
+    activeLeftSheet.value = 'part'
+  }
+})
+
+watch(() => [store.focusedPartIndex?.stackIndex, store.focusedPartIndex?.partIndex], ([stackIndex, partIndex]) => {
+  if (typeof stackIndex === 'number' && typeof partIndex === 'number') {
+    if (store.taskStage === 'polish' || store.taskStage === 'commit' || store.activeContextPanel === 'inspector') {
+      activeLeftSheet.value = 'layer'
+    }
+  }
+})
 
 const panelStyle = computed(() => {
+  if (props.embedded) {
+    return {
+      position: 'relative',
+      inset: 'auto',
+      width: '100%',
+      height: '100%',
+      maxHeight: '100%',
+      zIndex: 'auto'
+    }
+  }
   const margin = isMobile.value ? 8 : 12
   const maxW = hostWindow.innerWidth - margin * 2
   const maxH = hostWindow.innerHeight - margin * 2
@@ -582,6 +595,7 @@ const panelStyle = computed(() => {
 })
 
 function startDrag(e) {
+  if (props.embedded) return
   if (e.pointerType === 'mouse' && e.button !== 0) return
   if (e.target.closest('button')) return
 
@@ -596,6 +610,7 @@ function startDrag(e) {
 }
 
 function startResize(dir, e) {
+  if (props.embedded) return
   if (e.pointerType === 'mouse' && e.button !== 0) return
   resizing.value = true
   resizeDir.value = dir
@@ -681,6 +696,7 @@ function onWindowResize() {
 watch(() => props.visible, async (v) => {
   if (v) {
     await nextTick()
+    store.hydrateUiLayout()
     updateIsMobile()
     const margin = isMobile.value ? 8 : 12
     const targetW = isMobile.value ? Math.round(hostWindow.innerWidth * 0.98) : Math.round(hostWindow.innerWidth * 0.92)
@@ -692,22 +708,29 @@ watch(() => props.visible, async (v) => {
       pos.value.y = Math.max(margin, Math.round((hostWindow.innerHeight - size.value.h) / 2))
     }
     store.loadAssetData().catch(() => { /* ignore */ })
-    hostWindow.addEventListener('keydown', escHandler)
-    hostWindow.addEventListener('resize', onWindowResize)
+    if (!props.embedded) {
+      hostWindow.addEventListener('keydown', escHandler)
+      hostWindow.addEventListener('resize', onWindowResize)
+    }
   } else {
-    hostWindow.removeEventListener('keydown', escHandler)
-    hostWindow.removeEventListener('resize', onWindowResize)
+    if (!props.embedded) {
+      hostWindow.removeEventListener('keydown', escHandler)
+      hostWindow.removeEventListener('resize', onWindowResize)
+    }
   }
 })
 
 function escHandler(e) {
+  if (props.embedded) return
   if (e.key === 'Escape') close()
 }
 
 onMounted(async () => {
   updateIsMobile()
-  hostWindow.addEventListener('pointermove', onPointerMove, { passive: true })
-  hostWindow.addEventListener('pointerup', onPointerUp, { passive: true })
+  if (!props.embedded) {
+    hostWindow.addEventListener('pointermove', onPointerMove, { passive: true })
+    hostWindow.addEventListener('pointerup', onPointerUp, { passive: true })
+  }
 
   // Enable auto-save
   store.enableAutoSave()
@@ -724,8 +747,10 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
-  hostWindow.removeEventListener('pointermove', onPointerMove)
-  hostWindow.removeEventListener('pointerup', onPointerUp)
+  if (!props.embedded) {
+    hostWindow.removeEventListener('pointermove', onPointerMove)
+    hostWindow.removeEventListener('pointerup', onPointerUp)
+  }
   hostWindow.removeEventListener('keydown', escHandler)
   hostWindow.removeEventListener('resize', onWindowResize)
 
@@ -815,24 +840,40 @@ function exitVisualMoveMode() {
 }
 
 function togglePalette() {
-  if (store.palettePanelVisible) store.closePalettePanel()
-  else store.openPalettePanel([])
+  if (store.activeContextPanel === 'palette' && store.panelStates.palette !== 'pinned') {
+    store.closePalettePanel()
+    store.openContextPanel('inspector', 'palette-close')
+    return
+  }
+  store.openPalettePanel([])
+  store.openContextPanel('palette', 'palette-toggle')
 }
 
 function toggleLayerManager() {
-  store.toggleLayerManager(!store.layerManagerActive)
+  const nextVisible = store.panelStates.layer === 'hidden'
+  store.setPanelState('layer', nextVisible ? 'pinned' : 'hidden')
 }
 
 function toggleHistoryPanel() {
-  store.toggleHistoryPanel()
+  const nextVisible = store.panelStates.history === 'hidden'
+  store.setPanelState('history', nextVisible ? 'pinned' : 'hidden')
 }
 
 function toggleSavesManager() {
-  savesManagerActive.value = !savesManagerActive.value
+  const nextVisible = store.panelStates.saves === 'hidden'
+  store.setPanelState('saves', nextVisible ? 'pinned' : 'hidden')
 }
 
-function onPaletteClose() {
-  store.closePalettePanel()
+function doUndo() {
+  store.undo && store.undo()
+}
+
+function doRedo() {
+  store.redo && store.redo()
+}
+
+function jumpToLatest() {
+  store.jumpToHistoryState && store.jumpToHistoryState(0)
 }
 
 /* ----------------------- IMPORT / EXPORT ----------------------- */
@@ -841,16 +882,19 @@ const stacksFileInput = ref(null)
 const paletteFileInput = ref(null)
 
 function onSaveStacks() {
+  /** @deprecated Hidden from Studio toolbar; retained for backward compatibility. */
   store.persistStacksToLocalStorage()
   store.exportStacksToJsonFile('stacks.json')
 }
 
 function onLoadStacksClick() {
+  /** @deprecated Hidden from Studio toolbar; retained for backward compatibility. */
   const el = stacksFileInput.value
   if (el) { el.value = null; el.click() }
 }
 
 async function onStacksFileSelected(e) {
+  /** @deprecated Hidden from Studio toolbar; retained for backward compatibility. */
   const files = e.target.files
   if (!files || !files.length) return
   const ok = await store.importStacksFromJsonFile(files[0])
@@ -859,16 +903,19 @@ async function onStacksFileSelected(e) {
 }
 
 function onSavePalette() {
+  /** @deprecated Hidden from Studio toolbar; retained for backward compatibility. */
   store.persistPaletteToLocalStorage()
   store.exportPaletteToJsonFile('palette.json')
 }
 
 function onLoadPaletteClick() {
+  /** @deprecated Hidden from Studio toolbar; retained for backward compatibility. */
   const el = paletteFileInput.value
   if (el) { el.value = null; el.click() }
 }
 
 async function onPaletteFileSelected(e) {
+  /** @deprecated Hidden from Studio toolbar; retained for backward compatibility. */
   const files = e.target.files
   if (!files || !files.length) return
   const ok = await store.importPaletteFromJsonFile(files[0])
@@ -986,6 +1033,31 @@ async function clearAutoSave() {
   font-family: var(--font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif);
 }
 
+.studio-container.embedded {
+  position: relative;
+  inset: auto;
+  width: 100%;
+  height: 100%;
+  pointer-events: auto;
+  z-index: auto;
+}
+
+.studio-theme-root {
+  width: 100%;
+  height: 100%;
+}
+
+.studio-container.embedded .studio-theme-root {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.studio-container.embedded .studio-theme-root > .studio-window {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 .studio-window {
   pointer-events: auto;
   background: var(--color-bg-surface, #f8fafc);
@@ -996,6 +1068,14 @@ async function clearAutoSave() {
   overflow: hidden;
   box-sizing: border-box;
   max-height: var(--panel-max-height-safe, calc(100dvh - 24px));
+}
+
+.studio-window.embedded {
+  box-shadow: none;
+  border-radius: 0;
+  min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
 }
 
 /* --- Header & Toolbar --- */
@@ -1010,6 +1090,10 @@ async function clearAutoSave() {
   border-bottom: 1px solid var(--color-border-base, #e2e8f0);
   cursor: move;
   user-select: none;
+}
+
+.studio-window.embedded .studio-header {
+  cursor: default;
 }
 
 .header-title {
@@ -1050,6 +1134,35 @@ async function clearAutoSave() {
 
 .spacer {
   flex: 1;
+}
+
+.workspace-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--color-border-base, #e2e8f0);
+  border-radius: var(--radius-md, 8px);
+  background: var(--color-bg-panel, #f1f5f9);
+  margin-right: var(--space-xs, 6px);
+}
+
+.workspace-btn {
+  height: 26px;
+  min-width: 46px;
+  border: none;
+  border-radius: var(--radius-sm, 6px);
+  background: transparent;
+  color: var(--color-text-secondary, #64748b);
+  font-size: var(--font-size-xs, 12px);
+  font-weight: var(--font-weight-medium, 500);
+  cursor: pointer;
+  padding: 0 8px;
+}
+
+.workspace-btn.active {
+  background: var(--color-primary, #2563eb);
+  color: var(--color-text-inverse, #fff);
 }
 
 /* Base button style */
@@ -1200,8 +1313,36 @@ async function clearAutoSave() {
   border-color: var(--color-primary, #2563eb);
 }
 
+.task-stage-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs, 6px);
+  padding: var(--space-xs, 6px) var(--space-md, 12px);
+  border-bottom: 1px solid var(--color-border-base, #e2e8f0);
+  background: var(--color-bg-base, #ffffff);
+}
+
+.task-stage-btn {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm, 6px);
+  border: 1px solid var(--color-border-base, #e2e8f0);
+  background: var(--color-bg-base, #ffffff);
+  color: var(--color-text-secondary, #64748b);
+  cursor: pointer;
+  font-size: var(--font-size-xs, 12px);
+  font-weight: var(--font-weight-medium, 500);
+}
+
+.task-stage-btn.active {
+  color: var(--color-primary, #2563eb);
+  border-color: var(--color-primary, #2563eb);
+  background: var(--color-info-bg, #eff6ff);
+}
+
 .studio-body {
   flex: 1;
+  min-height: 0;
   display: flex;
   overflow: hidden;
   background: var(--color-bg-panel, #f1f5f9);
@@ -1217,7 +1358,12 @@ async function clearAutoSave() {
   background: var(--color-bg-base, #ffffff);
   border-right: 1px solid var(--color-border-base, #e2e8f0);
   min-height: 0;
+  overflow: hidden;
   position: relative;
+}
+
+.panel-section > * {
+  min-height: 0;
 }
 
 .studio-body.is-mobile .panel-section {
@@ -1236,8 +1382,95 @@ async function clearAutoSave() {
 /* Individual Panel Widths */
 .studio-left {
   width: auto;
-  min-width: 450px;
-  max-width: 450px;
+  min-width: 480px;
+  max-width: 480px;
+}
+
+.studio-structure {
+  width: 420px;
+  min-width: 350px;
+  max-width: 520px;
+}
+
+.structure-panels {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.structure-folio-rail {
+  height: 36px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--color-border-base, #e2e8f0);
+  background: var(--color-bg-surface, #f8fafc);
+}
+
+.folio-step {
+  height: 24px;
+  border: 1px solid var(--color-border-base, #e2e8f0);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--color-bg-base, #ffffff);
+  color: var(--color-text-secondary, #64748b);
+  padding: 0 8px;
+  font-size: 11px;
+  cursor: pointer;
+  max-width: 120px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.folio-step.active {
+  border-color: var(--color-primary, #2563eb);
+  color: var(--color-primary, #2563eb);
+  background: var(--color-info-bg, #eff6ff);
+}
+
+.folio-sep {
+  color: var(--color-text-tertiary, #94a3b8);
+  font-size: 11px;
+}
+
+.structure-stack {
+  flex: 1;
+  min-height: 0;
+}
+
+.structure-parts {
+  flex: 1;
+  min-height: 0;
+}
+
+.structure-layers {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.studio-center {
+  flex: 1;
+  min-width: 420px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.studio-center > * {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.studio-context {
+  width: 320px;
+  min-width: 280px;
+  max-width: 420px;
+  min-height: 0;
+  border-left: 1px solid var(--color-border-base, #e2e8f0);
+  border-right: none;
 }
 
 .stack-column {
@@ -1269,12 +1502,14 @@ async function clearAutoSave() {
 .studio-layer-manager {
   width: 280px;
   min-width: 240px;
+  min-height: 0;
   border-left: 1px solid var(--color-border-base);
 }
 
 .studio-history {
   width: 280px;
   min-width: 240px;
+  min-height: 0;
   border-left: 1px solid var(--color-border-base);
 }
 
@@ -1282,7 +1517,25 @@ async function clearAutoSave() {
   width: 400px;
   min-width: 350px;
   max-width: 500px;
+  min-height: 0;
   border-left: 1px solid var(--color-border-base);
+}
+
+.mini-history-bar {
+  height: 36px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs, 6px);
+  padding: 0 var(--space-md, 12px);
+  border-top: 1px solid var(--color-border-base, #e2e8f0);
+  background: var(--color-bg-base, #ffffff);
+}
+
+@media (max-height: 560px) {
+  .studio-window.embedded {
+    overflow-y: auto;
+  }
 }
 
 

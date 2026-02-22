@@ -19,13 +19,34 @@ export function initUndoRedoManager(state) {
   const manager = new UndoRedoManager({
     captureState: () => ({
       stacks: toRaw(state.stacks),
-      paletteMap: toRaw(state.paletteMap)
+      paletteMap: toRaw(state.paletteMap),
+      focusedPartIndex: toRaw(state.focusedPartIndex),
+      selectedLayers: toRaw(state.selectedLayers || []),
+      selectionMode: state.selectionMode || 'single',
+      activeFocusContext: toRaw(state.activeFocusContext || null),
+      previewTool: state.previewTool || 'view',
+      focusState: toRaw(state.focusState || null)
     }),
     restoreState: (snapshot) => {
       state.stacks = snapshot.stacks
       state.paletteMap = snapshot.paletteMap
+      if (snapshot.focusState) {
+        state.focusState = snapshot.focusState
+      }
       if (snapshot.focusedPartIndex) {
         state.focusedPartIndex = snapshot.focusedPartIndex
+      }
+      if (Array.isArray(snapshot.selectedLayers)) {
+        state.selectedLayers = snapshot.selectedLayers
+      }
+      if (snapshot.selectionMode === 'single' || snapshot.selectionMode === 'multiple') {
+        state.selectionMode = snapshot.selectionMode
+      }
+      if (snapshot.activeFocusContext) {
+        state.activeFocusContext = snapshot.activeFocusContext
+      }
+      if (snapshot.previewTool === 'view' || snapshot.previewTool === 'move') {
+        state.previewTool = snapshot.previewTool
       }
     },
     maxHistory: 100,

@@ -3,7 +3,7 @@ import { computed, ref, onMounted, onBeforeUnmount, nextTick, toRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFileSystemStore } from '@/stores/fileSystemStore'
 import FileThumbnail from './FileThumbnail.vue'
-import { injectTheme } from '@/composables/useTheme'
+import { injectTheme } from '@/services/ThemeService'
 import { ExternalAdapter } from '@/utils/external_adapters.js'
 import { hostWindow, doc } from '@/utils/host-window.js'
 import * as DialogService from '@/services/DialogService.js'
@@ -22,6 +22,37 @@ const fsStore = useFileSystemStore()
 
 // Get history records
 const historyRecords = computed(() => fsStore.getHistoryRecords())
+const searchQuery = ref('')
+const timeFilter = ref('all')
+
+const filteredHistoryRecords = computed(() => {
+  const q = (searchQuery.value || '').trim().toLowerCase()
+  const now = Date.now()
+
+  return (historyRecords.value || []).filter((record) => {
+    const ts = record?.name || ''
+    const matchesQuery = !q || ts.toLowerCase().includes(q)
+    if (!matchesQuery) return false
+
+    if (timeFilter.value === 'all') return true
+    const match = ts.match(/Record_(.+)/)
+    if (!match) return timeFilter.value === 'all'
+    const recordTime = new Date(match[1]).getTime()
+    if (Number.isNaN(recordTime)) return false
+
+    if (timeFilter.value === 'today') {
+      return now - recordTime <= 24 * 60 * 60 * 1000
+    }
+    if (timeFilter.value === 'week') {
+      return now - recordTime <= 7 * 24 * 60 * 60 * 1000
+    }
+    return true
+  })
+})
+
+function clearSearch() {
+  searchQuery.value = ''
+}
 
 // Format timestamp for display
 function formatTimestamp(recordName) {
@@ -263,7 +294,7 @@ const panelStyle = computed(() => {
         <div class="title">
           <span class="title-text">{{ t('historyViewer.title') }}</span>
           <span class="record-count" v-if="historyRecords.length > 0">
-            {{ t('historyViewer.recordCount', { count: historyRecords.length }) }}
+            {{ t('historyViewer.recordCount', { count: filteredHistoryRecords.length }) }}
           </span>
         </div>
 
@@ -275,9 +306,26 @@ const panelStyle = computed(() => {
         </div>
       </div>
 
+      <div class="toolbar">
+        <div class="search-row">
+          <input
+            v-model="searchQuery"
+            :placeholder="t('historyViewer.searchPlaceholder')"
+            class="search-input"
+            :aria-label="t('historyViewer.searchPlaceholder')"
+          />
+          <button v-if="searchQuery" class="chip-btn" @click="clearSearch">{{ t('historyViewer.clearSearch') }}</button>
+        </div>
+        <div class="chip-group" role="group" :aria-label="t('historyViewer.timeFilter')">
+          <button class="chip-btn" :class="{ active: timeFilter === 'all' }" @click="timeFilter = 'all'">{{ t('historyViewer.filterAll') }}</button>
+          <button class="chip-btn" :class="{ active: timeFilter === 'today' }" @click="timeFilter = 'today'">{{ t('historyViewer.filterToday') }}</button>
+          <button class="chip-btn" :class="{ active: timeFilter === 'week' }" @click="timeFilter = 'week'">{{ t('historyViewer.filterWeek') }}</button>
+        </div>
+      </div>
+
       <div class="history-list scrollable">
-        <template v-if="historyRecords.length > 0">
-          <div v-for="(record, index) in historyRecords" :key="record.name" class="history-record-card"
+        <template v-if="filteredHistoryRecords.length > 0">
+          <div v-for="(record, index) in filteredHistoryRecords" :key="record.name" class="history-record-card"
             @click="onRecordClick(record)" @dblclick="onRecordDoubleClick(record)"
             @contextmenu.capture="onContextMenu($event, record)" @mouseenter="onRecordMouseEnter(record)"
             @mouseleave="onRecordMouseLeave(record)">
@@ -291,7 +339,7 @@ const panelStyle = computed(() => {
                 </time>
               </div>
               <div class="record-meta">
-                <span class="record-index">#{{ historyRecords.length - index }}</span>
+                <span class="record-index">#{{ filteredHistoryRecords.length - index }}</span>
               </div>
             </div>
             <div class="record-actions">
@@ -405,6 +453,56 @@ const panelStyle = computed(() => {
 
 .panel-button:hover {
   background: var(--color-bg-hover, #f0f4f8);
+}
+
+.toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.search-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.search-input {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: var(--radius-lg, 10px);
+  border: 1px solid var(--color-border-base, #e2e8f0);
+  background: var(--color-bg-base, #fff);
+  color: var(--color-text-primary, #0f172a);
+  outline: none;
+}
+
+.search-input:focus {
+  box-shadow: 0 0 0 3px var(--color-border-focus, rgba(59,130,246,0.12));
+  border-color: var(--color-primary, #3b82f6);
+}
+
+.chip-group {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip-btn {
+  border: 1px solid var(--color-border-base, #d6dbe2);
+  background: var(--color-bg-base, #fff);
+  color: var(--color-text-secondary, #475569);
+  border-radius: var(--radius-md, 8px);
+  padding: 6px 10px;
+  font-size: var(--font-size-sm, 12px);
+  cursor: pointer;
+}
+
+.chip-btn.active {
+  border-color: var(--color-primary, #3b82f6);
+  color: var(--color-primary, #3b82f6);
+  background: var(--color-primary-bg, rgba(59, 130, 246, 0.1));
 }
 
 .clear-all-btn:hover {
