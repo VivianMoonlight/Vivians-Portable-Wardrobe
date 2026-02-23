@@ -6,18 +6,23 @@
                 :id="props.id"
                 class="fm-panel-shell"
                 :class="{ 'is-mobile': isMobile }"
-                :style="{
-                width: panel.w + 'px',
-                height: panel.h + 'px',
-                left: panel.x + 'px',
-                top: panel.y + 'px',
-                zIndex: panelZ
-            }"
+                :style="panelShellStyle"
                 role="dialog"
                 :aria-label="t('fileManagerPanel.ariaLabel')"
                 tabindex="0"
                 @mousedown="bringToFront"
                 @focus="bringToFront">
+                <MobileWardrobeShell
+                    v-if="isMobile"
+                    :on-import-player-wardrobe="importPlayerWardrobe"
+                    :on-save-backup="saveBackup"
+                    :on-import-backup="importBackup"
+                    :on-import-bcx="importBCX"
+                    :on-save-character="saveCharacterToFolder"
+                    :on-apply-to-current="applyActiveToCharacter"
+                    @close="requestClose" />
+
+                <template v-else>
                 <header class="fm-panel-header" @pointerdown.stop.prevent="startDrag">
                     <div class="fm-header-main">
                         <div class="fm-title">{{ t('fileManagerPanel.title') }}</div>
@@ -157,6 +162,7 @@
                 <div class="resize-handle corner bottom-left"
                     @pointerdown.stop.prevent="startResize('bottom-left', $event)">
                 </div>
+                </template>
             </div>
         </div>
     </transition>
@@ -173,6 +179,7 @@ import SidePreview from '@/components/SidePreview.vue'
 import FilterManager from '@/components/FilterManager.vue'
 import { useFileSystemStore } from '@/stores/fileSystemStore.js'
 import Studio from '@/components/Studio/Studio.vue'
+import MobileWardrobeShell from '@/components/mobile/MobileWardrobeShell.vue'
 import { ExternalAdapter } from '@/utils/external_adapters.js'
 import { useStudioStore } from '@/stores/studioStore.js'
 import { useWorkbenchStore } from '@/stores/workbenchStore.js'
@@ -199,12 +206,44 @@ const fs = useFileSystemStore()
 const studioStore = useStudioStore()
 const workbenchStore = useWorkbenchStore()
 
-const tabs = computed(() => [
-    { id: 'wardrobe', label: t('fileManagerPanel.tabWardrobe') },
-    { id: 'history', label: t('fileManagerPanel.tabHistory') },
-    { id: 'studio', label: t('fileManagerPanel.tabStudio') },
-    { id: 'settings', label: t('fileManagerPanel.tabSettings') }
-])
+const isMobile = ref(false)
+
+const panelShellStyle = computed(() => {
+    if (isMobile.value) {
+        return {
+            width: '100vw',
+            height: '100dvh',
+            left: '0px',
+            top: '0px',
+            zIndex: panelZ.value
+        }
+    }
+
+    return {
+        width: panel.value.w + 'px',
+        height: panel.value.h + 'px',
+        left: panel.value.x + 'px',
+        top: panel.value.y + 'px',
+        zIndex: panelZ.value
+    }
+})
+
+const tabs = computed(() => {
+    if (isMobile.value) {
+        return [
+            { id: 'wardrobe', label: t('fileManagerPanel.tabWardrobe') },
+            { id: 'history', label: t('fileManagerPanel.tabHistory') },
+            { id: 'settings', label: t('fileManagerPanel.tabSettings') }
+        ]
+    }
+
+    return [
+        { id: 'wardrobe', label: t('fileManagerPanel.tabWardrobe') },
+        { id: 'history', label: t('fileManagerPanel.tabHistory') },
+        { id: 'studio', label: t('fileManagerPanel.tabStudio') },
+        { id: 'settings', label: t('fileManagerPanel.tabSettings') }
+    ]
+})
 
 const activeTab = computed(() => workbenchStore.activeTab)
 const wardrobeTabRef = ref(null)
@@ -213,6 +252,10 @@ const studioTabRef = ref(null)
 const settingsTabRef = ref(null)
 
 async function setActiveTab(tab) {
+    if (isMobile.value && tab === 'studio') {
+        workbenchStore.setMobileMainTab('wardrobe')
+        return
+    }
     workbenchStore.setActiveTab(tab)
     if (tab === 'studio') {
         await studioStore.loadAssetData()
@@ -248,7 +291,6 @@ const panel = ref({
     startRect: { x: 0, y: 0, w: 0, h: 0 }
 })
 
-const isMobile = ref(false)
 const showSide = ref(true)
 const showFilters = ref(true)
 
@@ -728,7 +770,11 @@ function escHandler(e) {
     }
     if (e.key === '3') {
         e.preventDefault()
-        setActiveTab('studio')
+        if (isMobile.value) {
+            workbenchStore.setMobileMainTab('wardrobe')
+        } else {
+            setActiveTab('studio')
+        }
         return
     }
     if (e.key === 'Tab') {
@@ -745,6 +791,9 @@ function updateIsMobile() {
 
 watch(isMobile, (v) => {
     if (v) {
+        if (activeTab.value === 'studio') {
+            workbenchStore.setMobileMainTab('wardrobe')
+        }
         showFilters.value = false
         showSide.value = true
     } else {
@@ -831,6 +880,16 @@ function onWindowResize() {
     max-width: calc(100vw - 16px);
     max-height: var(--panel-max-height-safe, calc(100dvh - 24px));
     box-sizing: border-box;
+}
+
+.fm-panel-shell.is-mobile {
+    inset: 0;
+    border-radius: 0;
+    border: none;
+    box-shadow: none;
+    max-width: 100vw;
+    max-height: 100dvh;
+    overflow: hidden;
 }
 
 /* 当获得聚焦时（z-index 已由 script 提升），添加更明显的阴影 */

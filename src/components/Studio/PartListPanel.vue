@@ -183,6 +183,7 @@ import { hostWindow, doc } from '@/utils/host-window.js'
 
 const { t } = useI18n()
 const store = useStudioStore()
+const emit = defineEmits(['part-focused'])
 const selected = computed(() => store.selectedElement)
 const hasSelected = computed(() => !!selected.value && Array.isArray(selected.value.data))
 
@@ -673,6 +674,7 @@ function focusPart(part) {
   // focusing a part cancels replace mode (mutual exclusivity)
   if (store.focusPart) {
     store.focusPart(part)
+    emit('part-focused')
   }
   // store.focusPart clears replaceTarget already
 }

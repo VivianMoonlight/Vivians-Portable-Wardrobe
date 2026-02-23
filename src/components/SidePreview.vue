@@ -205,6 +205,12 @@ onBeforeUnmount(() => {
   object-fit: contain;
 }
 
+/* 移动 pane 环境下的 preview-inner：移除高度约束 */
+:is(.mobile-pane) .side-preview .preview-inner {
+  min-height: 0;
+  max-height: 100%;
+}
+
 /* canvas fills remaining area of preview-inner */
 .preview-canvas {
   width: 100%;
@@ -215,6 +221,21 @@ onBeforeUnmount(() => {
   background: transparent;
   display: block;
   position: relative;
+}
+
+/* 在移动 pane 环境下：canvas 移除最小高度约束，允许自适应 */
+:is(.mobile-pane) .preview-canvas {
+  min-height: 0;
+}
+
+/* 在移动 pane 环境下：side-preview 移除padding以充分利用空间 */
+:is(.mobile-pane) .side-preview {
+  padding: 0;
+  border-right: none;
+}
+
+:is(.mobile-pane) .preview-inner {
+  gap: 0;
 }
 
 /* hint and name */

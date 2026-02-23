@@ -3,6 +3,7 @@ import { hostWindow } from '@/utils/host-window.js'
 
 const ACTIVE_TAB_KEY = 'vpw.workbench.activeTab'
 const WARDROBE_UI_KEY = 'vpw.workbench.wardrobeUi'
+const MOBILE_UI_KEY = 'vpw.workbench.mobileUi'
 
 const TABS = ['wardrobe', 'history', 'studio', 'settings']
 
@@ -41,6 +42,14 @@ const defaultWardrobeUi = {
   rightPanelCollapsed: false
 }
 
+const defaultMobileUi = {
+  mainTab: 'wardrobe',
+  panes: {
+    wardrobe: 'wardrobe',
+    history: 'wardrobe'
+  }
+}
+
 export const useWorkbenchStore = defineStore('workbench', {
   state: () => {
     const persistedTab = safeLoadString(ACTIVE_TAB_KEY, 'wardrobe')
@@ -56,7 +65,8 @@ export const useWorkbenchStore = defineStore('workbench', {
         studio: { x: 0, y: 0 },
         settings: { x: 0, y: 0 }
       },
-      wardrobeUi: safeLoadJson(WARDROBE_UI_KEY, defaultWardrobeUi)
+      wardrobeUi: safeLoadJson(WARDROBE_UI_KEY, defaultWardrobeUi),
+      mobileUi: safeLoadJson(MOBILE_UI_KEY, defaultMobileUi)
     }
   },
   actions: {
@@ -69,6 +79,10 @@ export const useWorkbenchStore = defineStore('workbench', {
         tab
       ].slice(-10)
       safeSave(ACTIVE_TAB_KEY, tab)
+      if (tab === 'wardrobe' || tab === 'history' || tab === 'settings') {
+        this.mobileUi.mainTab = tab
+        safeSave(MOBILE_UI_KEY, JSON.stringify(this.mobileUi))
+      }
     },
     switchToNextTab() {
       const idx = TABS.indexOf(this.activeTab)
@@ -88,6 +102,21 @@ export const useWorkbenchStore = defineStore('workbench', {
         ...partial
       }
       safeSave(WARDROBE_UI_KEY, JSON.stringify(this.wardrobeUi))
+    },
+    setMobileMainTab(tab) {
+      if (!['wardrobe', 'history', 'settings'].includes(tab)) return
+      this.mobileUi.mainTab = tab
+      this.setActiveTab(tab)
+      safeSave(MOBILE_UI_KEY, JSON.stringify(this.mobileUi))
+    },
+    setMobilePane(mainTab, pane) {
+      if (!['wardrobe', 'history'].includes(mainTab)) return
+      if (!['preview', 'wardrobe', 'filter'].includes(pane)) return
+      this.mobileUi.panes = {
+        ...this.mobileUi.panes,
+        [mainTab]: pane
+      }
+      safeSave(MOBILE_UI_KEY, JSON.stringify(this.mobileUi))
     }
   }
 })

@@ -455,6 +455,16 @@ function onBreadcrumbDrop(e, idx) {
   box-shadow: var(--shadow-lg, 0 6px 28px rgba(10,20,40,0.06));
 }
 
+/* 嵌入模式：移除固定的最小尺寸，让容器自适应 */
+:is(.file-manager-panel)[style*="position: relative"] {
+  min-width: auto;
+  min-height: auto;
+  border-radius: 0;
+  box-shadow: none;
+  max-width: 100%;
+  max-height: 100%;
+}
+
 /* inner panel adopts consistent background / padding similar to FilterManager */
 .panel-inner {
   width: 100%;
@@ -467,6 +477,15 @@ function onBreadcrumbDrop(e, idx) {
   display: flex;
   flex-direction: column;
   gap: var(--space-fluid-sm, 10px);
+  min-height: 0;
+  overflow: auto;
+}
+
+/* 嵌入模式下的 panel-inner */
+:is(.file-manager-panel)[style*="position: relative"] .panel-inner {
+  border: none;
+  border-radius: 0;
+  padding: var(--space-fluid-md, 12px);
 }
 
 /* Top area with title and actions */

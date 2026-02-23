@@ -3,16 +3,21 @@
    
       <button
         class="open-fm-btn"
-        @click="openPanel"
-        @keydown.space.prevent="openPanel"
-        @keydown.enter.prevent="openPanel"
+        :class="{ 'is-active': showPanel, 'is-dragging': isDragging }"
+        :style="launcherStyle"
+        :data-tip="launcherTip"
+        :aria-pressed="showPanel"
+        @click="togglePanel"
+        @keydown.space.prevent="togglePanel"
+        @keydown.enter.prevent="togglePanel"
+        @pointerdown="onLauncherPointerDown"
         :aria-expanded="showPanel"
         aria-controls="file-manager-panel"
-        aria-label="打开文件管理器"
-        title="打开文件管理器"
+        :aria-label="launcherTip"
+        :title="launcherTip"
       >
         <img :src="logo" alt="" class="logo" />
-        <span class="visually-hidden">打开文件管理器</span>
+        <span class="visually-hidden">{{ launcherTip }}</span>
       </button>
 
       <!-- Theme Toggle Button >
@@ -56,7 +61,21 @@ import logo from './assets/logo.png'
 
 const showPanel = ref(false)
 const isMobile = ref(false)
+const isDragging = ref(false)
+const launcherX = ref(20)
+const launcherY = ref(100)
+const launcherSize = ref(64)
+const hasCustomLauncherPosition = ref(false)
+const suppressNextToggle = ref(false)
 const MOBILE_BREAKPOINT = 640
+const LAUNCHER_STORAGE_KEY = 'vpw-launcher-position-v1'
+
+let pointerId = null
+let dragStartX = 0
+let dragStartY = 0
+let buttonStartX = 0
+let buttonStartY = 0
+let hasMovedBeyondClickThreshold = false
 
 // Initialize theme
 const theme = useTheme()
@@ -72,20 +91,165 @@ function updateIsMobile() {
 
 function onWindowResize() {
   updateIsMobile()
+  syncLauncherLayout()
+}
+
+const launcherTip = computed(() => (showPanel.value ? '关闭文件管理器' : '打开文件管理器'))
+
+const launcherStyle = computed(() => ({
+  left: `${launcherX.value}px`,
+  top: `${launcherY.value}px`,
+  width: `${launcherSize.value}px`,
+  height: `${launcherSize.value}px`
+}))
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value))
+}
+
+function getLauncherBounds(size = launcherSize.value) {
+  const margin = 12
+  const maxX = Math.max(margin, hostWindow.innerWidth - size - margin)
+  const maxY = Math.max(margin, hostWindow.innerHeight - size - margin)
+
+  return {
+    minX: margin,
+    maxX,
+    minY: margin,
+    maxY
+  }
+}
+
+function getAdaptiveLauncherSize() {
+  const shortEdge = Math.min(hostWindow.innerWidth, hostWindow.innerHeight)
+  return clamp(Math.round(shortEdge * 0.09), 52, 72)
+}
+
+function getDefaultLauncherPosition(size = launcherSize.value) {
+  const { minX, maxX, maxY } = getLauncherBounds(size)
+  const defaultX = isMobile.value
+    ? Math.round((hostWindow.innerWidth - size) / 2)
+    : minX + 8
+  const defaultY = maxY - (isMobile.value ? 8 : 72)
+
+  return {
+    x: clamp(defaultX, minX, maxX),
+    y: clamp(defaultY, 12, maxY)
+  }
+}
+
+function saveLauncherPosition() {
+  try {
+    hostWindow.localStorage.setItem(
+      LAUNCHER_STORAGE_KEY,
+      JSON.stringify({ x: launcherX.value, y: launcherY.value })
+    )
+  } catch {
+    // Ignore storage failures in restricted environments
+  }
+}
+
+function loadLauncherPosition() {
+  try {
+    const raw = hostWindow.localStorage.getItem(LAUNCHER_STORAGE_KEY)
+    if (!raw) return
+
+    const parsed = JSON.parse(raw)
+    if (typeof parsed?.x === 'number' && typeof parsed?.y === 'number') {
+      launcherX.value = parsed.x
+      launcherY.value = parsed.y
+      hasCustomLauncherPosition.value = true
+    }
+  } catch {
+    // Ignore malformed storage data
+  }
+}
+
+function syncLauncherLayout() {
+  launcherSize.value = getAdaptiveLauncherSize()
+
+  if (!hasCustomLauncherPosition.value) {
+    const { x, y } = getDefaultLauncherPosition(launcherSize.value)
+    launcherX.value = x
+    launcherY.value = y
+    return
+  }
+
+  const { minX, maxX, minY, maxY } = getLauncherBounds(launcherSize.value)
+  launcherX.value = clamp(launcherX.value, minX, maxX)
+  launcherY.value = clamp(launcherY.value, minY, maxY)
+}
+
+function onLauncherPointerDown(event) {
+  if (event.button !== 0) return
+
+  pointerId = event.pointerId
+  isDragging.value = true
+  hasMovedBeyondClickThreshold = false
+  dragStartX = event.clientX
+  dragStartY = event.clientY
+  buttonStartX = launcherX.value
+  buttonStartY = launcherY.value
+
+  event.currentTarget?.setPointerCapture?.(pointerId)
+  hostWindow.addEventListener('pointermove', onLauncherPointerMove)
+  hostWindow.addEventListener('pointerup', onLauncherPointerUp)
+  hostWindow.addEventListener('pointercancel', onLauncherPointerUp)
+}
+
+function onLauncherPointerMove(event) {
+  if (!isDragging.value || event.pointerId !== pointerId) return
+
+  const deltaX = event.clientX - dragStartX
+  const deltaY = event.clientY - dragStartY
+  const movedDistance = Math.hypot(deltaX, deltaY)
+  if (movedDistance > 6) {
+    hasMovedBeyondClickThreshold = true
+  }
+
+  const { minX, maxX, minY, maxY } = getLauncherBounds(launcherSize.value)
+  launcherX.value = clamp(buttonStartX + deltaX, minX, maxX)
+  launcherY.value = clamp(buttonStartY + deltaY, minY, maxY)
+}
+
+function onLauncherPointerUp(event) {
+  if (!isDragging.value || event.pointerId !== pointerId) return
+
+  isDragging.value = false
+  pointerId = null
+  hostWindow.removeEventListener('pointermove', onLauncherPointerMove)
+  hostWindow.removeEventListener('pointerup', onLauncherPointerUp)
+  hostWindow.removeEventListener('pointercancel', onLauncherPointerUp)
+
+  if (hasMovedBeyondClickThreshold) {
+    suppressNextToggle.value = true
+    hasCustomLauncherPosition.value = true
+    saveLauncherPosition()
+  }
 }
 
 onMounted(() => {
   initTheme()
   updateIsMobile()
+  loadLauncherPosition()
+  syncLauncherLayout()
   hostWindow.addEventListener('resize', onWindowResize)
 })
 
 onBeforeUnmount(() => {
+  hostWindow.removeEventListener('pointermove', onLauncherPointerMove)
+  hostWindow.removeEventListener('pointerup', onLauncherPointerUp)
+  hostWindow.removeEventListener('pointercancel', onLauncherPointerUp)
   hostWindow.removeEventListener('resize', onWindowResize)
 })
 
-function openPanel() {
-  showPanel.value = true
+function togglePanel() {
+  if (suppressNextToggle.value) {
+    suppressNextToggle.value = false
+    return
+  }
+
+  showPanel.value = !showPanel.value
 }
 
 function closePanel() {
@@ -108,11 +272,11 @@ function closePanel() {
 /* 圆形悬浮按钮主样式 */
 .open-fm-btn {
   position: fixed;
-  left: calc(var(--safe-area-left) + clamp(16px, 3vw, 20px));
-  bottom: calc(var(--safe-area-bottom) + clamp(80px, 12vh, 100px));
+  left: 20px;
+  top: 100px;
 
-  width: clamp(56px, 12vw, 64px);
-  height: clamp(56px, 12vw, 64px);
+  width: 64px;
+  height: 64px;
   min-width: 56px;
   min-height: 56px;
   padding: 0;
@@ -130,28 +294,26 @@ function closePanel() {
     inset 0 1px 0 rgba(255,255,255,0.35);
   z-index: 2147483647;
 
-  transition: transform 180ms cubic-bezier(.2,.9,.2,1), box-shadow 180ms, filter 180ms;
+  transition: transform 180ms cubic-bezier(.2,.9,.2,1), box-shadow 180ms, filter 180ms, background 180ms;
   -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
+  touch-action: none;
   pointer-events: auto;
   outline: none;
 }
 
-/* Mobile: center button at bottom */
-@media (max-width: 640px) {
-  .open-fm-btn {
-    left: 50%;
-    bottom: calc(var(--safe-area-bottom) + 20px);
-    transform: translateX(-50%);
-  }
-  
-  .open-fm-btn:hover {
-    transform: translateX(-50%) translateY(-6px);
-  }
-  
-  .open-fm-btn:active {
-    transform: translateX(-50%) translateY(-2px) scale(0.985);
-  }
+.open-fm-btn.is-active {
+  background: linear-gradient(135deg, #ffffff 0%, #c8d6e8 55%, #d8e6f7 100%);
+  box-shadow:
+    0 14px 36px rgba(7, 33, 58, 0.28),
+    inset 0 1px 0 rgba(255,255,255,0.45);
+}
+
+.open-fm-btn.is-dragging {
+  cursor: grabbing;
+  transition: none;
+  box-shadow:
+    0 8px 24px rgba(7, 33, 58, 0.26),
+    inset 0 1px 0 rgba(255,255,255,0.28);
 }
 
 /* 内部 logo，使用相对导入的图片资源 */
@@ -173,12 +335,6 @@ function closePanel() {
       inset 0 1px 0 rgba(255,255,255,0.38);
     filter: saturate(1.05);
   }
-
-  @media (max-width: 640px) {
-    .open-fm-btn:hover {
-      transform: translateX(-50%) translateY(-6px);
-    }
-  }
 }
 
 .open-fm-btn:active {
@@ -198,7 +354,7 @@ function closePanel() {
 
 /* 简洁的 tooltip（桌面设备） */
 .open-fm-btn::after {
-  content: "打开文件管理器";
+  content: attr(data-tip);
   position: absolute;
   left: calc(100% + 12px);
   bottom: 50%;
@@ -214,6 +370,19 @@ function closePanel() {
   transition: opacity 160ms, transform 160ms;
   box-shadow: 0 8px 28px rgba(8, 20, 34, 0.32);
   z-index: 2147483647;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .open-fm-btn,
+  .open-fm-btn::after,
+  .open-fm-btn::before {
+    transition: none;
+  }
+
+  .open-fm-btn:hover,
+  .open-fm-btn:active {
+    transform: none;
+  }
 }
 
 .open-fm-btn::before {

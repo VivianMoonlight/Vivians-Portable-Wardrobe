@@ -221,9 +221,11 @@ onBeforeUnmount(() => {
 
 // hover 处理：进入时设置 ActiveItem，离开时清理
 function onMouseEnter() {
+  if (!canUseHover()) return
   fsStore.setActiveItem(props.item);
 }
 function onMouseLeave() {
+  if (!canUseHover()) return
   if (fsStore.activeItem && fsStore.activeItem.data && Array.isArray(fsStore.activeItem.data)) {
     fsStore.setActiveItem(-1);
   } else if (fsStore.activeItem === props.item) {
@@ -231,9 +233,33 @@ function onMouseLeave() {
   }
 }
 
+function canUseHover() {
+  return !!(hostWindow.matchMedia && hostWindow.matchMedia('(hover: hover) and (pointer: fine)').matches)
+}
+
+function setActiveFromInteraction() {
+  fsStore.setActiveItem(props.item)
+}
+
+function onFocusIn() {
+  setActiveFromInteraction()
+}
+
+function onFocusOut(e) {
+  if (rootEl.value && e?.relatedTarget && rootEl.value.contains(e.relatedTarget)) return
+  if (fsStore.activeItem === props.item) {
+    fsStore.setActiveItem(-1)
+  }
+}
+
 // 左键点击行为：文件夹则触发展开，否则 no-op
 function onClick() {
-  if (props.item && props.item.type === "folder") emit("open-folder");
+  if (!props.item) return
+  if (props.item.type === 'folder') {
+    emit('open-folder')
+    return
+  }
+  setActiveFromInteraction()
 }
 
 // 双击：文件夹打开，文件则把 active 数据应用到角色（按需求，这里应用的是 store.activeItem）
@@ -297,6 +323,7 @@ const draggable = !!props.item
 <template>
   <div ref="rootEl" class="file-item-card" :class="[themeClass, `view-${viewMode}`, { 'drop-target': isDragOver }]" @click="onClick"
     @dblclick="onDoubleClick" @contextmenu.capture="onContextMenu" @mouseenter="onMouseEnter" @mouseleave="onMouseLeave"
+    @focusin="onFocusIn" @focusout="onFocusOut" tabindex="0"
     :draggable="draggable" @dragstart="onDragStart" @dragend="onDragEnd" @dragover="onDragOver" @dragleave="onDragLeave"
     @drop="onDrop">
     <div class="thumb-wrap">
@@ -361,13 +388,20 @@ const draggable = !!props.item
   position: relative;
 }
 
-.file-item-card:hover {
-  box-shadow: var(--shadow-md, 0 4px 12px rgba(0, 0, 0, 0.1));
-  transform: translateY(-2px);
+.file-item-card:focus-visible {
+  border-color: var(--color-primary, #3b82f6);
+  box-shadow: 0 0 0 2px var(--color-primary-bg, rgba(59, 130, 246, 0.2));
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .file-item-card:hover {
+    box-shadow: var(--shadow-md, 0 4px 12px rgba(0, 0, 0, 0.1));
+    transform: translateY(-2px);
+  }
 }
 
 .thumb-wrap {
-  width: 100%;
+  width: clamp(92px, 26vw, 132px);
   aspect-ratio: 9 / 16;
   background: var(--color-bg-panel, #f0f2f6);
   border-radius: var(--radius-xl, 12px);
@@ -378,6 +412,7 @@ const draggable = !!props.item
   margin-bottom: 8px;
   overflow: hidden;
   position: relative;
+  align-self: center;
 }
 
 .file-info {
@@ -407,6 +442,7 @@ const draggable = !!props.item
 }
 
 .file-item-card.view-small .thumb-wrap {
+  width: clamp(76px, 22vw, 108px);
   aspect-ratio: 9 / 16;
   margin-bottom: 6px;
 }

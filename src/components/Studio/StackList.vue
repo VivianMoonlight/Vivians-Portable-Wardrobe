@@ -1,80 +1,222 @@
 <template>
   <div class="stacks-list" ref="rootEl" role="region" :aria-label="t('stackList.ariaLabel')">
     <div class="stacks-header">
-      <h4>{{ t('stackList.title') }}</h4>
+      <div class="header-main">
+        <h4>{{ t('stackList.title') }}</h4>
+        <p class="header-meta">
+          {{ t('stackList.statsVisible', { visible: filteredDisplayStacks.length, total: stacks.length }) }}
+          <span v-if="hasSelectedName" class="selected-pill">{{ t('stackList.statsSelected', { name: selectedStackName }) }}</span>
+        </p>
+      </div>
+
       <div class="stacks-actions">
-        <button class="icon-btn" :title="t('stackList.newStackTitle')" @click="addNewStack">
-          ＋
-        </button>
-        <button class="icon-btn" :disabled="!hasSelected" :title="t('stackList.copyFullTitle')"
-          @click="copySelectedFull">
-          ⧉
-        </button>
-        <button class="icon-btn" :disabled="!hasSelected" :title="t('stackList.copyFilteredTitle')"
-          @click="copySelectedFiltered">
-          ⧉✔
-        </button>
+        <BaseButton
+          variant="ghost"
+          icon-only
+          size="sm"
+          :title="t('stackList.newStackTitle')"
+          :aria-label="t('stackList.newStackTitle')"
+          @click="addNewStack"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+        </BaseButton>
+
+        <BaseButton
+          variant="ghost"
+          icon-only
+          size="sm"
+          :disabled="!hasSelected"
+          :title="t('stackList.copyFullTitle')"
+          :aria-label="t('stackList.copyFullTitle')"
+          @click="copySelectedFull"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+        </BaseButton>
+
+        <BaseButton
+          variant="ghost"
+          icon-only
+          size="sm"
+          :disabled="!hasSelected"
+          :title="t('stackList.copyFilteredTitle')"
+          :aria-label="t('stackList.copyFilteredTitle')"
+          @click="copySelectedFiltered"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="4" rx="1"></rect>
+            <path d="M8 8v10l4 2 4-2V8"></path>
+          </svg>
+        </BaseButton>
       </div>
     </div>
 
-    <ul class="stacks-items scrollable" role="list" @dragover.prevent>
-      <!-- displayStacks is REVERSED view. Top item = Last Store Index. -->
-      <li v-for="entry in displayStacks" :key="entry.item.id || entry.idx"
+    <div class="search-row">
+      <input
+        v-model="searchQuery"
+        class="search-input"
+        type="text"
+        :placeholder="t('stackList.searchPlaceholder')"
+        :aria-label="t('stackList.searchAria')"
+      />
+      <BaseButton
+        v-if="searchQuery"
+        variant="ghost"
+        icon-only
+        size="sm"
+        class="clear-search-btn"
+        :title="t('stackList.clearSearch')"
+        :aria-label="t('stackList.clearSearch')"
+        @click="clearSearch"
+      >
+        <svg width="14" height="14" viewBox="0 0 12 12" fill="none">
+          <path d="M1 1L11 11M11 1L1 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+        </svg>
+      </BaseButton>
+    </div>
+
+    <ul class="stacks-items" role="list" @dragover.prevent>
+      <li
+        v-for="entry in filteredDisplayStacks"
+        :key="entry.item.id || entry.idx"
         class="stack-row"
         :class="{
           active: entry.idx === selectedIndex,
           'drag-over-top': isDropTarget(entry.idx, 'top'),
           'drag-over-bottom': isDropTarget(entry.idx, 'bottom')
         }"
+        role="listitem"
+        tabindex="0"
+        :aria-selected="entry.idx === selectedIndex"
+        :title="t('stackList.clickToSelect')"
         @click="select(entry.idx)"
+        @keydown.enter.prevent="select(entry.idx)"
+        @keydown.space.prevent="select(entry.idx)"
+        @keydown.alt.up.prevent="moveVisual(entry.idx, 'up')"
+        @keydown.alt.down.prevent="moveVisual(entry.idx, 'down')"
+        @keydown.f2.prevent="startRename(entry.idx, entry.item.name)"
         @dragover="onDragOver($event, entry.idx)"
         @drop.prevent="onDrop($event, entry.idx)"
       >
-        <!-- Drag Handle -->
-        <div class="drag-handle" 
-             draggable="true" 
-             @dragstart="onDragStart($event, entry.idx)"
-             @click.stop
-             title="Drag to reorder">
-           ⋮⋮
+        <div
+          class="drag-handle"
+          :class="{ disabled: reorderLocked }"
+          draggable="true"
+          :title="reorderLocked ? t('stackList.reorderDisabledWhileSearch') : t('stackList.dragHandleTitle')"
+          @dragstart="onDragStart($event, entry.idx)"
+          @click.stop
+        >
+          ⋮⋮
         </div>
 
-        <div class="item-left" :title="t('stackList.clickToSelect')">
-          <!-- Inline Renaming -->
+        <div class="item-left">
           <div v-if="renamingIndex === entry.idx" class="rename-container">
-             <input 
-               ref="renameInputRef"
-               v-model="renamingValue"
-               class="rename-input"
-               @blur="commitRename(entry.idx)"
-               @keydown.enter="commitRename(entry.idx)"
-               @keydown.esc="cancelRename"
-               @click.stop
-             />
+            <input
+              ref="renameInputRef"
+              v-model="renamingValue"
+              class="rename-input"
+              @blur="commitRename(entry.idx)"
+              @keydown.enter="commitRename(entry.idx)"
+              @keydown.esc="cancelRename"
+              @click.stop
+            />
           </div>
           <div v-else class="item-info">
-             <div class="item-name" :title="entry.item.name">
-               {{ entry.item.name || t('stackList.defaultName', { n: entry.position + 1 }) }}
-             </div>
-             <div class="item-meta">
-               {{ t('stackList.meta', { parts: (entry.item.data?.length ?? 0), filters: (entry.item.filterList?.length ?? 0) }) }}
-             </div>
+            <div class="item-name" :title="entry.item.name">
+              {{ getStackDisplayName(entry) }}
+            </div>
+            <div class="item-meta">
+              {{ t('stackList.meta', { parts: entry.parts, filters: entry.filters }) }}
+            </div>
           </div>
         </div>
 
         <div class="item-controls">
-          <button class="icon-btn rename-btn" :title="t('stackList.renameTitle')"
-            @click.stop="startRename(entry.idx, entry.item.name)">✎</button>
+          <BaseButton
+            variant="ghost"
+            icon-only
+            size="sm"
+            class="row-action-btn"
+            :disabled="reorderLocked || !canMoveVisual(entry.idx, 'up')"
+            :title="reorderLocked ? t('stackList.reorderDisabledWhileSearch') : t('stackList.moveUpTitle')"
+            :aria-label="t('stackList.moveUpTitle')"
+            @click.stop="moveVisual(entry.idx, 'up')"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="18 15 12 9 6 15"></polyline>
+            </svg>
+          </BaseButton>
 
-          <button class="icon-btn delete-btn" :class="{ armed: isStackArmed(entry.idx) }"
-            @click.stop="toggleArmStackDelete(entry.idx)" :disabled="!stacks.length"
-            :title="isStackArmed(entry.idx) ? t('stackList.deleteConfirmTitle') : t('stackList.deleteArmTitle')">
-            {{ isStackArmed(entry.idx) ? '⚠' : '✖' }}
-          </button>
+          <BaseButton
+            variant="ghost"
+            icon-only
+            size="sm"
+            class="row-action-btn"
+            :disabled="reorderLocked || !canMoveVisual(entry.idx, 'down')"
+            :title="reorderLocked ? t('stackList.reorderDisabledWhileSearch') : t('stackList.moveDownTitle')"
+            :aria-label="t('stackList.moveDownTitle')"
+            @click.stop="moveVisual(entry.idx, 'down')"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+          </BaseButton>
+
+          <BaseButton
+            variant="ghost"
+            icon-only
+            size="sm"
+            class="row-action-btn"
+            :title="t('stackList.renameTitle')"
+            :aria-label="t('stackList.renameTitle')"
+            @click.stop="startRename(entry.idx, entry.item.name)"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 20h9"></path>
+              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"></path>
+            </svg>
+          </BaseButton>
+
+          <BaseButton
+            variant="ghost"
+            icon-only
+            size="sm"
+            class="row-action-btn delete-btn"
+            :class="{ armed: isStackArmed(entry.idx) }"
+            :disabled="!stacks.length"
+            :title="isStackArmed(entry.idx) ? t('stackList.deleteConfirmTitle') : t('stackList.deleteArmTitle')"
+            :aria-label="isStackArmed(entry.idx) ? t('stackList.deleteConfirmTitle') : t('stackList.deleteArmTitle')"
+            @click.stop="toggleArmStackDelete(entry.idx)"
+          >
+            <svg v-if="isStackArmed(entry.idx)" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+              <line x1="12" y1="9" x2="12" y2="13"></line>
+              <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+            <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+          </BaseButton>
         </div>
       </li>
 
-      <li v-if="stacks.length === 0" class="empty">{{ t('stackList.empty') }}</li>
+      <li v-if="filteredDisplayStacks.length === 0" class="empty">
+        <p>{{ emptyStateText }}</p>
+        <BaseButton
+          v-if="searchQuery"
+          variant="ghost"
+          size="sm"
+          @click="clearSearch"
+        >
+          {{ t('stackList.clearSearch') }}
+        </BaseButton>
+      </li>
     </ul>
   </div>
 </template>
@@ -82,19 +224,69 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
+import BaseButton from '../ui/BaseButton.vue'
 import { useStudioStore } from '@/stores/studioStore'
 import { doc } from '@/utils/host-window.js'
 
 const { t } = useI18n()
 const store = useStudioStore()
+const emit = defineEmits(['stack-selected'])
+
+const rootEl = ref(null)
+const renameInputRef = ref(null)
+const searchQuery = ref('')
 
 const stacks = computed(() => store.stacks)
 const selectedIndex = computed(() => store.selectedIndex)
 const hasSelected = computed(() => typeof selectedIndex.value === 'number' && selectedIndex.value >= 0)
+const hasSearchQuery = computed(() => searchQuery.value.trim().length > 0)
+const reorderLocked = computed(() => hasSearchQuery.value)
 
-const rootEl = ref(null)
+const selectedStackName = computed(() => {
+  const idx = selectedIndex.value
+  if (typeof idx !== 'number' || idx < 0 || idx >= stacks.value.length) return ''
+  const raw = stacks.value[idx]?.name
+  return typeof raw === 'string' ? raw.trim() : ''
+})
+const hasSelectedName = computed(() => !!selectedStackName.value)
 
-// --- Deletion Logic ---
+const displayStacks = computed(() => {
+  const arr = Array.isArray(stacks.value)
+    ? stacks.value.map((item, idx) => ({
+      item,
+      idx,
+      parts: Array.isArray(item?.data) ? item.data.length : 0,
+      filters: Array.isArray(item?.filterList) ? item.filterList.length : 0
+    }))
+    : []
+
+  return arr.slice().reverse().map((entry, position) => ({ ...entry, position }))
+})
+
+const filteredDisplayStacks = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase()
+  if (!q) return displayStacks.value
+  return displayStacks.value.filter(entry => {
+    const name = getStackDisplayName(entry).toLowerCase()
+    return name.includes(q)
+  })
+})
+
+const emptyStateText = computed(() => {
+  if (stacks.value.length === 0) return t('stackList.empty')
+  return t('stackList.emptySearch')
+})
+
+function getStackDisplayName(entry) {
+  const rawName = entry?.item?.name
+  if (typeof rawName === 'string' && rawName.trim()) return rawName.trim()
+  return t('stackList.defaultName', { n: entry.position + 1 })
+}
+
+function clearSearch() {
+  searchQuery.value = ''
+}
+
 const armedStacks = ref(new Set())
 
 function isStackArmed(idx) {
@@ -114,6 +306,11 @@ function confirmStackDelete(idx) {
     armedStacks.value.delete(idx)
     return
   }
+
+  if (renamingIndex.value === idx) {
+    cancelRename()
+  }
+
   store.removeElement(idx)
   armedStacks.value.clear()
 }
@@ -121,12 +318,11 @@ function confirmStackDelete(idx) {
 function onDocumentClick(e) {
   if (!rootEl.value) return
   const clickedInside = rootEl.value.contains(e.target)
-  if (!clickedInside) {
-    armedStacks.value.clear()
-    // Also cancel rename if clicking outside
-    if (renamingIndex.value !== -1) {
-      commitRename(renamingIndex.value)
-    }
+  if (clickedInside) return
+
+  armedStacks.value.clear()
+  if (renamingIndex.value !== -1) {
+    commitRename(renamingIndex.value)
   }
 }
 
@@ -138,149 +334,150 @@ onBeforeUnmount(() => {
   doc.removeEventListener('click', onDocumentClick, true)
 })
 
-// --- Selection ---
-function select(i) { 
-  // If renaming, clicking row shouldn't trigger select immediately if it blurs input
-  // But usually fine.
-  store.select(i) 
+function select(idx) {
+  store.select(idx)
+  emit('stack-selected')
+  armedStacks.value.clear()
 }
 
-// --- Creation ---
 function addNewStack() {
   const id = 'el_' + Math.random().toString(36).slice(2, 9)
   const name = t('stackList.defaultNewName', { n: stacks.value.length + 1 })
-  const elem = { id, name, data: [], filterList: [] }
-  store.addElement(elem)
+  const element = { id, name, data: [], filterList: [] }
+  store.addElement(element)
 }
 
-// --- Copy ---
 function _deepClone(obj) {
-  try { return JSON.parse(JSON.stringify(obj)) } catch (e) { return typeof structuredClone === 'function' ? structuredClone(obj) : Object.assign({}, obj) }
+  try {
+    return JSON.parse(JSON.stringify(obj))
+  } catch (e) {
+    if (typeof structuredClone === 'function') return structuredClone(obj)
+    return Object.assign({}, obj)
+  }
 }
 
 function copySelectedFull() {
   const idx = selectedIndex.value
   if (typeof idx !== 'number' || idx < 0 || idx >= stacks.value.length) return
-  
-  const orig = stacks.value[idx]
-  if (!orig) return
-  const clone = _deepClone(orig)
+
+  const original = stacks.value[idx]
+  if (!original) return
+
+  const clone = _deepClone(original)
   clone.id = 'el_' + Math.random().toString(36).slice(2, 9)
   clone.name = (clone.name || t('stackList.defaultBaseName')) + ' ' + t('stackList.copySuffix')
+
   if (Array.isArray(clone.data)) {
-    for (const p of clone.data) {
-      try { delete p._uid } catch (e) { }
+    for (const part of clone.data) {
+      try { delete part._uid } catch (e) { }
     }
   }
+
   store.addElement(clone)
 }
 
 function copySelectedFiltered() {
   const idx = selectedIndex.value
   if (typeof idx !== 'number' || idx < 0 || idx >= stacks.value.length) return
-  
-  const orig = stacks.value[idx]
-  const fl = Array.isArray(orig.filterList) ? orig.filterList.slice() : []
-  const parts = Array.isArray(orig.data) && fl.length > 0 ? orig.data.filter(p => {
-    try {
-      const slot = (p && (p.Group || (p.Asset && p.Asset.Group && (p.Asset.Group.Name || p.Asset.Group.name)))) || ''
-      return fl.includes(slot)
-    } catch (e) {
-      return false
-    }
-  }) : []
+
+  const original = stacks.value[idx]
+  if (!original) return
+
+  const filterList = Array.isArray(original.filterList) ? original.filterList.slice() : []
+  const filteredParts = Array.isArray(original.data) && filterList.length > 0
+    ? original.data.filter(part => {
+      try {
+        const slot = (part && (part.Group || (part.Asset && part.Asset.Group && (part.Asset.Group.Name || part.Asset.Group.name)))) || ''
+        return filterList.includes(slot)
+      } catch (e) {
+        return false
+      }
+    })
+    : []
 
   const clone = {
     id: 'el_' + Math.random().toString(36).slice(2, 9),
-    name: (orig.name || t('stackList.defaultBaseName')) + ' ' + t('stackList.copyFilteredSuffix'),
-    data: _deepClone(parts),
-    filterList: _deepClone(fl)
+    name: (original.name || t('stackList.defaultBaseName')) + ' ' + t('stackList.copyFilteredSuffix'),
+    data: _deepClone(filteredParts),
+    filterList: _deepClone(filterList)
   }
+
   if (Array.isArray(clone.data)) {
-    for (const p of clone.data) {
-      try { delete p._uid } catch (e) { }
+    for (const part of clone.data) {
+      try { delete part._uid } catch (e) { }
     }
   }
+
   store.addElement(clone)
 }
 
-// --- Inline Renaming ---
 const renamingIndex = ref(-1)
 const renamingValue = ref('')
-const renameInputRef = ref(null)
+
+function _getRenameInputEl() {
+  if (Array.isArray(renameInputRef.value)) return renameInputRef.value[0] || null
+  return renameInputRef.value || null
+}
 
 function startRename(idx, currentName) {
   renamingIndex.value = idx
   renamingValue.value = currentName || ''
+  armedStacks.value.clear()
+
   nextTick(() => {
-    if (renameInputRef.value && renameInputRef.value[0]) {
-      renameInputRef.value[0].focus()
-      renameInputRef.value[0].select()
-    }
+    const inputEl = _getRenameInputEl()
+    inputEl?.focus()
+    inputEl?.select()
   })
 }
 
 function commitRename(idx) {
   if (renamingIndex.value !== idx) return
-  
-  const trimmed = String(renamingValue.value).trim()
-  renamingIndex.value = -1 // Exit rename mode
-  
-  if (!trimmed) return // Do nothing if empty
 
-  // Update store
-  try {
-    // Attempt immutable update pattern
-    const copy = [...store.stacks]
-    if (copy[idx]) {
-      copy[idx] = { ...copy[idx], name: trimmed }
-      store.stacks = copy
-    }
-  } catch (e) {
-    // Fallback
-     if (store.stacks && store.stacks[idx]) store.stacks[idx].name = trimmed
-  }
-  
+  const nextName = String(renamingValue.value || '').trim()
+  renamingIndex.value = -1
+
+  if (!nextName || !store.stacks[idx]) return
+  if (String(store.stacks[idx].name || '').trim() === nextName) return
+
+  const nextStacks = [...store.stacks]
+  nextStacks[idx] = { ...nextStacks[idx], name: nextName }
+  store.stacks = nextStacks
+
   try { store.refreshMergedAppearanceData && store.refreshMergedAppearanceData() } catch (e) { }
+  try { store.pushHistorySnapshot && store.pushHistorySnapshot() } catch (e) { }
 }
 
 function cancelRename() {
   renamingIndex.value = -1
 }
 
-// --- Drag & Drop (Improved) ---
 const draggedStoreIndex = ref(-1)
 const dragOverStoreIndex = ref(-1)
-const dropPosition = ref(null) // 'top' | 'bottom'
-
-// Display Logic: Reversed
-const displayStacks = computed(() => {
-  const arr = Array.isArray(stacks.value) ? stacks.value.map((item, idx) => ({ item, idx })) : []
-  // Keep original position logic for default names
-  return arr.slice().reverse().map((e, pos) => ({ ...e, position: pos }))
-})
+const dropPosition = ref(null)
 
 function onDragStart(e, storeIdx) {
-  draggedStoreIndex.value = storeIdx
-  // Firefox requires setData
-  try { e.dataTransfer?.setData('text/plain', String(storeIdx)) } catch (err) { }
-  // Set drag image/effect if needed
-  if (e.dataTransfer) {
-    e.dataTransfer.effectAllowed = 'move'
+  if (reorderLocked.value) {
+    e.preventDefault()
+    return
   }
+
+  draggedStoreIndex.value = storeIdx
+  try { e.dataTransfer?.setData('text/plain', String(storeIdx)) } catch (err) { }
+  if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
 }
 
 function onDragOver(e, storeIdx) {
-  if (draggedStoreIndex.value === -1 || draggedStoreIndex.value === storeIdx) {
+  if (reorderLocked.value || draggedStoreIndex.value === -1 || draggedStoreIndex.value === storeIdx) {
     dragOverStoreIndex.value = -1
+    dropPosition.value = null
     return
   }
-  
-  // Calculate top/bottom half
+
   const rect = e.currentTarget.getBoundingClientRect()
   const y = e.clientY - rect.top
   const isTop = y < rect.height / 2
-  
+
   dragOverStoreIndex.value = storeIdx
   dropPosition.value = isTop ? 'top' : 'bottom'
 }
@@ -290,36 +487,30 @@ function isDropTarget(idx, pos) {
 }
 
 function onDrop(e, storeIdx) {
+  if (reorderLocked.value) {
+    resetDrag()
+    return
+  }
+
   const from = draggedStoreIndex.value
   const hovered = storeIdx
-  
+
   if (from === -1 || from === hovered) {
     resetDrag()
     return
   }
-  
-  // Determine Insertion Index
-  // Visual List is Reversed.
-  // Hover Top (Visual) -> Store Index + 1
-  // Hover Bottom (Visual) -> Store Index
-  
+
   let toIndex = dropPosition.value === 'top' ? hovered + 1 : hovered
-  
-  // Correction for standard array move logic where 'to' is the target index *before* removal
-  // If we move UP in store (from < to), the indices shift down.
-  
-  if (from < toIndex) {
-     toIndex -= 1
-  }
-  
-  // Clamp
+
+  if (from < toIndex) toIndex -= 1
+
   if (toIndex < 0) toIndex = 0
   if (toIndex >= stacks.value.length) toIndex = stacks.value.length - 1
-  
+
   if (from !== toIndex) {
     store.moveElement(from, toIndex)
   }
-  
+
   resetDrag()
 }
 
@@ -327,6 +518,18 @@ function resetDrag() {
   draggedStoreIndex.value = -1
   dragOverStoreIndex.value = -1
   dropPosition.value = null
+}
+
+function canMoveVisual(storeIdx, dir) {
+  if (dir === 'up') return storeIdx < stacks.value.length - 1
+  if (dir === 'down') return storeIdx > 0
+  return false
+}
+
+function moveVisual(storeIdx, dir) {
+  if (reorderLocked.value || !canMoveVisual(storeIdx, dir)) return
+  const targetIdx = dir === 'up' ? storeIdx + 1 : storeIdx - 1
+  store.moveElement(storeIdx, targetIdx)
 }
 </script>
 
@@ -336,67 +539,95 @@ function resetDrag() {
   flex-direction: column;
   gap: var(--space-sm, 8px);
   padding: var(--space-sm, 8px);
-  box-sizing: border-box;
   height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
 }
 
 .stacks-header {
   display: flex;
+  align-items: flex-start;
   justify-content: space-between;
-  align-items: center;
-  flex-shrink: 0; /* Prevent header collapse */
+  gap: var(--space-sm, 8px);
+  flex-shrink: 0;
+}
+
+.header-main {
+  min-width: 0;
 }
 
 .stacks-header h4 {
   margin: 0;
   font-size: var(--font-size-md, 14px);
-  color: var(--color-text-primary, #21314a);
+  color: var(--color-text-primary, #1e293b);
+}
+
+.header-meta {
+  margin: 2px 0 0;
+  font-size: var(--font-size-xs, 12px);
+  color: var(--color-text-tertiary, #64748b);
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm, 8px);
+  flex-wrap: wrap;
+}
+
+.selected-pill {
+  display: inline-flex;
+  align-items: center;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 8px;
+  border-radius: var(--radius-xl, 999px);
+  border: 1px solid var(--color-border-base, #e2e8f0);
+  background: var(--color-bg-surface, #f8fafc);
 }
 
 .stacks-actions {
-  display: flex;
-  gap: var(--space-sm, 8px);
-  align-items: center;
-}
-
-.icon-btn {
-  width: var(--button-height-lg, 36px);
-  height: var(--button-height-lg, 36px);
-  padding: 0;
-  border-radius: var(--radius-md, 8px);
-  border: 1px solid var(--color-border-base, rgba(220, 230, 240, 0.85));
-  background: var(--color-bg-base, #ffffff);
-  cursor: pointer;
-  font-size: var(--font-size-lg, 15px);
-  line-height: 1;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
+  gap: 2px;
   flex-shrink: 0;
-  transition: all var(--transition-fast, 0.15s) ease;
+}
+
+.search-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--color-border-base, #e2e8f0);
+  border-radius: var(--radius-md, 8px);
+  padding: 2px 4px 2px 8px;
+  background: var(--color-bg-base, #ffffff);
+  flex-shrink: 0;
+}
+
+.search-row:focus-within {
+  border-color: var(--color-border-focus, #93c5fd);
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.06));
+}
+
+.search-input {
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
   color: var(--color-text-primary, #0f172a);
+  font-size: var(--font-size-sm, 12px);
 }
 
-.icon-btn:hover:not(:disabled) {
-  background: var(--color-bg-hover, #f1f5f9);
-  border-color: var(--color-border-strong, #cbd5e1);
+.search-input::placeholder {
+  color: var(--color-text-tertiary, #94a3b8);
 }
 
-.icon-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
+.clear-search-btn {
+  flex-shrink: 0;
 }
 
-.icon-btn.armed {
-  background: var(--color-error-bg, #fff4f0);
-  border-color: var(--color-error, #ffb3a0);
-}
-
-/* List Container */
 .stacks-items {
   list-style: none;
-  padding: var(--space-xs, 4px) 0; /* space for drop indicators */
+  padding: var(--space-xs, 4px) 0;
   margin: 0;
   display: flex;
   flex-direction: column;
@@ -407,24 +638,42 @@ function resetDrag() {
   flex: 1 1 auto;
 }
 
-/* Row Item */
 .stack-row {
   display: flex;
   align-items: center;
-  padding: var(--space-sm, 6px) var(--space-sm, 8px); /* Slightly tighter padding */
+  min-height: 54px;
+  padding: 6px 8px;
   border-radius: var(--radius-lg, 10px);
-  background: var(--color-bg-base, #ffffff);
   border: 1px solid var(--color-border-base, rgba(220, 230, 240, 0.7));
+  background: var(--color-bg-base, #ffffff);
   cursor: pointer;
-  transition: all var(--transition-fast, 120ms) ease;
   user-select: none;
-  min-height: 50px;
   position: relative;
+  transition: all var(--transition-fast, 0.15s) ease;
+  outline: none;
+}
+
+.stack-row::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  opacity: 0;
+  background: var(--color-primary, #2563eb);
+  transition: opacity var(--transition-fast, 0.15s) ease;
 }
 
 .stack-row:hover {
   background: var(--color-bg-hover, #f1f5f9);
   border-color: var(--color-border-strong, #cbd5e1);
+}
+
+.stack-row:focus-visible {
+  border-color: var(--color-border-focus, rgba(120, 160, 215, 0.6));
+  box-shadow: var(--shadow-sm, 0 0 0 2px rgba(59, 130, 246, 0.12));
 }
 
 .stack-row.active {
@@ -433,10 +682,13 @@ function resetDrag() {
   background: var(--color-bg-base, #fdfdfd);
 }
 
-/* Drag Feedback Indicators */
+.stack-row.active::before {
+  opacity: 1;
+}
+
 .stack-row.drag-over-top {
   border-top: 2px solid var(--color-primary, #2563eb);
-  margin-top: -2px; /* prevent layout shift */
+  margin-top: -2px;
 }
 
 .stack-row.drag-over-bottom {
@@ -444,26 +696,32 @@ function resetDrag() {
   margin-bottom: -2px;
 }
 
-/* Drag Handle */
 .drag-handle {
+  width: 20px;
+  text-align: center;
   cursor: grab;
   color: var(--color-text-muted, #94a3b8);
   padding: 4px;
   margin-right: 4px;
-  font-size: 16px;
+  font-size: 15px;
   line-height: 1;
   flex-shrink: 0;
 }
+
 .drag-handle:active {
   cursor: grabbing;
 }
 
-/* Item Content Left */
+.drag-handle.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .item-left {
   display: flex;
   flex-direction: column;
   flex: 1;
-  min-width: 0; /* Crucial for text truncate in flex child */
+  min-width: 0;
   margin-right: 8px;
 }
 
@@ -474,31 +732,30 @@ function resetDrag() {
 }
 
 .item-name {
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold, 600);
   color: var(--color-text-primary, #0f172a);
-  font-size: 14px;
+  font-size: var(--font-size-sm, 13px);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .item-meta {
-  font-size: 12px;
+  font-size: var(--font-size-xs, 12px);
   color: var(--color-text-tertiary, #64748b);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* Inline Rename Input */
 .rename-container {
-  display: flex;
   width: 100%;
 }
+
 .rename-input {
   width: 100%;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: var(--font-size-sm, 13px);
+  font-weight: var(--font-weight-semibold, 600);
   padding: 4px 6px;
   border: 1px solid var(--color-selection-single, #417aed);
   border-radius: var(--radius-xs, 4px);
@@ -508,26 +765,37 @@ function resetDrag() {
   box-sizing: border-box;
 }
 
-/* Item Controls */
 .item-controls {
   display: flex;
   align-items: center;
-  gap: 6px;
-  flex-shrink: 0; /* Stop buttons from shrinking */
+  gap: 2px;
+  flex-shrink: 0;
 }
 
-.rename-btn, .delete-btn {
-  width: 32px; /* Slightly smaller in list */
-  height: 32px;
-  font-size: 14px;
+.row-action-btn {
+  color: var(--color-text-secondary, #64748b);
+}
+
+.delete-btn.armed {
+  color: var(--color-danger, #dc2626);
+  background: var(--color-error-bg, #fee2e2);
 }
 
 .empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm, 8px);
   text-align: center;
-  color: var(--color-text-muted);
-  padding: 16px;
+  color: var(--color-text-muted, #94a3b8);
+  padding: 20px 12px;
   border-radius: var(--radius-md, 8px);
-  border: 1px dashed var(--color-border-base);
-  font-size: 14px;
+  border: 1px dashed var(--color-border-base, #e2e8f0);
+  font-size: var(--font-size-sm, 13px);
+}
+
+.empty p {
+  margin: 0;
 }
 </style>

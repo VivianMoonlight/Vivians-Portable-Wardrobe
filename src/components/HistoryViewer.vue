@@ -212,6 +212,7 @@ async function clearAllHistory() {
 
 // Single click - load record into preview
 function onRecordClick(record) {
+  fsStore.setActiveItem(record)
   loadRecord(record)
 }
 
@@ -222,13 +223,30 @@ function onRecordDoubleClick(record) {
 
 // Mouse hover - set as active item for preview
 function onRecordMouseEnter(record) {
+  if (!canUseHover()) return
   fsStore.setActiveItem(record)
 }
 
 function onRecordMouseLeave(record) {
+  if (!canUseHover()) return
   if (fsStore.activeItem === record) {
     fsStore.setActiveItem(-1)
   }
+}
+
+function onRecordFocus(record) {
+  fsStore.setActiveItem(record)
+}
+
+function onRecordBlur(e, record) {
+  if (rootEl.value && e?.relatedTarget && rootEl.value.contains(e.relatedTarget)) return
+  if (fsStore.activeItem === record) {
+    fsStore.setActiveItem(-1)
+  }
+}
+
+function canUseHover() {
+  return !!(hostWindow.matchMedia && hostWindow.matchMedia('(hover: hover) and (pointer: fine)').matches)
 }
 
 // Global click/key handlers to close context menu
@@ -328,7 +346,8 @@ const panelStyle = computed(() => {
           <div v-for="(record, index) in filteredHistoryRecords" :key="record.name" class="history-record-card"
             @click="onRecordClick(record)" @dblclick="onRecordDoubleClick(record)"
             @contextmenu.capture="onContextMenu($event, record)" @mouseenter="onRecordMouseEnter(record)"
-            @mouseleave="onRecordMouseLeave(record)">
+            @mouseleave="onRecordMouseLeave(record)" @focusin="onRecordFocus(record)"
+            @focusout="onRecordBlur($event, record)" tabindex="0">
             <div class="record-thumbnail">
               <FileThumbnail :item="record" />
             </div>
@@ -385,6 +404,16 @@ const panelStyle = computed(() => {
   overflow: hidden;
   border-radius: var(--radius-xl, 13px);
   box-shadow: var(--shadow-lg, 0 6px 28px rgba(10, 20, 40, 0.06));
+}
+
+/* 嵌入模式：移除固定的最小尺寸 */
+:is(.history-viewer-panel)[style*="position: relative"] {
+  min-width: auto;
+  min-height: auto;
+  border-radius: 0;
+  box-shadow: none;
+  max-width: 100%;
+  max-height: 100%;
 }
 
 /* Inner panel */
@@ -451,10 +480,6 @@ const panelStyle = computed(() => {
   transition: background var(--transition-fast, 0.15s);
 }
 
-.panel-button:hover {
-  background: var(--color-bg-hover, #f0f4f8);
-}
-
 .toolbar {
   display: flex;
   flex-direction: column;
@@ -505,11 +530,6 @@ const panelStyle = computed(() => {
   background: var(--color-primary-bg, rgba(59, 130, 246, 0.1));
 }
 
-.clear-all-btn:hover {
-  background: var(--color-error-bg, #fee2e2);
-  border-color: var(--color-error, #ef4444);
-}
-
 /* History list - timeline layout */
 .history-list {
   padding: var(--space-md, 12px);
@@ -536,10 +556,9 @@ const panelStyle = computed(() => {
   user-select: none;
 }
 
-.history-record-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.1));
+.history-record-card:focus-visible {
   border-color: var(--color-primary, #3b82f6);
+  box-shadow: 0 0 0 2px var(--color-primary-bg, rgba(59, 130, 246, 0.2));
 }
 
 .history-record-card:active {
@@ -548,9 +567,10 @@ const panelStyle = computed(() => {
 
 /* Thumbnail area */
 .record-thumbnail {
-  flex: 0 0 80px;
-  width: 80px;
-  height: 120px;
+  flex: 0 0 72px;
+  width: 72px;
+  aspect-ratio: 9 / 16;
+  height: auto;
   border-radius: var(--radius-md, 8px);
   overflow: hidden;
   border: 1px solid var(--color-border-light, #e6eef6);
@@ -604,13 +624,30 @@ const panelStyle = computed(() => {
   transition: all var(--transition-fast, 0.15s);
 }
 
-.action-btn:hover {
-  background: var(--color-bg-hover, #f0f4f8);
-}
+@media (hover: hover) and (pointer: fine) {
+  .panel-button:hover {
+    background: var(--color-bg-hover, #f0f4f8);
+  }
 
-.delete-btn:hover {
-  background: var(--color-error-bg, #fee2e2);
-  border-color: var(--color-error, #ef4444);
+  .clear-all-btn:hover {
+    background: var(--color-error-bg, #fee2e2);
+    border-color: var(--color-error, #ef4444);
+  }
+
+  .history-record-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.1));
+    border-color: var(--color-primary, #3b82f6);
+  }
+
+  .action-btn:hover {
+    background: var(--color-bg-hover, #f0f4f8);
+  }
+
+  .delete-btn:hover {
+    background: var(--color-error-bg, #fee2e2);
+    border-color: var(--color-error, #ef4444);
+  }
 }
 
 /* Empty state */
@@ -700,8 +737,10 @@ const panelStyle = computed(() => {
   }
 
   .record-thumbnail {
-    width: 100%;
-    height: 160px;
+    width: min(44vw, 148px);
+    flex-basis: auto;
+    aspect-ratio: 9 / 16;
+    height: auto;
   }
 
   .record-actions {

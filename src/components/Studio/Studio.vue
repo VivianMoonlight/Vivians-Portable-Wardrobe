@@ -350,8 +350,8 @@
                   <button class="folio-step" :class="{ active: activeLeftSheet === 'layer' }" :title="leftSheetLabels.layer" @click="setActiveLeftSheet('layer')">{{ leftSheetLabels.layer }}</button>
                 </div>
 
-                <div v-show="activeLeftSheet === 'stack'" class="structure-stack"><StackList /></div>
-                <div v-show="activeLeftSheet === 'part'" class="structure-parts"><PartListPanel /></div>
+                <div v-show="activeLeftSheet === 'stack'" class="structure-stack"><StackList @stack-selected="onStackEntrySelected" /></div>
+                <div v-show="activeLeftSheet === 'part'" class="structure-parts"><PartListPanel @part-focused="onPartEntrySelected" /></div>
                 <div v-show="activeLeftSheet === 'layer'" class="structure-layers"><PartInspectorPanel /></div>
               </div>
             </aside>
@@ -496,8 +496,6 @@ const showSavesManager = computed(() => store.workspaceMode === 'pro' && store.p
 const canUndo = computed(() => !!store.canUndo && store.canUndo())
 const canRedo = computed(() => !!store.canRedo && store.canRedo())
 const activeLeftSheet = ref('part')
-const hasSelectedStack = computed(() => typeof store.selectedIndex === 'number' && store.selectedIndex >= 0)
-const hasFocusedPart = computed(() => typeof store.focusedPartIndex?.stackIndex === 'number' && typeof store.focusedPartIndex?.partIndex === 'number')
 const selectedStackName = computed(() => {
   const stack = store.selectedElement
   const raw = stack?.name || stack?.Name
@@ -530,42 +528,17 @@ function setActiveLeftSheet(sheet) {
   activeLeftSheet.value = sheet
 }
 
-watch(() => store.activeContextPanel, (panel) => {
-  if (panel === 'inspector') activeLeftSheet.value = 'layer'
-  if (panel === 'asset') activeLeftSheet.value = 'part'
-})
-
-watch(() => store.taskStage, (stage) => {
-  if (stage === 'assemble' && !hasSelectedStack.value) {
-    activeLeftSheet.value = 'stack'
-    return
-  }
-  if (stage === 'replace') {
-    activeLeftSheet.value = 'part'
-    return
-  }
-  if (stage === 'polish' || stage === 'commit') {
-    activeLeftSheet.value = hasFocusedPart.value ? 'layer' : 'part'
-  }
-})
-
-watch(() => store.selectedIndex, (idx) => {
-  if (typeof idx !== 'number' || idx < 0) {
-    activeLeftSheet.value = 'stack'
-    return
-  }
+function onStackEntrySelected() {
   if (activeLeftSheet.value === 'stack') {
     activeLeftSheet.value = 'part'
   }
-})
+}
 
-watch(() => [store.focusedPartIndex?.stackIndex, store.focusedPartIndex?.partIndex], ([stackIndex, partIndex]) => {
-  if (typeof stackIndex === 'number' && typeof partIndex === 'number') {
-    if (store.taskStage === 'polish' || store.taskStage === 'commit' || store.activeContextPanel === 'inspector') {
-      activeLeftSheet.value = 'layer'
-    }
+function onPartEntrySelected() {
+  if (activeLeftSheet.value === 'part') {
+    activeLeftSheet.value = 'layer'
   }
-})
+}
 
 const panelStyle = computed(() => {
   if (props.embedded) {
