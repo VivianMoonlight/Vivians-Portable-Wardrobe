@@ -1,6 +1,6 @@
 {
   "name": "vivians-portable-wardrobe",
-  "version": "0.10.0",
+  "version": "0.10.1-beta.1",
   "type": "module",
   "scripts": {
     "dev": "vite",

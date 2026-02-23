@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vivians Portable Wardrobe
 // @namespace    http://tampermonkey.net/
-// @version      0.10.0
+// @version      0.10.1-beta.1
 // @description  Loader for Portable Wardrobe and Vue floating panel
 // @downloadURL  https://vivianmoonlight.github.io/Vivians-Portable-Wardrobe/ViviansPortableWardrobeLoader.user.js
 // @updateURL    https://vivianmoonlight.github.io/Vivians-Portable-Wardrobe/ViviansPortableWardrobeLoader.user.js
