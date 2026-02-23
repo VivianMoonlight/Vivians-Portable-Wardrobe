@@ -8,7 +8,9 @@
     "release:patch": "node scripts/release.js patch",
     "release:minor": "node scripts/release.js minor",
     "release:major": "node scripts/release.js major",
-    "release:ci": "node scripts/release.js ci"
+    "release:beta": "node scripts/release.js beta",
+    "release:ci": "node scripts/release.js ci",
+    "publish:beta": "node scripts/publish-beta.js"
   },
   "dependencies": {
     "@ckpack/vue-color": "^1.6.0",

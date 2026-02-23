@@ -28,23 +28,16 @@ jobs:
       - name: Prepare release (CI mode)
         run: npm run release:ci
 
-      - name: Commit out folder changes
-        run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          if [[ -n $(git status --porcelain out) ]]; then
-            git add out
-            git commit -m "chore(release): update out userscript"
-            git push
-          else
-            echo "No changes in out/"
-          fi
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          name: ${{ github.ref_name }}
+          prerelease: ${{ contains(github.ref_name, '-beta.') }}
+          generate_release_notes: true
           files: |
+            ViviansPortableWardrobeLoader.user.js
             out/ViviansPortableWardrobeLoader.user.js
+            out/Vivians-Portable-Wardrobe.user.js
             dist/*.user.js
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

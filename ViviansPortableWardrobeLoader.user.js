@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vivians-Portable-Wardrobe
 // @namespace    https://www.bondageprojects.com/
-// @version      0.9.0
+// @version      0.10.0
 // @description  Loader for Portable Wardrobe
 // @author       VivianMoonlight
 // @match        https://bondageprojects.elementfx.com/*
