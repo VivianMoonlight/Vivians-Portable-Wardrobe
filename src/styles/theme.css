@@ -5,7 +5,8 @@
  */
 
 /* ========== Shared Design Tokens (Theme-Independent) ========== */
-#vue-tampermonkey-root {
+#vue-tampermonkey-root,
+#vpw-teleport-root {
   /* Spacing System */
   --space-xs: 4px;
   --space-sm: 8px;
@@ -131,7 +132,8 @@
 
 /* Responsive ramps (mobile-first) */
 @media (min-width: 640px) {
-  #vue-tampermonkey-root {
+  #vue-tampermonkey-root,
+  #vpw-teleport-root {
     --font-size-base: 14px;
     --font-size-lg: 15px;
     --font-size-xl: 17px;
@@ -141,7 +143,8 @@
 }
 
 @media (min-width: 1024px) {
-  #vue-tampermonkey-root {
+  #vue-tampermonkey-root,
+  #vpw-teleport-root {
     --font-size-base: 15px;
     --font-size-lg: 16px;
     --font-size-xl: 18px;
