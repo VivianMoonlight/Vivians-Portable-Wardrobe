@@ -39,7 +39,8 @@ async function ensureDialogMounted() {
   // Create container
   containerElement = doc.createElement('div')
   containerElement.id = 'vpw-dialog-service-root'
-  doc.body.appendChild(containerElement)
+  const teleportHost = doc.getElementById('vpw-teleport-root')
+  ;(teleportHost || doc.body).appendChild(containerElement)
 
   // Create and mount app
   mountedApp = createApp({

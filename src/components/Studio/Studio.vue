@@ -1,5 +1,5 @@
 <template>
-  <component :is="props.embedded ? 'div' : 'teleport'" v-bind="props.embedded ? {} : { to: 'body' }">
+  <component :is="props.embedded ? 'div' : 'teleport'" v-bind="props.embedded ? {} : { to: '#vpw-teleport-root' }">
     <div v-if="props.embedded || visible" class="studio-container" :class="{ embedded: props.embedded }">
       <div class="studio-theme-root" :class="themeClass">
         <div class="studio-window" :class="{ embedded: props.embedded }" :role="props.embedded ? 'region' : 'dialog'" :aria-label="t('studio.ariaLabel')" :style="panelStyle">

@@ -1,5 +1,5 @@
 <template>
-  <Teleport to="body">
+  <Teleport to="#vpw-teleport-root">
     <Transition name="dialog-fade">
       <div v-if="state.visible" class="dialog-overlay" @click="handleOverlayClick">
         <div class="dialog-container" @click.stop role="dialog" :aria-labelledby="dialogId" aria-modal="true">

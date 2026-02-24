@@ -377,7 +377,7 @@ const panelStyle = computed(() => {
     </div>
 
     <!-- Context menu teleported to body -->
-    <teleport to="body">
+    <teleport to="#vpw-teleport-root">
       <div :class="themeClass">
         <div v-if="contextMenu.visible" :id="menuElId" class="context-menu" :class="themeClass"
           :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }" role="menu" aria-hidden="false">

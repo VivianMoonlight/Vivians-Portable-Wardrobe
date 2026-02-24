@@ -10,7 +10,7 @@
       👗
     </button>
     <!-- 遮罩与OutfitPanel -->
-    <teleport to="body">
+    <teleport to="#vpw-teleport-root">
       <div v-if="showPanel" class="outfit-panel-overlay" :class="themeClass" @click.self="closePanel">
         <OutfitPanel
           @close="closePanel"

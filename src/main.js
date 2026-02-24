@@ -51,6 +51,11 @@ async function injectVueApp() {
   root.id = 'vue-tampermonkey-root';
   doc.body.appendChild(root);
 
+  // Create dedicated teleport host inside VPW root to keep teleported UI scoped
+  const teleportRoot = doc.createElement('div');
+  teleportRoot.id = 'vpw-teleport-root';
+  root.appendChild(teleportRoot);
+
   const app = createApp(App);
   const pinia = createPinia();
 
