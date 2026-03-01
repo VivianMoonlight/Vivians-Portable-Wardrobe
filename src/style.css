@@ -23,19 +23,19 @@
 }
 
 /* ---------- WebKit Scrollbar Styles ---------- */
-#vue-tampermonkey-root::-webkit-scrollbar,
+body::-webkit-scrollbar,
 .scrollable::-webkit-scrollbar {
   width: var(--scrollbar-size);
   height: var(--scrollbar-size);
 }
 
-#vue-tampermonkey-root::-webkit-scrollbar-track,
+body::-webkit-scrollbar-track,
 .scrollable::-webkit-scrollbar-track {
   background: var(--scrollbar-track);
   border-radius: calc(var(--scrollbar-size) / 2);
 }
 
-#vue-tampermonkey-root::-webkit-scrollbar-thumb,
+body::-webkit-scrollbar-thumb,
 .scrollable::-webkit-scrollbar-thumb {
   background-color: var(--scrollbar-thumb);
   border-radius: calc(var(--scrollbar-size) / 2);
@@ -45,23 +45,23 @@
   transition: background-color 150ms ease, transform 120ms ease;
 }
 
-#vue-tampermonkey-root::-webkit-scrollbar-thumb:hover,
+body::-webkit-scrollbar-thumb:hover,
 .scrollable::-webkit-scrollbar-thumb:hover {
   background-color: var(--scrollbar-thumb-hover);
 }
 
-#vue-tampermonkey-root::-webkit-scrollbar-thumb:active,
+body::-webkit-scrollbar-thumb:active,
 .scrollable::-webkit-scrollbar-thumb:active {
   background-color: var(--scrollbar-thumb-active);
 }
 
-#vue-tampermonkey-root::-webkit-scrollbar-corner,
+body::-webkit-scrollbar-corner,
 .scrollable::-webkit-scrollbar-corner {
   background: var(--scrollbar-corner);
 }
 
 /* ---------- Firefox Scrollbar ---------- */
-#vue-tampermonkey-root,
+body,
 .scrollable {
   scrollbar-width: thin;
   scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);

@@ -344,7 +344,7 @@ const draggable = !!props.item
     </div>
 
     <!-- 将菜单 teleport 到 body 可以避免被父容器的 overflow/transform/position 影响 -->
-    <teleport to="#vpw-teleport-root">
+    <teleport to="body">
       <div :class="themeClass">
         <div v-if="contextMenu.visible" :id="menuElId" class="context-menu" :class="themeClass"
           :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }" role="menu" aria-hidden="false">

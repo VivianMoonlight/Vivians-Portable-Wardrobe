@@ -3,31 +3,22 @@
  * Basic reset for consistent cross-browser styling
  */
 
-/* Box sizing (scoped to VPW root) */
-#vue-tampermonkey-root,
-#vue-tampermonkey-root *,
-#vue-tampermonkey-root *::before,
-#vue-tampermonkey-root *::after,
-#vpw-teleport-root,
-#vpw-teleport-root *,
-#vpw-teleport-root *::before,
-#vpw-teleport-root *::after {
+/* Box sizing */
+*, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
 /* Typography */
-#vue-tampermonkey-root,
-#vpw-teleport-root {
+html {
   font-size: 16px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
 }
 
-#vue-tampermonkey-root,
-#vpw-teleport-root {
+body {
   font-family: var(--font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif);
   line-height: 1.5;
   color: var(--color-text-primary, #0f172a);
@@ -35,81 +26,54 @@
 }
 
 /* Media */
-#vue-tampermonkey-root img,
-#vue-tampermonkey-root svg,
-#vue-tampermonkey-root video,
-#vue-tampermonkey-root canvas,
-#vue-tampermonkey-root audio,
-#vue-tampermonkey-root iframe,
-#vpw-teleport-root img,
-#vpw-teleport-root svg,
-#vpw-teleport-root video,
-#vpw-teleport-root canvas,
-#vpw-teleport-root audio,
-#vpw-teleport-root iframe {
+img, svg, video, canvas, audio, iframe {
   display: block;
   max-width: 100%;
 }
 
 /* Forms */
-#vue-tampermonkey-root button,
-#vue-tampermonkey-root input,
-#vue-tampermonkey-root select,
-#vue-tampermonkey-root textarea,
-#vpw-teleport-root button,
-#vpw-teleport-root input,
-#vpw-teleport-root select,
-#vpw-teleport-root textarea {
+button, input, select, textarea {
   font: inherit;
   color: inherit;
   line-height: inherit;
 }
 
-#vue-tampermonkey-root button,
-#vpw-teleport-root button {
+button {
   cursor: pointer;
   background: none;
   border: none;
 }
 
-#vue-tampermonkey-root button:disabled,
-#vpw-teleport-root button:disabled {
+button:disabled {
   cursor: not-allowed;
 }
 
 /* Links */
-#vue-tampermonkey-root a,
-#vpw-teleport-root a {
+a {
   color: inherit;
   text-decoration: none;
 }
 
 /* Lists */
-#vue-tampermonkey-root ul,
-#vue-tampermonkey-root ol,
-#vpw-teleport-root ul,
-#vpw-teleport-root ol {
+ul, ol {
   list-style: none;
 }
 
 /* Tables */
-#vue-tampermonkey-root table,
-#vpw-teleport-root table {
+table {
   border-collapse: collapse;
   border-spacing: 0;
 }
 
 /* Remove default focus outline, add custom focus style */
-#vue-tampermonkey-root :focus-visible,
-#vpw-teleport-root :focus-visible {
+:focus-visible {
   outline: 2px solid var(--color-border-focus, #3b82f6);
   outline-offset: 2px;
 }
 
 /* Smooth scrolling */
 @media (prefers-reduced-motion: no-preference) {
-  #vue-tampermonkey-root,
-  #vpw-teleport-root {
+  html {
     scroll-behavior: smooth;
   }
 }

@@ -36,24 +36,8 @@ async function injectVueApp() {
 
 
 
-  const APP_ROOT_ID = 'vue-tampermonkey-root'
-  const TELEPORT_ROOT_ID = 'vpw-teleport-root'
-
-  const ensureTeleportRoot = () => {
-    let teleportRoot = doc.getElementById(TELEPORT_ROOT_ID)
-    if (!teleportRoot) {
-      teleportRoot = doc.createElement('div')
-      teleportRoot.id = TELEPORT_ROOT_ID
-      doc.body.appendChild(teleportRoot)
-    }
-    return teleportRoot
-  }
-
-  // 防止重复 mount；但要确保 teleport host 始终存在
-  if (doc.getElementById(APP_ROOT_ID)) {
-    ensureTeleportRoot()
-    return
-  }
+  // 防止重复 mount
+  if (doc.getElementById('vue-tampermonkey-root')) return;
 
   await LayerTranslator.ensureItemColorLayerNamesLoaded();
   LayerTranslator.cleanUpItemColorLayerNamesLoad();
@@ -64,11 +48,8 @@ async function injectVueApp() {
 
   // 创建 root
   const root = doc.createElement('div');
-  root.id = APP_ROOT_ID;
+  root.id = 'vue-tampermonkey-root';
   doc.body.appendChild(root);
-
-  // Create dedicated teleport host outside Vue root to satisfy Teleport timing/lifecycle
-  ensureTeleportRoot()
 
   const app = createApp(App);
   const pinia = createPinia();
