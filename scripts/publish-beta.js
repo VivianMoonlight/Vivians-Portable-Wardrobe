@@ -18,21 +18,17 @@ function run(cmd, args, opts = {}) {
     let stdout = ''
     let stderr = ''
 
-    if (child.stdout) {
-      child.stdout.on('data', (chunk) => {
-        const text = chunk.toString()
-        stdout += text
-        process.stdout.write(text)
-      })
-    }
+    child.stdout.on('data', (chunk) => {
+      const text = chunk.toString()
+      stdout += text
+      process.stdout.write(text)
+    })
 
-    if (child.stderr) {
-      child.stderr.on('data', (chunk) => {
-        const text = chunk.toString()
-        stderr += text
-        process.stderr.write(text)
-      })
-    }
+    child.stderr.on('data', (chunk) => {
+      const text = chunk.toString()
+      stderr += text
+      process.stderr.write(text)
+    })
 
     child.on('exit', (code) => {
       if (code === 0) {
