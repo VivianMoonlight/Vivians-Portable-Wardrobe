@@ -17,13 +17,13 @@ defineProps({
 </script>
 
 <template>
-  <div :class="['card-base', `card-padding-${padding}`, { 'card-interactive': interactive }]">
+  <div :class="['vpw-card-base', `vpw-card-padding-${padding}`, { 'vpw-card-interactive': interactive }]">
     <slot />
   </div>
 </template>
 
 <style scoped>
-.card-base {
+.vpw-card-base {
   background: var(--color-bg-base, #fff);
   border: 1px solid var(--color-border-base, #e2e8f0);
   border-radius: var(--radius-md, 8px);

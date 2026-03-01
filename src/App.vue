@@ -1,9 +1,9 @@
 <template>
-  <div class="fm-launcher-root" :class="themeClass">
+  <div class="vpw-fm-launcher-root" :class="themeClass">
    
       <button
-        class="open-fm-btn"
-        :class="{ 'is-active': showPanel, 'is-dragging': isDragging }"
+        class="vpw-open-fm-btn"
+        :class="{ 'vpw-is-active': showPanel, 'vpw-is-dragging': isDragging }"
         :style="launcherStyle"
         :data-tip="launcherTip"
         :aria-pressed="showPanel"
@@ -17,12 +17,12 @@
         :title="launcherTip"
       >
         <img :src="logo" alt="" class="logo" />
-        <span class="visually-hidden">{{ launcherTip }}</span>
+        <span class="vpw-visually-hidden">{{ launcherTip }}</span>
       </button>
 
       <!-- Theme Toggle Button >
       <button
-        class="theme-toggle-btn"
+        class="vpw-theme-toggle-btn"
         @click="toggleTheme"
         :title="currentTheme === 'light' ? '切换到深色模式' : '切换到浅色模式'"
         aria-label="切换主题"
@@ -259,18 +259,18 @@ function closePanel() {
 
 <style scoped>
 /* 根容器保持简单，避免创建 stacking context */
-.fm-launcher-root {
+.vpw-fm-launcher-root {
   width: 100%;
   position: relative;
 }
 
 /* top bar 用于布局（如果未来需要扩展可修改） */
-.top-bar {
+.vpw-top-bar {
   padding: 14px 20px;
 }
 
 /* 圆形悬浮按钮主样式 */
-.open-fm-btn {
+.vpw-open-fm-btn {
   position: fixed;
   left: 20px;
   top: 100px;
@@ -301,14 +301,14 @@ function closePanel() {
   outline: none;
 }
 
-.open-fm-btn.is-active {
+.vpw-open-fm-btn.vpw-is-active {
   background: linear-gradient(135deg, #ffffff 0%, #c8d6e8 55%, #d8e6f7 100%);
   box-shadow:
     0 14px 36px rgba(7, 33, 58, 0.28),
     inset 0 1px 0 rgba(255,255,255,0.45);
 }
 
-.open-fm-btn.is-dragging {
+.vpw-open-fm-btn.vpw-is-dragging {
   cursor: grabbing;
   transition: none;
   box-shadow:
@@ -317,7 +317,7 @@ function closePanel() {
 }
 
 /* 内部 logo，使用相对导入的图片资源 */
-.open-fm-btn .logo {
+.vpw-open-fm-btn .logo {
   width: 56%;
   height: 56%;
   object-fit: contain;
@@ -328,7 +328,7 @@ function closePanel() {
 
 /* Hover/active 状态以增强交互感知 */
 @media (hover: hover) and (pointer: fine) {
-  .open-fm-btn:hover {
+  .vpw-open-fm-btn:hover {
     transform: translateY(-6px);
     box-shadow:
       0 18px 42px rgba(7, 33, 58, 0.26),
@@ -337,7 +337,7 @@ function closePanel() {
   }
 }
 
-.open-fm-btn:active {
+.vpw-open-fm-btn:active {
   transform: translateY(-2px) scale(0.985);
   box-shadow:
     0 8px 20px rgba(7, 33, 58, 0.18),
@@ -345,7 +345,7 @@ function closePanel() {
 }
 
 /* Focus-visible 优化，便于键盘用户 */
-.open-fm-btn:focus-visible {
+.vpw-open-fm-btn:focus-visible {
   box-shadow:
     0 12px 36px rgba(7,33,58,0.22),
     0 0 0 6px rgba(95, 180, 255, 0.18);
@@ -353,7 +353,7 @@ function closePanel() {
 }
 
 /* 简洁的 tooltip（桌面设备） */
-.open-fm-btn::after {
+.vpw-open-fm-btn::after {
   content: attr(data-tip);
   position: absolute;
   left: calc(100% + 12px);
@@ -373,19 +373,19 @@ function closePanel() {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .open-fm-btn,
-  .open-fm-btn::after,
-  .open-fm-btn::before {
+  .vpw-open-fm-btn,
+  .vpw-open-fm-btn::after,
+  .vpw-open-fm-btn::before {
     transition: none;
   }
 
-  .open-fm-btn:hover,
-  .open-fm-btn:active {
+  .vpw-open-fm-btn:hover,
+  .vpw-open-fm-btn:active {
     transform: none;
   }
 }
 
-.open-fm-btn::before {
+.vpw-open-fm-btn::before {
   content: "";
   position: absolute;
   left: calc(100% + 6px);
@@ -400,13 +400,13 @@ function closePanel() {
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .open-fm-btn:hover::after,
-  .open-fm-btn:focus-visible::after {
+  .vpw-open-fm-btn:hover::after,
+  .vpw-open-fm-btn:focus-visible::after {
     opacity: 1;
     transform: translateY(50%) translateX(6px);
   }
-  .open-fm-btn:hover::before,
-  .open-fm-btn:focus-visible::before {
+  .vpw-open-fm-btn:hover::before,
+  .vpw-open-fm-btn:focus-visible::before {
     opacity: 1;
     transform: translateY(50%) rotate(45deg) translateX(4px);
   }
@@ -414,14 +414,14 @@ function closePanel() {
 
 /* 小屏或触摸设备上隐藏 tooltip */
 @media (max-width: 480px) {
-  .open-fm-btn::after,
-  .open-fm-btn::before {
+  .vpw-open-fm-btn::after,
+  .vpw-open-fm-btn::before {
     display: none;
   }
 }
 
 /* 屏幕阅读器隐藏文本 */
-.visually-hidden {
+.vpw-visually-hidden {
   position: absolute !important;
   width: 1px;
   height: 1px;
@@ -434,7 +434,7 @@ function closePanel() {
 }
 
 /* Theme toggle button */
-.theme-toggle-btn {
+.vpw-theme-toggle-btn {
   position: fixed;
   left: calc(var(--safe-area-left) + clamp(16px, 3vw, 20px));
   bottom: calc(var(--safe-area-bottom) + clamp(20px, 4vh, 30px));
@@ -462,26 +462,26 @@ function closePanel() {
 
 /* Mobile: position theme toggle near launcher */
 @media (max-width: 640px) {
-  .theme-toggle-btn {
+  .vpw-theme-toggle-btn {
     left: calc(50% + 48px);
     bottom: calc(var(--safe-area-bottom) + 24px);
   }
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .theme-toggle-btn:hover {
+  .vpw-theme-toggle-btn:hover {
     transform: translateY(-4px) scale(1.05);
     box-shadow: var(--shadow-xl, 0 12px 28px rgba(7, 33, 58, 0.22));
     filter: saturate(1.05);
   }
 }
 
-.theme-toggle-btn:active {
+.vpw-theme-toggle-btn:active {
   transform: translateY(-1px) scale(0.98);
   box-shadow: var(--shadow-md, 0 4px 12px rgba(7, 33, 58, 0.16));
 }
 
-.theme-toggle-btn:focus-visible {
+.vpw-theme-toggle-btn:focus-visible {
   box-shadow:
     var(--shadow-lg, 0 8px 24px rgba(7,33,58,0.18)),
     0 0 0 4px rgba(95, 180, 255, 0.18);

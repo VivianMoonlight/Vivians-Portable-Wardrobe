@@ -18,7 +18,7 @@ defineProps({
 </script>
 
 <template>
-  <div :class="['panel-base', `panel-${variant}`, `panel-padding-${padding}`]">
+  <div :class="['vpw-panel-base', `vpw-panel-${variant}`, `vpw-panel-padding-${padding}`]">
     <slot />
   </div>
 </template>

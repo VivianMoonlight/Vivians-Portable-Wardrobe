@@ -1779,9 +1779,10 @@ button:focus,
 }
 </style>
 
-
-<style>
-.vc-input__input {
+<!-- Scoped override for vue-color component styles to prevent global pollution -->
+<style scoped>
+/* Use :deep() to pierce into vue-color child components */
+:deep(.vc-input__input) {
   background-color: var(--color-bg-base, #fff) !important;
   color: var(--color-text-primary, #0f172a) !important;
   font-size: 16px !important;
