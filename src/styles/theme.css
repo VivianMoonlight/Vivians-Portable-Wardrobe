@@ -546,3 +546,63 @@
   color: var(--color-text-primary);
   background-color: var(--color-bg-base);
 }
+
+/* ========== Scrollbar Styles for Theme Containers ========== */
+/* Ensure scrollbar styles are applied within theme contexts */
+.theme-light ::-webkit-scrollbar,
+.theme-dark ::-webkit-scrollbar,
+.theme-themed-light ::-webkit-scrollbar,
+.theme-themed-dark ::-webkit-scrollbar {
+  width: var(--scrollbar-size);
+  height: var(--scrollbar-size);
+}
+
+.theme-light ::-webkit-scrollbar-track,
+.theme-dark ::-webkit-scrollbar-track,
+.theme-themed-light ::-webkit-scrollbar-track,
+.theme-themed-dark ::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+  border-radius: calc(var(--scrollbar-size) / 2);
+}
+
+.theme-light ::-webkit-scrollbar-thumb,
+.theme-dark ::-webkit-scrollbar-thumb,
+.theme-themed-light ::-webkit-scrollbar-thumb,
+.theme-themed-dark ::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb);
+  border-radius: calc(var(--scrollbar-size) / 2);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+  min-height: 28px;
+  transition: background-color 150ms ease, transform 120ms ease;
+}
+
+.theme-light ::-webkit-scrollbar-thumb:hover,
+.theme-dark ::-webkit-scrollbar-thumb:hover,
+.theme-themed-light ::-webkit-scrollbar-thumb:hover,
+.theme-themed-dark ::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scrollbar-thumb-hover);
+}
+
+.theme-light ::-webkit-scrollbar-thumb:active,
+.theme-dark ::-webkit-scrollbar-thumb:active,
+.theme-themed-light ::-webkit-scrollbar-thumb:active,
+.theme-themed-dark ::-webkit-scrollbar-thumb:active {
+  background-color: var(--scrollbar-thumb-active);
+}
+
+.theme-light ::-webkit-scrollbar-corner,
+.theme-dark ::-webkit-scrollbar-corner,
+.theme-themed-light ::-webkit-scrollbar-corner,
+.theme-themed-dark ::-webkit-scrollbar-corner {
+  background: var(--scrollbar-corner);
+}
+
+/* Firefox scrollbar support within theme contexts */
+.theme-light *,
+.theme-dark *,
+.theme-themed-light *,
+.theme-themed-dark * {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}

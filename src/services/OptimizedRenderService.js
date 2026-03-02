@@ -36,6 +36,18 @@ export class OptimizedRenderService {
         // Track if initialized
         this.initialized = false;
         this.previousDataCache = [];
+        // Cache processed Appearance items for incremental updates
+        // Map: groupName -> AppearanceItem
+        this.previousAppearanceCache = new Map();
+        // Performance monitoring
+        this.perfStats = {
+            totalRenders: 0,
+            fastPathHits: 0,
+            incrementalHits: 0,
+            fullReloadHits: 0,
+            itemsProcessed: 0,
+            itemsReused: 0
+        };
     }
 
     /**
@@ -293,11 +305,16 @@ export class OptimizedRenderService {
                     memberNumber
                 );
             } else {
+                const perfStart = performance.now();
+                this.perfStats.totalRenders++;
+
                 const usedFastPath = this._tryApplyGeneralParamUpdate(rawItemData);
                 if (usedFastPath) {
+                    this.perfStats.fastPathHits++;
                     this.previousDataCache = structuredClone(rawItemData).sort((a, b) => a.Group.localeCompare(b.Group));
                     hostWindow.CharacterRefresh(toRaw(this.displayCharacter));
 
+                    console.log(`[Perf] Fast path: ${(performance.now() - perfStart).toFixed(2)}ms`);
                     this.drawCallbacks.drawPreview({
                         data: rawItemData,
                         ctx: ctx,
@@ -309,78 +326,138 @@ export class OptimizedRenderService {
                     return;
                 }
 
-                //find changed items compared to previous data cache
-                const changeditems = rawItemData.filter(newItem => {
-                    return !this.previousDataCache.find(prevItem => isEqual(newItem, prevItem));
+                // OPTIMIZED INCREMENTAL UPDATE
+                // Only process changed items, reuse cached Appearance for unchanged items
+                this.perfStats.incrementalHits++;
+
+                // Build maps for efficient lookup
+                const previousBundleMap = new Map();
+                this.previousDataCache.forEach(item => {
+                    const groupName = this._getBundleGroupName(item);
+                    if (groupName) previousBundleMap.set(groupName, item);
                 });
 
-                //use hostWindow.ServerBundledItemToAppearanceItem
+                const newBundleMap = new Map();
+                rawItemData.forEach(item => {
+                    const groupName = this._getBundleGroupName(item);
+                    if (groupName) newBundleMap.set(groupName, item);
+                });
 
-                const newItems = rawItemData.map(bundleItem =>
-                    hostWindow.ServerBundledItemToAppearanceItem(
-                        family,
-                        toRaw(bundleItem))
-                );
-
-                const appearanceData = toRaw(this.defaultAppearance).filter(item => !newItems.find(newItem => newItem.Asset.Group.Name === item.Asset.Group.Name)).concat(newItems)
-
-                //santize only changed items
-                //since we sorted above, use sequential comparison for efficiency
-                //note that previousDataCache is also sorted but not necessarily in the same  length
-
-
-                this.displayCharacter.Appearance = appearanceData;
-
-
-                const newChangedItems = changeditems.map(bundleItem => {
-                    const bundleItemWithoutProperties = { ...toRaw(bundleItem) };
-                    delete bundleItemWithoutProperties.Property;
-                    const baseItem = hostWindow.ServerBundledItemToAppearanceItem(
-                        family,
-                        toRaw(bundleItemWithoutProperties))
-                    hostWindow.ValidationSanitizeProperties(
-                        toRaw(this.displayCharacter),
-                        toRaw(baseItem)
-                    );
-                    //merge both properties, override base with new ones if has conflicting keys
-                    const finalbundleItem = toRaw(bundleItem);
-                    finalbundleItem.Property = {
-                        ...baseItem.Property,
-                        ...toRaw(bundleItem.Property)
+                // Identify changed items
+                const changedGroups = new Set();
+                const addedGroups = new Set();
+                
+                // Check for changes and additions
+                for (const [groupName, newBundle] of newBundleMap.entries()) {
+                    const prevBundle = previousBundleMap.get(groupName);
+                    if (!prevBundle) {
+                        addedGroups.add(groupName);
+                        changedGroups.add(groupName);
+                    } else if (!isEqual(prevBundle, newBundle)) {
+                        changedGroups.add(groupName);
                     }
-                    const finalItem = hostWindow.ServerBundledItemToAppearanceItem(
-                        family,
-                        toRaw(finalbundleItem))
-                    hostWindow.ValidationSanitizeProperties(
-                        toRaw(this.displayCharacter),
-                        toRaw(finalItem)
-                    );
-                    return finalItem;
                 }
 
+                // Check for removals (items in previous but not in new)
+                const removedGroups = new Set();
+                for (const groupName of previousBundleMap.keys()) {
+                    if (!newBundleMap.has(groupName)) {
+                        removedGroups.add(groupName);
+                    }
+                }
 
-                );
+                console.log(`[Perf] Incremental: ${changedGroups.size} changed, ${removedGroups.size} removed, ${newBundleMap.size - changedGroups.size} reused`);
 
+                // Build new Appearance array
+                const newAppearance = [];
+                let itemsProcessed = 0;
+                let itemsReused = 0;
 
-                /* if (newChangedItems.length > 0) {
-                    newChangedItems.forEach(item => {
+                // Process each item in the new bundle
+                for (const [groupName, bundleItem] of newBundleMap.entries()) {
+                    if (changedGroups.has(groupName)) {
+                        // Process changed/added items
+                        itemsProcessed++;
+                        
+                        const bundleItemWithoutProperties = { ...toRaw(bundleItem) };
+                        delete bundleItemWithoutProperties.Property;
+                        
+                        const baseItem = hostWindow.ServerBundledItemToAppearanceItem(
+                            family,
+                            toRaw(bundleItemWithoutProperties)
+                        );
+                        
                         hostWindow.ValidationSanitizeProperties(
                             toRaw(this.displayCharacter),
-                            toRaw(item)
+                            toRaw(baseItem)
                         );
-                    });
-                } */
-                //merge unchanged items back
+                        
+                        // Merge properties
+                        const finalbundleItem = toRaw(bundleItem);
+                        finalbundleItem.Property = {
+                            ...baseItem.Property,
+                            ...toRaw(bundleItem.Property)
+                        };
+                        
+                        const finalItem = hostWindow.ServerBundledItemToAppearanceItem(
+                            family,
+                            toRaw(finalbundleItem)
+                        );
+                        
+                        hostWindow.ValidationSanitizeProperties(
+                            toRaw(this.displayCharacter),
+                            toRaw(finalItem)
+                        );
+                        
+                        newAppearance.push(finalItem);
+                        // Update cache
+                        this.previousAppearanceCache.set(groupName, finalItem);
+                    } else {
+                        // Reuse cached Appearance item
+                        itemsReused++;
+                        const cachedItem = this.previousAppearanceCache.get(groupName);
+                        if (cachedItem) {
+                            newAppearance.push(cachedItem);
+                        } else {
+                            // Fallback: process if not in cache (shouldn't happen normally)
+                            console.warn(`[Perf] Cache miss for unchanged group: ${groupName}`);
+                            const appearanceItem = hostWindow.ServerBundledItemToAppearanceItem(
+                                family,
+                                toRaw(bundleItem)
+                            );
+                            hostWindow.ValidationSanitizeProperties(
+                                toRaw(this.displayCharacter),
+                                toRaw(appearanceItem)
+                            );
+                            newAppearance.push(appearanceItem);
+                            this.previousAppearanceCache.set(groupName, appearanceItem);
+                        }
+                    }
+                }
 
-                const finalAppearance = appearanceData.filter(item => {
-                    return !newChangedItems.find(newItem => newItem.Asset.Group.Name === item.Asset.Group.Name);
-                }).concat(newChangedItems);
+                // Remove deleted items from cache
+                for (const groupName of removedGroups) {
+                    this.previousAppearanceCache.delete(groupName);
+                }
 
+                // Fill in with default appearance items for groups not in newBundleMap
+                const coveredGroups = new Set(newBundleMap.keys());
+                for (const defaultItem of this.defaultAppearance) {
+                    const groupName = defaultItem?.Asset?.Group?.Name;
+                    if (groupName && !coveredGroups.has(groupName)) {
+                        newAppearance.push(defaultItem);
+                    }
+                }
 
-                this.displayCharacter.Appearance = finalAppearance;
+                this.displayCharacter.Appearance = newAppearance;
 
-                //update Cache
+                // Update stats
+                this.perfStats.itemsProcessed += itemsProcessed;
+                this.perfStats.itemsReused += itemsReused;
 
+                const perfTime = (performance.now() - perfStart).toFixed(2);
+                console.log(`[Perf] Incremental render: ${perfTime}ms (processed: ${itemsProcessed}, reused: ${itemsReused})`);
+                console.log(`[Perf] Stats: ${this.perfStats.fastPathHits} fast, ${this.perfStats.incrementalHits} incremental, ${this.perfStats.fullReloadHits} full of ${this.perfStats.totalRenders} total`);
             }
             this.previousDataCache = structuredClone(rawItemData).sort((a, b) => a.Group.localeCompare(b.Group));
 
@@ -435,6 +512,10 @@ export class OptimizedRenderService {
         // Clear all canvases
         this.canvasRegistry = new WeakMap();
 
+        // Clear caches
+        this.previousAppearanceCache.clear();
+        this.previousDataCache = [];
+
         // Delete persistent character
         if (this.displayCharacter) {
             try {
@@ -446,6 +527,27 @@ export class OptimizedRenderService {
         }
 
         this.initialized = false;
+    }
+
+    /**
+     * Get performance statistics
+     */
+    getPerfStats() {
+        return { ...this.perfStats };
+    }
+
+    /**
+     * Reset performance statistics
+     */
+    resetPerfStats() {
+        this.perfStats = {
+            totalRenders: 0,
+            fastPathHits: 0,
+            incrementalHits: 0,
+            fullReloadHits: 0,
+            itemsProcessed: 0,
+            itemsReused: 0
+        };
     }
 
     /**

@@ -45,8 +45,8 @@
             :key="assetKey(a, idx)"
             class="asset-row"
             :title="assetPrimary(a)"
-            @mouseenter="onHoverAsset(a)"
-            @mouseleave="onLeaveAsset(a)"
+            @mouseenter="onHoverAssetThrottled(a)"
+            @mouseleave="onLeaveAssetDebounced(a)"
           >
             <div class="left">
               <canvas class="entry-thumb"
@@ -114,6 +114,7 @@ import { AssetApi } from '@/utils/AssetApi'
 import * as Palette from '@/services/PaletteService'
 import { hostWindow, doc, setTimeoutHost } from '@/utils/host-window.js'
 import * as DialogService from '@/services/DialogService.js'
+import { throttle, debounce } from '@/utils/performance.js'
 
 const { t } = useI18n()
 
@@ -135,6 +136,13 @@ const hasFocused = computed(() => isReplaceMode.value && !!part.value)
 // search state
 const searchTerm = ref('')
 const searchDebounceTimer = ref(null)
+
+// ✅ Performance optimization: throttle hover preview rendering (100ms min interval)
+// This prevents excessive render calls when user quickly hovers over multiple assets
+let lastPreviewMerged = null
+let hoverPreviewActive = false
+const onHoverAssetThrottled = throttle(onHoverAssetImpl, 100)
+const onLeaveAssetDebounced = debounce(onLeaveAssetImpl, 50)
 
 // group description (do NOT show group name) - delegated to store helper
 const groupDescription = computed(() => {
@@ -580,7 +588,7 @@ function createPreviewDataWithAsset(asset) {
   return mergedPreview
 }
 
-async function onHoverAsset(asset) {
+async function onHoverAssetImpl(asset) {
   if (!asset) return
   if (!store.renderer || typeof store.renderer.renderPreviewWithItem !== 'function') return
 
@@ -598,7 +606,7 @@ async function onHoverAsset(asset) {
   }
 }
 
-function onLeaveAsset(asset) {
+function onLeaveAssetImpl(asset) {
   // restore previous merged appearance rendering
   hoverPreviewActive = false
   store.refreshMergedAppearanceData && store.refreshMergedAppearanceData()

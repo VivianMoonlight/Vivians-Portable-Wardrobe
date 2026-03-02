@@ -180,6 +180,7 @@ import {
 import { AssetApi } from '@/utils/AssetApi'
 import * as Palette from '@/services/PaletteService'
 import { hostWindow, doc } from '@/utils/host-window.js'
+import { throttle } from '@/utils/performance.js'
 
 const { t } = useI18n()
 const store = useStudioStore()
@@ -209,6 +210,7 @@ const armedAll = ref(false)        // prepared to delete entire selection
 
 // hover blink state (part list -> preview visibility flashing)
 const partHoverBlinkTimerId = ref(null)
+const partHoverBlinkRafId = ref(null)  // ✅ Add requestAnimationFrame ID
 const partHoverBlinkState = ref(null)
 const hoveredPartForBlink = ref(null)
 const partHoverBlinkSuppressedByControls = ref(false)
@@ -890,23 +892,47 @@ function startPartHoverBlink(part) {
   const context = {
     stackIndex,
     slotName,
-    visible: true
+    visible: true,
+    startTime: Date.now(),   // ✅ Record start time for calculation
+    BLINK_INTERVAL: 260      // Blink cycle: 260ms on + 260ms off = 520ms total
   }
   partHoverBlinkState.value = context
 
-  // first frame: hide, then toggle show/hide periodically
-  context.visible = false
-  _applyPartHoverBlinkFrame(context, context.visible)
-
-  partHoverBlinkTimerId.value = hostWindow.setInterval(() => {
+  // ✅ Use requestAnimationFrame + timestamp-based calculation instead of setInterval
+  // This synchronizes with browser refresh rate and reduces unnecessary renders
+  function updateBlinkFrame() {
     const latest = partHoverBlinkState.value
     if (!latest) return
-    latest.visible = !latest.visible
+
+    const elapsed = Date.now() - latest.startTime
+    const cyclePos = (elapsed % (latest.BLINK_INTERVAL * 2)) / latest.BLINK_INTERVAL
+    
+    // cyclePos 0-1: visible, cyclePos 1-2: hidden
+    latest.visible = cyclePos < 1
+
     _applyPartHoverBlinkFrame(latest, latest.visible)
-  }, 260)
+
+    // Continue animation only if still hovering
+    partHoverBlinkRafId.value = hostWindow.requestAnimationFrame(updateBlinkFrame)
+  }
+
+  // Initial frame (hidden to start the blink effect)
+  context.visible = false
+  _applyPartHoverBlinkFrame(context, context.visible)
+  
+  // Start RAF loop
+  partHoverBlinkRafId.value = hostWindow.requestAnimationFrame(updateBlinkFrame)
 }
 
 function stopPartHoverBlink() {
+  // ✅ Cancel requestAnimationFrame instead of clearInterval
+  const rafId = partHoverBlinkRafId.value
+  if (rafId !== null) {
+    hostWindow.cancelAnimationFrame(rafId)
+    partHoverBlinkRafId.value = null
+  }
+
+  // Keep old timer cleanup for backward compatibility
   const timerId = partHoverBlinkTimerId.value
   if (timerId !== null) {
     hostWindow.clearInterval(timerId)

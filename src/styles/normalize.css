@@ -1,7 +1,22 @@
 /**
+ * ⚠️ DEPRECATED - DO NOT USE ⚠️
+ * 
+ * This file is DEPRECATED and should NOT be imported.
+ * It has been disabled in src/style.css
+ * 
+ * REASON: Using !important for reset rules causes conflicts with component styles
+ * and makes debugging difficult. Component-level scoped styles are sufficient.
+ * 
+ * STATUS: Disabled on 2026-03-01
+ * ALTERNATIVE: Use component-level scoped styles and CSS variables from theme.css
+ * 
+ * ---
+ * 
  * Normalize - CSS Reset
  * Scoped to #vue-tampermonkey-root to prevent style leakage to host page
  * All selectors are prefixed with the root container
+ * 
+ * ⚠️ IMPORTANT: Using !important for critical reset rules to override scoped component styles
  */
 
 /* Box sizing - scoped to VPW container */
@@ -9,9 +24,9 @@
 #vue-tampermonkey-root *,
 #vue-tampermonkey-root *::before,
 #vue-tampermonkey-root *::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+  box-sizing: border-box !important;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
 /* Typography */
@@ -40,7 +55,7 @@
   max-width: 100%;
 }
 
-/* Forms */
+/* Forms - Use !important to override scoped styles */
 #vue-tampermonkey-root button,
 #vue-tampermonkey-root input,
 #vue-tampermonkey-root select,
@@ -51,9 +66,9 @@
 }
 
 #vue-tampermonkey-root button {
-  cursor: pointer;
-  background: none;
-  border: none;
+  cursor: pointer !important;
+  background: none !important;
+  border: none !important;
 }
 
 #vue-tampermonkey-root button:disabled {
