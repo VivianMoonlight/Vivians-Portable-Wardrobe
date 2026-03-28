@@ -9,10 +9,30 @@
       <span class="group-title">{{ groupName }}</span>
       
       <span class="group-count">{{ layerCount }}</span>
+
+      <button
+        v-if="!isMultiMode"
+        class="quick-multi-btn"
+        @click.stop="enterMultiAndSelectGroup"
+        :title="t('layerGroup.quickMultiSelect') || 'Switch to multi-select and select this group'"
+      >
+        {{ t('layerGroup.multiSelect') || 'Multi' }}
+      </button>
       
-      <button v-if="isMultiMode" class="batch-select-btn" @click.stop="selectAllInGroup"
-        :title="t('layerGroup.selectAll') || 'Select all layers in group'">
-        ☑
+      <button
+        v-if="isMultiMode"
+        class="batch-select-toggle"
+        :class="groupSelectionState"
+        role="checkbox"
+        :aria-checked="groupSelectionState === 'partial' ? 'mixed' : (groupSelectionState === 'all' ? 'true' : 'false')"
+        @click.stop="toggleGroupSelection"
+        :title="groupToggleTitle"
+      >
+        <span class="tri-check" :class="groupSelectionState" aria-hidden="true">
+          <span v-if="groupSelectionState === 'all'">✓</span>
+          <span v-else-if="groupSelectionState === 'partial'">−</span>
+        </span>
+        <span class="tri-text">{{ selectedCountInGroup }}/{{ layerCount }}</span>
       </button>
     </div>
     
@@ -61,30 +81,91 @@ function toggleCollapse() {
   collapsed.value = !collapsed.value
 }
 
+const selectedLayerKeySet = computed(() => {
+  const selected = Array.isArray(store.selectedLayers) ? store.selectedLayers : []
+  return new Set(selected.map(s => s?._key).filter(Boolean))
+})
+
+const groupLayerKeys = computed(() => {
+  if (!Array.isArray(props.layers) || props.layers.length === 0) return []
+  return props.layers
+    .map((layer) => {
+      const layerIndex = Number(layer?.layerIndex)
+      if (!Number.isFinite(layerIndex)) return null
+      return `${props.stackIndex}-${props.partIndex}-${layerIndex}`
+    })
+    .filter(Boolean)
+})
+
+const selectedCountInGroup = computed(() => {
+  const keySet = selectedLayerKeySet.value
+  return groupLayerKeys.value.reduce((count, key) => count + (keySet.has(key) ? 1 : 0), 0)
+})
+
+const groupSelectionState = computed(() => {
+  if (selectedCountInGroup.value <= 0) return 'none'
+  if (selectedCountInGroup.value >= layerCount.value) return 'all'
+  return 'partial'
+})
+
+const groupToggleTitle = computed(() => {
+  if (groupSelectionState.value === 'all') {
+    return t('layerGroup.deselectAll') || 'Deselect all layers in group'
+  }
+  if (groupSelectionState.value === 'partial') {
+    return t('layerGroup.selectAll') || 'Select all layers in group'
+  }
+  return t('layerGroup.selectAll') || 'Select all layers in group'
+})
+
+function enterMultiAndSelectGroup() {
+  if (!isMultiMode.value) {
+    store.toggleSelectionMode()
+  }
+  selectAllInGroup()
+}
+
 function selectAllInGroup() {
-  if (!isMultiMode.value) return
-  
-  // Select all layers in this group
-  props.layers.forEach(layer => {
+  props.layers.forEach((layer) => {
     const layerInfo = {
       stackIndex: props.stackIndex,
       partIndex: props.partIndex,
       layerIndex: layer.layerIndex
     }
-    
-    // Check if already selected
     if (!store.isLayerSelected(layerInfo)) {
       store.toggleLayerSelection(layerInfo)
     }
   })
 }
+
+function clearGroupSelection() {
+  props.layers.forEach((layer) => {
+    const layerInfo = {
+      stackIndex: props.stackIndex,
+      partIndex: props.partIndex,
+      layerIndex: layer.layerIndex
+    }
+    if (store.isLayerSelected(layerInfo)) {
+      store.toggleLayerSelection(layerInfo)
+    }
+  })
+}
+
+function toggleGroupSelection() {
+  if (!isMultiMode.value) return
+  if (groupSelectionState.value === 'all') {
+    clearGroupSelection()
+  } else {
+    selectAllInGroup()
+  }
+}
 </script>
 
 <style scoped>
 .layer-group {
-  margin-bottom: 12px;
-  border-radius: var(--radius-lg, 10px);
-  border: 2px solid var(--color-border-light);
+  margin-bottom: 10px;
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--color-border-base);
   background: var(--color-bg-base);
   overflow: hidden;
 }
@@ -93,15 +174,15 @@ function selectAllInGroup() {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
-  background: linear-gradient(90deg, var(--color-bg-surface) 60%, var(--color-bg-base) 100%);
-  border-bottom: 1px dashed var(--color-border-light);
+  padding: 8px 10px;
+  background: var(--color-bg-surface);
+  border-bottom: 1px solid var(--color-border-light);
   cursor: pointer;
   user-select: none;
 }
 
 .group-header:hover {
-  background: linear-gradient(90deg, var(--color-bg-hover) 60%, var(--color-bg-surface) 100%);
+  background: var(--color-bg-hover);
 }
 
 .fold-toggle {
@@ -144,38 +225,89 @@ function selectAllInGroup() {
 .group-count {
   font-size: 12px;
   color: var(--color-text-secondary);
-  background: var(--color-bg-surface);
+  background: var(--color-bg-base);
   padding: 2px 8px;
-  border-radius: var(--radius-xl, 12px);
+  border-radius: var(--radius-md, 8px);
   border: 1px solid var(--color-border-light);
 }
 
-.batch-select-btn {
-  width: 28px;
-  height: 28px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+.quick-multi-btn {
+  height: 26px;
+  min-width: 48px;
+  padding: 0 8px;
   border-radius: var(--radius-sm, 6px);
   border: 1px solid var(--color-selection-multi-border);
   background: var(--color-selection-multi-bg);
-  color: var(--color-accent-purple);
+  color: var(--color-text-primary);
+  font-size: 12px;
   cursor: pointer;
-  font-size: 14px;
+}
+
+.quick-multi-btn:hover {
+  background: var(--color-selection-multi-hover);
+}
+
+.batch-select-toggle {
+  height: 28px;
+  min-width: 64px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: var(--radius-sm, 6px);
+  border: 1px solid var(--color-selection-multi-border);
+  background: var(--color-bg-base);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  font-size: 12px;
   transition: all 0.15s;
 }
 
-.batch-select-btn:hover {
+.batch-select-toggle:hover {
   background: var(--color-selection-multi-hover);
   border-color: var(--color-accent-purple);
-  box-shadow: 0 2px 4px var(--color-panel-glassmorphism-shadow);
+}
+
+.batch-select-toggle.none {
+  border-color: var(--color-border-base);
+}
+
+.batch-select-toggle.partial,
+.batch-select-toggle.all {
+  border-color: var(--color-selection-multi-border);
+}
+
+.tri-check {
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  border: 1px solid var(--color-border-base);
+  background: var(--color-bg-base);
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 700;
+}
+
+.tri-check.partial,
+.tri-check.all {
+  border-color: var(--color-selection-multi-border);
+  background: var(--color-selection-multi-bg);
+}
+
+.tri-text {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-secondary);
 }
 
 .group-body {
-  padding: 8px;
+  padding: 6px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 /* Transitions */

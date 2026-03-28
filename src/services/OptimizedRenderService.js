@@ -7,6 +7,8 @@ import { toRaw } from "vue";
 import { hostWindow, doc, setTimeoutHost } from '@/utils/host-window.js';
 import { createCanvas, get2DContext } from '@/utils/canvas.js';
 import { isEqual } from 'lodash-es';
+import { normalizeForFastPath } from '@/services/NormalizationPolicy';
+import { isFastPathNormalizationEnabled } from '@/config/featureFlags';
 
 // Constants for character ID generation
 const RANDOM_ID_SUBSTRING_LENGTH = 7;
@@ -36,6 +38,7 @@ export class OptimizedRenderService {
         // Track if initialized
         this.initialized = false;
         this.previousDataCache = [];
+        this.previousComparableCache = [];
         // Cache processed Appearance items for incremental updates
         // Map: groupName -> AppearanceItem
         this.previousAppearanceCache = new Map();
@@ -46,7 +49,9 @@ export class OptimizedRenderService {
             incrementalHits: 0,
             fullReloadHits: 0,
             itemsProcessed: 0,
-            itemsReused: 0
+            itemsReused: 0,
+            normalizationRuns: 0,
+            normalizationFallbacks: 0
         };
     }
 
@@ -79,7 +84,12 @@ export class OptimizedRenderService {
             hostWindow.CharacterRefresh(toRaw(this.displayCharacter));
 
             this.initialized = true;
-            this.defaultAppearance = this.displayCharacter.Appearance || [];
+            // Store default appearance (filter out invalid items, extract raw objects)
+            this.defaultAppearance = (this.displayCharacter.Appearance || [])
+                .map(item => toRaw(item))
+                .filter(item => 
+                    item && item.Asset && item.Asset.Group
+                );
             return true;
         } catch (e) {
             console.error('[OptimizedRenderService] Character initialization failed:', e);
@@ -113,6 +123,23 @@ export class OptimizedRenderService {
         }
         const numericOpacity = Number(rawOpacity);
         return Number.isFinite(numericOpacity) ? numericOpacity : 1;
+    }
+
+    _buildComparableBundle(rawBundleData) {
+        if (!Array.isArray(rawBundleData)) return [];
+
+        if (!isFastPathNormalizationEnabled()) {
+            return rawBundleData;
+        }
+
+        try {
+            this.perfStats.normalizationRuns++;
+            return normalizeForFastPath(rawBundleData);
+        } catch (e) {
+            this.perfStats.normalizationFallbacks++;
+            console.warn('[OptimizedRenderService] Fast-path normalization fallback:', e);
+            return rawBundleData;
+        }
     }
 
     _isSafeGeneralParamUpdate(previousBundleItem, nextBundleItem) {
@@ -169,7 +196,7 @@ export class OptimizedRenderService {
         return false;
     }
 
-    _tryApplyGeneralParamUpdate(newBundleData) {
+    _tryApplyGeneralParamUpdate(newBundleData, comparableBundleData = null) {
         if (!Array.isArray(newBundleData) || !Array.isArray(this.previousDataCache)) {
             return false;
         }
@@ -178,14 +205,24 @@ export class OptimizedRenderService {
             return false;
         }
 
-        if (this.previousDataCache.length === 0 || this.previousDataCache.length !== newBundleData.length) {
+        const comparableData = Array.isArray(comparableBundleData) ? comparableBundleData : newBundleData;
+        if (!Array.isArray(comparableData)) {
+            return false;
+        }
+
+        const previousComparable = Array.isArray(this.previousComparableCache) && this.previousComparableCache.length
+            ? this.previousComparableCache
+            : this.previousDataCache;
+
+        if (previousComparable.length === 0 || previousComparable.length !== comparableData.length) {
             return false;
         }
 
         const previousMap = new Map();
         const nextMap = new Map();
+        const nextRawMap = new Map();
 
-        for (const previousItem of this.previousDataCache) {
+        for (const previousItem of previousComparable) {
             const groupName = this._getBundleGroupName(previousItem);
             if (!groupName || previousMap.has(groupName)) {
                 return false;
@@ -193,12 +230,20 @@ export class OptimizedRenderService {
             previousMap.set(groupName, previousItem);
         }
 
-        for (const nextItem of newBundleData) {
+        for (const nextItem of comparableData) {
             const groupName = this._getBundleGroupName(nextItem);
             if (!groupName || nextMap.has(groupName)) {
                 return false;
             }
             nextMap.set(groupName, nextItem);
+        }
+
+        for (const nextRawItem of newBundleData) {
+            const groupName = this._getBundleGroupName(nextRawItem);
+            if (!groupName || nextRawMap.has(groupName)) {
+                return false;
+            }
+            nextRawMap.set(groupName, nextRawItem);
         }
 
         if (previousMap.size !== nextMap.size) {
@@ -224,8 +269,13 @@ export class OptimizedRenderService {
             return false;
         }
 
-        for (const { groupName, nextItem } of changedItems) {
-            const appearanceItem = this.displayCharacter.Appearance.find(current => current?.Asset?.Group?.Name === groupName);
+        for (const { groupName } of changedItems) {
+            const nextItem = nextRawMap.get(groupName);
+            if (!nextItem) {
+                return false;
+            }
+
+            const appearanceItem = toRaw(this.displayCharacter.Appearance.find(current => current?.Asset?.Group?.Name === groupName));
             if (!appearanceItem) {
                 return false;
             }
@@ -289,7 +339,24 @@ export class OptimizedRenderService {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         try {
-            const rawItemData = toRaw(item.data);
+            let rawItemData = toRaw(item.data);
+            
+            // Filter out null/undefined items and items without proper structure
+            if (Array.isArray(rawItemData)) {
+                rawItemData = rawItemData.filter(bundleItem => {
+                    if (!bundleItem) {
+                        console.warn('[OptimizedRenderService] Found null/undefined item in data, skipping');
+                        return false;
+                    }
+                    // Check if item has Group directly or has Name+Group structure
+                    const hasGroup = bundleItem.Group || (bundleItem.Name && bundleItem.Group !== undefined);
+                    if (!hasGroup) {
+                        console.warn('[OptimizedRenderService] Found item without Group property, skipping:', bundleItem);
+                        return false;
+                    }
+                    return true;
+                });
+            }
 
             // Update character appearance using persistent instance
             const family = this.displayCharacter.AssetFamily || 'Female3DCG';
@@ -307,11 +374,13 @@ export class OptimizedRenderService {
             } else {
                 const perfStart = performance.now();
                 this.perfStats.totalRenders++;
+                const comparableData = this._buildComparableBundle(rawItemData);
 
-                const usedFastPath = this._tryApplyGeneralParamUpdate(rawItemData);
+                const usedFastPath = this._tryApplyGeneralParamUpdate(rawItemData, comparableData);
                 if (usedFastPath) {
                     this.perfStats.fastPathHits++;
                     this.previousDataCache = structuredClone(rawItemData).sort((a, b) => a.Group.localeCompare(b.Group));
+                    this.previousComparableCache = structuredClone(comparableData).sort((a, b) => a.Group.localeCompare(b.Group));
                     hostWindow.CharacterRefresh(toRaw(this.displayCharacter));
 
                     console.log(`[Perf] Fast path: ${(performance.now() - perfStart).toFixed(2)}ms`);
@@ -409,15 +478,38 @@ export class OptimizedRenderService {
                             toRaw(finalItem)
                         );
                         
-                        newAppearance.push(finalItem);
-                        // Update cache
-                        this.previousAppearanceCache.set(groupName, finalItem);
+                        // Validate item has required structure before adding
+                        if (finalItem && finalItem.Asset && finalItem.Asset.Group) {
+                            newAppearance.push(toRaw(finalItem));
+                            // Update cache with raw object
+                            this.previousAppearanceCache.set(groupName, toRaw(finalItem));
+                        } else {
+                            console.warn(`[OptimizedRenderService] Invalid finalItem for group ${groupName}, skipping`);
+                        }
                     } else {
-                        // Reuse cached Appearance item
+                        // Reuse cached Appearance item (already raw from cache)
                         itemsReused++;
                         const cachedItem = this.previousAppearanceCache.get(groupName);
-                        if (cachedItem) {
-                            newAppearance.push(cachedItem);
+                        if (cachedItem && cachedItem.Asset && cachedItem.Asset.Group) {
+                            newAppearance.push(toRaw(cachedItem));
+                        } else if (cachedItem) {
+                            console.warn(`[OptimizedRenderService] Invalid cached item for group ${groupName}, reprocessing`);
+                            this.previousAppearanceCache.delete(groupName);
+                            // Fallback: reprocess
+                            const appearanceItem = hostWindow.ServerBundledItemToAppearanceItem(
+                                family,
+                                toRaw(bundleItem)
+                            );
+                            hostWindow.ValidationSanitizeProperties(
+                                toRaw(this.displayCharacter),
+                                toRaw(appearanceItem)
+                            );
+                            if (appearanceItem && appearanceItem.Asset && appearanceItem.Asset.Group) {
+                                newAppearance.push(toRaw(appearanceItem));
+                                this.previousAppearanceCache.set(groupName, toRaw(appearanceItem));
+                            } else {
+                                console.warn(`[OptimizedRenderService] Failed to reprocess item for group ${groupName}`);
+                            }
                         } else {
                             // Fallback: process if not in cache (shouldn't happen normally)
                             console.warn(`[Perf] Cache miss for unchanged group: ${groupName}`);
@@ -429,8 +521,12 @@ export class OptimizedRenderService {
                                 toRaw(this.displayCharacter),
                                 toRaw(appearanceItem)
                             );
-                            newAppearance.push(appearanceItem);
-                            this.previousAppearanceCache.set(groupName, appearanceItem);
+                            if (appearanceItem && appearanceItem.Asset && appearanceItem.Asset.Group) {
+                                newAppearance.push(toRaw(appearanceItem));
+                                this.previousAppearanceCache.set(groupName, toRaw(appearanceItem));
+                            } else {
+                                console.warn(`[OptimizedRenderService] Failed to process fallback item for group ${groupName}`);
+                            }
                         }
                     }
                 }
@@ -445,11 +541,16 @@ export class OptimizedRenderService {
                 for (const defaultItem of this.defaultAppearance) {
                     const groupName = defaultItem?.Asset?.Group?.Name;
                     if (groupName && !coveredGroups.has(groupName)) {
-                        newAppearance.push(defaultItem);
+                        newAppearance.push(toRaw(defaultItem));
                     }
                 }
 
-                this.displayCharacter.Appearance = newAppearance;
+                // Extract raw objects from all items before assignment
+                this.displayCharacter.Appearance = newAppearance
+                    .map(item => toRaw(item))
+                    .filter(item => 
+                        item && item.Asset && item.Asset.Group
+                    );
 
                 // Update stats
                 this.perfStats.itemsProcessed += itemsProcessed;
@@ -460,6 +561,7 @@ export class OptimizedRenderService {
                 console.log(`[Perf] Stats: ${this.perfStats.fastPathHits} fast, ${this.perfStats.incrementalHits} incremental, ${this.perfStats.fullReloadHits} full of ${this.perfStats.totalRenders} total`);
             }
             this.previousDataCache = structuredClone(rawItemData).sort((a, b) => a.Group.localeCompare(b.Group));
+            this.previousComparableCache = structuredClone(this._buildComparableBundle(rawItemData)).sort((a, b) => a.Group.localeCompare(b.Group));
 
             // Refresh only once
             hostWindow.CharacterRefresh(toRaw(this.displayCharacter));
@@ -515,6 +617,7 @@ export class OptimizedRenderService {
         // Clear caches
         this.previousAppearanceCache.clear();
         this.previousDataCache = [];
+        this.previousComparableCache = [];
 
         // Delete persistent character
         if (this.displayCharacter) {
@@ -546,7 +649,9 @@ export class OptimizedRenderService {
             incrementalHits: 0,
             fullReloadHits: 0,
             itemsProcessed: 0,
-            itemsReused: 0
+            itemsReused: 0,
+            normalizationRuns: 0,
+            normalizationFallbacks: 0
         };
     }
 

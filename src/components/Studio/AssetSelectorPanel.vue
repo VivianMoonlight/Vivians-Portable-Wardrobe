@@ -1,7 +1,11 @@
 <template>
-  <div class="asset-selector-panel" role="region" :aria-label="t('assetSelector.ariaLabel')">
+  <div
+    class="asset-selector-panel"
+    role="region"
+    :aria-label="t('assetSelector.ariaLabel')"
+  >
     <div class="header">
-      <h4>{{ t('assetSelector.title') }}</h4>
+      <h4>{{ t("assetSelector.title") }}</h4>
 
       <div class="actions">
         <input
@@ -14,27 +18,50 @@
         />
 
         <!-- new: 切换按钮 -->
-        <button @click="toggleView" class="view-toggle-btn" :title="isCardView ? t('assetSelector.toggleToListView') : t('assetSelector.toggleToCardView')">
-          {{ isCardView ? '▦' : '≣' }}
+        <button
+          @click="toggleView"
+          class="view-toggle-btn"
+          :title="
+            isCardView
+              ? t('assetSelector.toggleToListView')
+              : t('assetSelector.toggleToCardView')
+          "
+        >
+          {{ isCardView ? "▦" : "≣" }}
         </button>
 
-        <button @click="refresh" :disabled="loading" class="refresh-btn" :title="t('assetSelector.refreshTitle')">↻</button>
+        <button
+          @click="refresh"
+          :disabled="loading"
+          class="refresh-btn"
+          :title="t('assetSelector.refreshTitle')"
+        >
+          ↻
+        </button>
       </div>
     </div>
 
     <div class="body">
       <div v-if="!isReplaceMode" class="placeholder">
-        {{ t('assetSelector.notInReplaceModePlaceholder') }}
+        {{ t("assetSelector.notInReplaceModePlaceholder") }}
       </div>
 
       <div v-else>
         <div class="meta">
-          <div><strong>{{ t('assetSelector.groupLabel') }}</strong> {{ groupDescription || "—" }}</div>
-          <div><strong>{{ t('assetSelector.candidatesLabel') }}</strong> {{ filteredAssets.length }}</div>
+          <div>
+            <strong>{{ t("assetSelector.groupLabel") }}</strong>
+            {{ groupDescription || "—" }}
+          </div>
+          <div>
+            <strong>{{ t("assetSelector.candidatesLabel") }}</strong>
+            {{ filteredAssets.length }}
+          </div>
         </div>
 
-        <div v-if="loading" class="placeholder">{{ t('assetSelector.loading') }}</div>
-        <div v-else-if="filteredAssets.length === 0" class="placeholder">{{ t('assetSelector.noMatches') }}</div>
+        <div v-if="loading" class="placeholder">{{ t("assetSelector.loading") }}</div>
+        <div v-else-if="filteredAssets.length === 0" class="placeholder">
+          {{ t("assetSelector.noMatches") }}
+        </div>
 
         <!-- ====================== -->
         <!-- LIST VIEW（原样） -->
@@ -46,11 +73,12 @@
             class="asset-row"
             :title="assetPrimary(a)"
             @mouseenter="onHoverAssetThrottled(a)"
-            @mouseleave="onLeaveAssetDebounced(a)"
+            @mouseleave="onLeaveAssetImpl(a)"
           >
             <div class="left">
-              <canvas class="entry-thumb"
-                :ref="el => registerCanvas(el, a, idx)"
+              <canvas
+                class="entry-thumb"
+                :ref="(el) => registerCanvas(el, a, idx)"
                 aria-hidden="true"
               ></canvas>
             </div>
@@ -60,9 +88,13 @@
             </div>
 
             <div class="right">
-              <button class="tiny" @click="applyAsset(a)" :disabled="!canApply"
-                :title="t('assetSelector.applyTitle')">
-                {{ t('assetSelector.apply') }}
+              <button
+                class="tiny"
+                @click="applyAsset(a)"
+                :disabled="!canApply"
+                :title="t('assetSelector.applyTitle')"
+              >
+                {{ t("assetSelector.apply") }}
               </button>
             </div>
           </div>
@@ -79,8 +111,9 @@
           >
             <!-- 图片区域：始终显示、占主要宽度 -->
             <div class="card-img-wrapper">
-              <canvas class="card-thumb"
-                :ref="el => registerCanvas(el, a, idx)"
+              <canvas
+                class="card-thumb"
+                :ref="(el) => registerCanvas(el, a, idx)"
                 aria-hidden="true"
               ></canvas>
             </div>
@@ -91,105 +124,120 @@
                 {{ assetPrimary(a) }}
               </div>
 
-              <button class="apply-btn" @click="applyAsset(a)" :disabled="!canApply" :title="t('assetSelector.applyTitle')">
-                {{ t('assetSelector.apply') }}
+              <button
+                class="apply-btn"
+                @click="applyAsset(a)"
+                :disabled="!canApply"
+                :title="t('assetSelector.applyTitle')"
+              >
+                {{ t("assetSelector.apply") }}
               </button>
             </div>
           </div>
         </div>
         <!-- END CARD VIEW -->
-
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed, ref, onMounted, onBeforeUnmount, watch, nextTick, toRaw } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { useStudioStore } from '@/stores/studioStore'
-import { useFileSystemStore } from '@/stores/fileSystemStore'
-import { classifyToGroup } from '@/config/filterGroupConfig.js'
-import { AssetApi } from '@/utils/AssetApi'
-import * as Palette from '@/services/PaletteService'
-import { hostWindow, doc, setTimeoutHost } from '@/utils/host-window.js'
-import * as DialogService from '@/services/DialogService.js'
-import { throttle, debounce } from '@/utils/performance.js'
+import { computed, ref, onMounted, onBeforeUnmount, watch, nextTick, toRaw } from "vue";
+import { useI18n } from "vue-i18n";
+import { useStudioStore } from "@/stores/studioStore";
+import { useFileSystemStore } from "@/stores/fileSystemStore";
+import { classifyToGroup } from "@/config/filterGroupConfig.js";
+import { AssetApi } from "@/utils/AssetApi";
+import * as Palette from "@/services/PaletteService";
+import { hostWindow, doc, setTimeoutHost } from "@/utils/host-window.js";
+import * as DialogService from "@/services/DialogService.js";
+import { throttle, debounce } from "@/utils/performance.js";
 
-const { t } = useI18n()
+const { t } = useI18n();
 
-const isCardView = ref(false)
+const isCardView = ref(false);
 function toggleView() {
-  isCardView.value = !isCardView.value
+  isCardView.value = !isCardView.value;
 }
 
-const store = useStudioStore()
-const fsStore = useFileSystemStore()
-const loading = ref(false)
+const store = useStudioStore();
+const fsStore = useFileSystemStore();
+const loading = ref(false);
 
 // Replace mode target (from store.replaceTarget)
-const replaceTarget = computed(() => store.replaceTarget)
-const isReplaceMode = computed(() => !!(replaceTarget.value && replaceTarget.value.active))
-const part = computed(() => replaceTarget.value ? replaceTarget.value.item : null)
-const hasFocused = computed(() => isReplaceMode.value && !!part.value)
+const replaceTarget = computed(() => store.replaceTarget);
+const isReplaceMode = computed(
+  () => !!(replaceTarget.value && replaceTarget.value.active)
+);
+const part = computed(() => (replaceTarget.value ? replaceTarget.value.item : null));
+const hasFocused = computed(() => isReplaceMode.value && !!part.value);
 
 // search state
-const searchTerm = ref('')
-const searchDebounceTimer = ref(null)
+const searchTerm = ref("");
+const searchDebounceTimer = ref(null);
 
 // ✅ Performance optimization: throttle hover preview rendering (100ms min interval)
 // This prevents excessive render calls when user quickly hovers over multiple assets
-let lastPreviewMerged = null
-let hoverPreviewActive = false
-const onHoverAssetThrottled = throttle(onHoverAssetImpl, 100)
-const onLeaveAssetDebounced = debounce(onLeaveAssetImpl, 50)
+let lastPreviewMerged = null;
+let hoverPreviewActive = false;
+const onHoverAssetThrottled = throttle(onHoverAssetImpl, 100);
 
 // group description (do NOT show group name) - delegated to store helper
 const groupDescription = computed(() => {
-  if (!part.value) return null
-  return store.getGroupDescriptionForPart ? store.getGroupDescriptionForPart(part.value) : (part.value.Asset?.Group?.Description || part.value.GroupDescription || null)
-})
+  if (!part.value) return null;
+  return store.getGroupDescriptionForPart
+    ? store.getGroupDescriptionForPart(part.value)
+    : part.value.Asset?.Group?.Description || part.value.GroupDescription || null;
+});
 
 // assets for the target part (delegated to store)
 const assets = computed(() => {
-  if (!part.value) return []
-  return store.getAssetCandidatesForPart ? store.getAssetCandidatesForPart(part.value) : (store.findAssetsGroupForPart ? store.findAssetsGroupForPart(part.value) : [])
-})
+  if (!part.value) return [];
+  return store.getAssetCandidatesForPart
+    ? store.getAssetCandidatesForPart(part.value)
+    : store.findAssetsGroupForPart
+    ? store.findAssetsGroupForPart(part.value)
+    : [];
+});
 
 // filtered assets according to searchTerm
 const filteredAssets = computed(() => {
-  const term = (searchTerm.value || '').trim().toLowerCase()
-  if (!term) return assets.value || []
-  return (assets.value || []).filter(a => {
+  const term = (searchTerm.value || "").trim().toLowerCase();
+  if (!term) return assets.value || [];
+  return (assets.value || []).filter((a) => {
     try {
-      const primary = assetPrimary(a).toLowerCase()
-      if (primary.includes(term)) return true
-      const name = (a && (a.Name || a.name || '')).toString().toLowerCase()
-      if (name.includes(term)) return true
-      const desc = (a && (a.Description || a.Desc || a.description || '')).toString().toLowerCase()
-      if (desc.includes(term)) return true
-    } catch (e) { /* ignore */ }
-    return false
-  })
-})
+      const primary = assetPrimary(a).toLowerCase();
+      if (primary.includes(term)) return true;
+      const name = (a && (a.Name || a.name || "")).toString().toLowerCase();
+      if (name.includes(term)) return true;
+      const desc = (a && (a.Description || a.Desc || a.description || ""))
+        .toString()
+        .toLowerCase();
+      if (desc.includes(term)) return true;
+    } catch (e) {
+      /* ignore */
+    }
+    return false;
+  });
+});
 
 // helper for primary label
 function assetPrimary(a) {
-  if (!a) return t('assetSelector.unknown')
-  if (typeof a === 'string') return a
-  return a.Description || a.Desc || a.description || a.name || t('assetSelector.unnamed')
+  if (!a) return t("assetSelector.unknown");
+  if (typeof a === "string") return a;
+  return a.Description || a.Desc || a.description || a.name || t("assetSelector.unnamed");
 }
 
 // generate stable key for v-for (use Name when available)
 function assetKey(a, idx) {
   try {
-    if (!a) return String(idx)
-    if (typeof a === 'string') return 's_' + a
-    if (a.Name) return 'n_' + a.Name
-    if (a.name) return 'n_' + a.name
-    return 'i_' + idx
+    if (!a) return String(idx);
+    if (typeof a === "string") return "s_" + a;
+    if (a.Name) return "n_" + a.Name;
+    if (a.name) return "n_" + a.name;
+    return "i_" + idx;
   } catch (e) {
-    return 'i_' + idx
+    return "i_" + idx;
   }
 }
 
@@ -198,141 +246,153 @@ function assetKey(a, idx) {
    ------------------------- */
 
 // Map: key (string) -> canvas element
-const canvasMap = new Map()
+const canvasMap = new Map();
 // Map: key -> asset object (latest)
-const keyToAsset = new Map()
+const keyToAsset = new Map();
 
 // square area in CSS pixels for thumbnails
-const CSS_SIZE = 56
- 
+const CSS_SIZE = 56;
 
 // Compute path for asset (uses DynamicPreviewImage and fsStore.character)
 function computeImagePath(asset) {
-  if (!asset) return null
+  if (!asset) return null;
 
   // C can be the target character from file system store
-  const C = fsStore.character || null
+  const C = fsStore.character || null;
 
   // Determine dynamic suffix
-  let dynamicSuffix = ''
+  let dynamicSuffix = "";
   try {
     if (C && asset.DynamicPreviewImage) {
-      if (typeof asset.DynamicPreviewImage === 'function') {
+      if (typeof asset.DynamicPreviewImage === "function") {
         try {
-          const res = asset.DynamicPreviewImage(C)
-          if (res) dynamicSuffix = String(res)
+          const res = asset.DynamicPreviewImage(C);
+          if (res) dynamicSuffix = String(res);
         } catch (e) {
-          dynamicSuffix = ''
+          dynamicSuffix = "";
         }
-      } else if (typeof asset.DynamicPreviewImage === 'string') {
-        dynamicSuffix = asset.DynamicPreviewImage || ''
+      } else if (typeof asset.DynamicPreviewImage === "string") {
+        dynamicSuffix = asset.DynamicPreviewImage || "";
       }
     }
   } catch (e) {
-    dynamicSuffix = ''
+    dynamicSuffix = "";
   }
 
   try {
-    if (typeof AssetGetPreviewPath === 'function') {
+    if (typeof AssetGetPreviewPath === "function") {
       try {
-        const base = AssetGetPreviewPath(asset)
-        if (base) return `${base}/${asset.Name}${dynamicSuffix}.png`
-      } catch (e) { /* fallthrough */ }
+        const base = AssetGetPreviewPath(asset);
+        if (base) return `${base}/${asset.Name}${dynamicSuffix}.png`;
+      } catch (e) {
+        /* fallthrough */
+      }
     }
-    if (asset.PreviewPath) return asset.PreviewPath
-    if (asset.Url) return asset.Url
-    if (asset.Path) return `${asset.Path}/${asset.Name}${dynamicSuffix}.png`
-    return asset.Name ? `${asset.Name}${dynamicSuffix}.png` : null
+    if (asset.PreviewPath) return asset.PreviewPath;
+    if (asset.Url) return asset.Url;
+    if (asset.Path) return `${asset.Path}/${asset.Name}${dynamicSuffix}.png`;
+    return asset.Name ? `${asset.Name}${dynamicSuffix}.png` : null;
   } catch (e) {
-    return null
+    return null;
   }
 }
 
 // Draw asset into a square canvas with aspect-fit centering and DPR handling
 async function drawAssetThumbOnCanvas(asset, canvasEl) {
-  if (!asset || !canvasEl) return
+  if (!asset || !canvasEl) return;
 
-  let cssSize = CSS_SIZE
-  const dpr = hostWindow.devicePixelRatio || 1
+  let cssSize = CSS_SIZE;
+  const dpr = hostWindow.devicePixelRatio || 1;
 
   if (isCardView.value) {
-    const wrapper = canvasEl.parentNode   // card-img-wrapper
+    const wrapper = canvasEl.parentNode; // card-img-wrapper
     if (wrapper) {
-      const rect = wrapper.getBoundingClientRect()
-      cssSize = Math.floor(rect.width)   // 正方形卡片 → 宽=高
+      const rect = wrapper.getBoundingClientRect();
+      cssSize = Math.floor(rect.width); // 正方形卡片 → 宽=高
     }
   }
 
   // Ensure CSS size (visual) and backing store size (actual pixels) are set
   try {
-    canvasEl.style.width = cssSize + 'px'
-    canvasEl.style.height = cssSize + 'px'
+    canvasEl.style.width = cssSize + "px";
+    canvasEl.style.height = cssSize + "px";
     // set backing store to DPR-scaled size
-    canvasEl.width = Math.round(cssSize * dpr)
-    canvasEl.height = Math.round(cssSize * dpr)
+    canvasEl.width = Math.round(cssSize * dpr);
+    canvasEl.height = Math.round(cssSize * dpr);
   } catch (e) {
     // ignore if setting sizes fails for some reason
   }
 
-  const ctx = canvasEl.getContext('2d')
-  if (!ctx) return
+  const ctx = canvasEl.getContext("2d");
+  if (!ctx) return;
 
   // Set transform so we can draw using CSS pixel coordinates (0..cssSize)
-  try { ctx.setTransform(dpr, 0, 0, dpr, 0, 0) } catch (e) { /* ignore */ }
+  try {
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  } catch (e) {
+    /* ignore */
+  }
 
   // clear canvas (use CSS coords)
-  try { ctx.clearRect(0, 0, cssSize, cssSize) } catch (e) { /* ignore */ }
+  try {
+    ctx.clearRect(0, 0, cssSize, cssSize);
+  } catch (e) {
+    /* ignore */
+  }
 
   // If group hasn't preview images or preview zone, draw placeholder
   if (!asset.Group || (!asset.Group.HasPreviewImages && !asset.Group.PreviewZone)) {
     try {
-      ctx.fillStyle = '#f3f7fb'
-      ctx.fillRect(0, 0, cssSize, cssSize)
-    } catch (e) { /* ignore */ }
-    return
+      ctx.fillStyle = "#f3f7fb";
+      ctx.fillRect(0, 0, cssSize, cssSize);
+    } catch (e) {
+      /* ignore */
+    }
+    return;
   }
 
-  const GroupType = classifyToGroup(asset.Group)
-  if (GroupType === 'Hair' || GroupType === 'Face') {
-
-    const previewItem = toRaw(createPreviewDataWithAsset(asset))
-
+  const GroupType = classifyToGroup(asset.Group);
+  if (GroupType === "Hair" || GroupType === "Face") {
+    const previewItem = toRaw(createPreviewDataWithAsset(asset));
 
     // render via engine and get a canvas-like source
     try {
-      store.renderer && store.renderer.startThumbFor && store.renderer.startThumbFor(previewItem)
-      const srcRaw = await store.renderer.getCanvas(previewItem, { timeout: 4000 }).catch(() => null)
-      const src = srcRaw ? srcRaw : store.renderer._getCanvas(previewItem) || null
-      
+      store.renderer &&
+        store.renderer.startThumbFor &&
+        store.renderer.startThumbFor(previewItem);
+      const srcRaw = await store.renderer
+        .getCanvas(previewItem, { timeout: 4000 })
+        .catch(() => null);
+      const src = srcRaw ? srcRaw : store.renderer._getCanvas(previewItem) || null;
 
       // clear (already cleared, but ensure)
-      ctx.clearRect(0, 0, cssSize, cssSize)
+      ctx.clearRect(0, 0, cssSize, cssSize);
 
-      const previewZone = asset.Group.PreviewZone || null
+      const previewZone = asset.Group.PreviewZone || null;
       if (src && previewZone) {
         try {
-          const srcX = previewZone[0] || 0
-          const srcY = previewZone[1] || 0
-          const srcW = previewZone[2] || src.width || 1
-          const srcH = previewZone[3] || src.height || 1
+          const srcX = previewZone[0] || 0;
+          const srcY = previewZone[1] || 0;
+          const srcW = previewZone[2] || src.width || 1;
+          const srcH = previewZone[3] || src.height || 1;
 
-          const srcAspect = (srcW || 1) / (srcH || 1)
-          const destAspect = 1 // square
-          let destW, destH
+          const srcAspect = (srcW || 1) / (srcH || 1);
+          const destAspect = 1; // square
+          let destW, destH;
           if (destAspect > srcAspect) {
-            destH = cssSize
-            destW = destH * srcAspect
+            destH = cssSize;
+            destW = destH * srcAspect;
           } else {
-            destW = cssSize
-            destH = destW / srcAspect
+            destW = cssSize;
+            destH = destW / srcAspect;
           }
-          const dx = (cssSize - destW) / 2
-          const dy = (cssSize - destH) / 2
+          const dx = (cssSize - destW) / 2;
+          const dy = (cssSize - destH) / 2;
 
           // drawImage accepts canvas/image elements
           try {
             // If src is a canvas or image element, use drawImage with specified source rect
-            ctx.drawImage(src, srcX, srcY, srcW, srcH, dx, dy, destW, destH)
+            ctx.drawImage(src, srcX, srcY, srcW, srcH, dx, dy, destW, destH);
           } catch (e) {
             // ignore drawing errors
           }
@@ -340,110 +400,129 @@ async function drawAssetThumbOnCanvas(asset, canvasEl) {
           // ignore
         }
       }
-
     } catch (e) {
       // ignore render errors
     } finally {
-      store.renderer && store.renderer.stopFor && store.renderer.stopFor(previewItem)
+      store.renderer && store.renderer.stopFor && store.renderer.stopFor(previewItem);
     }
 
-    return
+    return;
   }
 
   // now we draw the image if it has a valid path
   if (!asset.Group.HasPreviewImages) {
     // draw placeholder background
     try {
-      ctx.fillStyle = '#f3f7fb'
-      ctx.fillRect(0, 0, cssSize, cssSize)
-    } catch (e) { /* ignore */ }
-    return
+      ctx.fillStyle = "#f3f7fb";
+      ctx.fillRect(0, 0, cssSize, cssSize);
+    } catch (e) {
+      /* ignore */
+    }
+    return;
   }
 
-  ctx.imageSmoothingEnabled = true
-  try { ctx.imageSmoothingQuality = 'high' } catch (e) { /* ignore */ }
+  ctx.imageSmoothingEnabled = true;
+  try {
+    ctx.imageSmoothingQuality = "high";
+  } catch (e) {
+    /* ignore */
+  }
 
-  const imagePath = computeImagePath(asset)
+  const imagePath = computeImagePath(asset);
   if (!imagePath) {
     // draw placeholder background
     try {
-      ctx.fillStyle = '#f3f7fb'
-      ctx.fillRect(0, 0, cssSize, cssSize)
-    } catch (e) { /* ignore */ }
-    return
+      ctx.fillStyle = "#f3f7fb";
+      ctx.fillRect(0, 0, cssSize, cssSize);
+    } catch (e) {
+      /* ignore */
+    }
+    return;
   }
 
   // Prefer DrawImageEx when available. Assume DrawImageEx expects logical (CSS) units here.
-  if (typeof DrawImageEx === 'function') {
+  if (typeof DrawImageEx === "function") {
     try {
-      DrawImageEx(imagePath, ctx, 0, 0, { Width: cssSize, Height: cssSize })
-      return
+      DrawImageEx(imagePath, ctx, 0, 0, { Width: cssSize, Height: cssSize });
+      return;
     } catch (e) {
       // fallback to image element
     }
   }
 
   // Browser fallback using Image
-  await drawWithImageElement(imagePath, ctx, cssSize)
+  await drawWithImageElement(imagePath, ctx, cssSize);
 }
 
 function drawWithImageElement(srcUrl, ctx, cssSize) {
   return new Promise((resolve) => {
-    const img = new Image()
-    img.crossOrigin = 'anonymous'
-    let resolved = false
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    let resolved = false;
 
     img.onload = () => {
       try {
-        const srcW = img.width || 1
-        const srcH = img.height || 1
-        const srcAspect = srcW / srcH
-        const destAspect = 1 // square
+        const srcW = img.width || 1;
+        const srcH = img.height || 1;
+        const srcAspect = srcW / srcH;
+        const destAspect = 1; // square
 
-        let destW, destH
+        let destW, destH;
         if (destAspect > srcAspect) {
-          destH = cssSize
-          destW = destH * srcAspect
+          destH = cssSize;
+          destW = destH * srcAspect;
         } else {
-          destW = cssSize
-          destH = destW / srcAspect
+          destW = cssSize;
+          destH = destW / srcAspect;
         }
 
-        const dx = (cssSize - destW) / 2
-        const dy = (cssSize - destH) / 2
+        const dx = (cssSize - destW) / 2;
+        const dy = (cssSize - destH) / 2;
 
-        ctx.clearRect(0, 0, cssSize, cssSize)
+        ctx.clearRect(0, 0, cssSize, cssSize);
         try {
           // drawImage(img, sx, sy, sWidth, sHeight, dx, dy, dWidth, dHeight)
-          ctx.drawImage(img, 0, 0, srcW, srcH, dx, dy, destW, destH)
+          ctx.drawImage(img, 0, 0, srcW, srcH, dx, dy, destW, destH);
         } catch (e) {
           // ignore
         }
       } catch (e) {
         // ignore
       } finally {
-        if (!resolved) { resolved = true; resolve() }
+        if (!resolved) {
+          resolved = true;
+          resolve();
+        }
       }
-    }
+    };
 
     img.onerror = () => {
       // draw placeholder if image fails
       try {
-        ctx.clearRect(0, 0, cssSize, cssSize)
-        ctx.fillStyle = '#f7fbff'
-        ctx.fillRect(0, 0, cssSize, cssSize)
-      } catch (e) { /* ignore */ }
-      if (!resolved) { resolved = true; resolve() }
-    }
+        ctx.clearRect(0, 0, cssSize, cssSize);
+        ctx.fillStyle = "#f7fbff";
+        ctx.fillRect(0, 0, cssSize, cssSize);
+      } catch (e) {
+        /* ignore */
+      }
+      if (!resolved) {
+        resolved = true;
+        resolve();
+      }
+    };
 
-    img.src = srcUrl
+    img.src = srcUrl;
     // if cached and onload didn't fire, ensure we call load path
     setTimeoutHost(() => {
       if (!resolved && img.complete) {
-        try { img.onload && img.onload() } catch (e) { /* ignore */ }
+        try {
+          img.onload && img.onload();
+        } catch (e) {
+          /* ignore */
+        }
       }
-    }, 0)
-  })
+    }, 0);
+  });
 }
 
 /* -------------------------
@@ -452,94 +531,125 @@ function drawWithImageElement(srcUrl, ctx, cssSize) {
 
 // registerCanvas is used as function ref in template
 function registerCanvas(el, asset, idx) {
-  const key = assetKey(asset, idx)
+  const key = assetKey(asset, idx);
   // if el is null -> unmounting: remove maps
   if (!el) {
-    canvasMap.delete(key)
-    keyToAsset.delete(key)
-    return
+    canvasMap.delete(key);
+    keyToAsset.delete(key);
+    return;
   }
   // keep latest asset object for this key
-  keyToAsset.set(key, asset)
-  canvasMap.set(key, el)
+  keyToAsset.set(key, asset);
+  canvasMap.set(key, el);
 
   // schedule an immediate draw (allow DOM to stabilize)
   setTimeoutHost(() => {
-    drawAssetThumbOnCanvas(asset, el).catch(() => { /* ignore */ })
-  }, 8)
+    drawAssetThumbOnCanvas(asset, el).catch(() => {
+      /* ignore */
+    });
+  }, 8);
 }
 
 // redraw all visible thumbs (called when assets list changes or character changes)
 async function redrawAllThumbs() {
-  await nextTick()
+  await nextTick();
   for (const [key, canvasEl] of canvasMap.entries()) {
-    const asset = keyToAsset.get(key)
+    const asset = keyToAsset.get(key);
     if (asset && canvasEl) {
       // small timeout to reduce layout thrash
-      setTimeoutHost(() => drawAssetThumbOnCanvas(asset, canvasEl).catch(() => { }), 6)
+      setTimeoutHost(() => drawAssetThumbOnCanvas(asset, canvasEl).catch(() => {}), 6);
     }
   }
 }
 
-let charWatcherStop = null
+let charWatcherStop = null;
 onMounted(() => {
   // watch for character changes: redraw thumbnails since DynamicPreviewImage may differ
-  charWatcherStop = watch(() => fsStore.character, () => redrawAllThumbs(), { immediate: false })
-})
+  charWatcherStop = watch(
+    () => fsStore.character,
+    () => redrawAllThumbs(),
+    { immediate: false }
+  );
+});
 
 onBeforeUnmount(() => {
-  try { charWatcherStop && charWatcherStop() } catch (e) { /* ignore */ }
-})
+  try {
+    charWatcherStop && charWatcherStop();
+  } catch (e) {
+    /* ignore */
+  }
+});
 
-watch(assets, () => {
-  // When assets change, rebind/redraw canvases
-  setTimeoutHost(() => redrawAllThumbs(), 12)
-}, { deep: true })
+watch(
+  assets,
+  () => {
+    // When assets change, rebind/redraw canvases
+    setTimeoutHost(() => redrawAllThumbs(), 12);
+  },
+  { deep: true }
+);
 
-watch(() => fsStore.character, () => {
-  // redundant safety: also trigger redraw on character update
-  setTimeoutHost(() => redrawAllThumbs(), 10)
-})
+watch(
+  () => fsStore.character,
+  () => {
+    // redundant safety: also trigger redraw on character update
+    setTimeoutHost(() => redrawAllThumbs(), 10);
+  }
+);
 
 /* -------------------------
    UI actions (apply + search + preview)
    ------------------------- */
 
 function refresh() {
-  loading.value = true
+  loading.value = true;
   // call store loader and ensure loading flag reset
-  store.loadAssetData()
-    .catch((e) => { console.warn('loadAssetData failed', e) })
-    .finally(() => { loading.value = false })
+  store
+    .loadAssetData()
+    .catch((e) => {
+      console.warn("loadAssetData failed", e);
+    })
+    .finally(() => {
+      loading.value = false;
+    });
 }
 
 const canApply = computed(() => {
   // need a replace target and a selected stack
-  return isReplaceMode.value && !!part.value && (store.selectedIndex !== undefined && store.selectedIndex !== null && store.selectedIndex !== -1 && Array.isArray(store.stacks))
-})
+  return (
+    isReplaceMode.value &&
+    !!part.value &&
+    store.selectedIndex !== undefined &&
+    store.selectedIndex !== null &&
+    store.selectedIndex !== -1 &&
+    Array.isArray(store.stacks)
+  );
+});
 
 // Apply asset now delegates to store method if available (which handles layerEntries / commits)
 async function applyAsset(asset) {
-  if (!asset) return
+  if (!asset) return;
   if (!canApply.value) {
     // use i18n message
-    await DialogService.alert(t('assetSelector.alertNoReplaceMode'))
-    return
+    await DialogService.alert(t("assetSelector.alertNoReplaceMode"));
+    return;
   }
 
   try {
-    const res = await (store.applyAssetToSelectedStack ? store.applyAssetToSelectedStack(asset, replaceTarget.value) : null)
+    const res = await (store.applyAssetToSelectedStack
+      ? store.applyAssetToSelectedStack(asset, replaceTarget.value)
+      : null);
 
     if (!res) {
-      console.warn('applyAsset: store.applyAssetToSelectedStack failed or returned null')
-      await DialogService.alert(t('assetSelector.alertApplyFailed'))
-      return
+      console.warn("applyAsset: store.applyAssetToSelectedStack failed or returned null");
+      await DialogService.alert(t("assetSelector.alertApplyFailed"));
+      return;
     }
     // optionally exit replace mode
     // store.clearReplaceTarget && store.clearReplaceTarget()
   } catch (e) {
-    console.error('applyAsset failed', e)
-    await DialogService.alert(t('assetSelector.alertApplyFailed'))
+    console.error("applyAsset failed", e);
+    await DialogService.alert(t("assetSelector.alertApplyFailed"));
   }
 }
 
@@ -551,77 +661,87 @@ async function applyAsset(asset) {
    - on leave, restore rendering to store.mergedAppearanceData
    ------------------------- */
 
-let hoverPreviewActive = false
-let lastPreviewMerged = null
-
-
 function createPreviewDataWithAsset(asset) {
   const newPart = {
     Name: asset.Name,
-    Group: (asset.Group && (typeof asset.Group === 'string' ? asset.Group : (asset.Group.Name || asset.Group.name))) || undefined,
-    Color: asset.DefaultColor ?? asset.DefaultColour ?? asset.Default ?? null
-  }
+    Group:
+      (asset.Group &&
+        (typeof asset.Group === "string"
+          ? asset.Group
+          : asset.Group.Name || asset.Group.name)) ||
+      undefined,
+    Color: asset.DefaultColor ?? asset.DefaultColour ?? asset.Default ?? null,
+  };
 
   // ensure entries for preview part
-  let entries = []
+  let entries = [];
   try {
-    const res = (typeof store.buildLayerEntriesForPart === 'function') ? store.buildLayerEntriesForPart(newPart) : null
-    entries = res || []
+    const res =
+      typeof store.buildLayerEntriesForPart === "function"
+        ? store.buildLayerEntriesForPart(newPart)
+        : null;
+    entries = res || [];
   } catch (e) {
-    entries = []
+    entries = [];
   }
-  try { newPart.layerEntries = JSON.parse(JSON.stringify(entries || [])) } catch (e) { newPart.layerEntries = (entries || []).slice() }
+  try {
+    newPart.layerEntries = JSON.parse(JSON.stringify(entries || []));
+  } catch (e) {
+    newPart.layerEntries = (entries || []).slice();
+  }
 
   // Build previewStacks: clone current stacks and append preview part onto each stack's data (top layer)
-  const previewStacks = JSON.parse(JSON.stringify(store.stacks || []))
+  const previewStacks = JSON.parse(JSON.stringify(store.stacks || []));
   previewStacks.push({
     data: [newPart],
-    filterList: [newPart.Group || ''],
+    filterList: [newPart.Group || ""],
     id: `preview_stack_${Date.now()}`,
-    name: 'Preview Stack'
-  })
-
+    name: "Preview Stack",
+  });
 
   // Build unexpanded item and expand with palette to get mergedAppearanceData-like shape
-  const unexpanded = { data: AssetApi.stackOutfitData(previewStacks), type: 'outfit' }
-  const mergedPreview = Palette.expandedAppearanceForRendering(unexpanded, store.paletteMap)
-  return mergedPreview
+  const unexpanded = { data: AssetApi.stackOutfitData(previewStacks), type: "outfit" };
+  const mergedPreview = Palette.expandedAppearanceForRendering(
+    unexpanded,
+    store.paletteMap
+  );
+  return mergedPreview;
 }
 
 async function onHoverAssetImpl(asset) {
-  if (!asset) return
-  if (!store.renderer || typeof store.renderer.renderPreviewWithItem !== 'function') return
+  if (!asset) return;
+  if (!store.renderer || typeof store.renderer.renderPreviewWithItem !== "function")
+    return;
 
   try {
-    // construct preview part like apply logic (but do NOT write into store.stacks)
-    const mergedPreview = createPreviewDataWithAsset(asset)
-    lastPreviewMerged = mergedPreview
-    hoverPreviewActive = true
-    store.mergedAppearanceData = mergedPreview
-    // render preview using renderer
-    store.previewRenderer.renderPreviewWithItem(toRaw(store.mergedAppearanceData))
+    // Construct preview part like apply logic (but do NOT write into store.stacks)
+    const mergedPreview = createPreviewDataWithAsset(asset);
+    lastPreviewMerged = mergedPreview;
+    hoverPreviewActive = true;
 
+    // Push preview onto stack (priority 2: higher than layer blink - asset selection takes precedence)
+    store.pushPreview("asset-hover", 2, mergedPreview, "asset-hover");
   } catch (e) {
-    console.warn('onHoverAsset failed', e)
+    console.warn("onHoverAsset failed", e);
   }
 }
 
 function onLeaveAssetImpl(asset) {
-  // restore previous merged appearance rendering
-  hoverPreviewActive = false
-  store.refreshMergedAppearanceData && store.refreshMergedAppearanceData()
+  // Remove preview from stack to restore state
+  hoverPreviewActive = false;
+  store.popPreview("asset-hover");
 }
 
 /* -------------------------
    Search helpers
    ------------------------- */
 function onSearchInput() {
-  if (searchDebounceTimer.value) clearTimeout(searchDebounceTimer.value)
+  if (searchDebounceTimer.value) clearTimeout(searchDebounceTimer.value);
   // simple debounce to avoid frequent re-calculations
   searchDebounceTimer.value = setTimeoutHost(() => {
-    searchDebounceTimer.value = null
+    searchDebounceTimer.value = null;
     // filteredAssets is computed; nothing else needed here
-  }, 120)
+  }, 120);
 }
 </script>
 
@@ -682,7 +802,11 @@ function onSearchInput() {
   overflow: auto;
   padding: 8px;
   border-radius: var(--radius-md, 8px);
-  background: linear-gradient(180deg, var(--color-bg-base, #fff), var(--color-bg-surface, #f8fafc));
+  background: linear-gradient(
+    180deg,
+    var(--color-bg-base, #fff),
+    var(--color-bg-surface, #f8fafc)
+  );
   border: 1px solid var(--color-border-base, #e2e8f0);
 }
 
@@ -828,7 +952,7 @@ function onSearchInput() {
 .card-img-wrapper {
   position: relative;
   width: 100%;
-  padding-top: 100%;  /* 正方形 */
+  padding-top: 100%; /* 正方形 */
   overflow: hidden;
   border-radius: var(--radius-lg, 10px);
   background: var(--color-bg-surface, #f8fafc);
@@ -870,5 +994,4 @@ function onSearchInput() {
   cursor: pointer;
   color: var(--color-text-primary, #0f172a);
 }
-
 </style>

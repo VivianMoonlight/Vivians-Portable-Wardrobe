@@ -26,7 +26,7 @@
       <div v-if="!hasPart" class="placeholder">{{ t('partInspector.noPartPlaceholder') }}</div>
 
       <div v-else class="content">
-        <div v-if="isReplaceStage" class="stage-hint stage-hint-replace">
+        <div v-if="false" class="stage-hint stage-hint-replace">
           <div class="stage-hint-title">{{ t('partInspector.replaceStageTitle') || '当前处于替换阶段' }}</div>
           <div class="stage-hint-text">{{ t('partInspector.replaceStageDesc') || '请在 Asset 面板选择并应用资源，应用后会自动回到精修。' }}</div>
           <button class="stage-hint-btn" @click="goToAssetPanel">{{ t('partInspector.goToAsset') || '前往替换面板' }}</button>
@@ -218,11 +218,9 @@ const hasPart = computed(() => !!part.value)
 // Multi-selection state
 const isMultiMode = computed(() => store.selectionMode === 'multiple')
 const hasSelections = computed(() => store.selectedLayers && store.selectedLayers.length > 0)
-const taskStage = computed(() => store.taskStage || 'assemble')
-const isReplaceStage = computed(() => taskStage.value === 'replace')
-const isPolishStage = computed(() => taskStage.value === 'polish')
-const showStructureFields = computed(() => !isPolishStage.value)
-const showAdvancedSection = computed(() => !isPolishStage.value)
+// taskStage is deprecated. Keep inspector fields visible for debugging regardless of legacy stages.
+const showStructureFields = computed(() => true)
+const showAdvancedSection = computed(() => true)
 const scopeLabel = computed(() => {
   if (!hasPart.value) return ''
   if (isMultiMode.value) {
@@ -241,7 +239,8 @@ function togglePreviewTool() {
 }
 
 function goToAssetPanel() {
-  store.setTaskStage('replace')
+  // Deprecated: taskStage flow removed.
+  // store.setTaskStage('replace')
   store.openContextPanel('asset', 'inspector-goto-asset')
 }
 
@@ -762,9 +761,10 @@ function _buildLayerHoverBlinkAppearance(context, visible) {
 function _applyLayerHoverBlinkFrame(context, visible) {
   const appearance = _buildLayerHoverBlinkAppearance(context, visible)
   if (!appearance) return
-  const activeRenderer = store.useOptimizedRenderer ? store.previewRenderer : store.renderer
-  store.mergedAppearanceData = appearance
-  try { activeRenderer.renderPreviewWithItem(appearance) } catch (e) { /* ignore */ }
+  
+  // Update the layer blink preview on the stack (priority 1: lower than asset hover to avoid interrupting asset selection)
+  const previewId = `layer-blink-${context.stackIndex}-${context.partIndex}`
+  store.pushPreview(previewId, 1, appearance, 'layer-blink')
 }
 
 function startLayerHoverBlink(layerIndices) {
@@ -803,6 +803,13 @@ function startLayerHoverBlink(layerIndices) {
   layerHoverBlinkTimerId.value = hostWindow.setInterval(() => {
     const latest = layerHoverBlinkState.value
     if (!latest) return
+    
+    // Stop blinking if a higher priority preview (asset-hover) becomes active
+    if (store.isPreviewActive && store.isPreviewActive('asset-hover')) {
+      stopLayerHoverBlink()
+      return
+    }
+    
     latest.visible = !latest.visible
     _applyLayerHoverBlinkFrame(latest, latest.visible)
   }, 260)
@@ -817,7 +824,10 @@ function stopLayerHoverBlink() {
   const context = layerHoverBlinkState.value
   layerHoverBlinkState.value = null
   if (!context) return
-  try { store.refreshMergedAppearanceData() } catch (e) { /* ignore */ }
+  
+  // Remove layer blink preview from stack
+  const previewId = `layer-blink-${context.stackIndex}-${context.partIndex}`
+  store.popPreview(previewId)
 }
 
 function onSingleLayerMouseEnter(layer) {
@@ -1018,10 +1028,10 @@ onBeforeUnmount(() => {
 .mode-chip {
   padding: 4px 10px;
   border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-xl, 12px);
+  border-radius: var(--radius-md, 8px);
   font-size: 12px;
   color: var(--color-text-secondary);
-  background: var(--color-bg-surface);
+  background: var(--color-bg-base);
   cursor: pointer;
   transition: all 0.15s ease;
 }
@@ -1039,7 +1049,7 @@ onBeforeUnmount(() => {
 .mode-chip.active {
   color: var(--color-text-primary);
   border-color: var(--color-border-focus);
-  background: var(--color-selection-single-bg);
+  background: var(--color-bg-surface);
 }
 
 .mode-chip.scope {
@@ -1056,7 +1066,7 @@ onBeforeUnmount(() => {
   overflow: auto;
   padding: 10px;
   border-radius: var(--radius-md, 8px);
-  background: linear-gradient(180deg, var(--color-bg-base), var(--color-bg-surface));
+  background: var(--color-bg-base);
   border: 1px solid var(--panel-border);
   box-sizing: border-box;
 }
@@ -1165,8 +1175,8 @@ onBeforeUnmount(() => {
 
 .edit-input:focus {
   border-color: var(--color-border-focus);
-  background: linear-gradient(180deg, var(--color-bg-base), var(--color-bg-surface));
-  box-shadow: 0 0 0 4px var(--color-selection-single-bg);
+  background: var(--color-bg-base);
+  box-shadow: 0 0 0 2px var(--color-selection-single-bg);
 }
 
 .text-limit {
@@ -1195,7 +1205,7 @@ onBeforeUnmount(() => {
 }
 
 .tiny-edit {
-  background: linear-gradient(180deg, var(--color-bg-surface), var(--color-bg-base));
+  background: var(--color-bg-surface);
   color: var(--accent);
   border-color: var(--color-selection-single-border);
 }
@@ -1236,7 +1246,7 @@ onBeforeUnmount(() => {
 .prop-block {
   margin-top: 12px;
   padding-top: 10px;
-  border-top: 1px dashed var(--color-border-base);
+  border-top: 1px solid var(--color-border-base);
 }
 
 .prop-title {
@@ -1269,7 +1279,7 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 12px;
   padding: 6px 8px;
-  background: var(--color-bg-surface);
+  background: var(--color-bg-base);
   border-radius: var(--radius-md, 8px);
   border: 1px solid var(--color-border-base);
   box-sizing: border-box;

@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { toRaw } from 'vue'
 import { FileSystem } from '@/services/FileSystem'
 import { RenderService } from '@/services/RenderService'
 import { StorageAdapter } from '@/services/StorageAdapter'
@@ -295,7 +296,8 @@ export const useFileSystemStore = defineStore('fs', {
     },
 
     applyFilteredOutfitToCharacter({ outfitData = null, mode = null } = {}) {
-      const target = this.character || hostWindow.CurrentCharacter || hostWindow.Player
+      const rawCharacter = this.character ? toRaw(this.character) : null
+      const target = rawCharacter || hostWindow.CurrentCharacter || hostWindow.Player
       if (!target) return false
 
       const characterData = AssetApi.collectOutfitData(target)
@@ -315,7 +317,8 @@ export const useFileSystemStore = defineStore('fs', {
     },
 
     removeSelectedSlotsFromCharacter() {
-      const target = this.character || hostWindow.CurrentCharacter || hostWindow.Player
+      const rawCharacter = this.character ? toRaw(this.character) : null
+      const target = rawCharacter || hostWindow.CurrentCharacter || hostWindow.Player
       if (!target) return false
 
       const selectedGroups = new Set((this.activeFilters || []).filter(Boolean))

@@ -1,17 +1,19 @@
 <template>
   <div ref="rootEl" class="palette-panel" @keydown.esc="exitTagEditMode">
-
     <!-- 0. Mode Indicator Bar -->
     <div class="mode-indicator-bar" :class="{ 'is-editing-tag': !!editingTagId }">
       <div class="mode-status">
-        <span v-if="!editingTagId" class="mode-label">🎨 {{ t('palette.modeIndicator.browse') }}</span>
+        <span v-if="!editingTagId" class="mode-label"
+          >🎨 {{ t("palette.modeIndicator.browse") }}</span
+        >
         <span v-else class="mode-label editing">
-          ✎ {{ t('palette.modeIndicator.editingTag') }}: <strong>{{ editingTagId }}</strong>
+          ✎ {{ t("palette.modeIndicator.editingTag") }}:
+          <strong>{{ editingTagId }}</strong>
         </span>
       </div>
       <div v-if="editingTagId" class="mode-actions">
         <button class="exit-btn" @click="exitTagEditMode">
-          {{ t('common.done') }}
+          {{ t("common.done") }}
         </button>
       </div>
     </div>
@@ -25,58 +27,76 @@
       <!-- Quick Actions Bar -->
       <div class="quick-actions" :class="`screen-${screenSize}`">
         <!-- Add to Saved -->
-        <button 
-          class="action-btn save-btn" 
-          @click="addCurrentToSaved" 
+        <button
+          class="action-btn save-btn"
+          @click="addCurrentToSaved"
           :disabled="!!editingTagId"
-          :title="editingTagId ? t('palette.actions.disabledInEditMode') : t('palette.saved.saveTitle')">
+          :title="
+            editingTagId
+              ? t('palette.actions.disabledInEditMode')
+              : t('palette.saved.saveTitle')
+          "
+        >
           <span class="icon">💾</span>
-          <span class="label">{{ t('palette.saved.title') }}</span>
+          <span class="label">{{ t("palette.saved.title") }}</span>
         </button>
         <!-- Create Tag -->
-        <button 
-          class="action-btn tag-btn" 
-          @click="createTagFromCurrent" 
+        <button
+          class="action-btn tag-btn"
+          @click="createTagFromCurrent"
           :disabled="!!editingTagId"
-          :title="editingTagId ? t('palette.actions.disabledInEditMode') : t('palette.tags.createFromCurrent')">
+          :title="
+            editingTagId
+              ? t('palette.actions.disabledInEditMode')
+              : t('palette.tags.createFromCurrent')
+          "
+        >
           <span class="icon">🏷️</span>
-          <span class="label">{{ t('palette.tags.title') }}</span>
+          <span class="label">{{ t("palette.tags.title") }}</span>
         </button>
       </div>
     </div>
 
     <!-- Scrollable Content -->
     <div class="palette-content scrollable">
-
       <!-- 2. Saved Colors (Grid) -->
       <div class="section-block saved-section">
         <div class="section-header" @click="toggleSaved">
-          <span class="arrow">{{ collapsedSaved ? '▸' : '▾' }}</span>
+          <span class="arrow">{{ collapsedSaved ? "▸" : "▾" }}</span>
           <span class="section-icon">💾</span>
-          <span class="sec-title">{{ t('palette.saved.title') }}</span>
+          <span class="sec-title">{{ t("palette.saved.title") }}</span>
           <span class="count" v-if="savedColors.length">({{ savedColors.length }})</span>
-          <button v-if="savedColors.length" class="clear-btn" @click.stop="handleClearAllSaved"
-            :title="t('palette.saved.clearTitle')">
+          <button
+            v-if="savedColors.length"
+            class="clear-btn"
+            @click.stop="handleClearAllSaved"
+            :title="t('palette.saved.clearTitle')"
+          >
             Clear
           </button>
         </div>
 
         <div v-if="!collapsedSaved" class="section-description">
-          {{ t('palette.saved.description') }}
+          {{ t("palette.saved.description") }}
         </div>
 
         <transition name="fade">
           <div v-show="!collapsedSaved" class="saved-grid">
             <div v-if="savedColors.length === 0" class="empty-state">
               <div class="empty-icon">💾</div>
-              <div class="empty-text">{{ t('palette.saved.emptyText') }}</div>
+              <div class="empty-text">{{ t("palette.saved.emptyText") }}</div>
               <button class="empty-cta" @click="addCurrentToSaved">
-                {{ t('palette.saved.emptyCTA') }}
+                {{ t("palette.saved.emptyCTA") }}
               </button>
             </div>
 
-            <div v-for="(c, idx) in savedColors" :key="`saved-${idx}`" class="saved-swatch-item"
-              @click="applySavedColor(idx)" :title="savedText(c)">
+            <div
+              v-for="(c, idx) in savedColors"
+              :key="`saved-${idx}`"
+              class="saved-swatch-item"
+              @click="applySavedColor(idx)"
+              :title="savedText(c)"
+            >
               <div class="delete-overlay" @click.stop="deleteSavedColor(idx)">X</div>
               <span class="swatch-bg" :style="savedSwatchStyle(c)"></span>
             </div>
@@ -87,36 +107,49 @@
       <!-- 3. Tags (List) -->
       <div class="section-block tags-section">
         <div class="section-header" @click="toggleTags">
-          <span class="arrow">{{ collapsedTags ? '▸' : '▾' }}</span>
+          <span class="arrow">{{ collapsedTags ? "▸" : "▾" }}</span>
           <span class="section-icon">🏷️</span>
-          <span class="sec-title">{{ t('palette.tags.title') }}</span>
+          <span class="sec-title">{{ t("palette.tags.title") }}</span>
           <span class="count" v-if="tagKeys.length">({{ tagKeys.length }})</span>
         </div>
 
         <div v-if="!collapsedTags" class="section-description">
-          {{ t('palette.tags.description') }}
+          {{ t("palette.tags.description") }}
         </div>
 
         <transition name="fade">
           <div v-show="!collapsedTags" class="tags-list">
             <div v-if="tagKeys.length === 0" class="empty-state tags-empty">
               <div class="empty-icon">🏷️</div>
-              <div class="empty-text">{{ t('palette.tags.emptyText') }}</div>
+              <div class="empty-text">{{ t("palette.tags.emptyText") }}</div>
               <button class="empty-cta" @click="createTagFromCurrent">
-                {{ t('palette.tags.emptyCTA') }}
+                {{ t("palette.tags.emptyCTA") }}
               </button>
             </div>
 
-            <div v-for="tag in tagKeys" :key="tag" class="tag-row" :class="{ 'is-editing': editingTagId === tag }">
+            <div
+              v-for="tag in tagKeys"
+              :key="tag"
+              class="tag-row"
+              :class="{ 'is-editing': editingTagId === tag }"
+            >
               <!-- Color Swatch (Click to apply) -->
-              <div class="tag-swatch-col" @click="applyTag(tag)" :title="t('palette.actions.apply')">
+              <div
+                class="tag-swatch-col"
+                @click="applyTag(tag)"
+                :title="t('palette.actions.apply')"
+              >
                 <span class="tag-swatch" :style="swatchStyle(tag)"></span>
               </div>
 
               <!-- Name Input (Auto-save) -->
               <div class="tag-name-col">
-                <input class="tag-name-input" :value="tag" @change="e => onTagRename(tag, e.target.value)"
-                  @keydown.enter="e => e.target.blur()" />
+                <input
+                  class="tag-name-input"
+                  :value="tag"
+                  @change="(e) => onTagRename(tag, e.target.value)"
+                  @keydown.enter="(e) => e.target.blur()"
+                />
               </div>
 
               <!-- Value Display (with ColorValuePreview Component) -->
@@ -132,13 +165,20 @@
               <!-- Actions -->
               <div class="tag-actions">
                 <!-- Edit Color Mode Toggle -->
-                <button class="icon-action" :class="{ active: editingTagId === tag }"
-                  @click.stop="toggleEditTagMode(tag)" :title="t('palette.tags.editTitle')">
+                <button
+                  class="icon-action"
+                  :class="{ active: editingTagId === tag }"
+                  @click.stop="toggleEditTagMode(tag)"
+                  :title="t('palette.tags.editTitle')"
+                >
                   ✎
                 </button>
                 <!-- Delete -->
-                <button class="icon-action danger" @click.stop="handleDeleteTag(tag)"
-                  :title="t('palette.saved.delete')">
+                <button
+                  class="icon-action danger"
+                  @click.stop="handleDeleteTag(tag)"
+                  :title="t('palette.saved.delete')"
+                >
                   ×
                 </button>
               </div>
@@ -150,17 +190,17 @@
       <!-- 4. Advanced Tag+Offset (below Tags) -->
       <div class="section-block advanced-section">
         <div class="section-header" @click="toggleAdvanced">
-          <span class="arrow">{{ collapsedAdvanced ? '▸' : '▾' }}</span>
+          <span class="arrow">{{ collapsedAdvanced ? "▸" : "▾" }}</span>
           <span class="section-icon">⚙️</span>
-          <span class="sec-title">{{ t('palette.advanced.title') }}</span>
+          <span class="sec-title">{{ t("palette.advanced.title") }}</span>
         </div>
 
         <transition name="fade">
           <div v-show="!collapsedAdvanced" class="advanced-body">
-            <div class="advanced-summary">{{ t('palette.advanced.summary') }}</div>
+            <div class="advanced-summary">{{ t("palette.advanced.summary") }}</div>
 
             <div class="advanced-row status-row">
-              <span class="advanced-label">{{ t('palette.advanced.targetType') }}</span>
+              <span class="advanced-label">{{ t("palette.advanced.targetType") }}</span>
               <span class="advanced-color-chip" :title="currentTargetDisplayText">
                 <span class="advanced-color-dot" :style="currentTargetDotStyle"></span>
                 <span class="advanced-color-text">{{ currentTargetDisplayText }}</span>
@@ -168,297 +208,372 @@
             </div>
 
             <div class="advanced-row">
-              <label class="advanced-label" for="advanced-base-tag">{{ t('palette.advanced.baseTag') }}</label>
-              <select id="advanced-base-tag" class="advanced-select" v-model="advancedBaseTag" :disabled="!tagKeys.length">
-                <option value="">{{ t('palette.advanced.selectTag') }}</option>
-                <option v-for="tag in tagKeys" :key="`adv-tag-${tag}`" :value="tag">{{ tag }}</option>
+              <label class="advanced-label" for="advanced-base-tag">{{
+                t("palette.advanced.baseTag")
+              }}</label>
+              <select
+                id="advanced-base-tag"
+                class="advanced-select"
+                v-model="advancedBaseTag"
+                :disabled="!tagKeys.length"
+              >
+                <option value="">{{ t("palette.advanced.selectTag") }}</option>
+                <option v-for="tag in tagKeys" :key="`adv-tag-${tag}`" :value="tag">
+                  {{ tag }}
+                </option>
               </select>
             </div>
 
             <div class="advanced-row">
               <label class="advanced-slider-label">H {{ offsetH }}</label>
-              <input type="range" min="-180" max="180" step="1" v-model.number="offsetH" class="advanced-slider" />
+              <input
+                type="range"
+                min="-180"
+                max="180"
+                step="1"
+                v-model.number="offsetH"
+                class="advanced-slider"
+              />
             </div>
             <div class="advanced-row">
               <label class="advanced-slider-label">L {{ offsetL }}</label>
-              <input type="range" min="-100" max="100" step="1" v-model.number="offsetL" class="advanced-slider" />
+              <input
+                type="range"
+                min="-100"
+                max="100"
+                step="1"
+                v-model.number="offsetL"
+                class="advanced-slider"
+              />
             </div>
             <div class="advanced-row">
               <label class="advanced-slider-label">S {{ offsetS }}</label>
-              <input type="range" min="-100" max="100" step="1" v-model.number="offsetS" class="advanced-slider" />
+              <input
+                type="range"
+                min="-100"
+                max="100"
+                step="1"
+                v-model.number="offsetS"
+                class="advanced-slider"
+              />
             </div>
 
             <div class="advanced-row advanced-buttons">
-              <button class="action-btn" @click="suggestOffsetFromCurrent" :disabled="!canSuggestOffset">
-                {{ t('palette.advanced.suggest') }}
+              <button
+                class="action-btn"
+                @click="suggestOffsetFromCurrent"
+                :disabled="!canSuggestOffset"
+              >
+                {{ t("palette.advanced.suggest") }}
               </button>
-              <button class="action-btn" @click="resetAdvancedOffset" :disabled="!canApplyAdvanced">
-                {{ t('palette.advanced.reset') }}
+              <button
+                class="action-btn"
+                @click="resetAdvancedOffset"
+                :disabled="!canApplyAdvanced"
+              >
+                {{ t("palette.advanced.reset") }}
               </button>
             </div>
             <div class="advanced-row advanced-buttons">
-              <button class="action-btn" @click="convertAdvancedToHls" :disabled="!canSuggestOffset">
-                {{ t('palette.advanced.toHls') }}
+              <button
+                class="action-btn"
+                @click="convertAdvancedToHls"
+                :disabled="!canSuggestOffset"
+              >
+                {{ t("palette.advanced.toHls") }}
               </button>
-              <button class="action-btn" @click="detachAdvancedToRaw" :disabled="!canDetachAdvanced">
-                {{ t('palette.advanced.detach') }}
+              <button
+                class="action-btn"
+                @click="detachAdvancedToRaw"
+                :disabled="!canDetachAdvanced"
+              >
+                {{ t("palette.advanced.detach") }}
               </button>
             </div>
           </div>
         </transition>
       </div>
-
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { useStudioStore } from '@/stores/studioStore'
-import { Chrome } from '@ckpack/vue-color'
-import { throttle } from '@/utils/performance.js'
-import { hostWindow, setTimeoutHost } from '@/utils/host-window.js'
-import * as DialogService from '@/services/DialogService.js'
-import * as PaletteService from '@/services/PaletteService'
-import { getHlsOffsetBetweenColors } from '@/utils/color-hls.js'
-import ColorValuePreview from '@/components/ui/ColorValuePreview.vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from "vue";
+import { useI18n } from "vue-i18n";
+import { useStudioStore } from "@/stores/studioStore";
+import { Chrome } from "@ckpack/vue-color";
+import { throttle } from "@/utils/performance.js";
+import { hostWindow, setTimeoutHost } from "@/utils/host-window.js";
+import * as DialogService from "@/services/DialogService.js";
+import * as PaletteService from "@/services/PaletteService";
+import { getHlsOffsetBetweenColors } from "@/utils/color-hls.js";
+import ColorValuePreview from "@/components/ui/ColorValuePreview.vue";
 
-const { t } = useI18n()
-const store = useStudioStore()
-const rootEl = ref(null)
+const { t } = useI18n();
+const store = useStudioStore();
+const rootEl = ref(null);
 
 /* ---------------- State ---------------- */
 
 // Display State
-const collapsedSaved = ref(false)
-const collapsedTags = ref(false)
-const collapsedAdvanced = ref(true)
+const collapsedSaved = ref(false);
+const collapsedTags = ref(false);
+const collapsedAdvanced = ref(true);
 
 // Picker State
 // pickerColor binds to the visual picker component.
 // It syncs FROM store when selection changes, and syncs TO store when user drags it.
-const pickerColor = ref('#cccccc')
+const pickerColor = ref("#cccccc");
 
 // "Editing Tag" Mode
 // If null, picker updates the Active Selection (Store.activePaletteTargets)
 // If set (string), picker updates the Store.paletteMap[tag]
-const editingTagId = ref(null)
+const editingTagId = ref(null);
 
-const advancedBaseTag = ref('')
-const offsetH = ref(0)
-const offsetL = ref(0)
-const offsetS = ref(0)
-const advancedSyncing = ref(false)
+const advancedBaseTag = ref("");
+const offsetH = ref(0);
+const offsetL = ref(0);
+const offsetS = ref(0);
+const advancedSyncing = ref(false);
 
 // Warnings
-const deleteTagWarning = ref(null)
-const clearSavedWarning = ref(false)
-let deleteTagTimer = null
-let clearSavedTimer = null
-let pickerSyncflag = false
+const deleteTagWarning = ref(null);
+const clearSavedWarning = ref(false);
+let deleteTagTimer = null;
+let clearSavedTimer = null;
+let pickerSyncflag = false;
+let realtimeCommitTimer = null;
 
 // Responsive Screen Size Tracking
-const screenSize = ref('md')  // 'xs' | 'sm' | 'md' | 'lg'
+const screenSize = ref("md"); // 'xs' | 'sm' | 'md' | 'lg'
 
 function updateScreenSize() {
-  const width = window.innerWidth
-  if (width < 340) screenSize.value = 'xs'
-  else if (width < 600) screenSize.value = 'sm'
-  else if (width < 1024) screenSize.value = 'md'
-  else screenSize.value = 'lg'
+  const width = window.innerWidth;
+  if (width < 340) screenSize.value = "xs";
+  else if (width < 600) screenSize.value = "sm";
+  else if (width < 1024) screenSize.value = "md";
+  else screenSize.value = "lg";
 }
 
 // Initialize screen size
-updateScreenSize()
+updateScreenSize();
 
 onMounted(() => {
-  const key = 'studio.ui.palette.advancedExpanded'
-  if (store.workspaceMode === 'pro') {
-    const persisted = localStorage.getItem(key)
-    if (persisted === '1') collapsedAdvanced.value = false
-    else if (persisted === '0') collapsedAdvanced.value = true
+  const key = "studio.ui.palette.advancedExpanded";
+  if (store.workspaceMode === "pro") {
+    const persisted = localStorage.getItem(key);
+    if (persisted === "1") collapsedAdvanced.value = false;
+    else if (persisted === "0") collapsedAdvanced.value = true;
   } else {
-    collapsedAdvanced.value = true
+    collapsedAdvanced.value = true;
   }
 
-  window.addEventListener('resize', updateScreenSize)
+  window.addEventListener("resize", updateScreenSize);
 
   nextTick(() => {
-    syncAdvancedFromSelection()
-  })
-})
+    syncAdvancedFromSelection();
+  });
+});
 
 onUnmounted(() => {
-  window.removeEventListener('resize', updateScreenSize)
-})
+  window.removeEventListener("resize", updateScreenSize);
+  if (realtimeCommitTimer) {
+    clearTimeout(realtimeCommitTimer);
+    realtimeCommitTimer = null;
+  }
+  try {
+    store.endPaletteRealtimeUpdate?.({ commit: true });
+  } catch (e) {
+    console.warn(e);
+  }
+});
 
 watch([collapsedAdvanced, () => store.workspaceMode], ([collapsed, mode]) => {
-  if (mode !== 'pro') return
-  localStorage.setItem('studio.ui.palette.advancedExpanded', collapsed ? '0' : '1')
-})
+  if (mode !== "pro") return;
+  localStorage.setItem("studio.ui.palette.advancedExpanded", collapsed ? "0" : "1");
+});
 
 /* ---------------- Computeds ---------------- */
 
-const palette = computed(() => store.paletteSnapshot || {})
-const tagKeys = computed(() => Object.keys(palette.value))
-const savedColors = computed(() => store.savedColors || [])
+const palette = computed(() => store.paletteSnapshot || {});
+const tagKeys = computed(() => Object.keys(palette.value));
+const savedColors = computed(() => store.savedColors || []);
 
 // Determine what the picker should show
-const activeTargets = computed(() => store.activePaletteTargets || [])
-const firstActiveTarget = computed(() => (activeTargets.value.length ? activeTargets.value[0] : null))
+const activeTargets = computed(() => store.activePaletteTargets || []);
+const firstActiveTarget = computed(() =>
+  activeTargets.value.length ? activeTargets.value[0] : null
+);
 
 const parsedFirstTargetRef = computed(() => {
-  const text = firstActiveTarget.value?.currentColorText
-  return PaletteService.parseTagOffsetRef(text)
-})
+  const text = firstActiveTarget.value?.currentColorText;
+  return PaletteService.parseTagOffsetRef(text);
+});
 
 const targetValueKind = computed(() => {
-  const text = String(firstActiveTarget.value?.currentColorText || '').trim()
-  if (!text) return 'raw'
-  if (parsedFirstTargetRef.value?.isTagOffsetRef) return 'tag-offset'
-  if (text in (palette.value || {})) return 'tag'
-  return 'raw'
-})
+  const text = String(firstActiveTarget.value?.currentColorText || "").trim();
+  if (!text) return "raw";
+  if (parsedFirstTargetRef.value?.isTagOffsetRef) return "tag-offset";
+  if (text in (palette.value || {})) return "tag";
+  return "raw";
+});
 
 const targetValueKindLabel = computed(() => {
-  if (targetValueKind.value === 'tag-offset') return t('palette.advanced.kindTagOffset')
-  if (targetValueKind.value === 'tag') return t('palette.advanced.kindTag')
-  return t('palette.advanced.kindRaw')
-})
+  if (targetValueKind.value === "tag-offset") return t("palette.advanced.kindTagOffset");
+  if (targetValueKind.value === "tag") return t("palette.advanced.kindTag");
+  return t("palette.advanced.kindRaw");
+});
 
 const currentTargetDisplayText = computed(() => {
-  const text = String(firstActiveTarget.value?.currentColorText || '').trim()
-  if (text) return text
-  return targetValueKindLabel.value
-})
+  const text = String(firstActiveTarget.value?.currentColorText || "").trim();
+  if (text) return text;
+  return targetValueKindLabel.value;
+});
 
 const currentTargetCss = computed(() => {
-  const css = String(firstActiveTarget.value?.currentColorCss || '').trim()
-  if (css) return css
+  const css = String(firstActiveTarget.value?.currentColorCss || "").trim();
+  if (css) return css;
 
-  const text = String(firstActiveTarget.value?.currentColorText || '').trim()
+  const text = String(firstActiveTarget.value?.currentColorText || "").trim();
   if (text in palette.value) {
-    return extractPrimaryCssColor(palette.value[text]) || ''
+    return extractPrimaryCssColor(palette.value[text]) || "";
   }
   if (parsedFirstTargetRef.value?.isTagOffsetRef) {
-    const resolved = PaletteService.resolveTagOffsetColor(text, palette.value)
-    if (resolved?.ok) return resolved.color
+    const resolved = PaletteService.resolveTagOffsetColor(text, palette.value);
+    if (resolved?.ok) return resolved.color;
   }
-  return ''
-})
+  return "";
+});
 
 const currentTargetDotStyle = computed(() => {
-  const css = currentTargetCss.value
+  const css = currentTargetCss.value;
   if (!css) {
     return {
-      background: 'transparent',
-      border: '1px dashed var(--color-border-base, #e2e8f0)'
-    }
+      background: "transparent",
+      border: "1px dashed var(--color-border-base, #e2e8f0)",
+    };
   }
   return {
     background: css,
-    border: '1px solid var(--color-border-base, #e2e8f0)'
-  }
-})
+    border: "1px solid var(--color-border-base, #e2e8f0)",
+  };
+});
 
 const canApplyAdvanced = computed(() => {
-  return !editingTagId.value && !!advancedBaseTag.value && activeTargets.value.length > 0
-})
+  return !editingTagId.value && !!advancedBaseTag.value && activeTargets.value.length > 0;
+});
 
 const canSuggestOffset = computed(() => {
-  return !editingTagId.value && !!advancedBaseTag.value && !!firstActiveTarget.value
-})
+  return !editingTagId.value && !!advancedBaseTag.value && !!firstActiveTarget.value;
+});
 
 const canDetachAdvanced = computed(() => {
-  return !editingTagId.value && !!firstActiveTarget.value && (
-    parsedFirstTargetRef.value?.isTagOffsetRef || !!advancedBaseTag.value
-  )
-})
+  return (
+    !editingTagId.value &&
+    !!firstActiveTarget.value &&
+    (parsedFirstTargetRef.value?.isTagOffsetRef || !!advancedBaseTag.value)
+  );
+});
 
 // Cache for tag usage counts (invalidated when palette or stacks change)
-const usageCountCache = ref({})
+const usageCountCache = ref({});
 
 function calculateUsageCount(tag) {
-  if (!store.stacks) return 0
-  let count = 0
+  if (!store.stacks) return 0;
+  let count = 0;
   const isRefToTag = (value) => {
-    if (value === tag) return true
-    if (typeof value !== 'string') return false
-    const parsed = PaletteService.parseTagOffsetRef(value)
-    return parsed.isTagOffsetRef && parsed.tag === tag
-  }
+    if (value === tag) return true;
+    if (typeof value !== "string") return false;
+    const parsed = PaletteService.parseTagOffsetRef(value);
+    return parsed.isTagOffsetRef && parsed.tag === tag;
+  };
 
   // 遍历所有 stack
-  store.stacks.forEach(stack => {
-    if (!stack.data) return
-    stack.data.forEach(part => {
-      if (isRefToTag(part.Color)) count++
-      if (Array.isArray(part.Color) && part.Color.some(c => isRefToTag(c))) count++
-    })
-  })
+  store.stacks.forEach((stack) => {
+    if (!stack.data) return;
+    stack.data.forEach((part) => {
+      if (isRefToTag(part.Color)) count++;
+      if (Array.isArray(part.Color) && part.Color.some((c) => isRefToTag(c))) count++;
+    });
+  });
 
   // 遍历 focusedPart
   if (store.focusedPart?.data) {
-    store.focusedPart.data.forEach(part => {
-      if (isRefToTag(part.Color)) count++
-      if (Array.isArray(part.Color) && part.Color.some(c => isRefToTag(c))) count++
-    })
+    store.focusedPart.data.forEach((part) => {
+      if (isRefToTag(part.Color)) count++;
+      if (Array.isArray(part.Color) && part.Color.some((c) => isRefToTag(c))) count++;
+    });
   }
 
-  return count
+  return count;
 }
 
 function usageCount(tag) {
   // 返回缓存的值，如果没有则计算并缓存
   if (!(tag in usageCountCache.value)) {
-    usageCountCache.value[tag] = calculateUsageCount(tag)
+    usageCountCache.value[tag] = calculateUsageCount(tag);
   }
-  return usageCountCache.value[tag]
+  return usageCountCache.value[tag];
 }
 
 // Invalidate cache when palette changes
-watch([() => store.paletteMap, () => store.stacks], () => {
-  usageCountCache.value = {}
-}, { deep: true })
+watch(
+  [() => store.paletteMap, () => store.stacks],
+  () => {
+    usageCountCache.value = {};
+  },
+  { deep: true }
+);
 
 watch(tagKeys, (keys) => {
-  if (!advancedBaseTag.value) return
+  if (!advancedBaseTag.value) return;
   if (!keys.includes(advancedBaseTag.value)) {
-    advancedBaseTag.value = ''
-    offsetH.value = 0
-    offsetL.value = 0
-    offsetS.value = 0
+    advancedBaseTag.value = "";
+    offsetH.value = 0;
+    offsetL.value = 0;
+    offsetS.value = 0;
   }
-})
+});
 
 /* ---------------- Picker Logic ---------------- */
 
 // 1. Sync Picker -> Store (Throttled)
 const updateStoreFromPicker = throttle((val) => {
-  const hex = normalizePickerOutput(val)
-  if (!hex) return
-  if (pickerSyncflag) return // Prevent loop
+  const hex = normalizePickerOutput(val);
+  if (!hex) return;
+  if (pickerSyncflag) return; // Prevent loop
 
   if (editingTagId.value) {
     // Mode A: Editing a Tag Definition
-    store.updatePaletteTag(editingTagId.value, hex)
+    store.updatePaletteTag(editingTagId.value, hex);
   } else {
     // Mode B: Editing the Active Selection(s)
-    // Note: If the active selection is currently using a Tag, 
+    // Note: If the active selection is currently using a Tag,
     // this will override the tag with a raw color (breaking the link),
     // which is usually expected behavior in "Direct" mode.
-    store.applyColorToActivePaletteTargets(hex)
+    // Realtime mode: during drag only update layer entries + preview.
+    // Expensive part rebuild and history are committed once after idle.
+    store.beginPaletteRealtimeUpdate?.();
+    store.applyColorToActivePaletteTargets(hex, { deferCommit: true });
+    if (realtimeCommitTimer) clearTimeout(realtimeCommitTimer);
+    realtimeCommitTimer = setTimeoutHost(() => {
+      realtimeCommitTimer = null;
+      try {
+        store.endPaletteRealtimeUpdate?.({ commit: true });
+      } catch (e) {
+        console.warn(e);
+      }
+    }, 220);
   }
-}, 100)
+}, 100);
 
 // Watch the visual picker component
 watch(pickerColor, (nv) => {
   // Only trigger update if we are interacting.
   // We need to distinguish between "Store changed picker" vs "User changed picker".
   // The simplest way is to let the update flow, but throttle it.
-  updateStoreFromPicker(nv)
-})
+  updateStoreFromPicker(nv);
+});
 
 // 2. Sync Store -> Picker
 // We need to update the picker color when:
@@ -466,153 +581,184 @@ watch(pickerColor, (nv) => {
 // B. The user selects a different tag to edit.
 // C. The value of the edited tag changes externally.
 
-watch(() => store.paletteUpdateFlag, () => {
-  if (!editingTagId.value) {
-    syncPickerToActiveSelection()
-    syncAdvancedFromSelection()
-  }
-})
-
-watch(activeTargets, () => {
-  if (!editingTagId.value && store.paletteModeActive) {
-    syncPickerToActiveSelection()
-    syncAdvancedFromSelection()
-  }
-}, { deep: true })
-
-watch(() => editingTagId.value, (newTag) => {
-  if (newTag) {
-    // Sync picker to this tag's color
-    const v = palette.value[newTag]
-    syncPickerToColorValue(v)
-  } else {
-    // Revert picker to active selection
-    syncPickerToActiveSelection()
-  }
-})
-
-watch(firstActiveTarget, () => {
-  if (!store.paletteModeActive) return
-  syncAdvancedFromSelection()
-}, { deep: true })
-
-// Also watch the palette itself in case the tag being edited changes value elsewhere
-watch(palette, (newPalette) => {
-  if (editingTagId.value && newPalette[editingTagId.value]) {
-    // If the tag we are editing changed (e.g. undo/redo), update picker
-    // Check for difference to avoid loop
-    const v = newPalette[editingTagId.value]
-    const hex = extractPrimaryCssColor(v)
-    if (hex && normalizePickerOutput(pickerColor.value) !== normalizePickerOutput(hex)) {
-      syncPickerToColorValue(v)
+watch(
+  () => store.paletteUpdateFlag,
+  () => {
+    if (!editingTagId.value) {
+      syncPickerToActiveSelection();
+      syncAdvancedFromSelection();
     }
   }
-}, { deep: true })
+);
+
+watch(
+  activeTargets,
+  () => {
+    if (!editingTagId.value && store.paletteModeActive) {
+      syncPickerToActiveSelection();
+      syncAdvancedFromSelection();
+    }
+  },
+  { deep: true }
+);
+
+watch(
+  () => editingTagId.value,
+  (newTag) => {
+    if (newTag) {
+      // Sync picker to this tag's color
+      const v = palette.value[newTag];
+      syncPickerToColorValue(v);
+    } else {
+      // Revert picker to active selection
+      syncPickerToActiveSelection();
+    }
+  }
+);
+
+watch(
+  firstActiveTarget,
+  () => {
+    if (!store.paletteModeActive) return;
+    syncAdvancedFromSelection();
+  },
+  { deep: true }
+);
+
+// Also watch the palette itself in case the tag being edited changes value elsewhere
+watch(
+  palette,
+  (newPalette) => {
+    if (editingTagId.value && newPalette[editingTagId.value]) {
+      // If the tag we are editing changed (e.g. undo/redo), update picker
+      // Check for difference to avoid loop
+      const v = newPalette[editingTagId.value];
+      const hex = extractPrimaryCssColor(v);
+      if (
+        hex &&
+        normalizePickerOutput(pickerColor.value) !== normalizePickerOutput(hex)
+      ) {
+        syncPickerToColorValue(v);
+      }
+    }
+  },
+  { deep: true }
+);
 
 function syncAdvancedFromSelection() {
   const resetAdvancedFields = () => {
-    advancedBaseTag.value = ''
-    offsetH.value = 0
-    offsetL.value = 0
-    offsetS.value = 0
-  }
+    advancedBaseTag.value = "";
+    offsetH.value = 0;
+    offsetL.value = 0;
+    offsetS.value = 0;
+  };
 
   const inferNearestTagOffsetFromColor = (targetColor) => {
-    if (!targetColor) return null
-    const tags = tagKeys.value || []
-    if (!tags.length) return null
+    if (!targetColor) return null;
+    const tags = tagKeys.value || [];
+    if (!tags.length) return null;
 
-    let best = null
+    let best = null;
 
     for (const tag of tags) {
-      const baseColor = extractPrimaryCssColor(palette.value[tag])
-      if (!baseColor) continue
-      const diff = getHlsOffsetBetweenColors(baseColor, targetColor)
-      if (!diff.ok) continue
+      const baseColor = extractPrimaryCssColor(palette.value[tag]);
+      if (!baseColor) continue;
+      const diff = getHlsOffsetBetweenColors(baseColor, targetColor);
+      if (!diff.ok) continue;
 
-      const score = Math.abs(diff.offset.h) * 0.6 + Math.abs(diff.offset.l) + Math.abs(diff.offset.s)
+      const score =
+        Math.abs(diff.offset.h) * 0.6 + Math.abs(diff.offset.l) + Math.abs(diff.offset.s);
       if (!best || score < best.score) {
         best = {
           tag,
           offset: diff.offset,
-          score
-        }
+          score,
+        };
       }
     }
 
-    return best
-  }
+    return best;
+  };
 
-  const text = String(firstActiveTarget.value?.currentColorText || '').trim()
+  const text = String(firstActiveTarget.value?.currentColorText || "").trim();
   if (!text) {
-    resetAdvancedFields()
-    return
+    resetAdvancedFields();
+    return;
   }
 
-  advancedSyncing.value = true
+  advancedSyncing.value = true;
 
-  const parsed = PaletteService.parseTagOffsetRef(text)
+  const parsed = PaletteService.parseTagOffsetRef(text);
   if (parsed.isTagOffsetRef && parsed.tag) {
-    advancedBaseTag.value = parsed.tag
-    offsetH.value = parsed.offset.h
-    offsetL.value = parsed.offset.l
-    offsetS.value = parsed.offset.s
-    nextTick(() => { advancedSyncing.value = false })
-    return
+    advancedBaseTag.value = parsed.tag;
+    offsetH.value = parsed.offset.h;
+    offsetL.value = parsed.offset.l;
+    offsetS.value = parsed.offset.s;
+    nextTick(() => {
+      advancedSyncing.value = false;
+    });
+    return;
   }
 
   if (text in palette.value) {
-    advancedBaseTag.value = text
-    offsetH.value = 0
-    offsetL.value = 0
-    offsetS.value = 0
+    advancedBaseTag.value = text;
+    offsetH.value = 0;
+    offsetL.value = 0;
+    offsetS.value = 0;
   } else {
-    const targetColor = String(firstActiveTarget.value?.currentColorCss || '').trim() || text
-    const inferred = inferNearestTagOffsetFromColor(targetColor)
+    const targetColor =
+      String(firstActiveTarget.value?.currentColorCss || "").trim() || text;
+    const inferred = inferNearestTagOffsetFromColor(targetColor);
     if (inferred) {
-      advancedBaseTag.value = inferred.tag
-      offsetH.value = inferred.offset.h
-      offsetL.value = inferred.offset.l
-      offsetS.value = inferred.offset.s
+      advancedBaseTag.value = inferred.tag;
+      offsetH.value = inferred.offset.h;
+      offsetL.value = inferred.offset.l;
+      offsetS.value = inferred.offset.s;
     } else {
-      resetAdvancedFields()
+      resetAdvancedFields();
     }
   }
-  nextTick(() => { advancedSyncing.value = false })
+  nextTick(() => {
+    advancedSyncing.value = false;
+  });
 }
 
 const applyAdvancedRealtime = throttle(() => {
-  if (advancedSyncing.value) return
-  if (!canApplyAdvanced.value) return
+  if (advancedSyncing.value) return;
+  if (!canApplyAdvanced.value) return;
   store.applyTagOffsetToActivePaletteTargets({
     tag: advancedBaseTag.value,
     offset: {
       h: offsetH.value,
       l: offsetL.value,
-      s: offsetS.value
-    }
-  })
-}, 120)
+      s: offsetS.value,
+    },
+  });
+}, 120);
 
 watch([advancedBaseTag, offsetH, offsetL, offsetS], () => {
-  applyAdvancedRealtime()
-})
+  applyAdvancedRealtime();
+});
 
 function syncPickerToActiveSelection() {
-  if (activeTargets.value.length === 0) return
-  const first = activeTargets.value[0]
+  if (activeTargets.value.length === 0) return;
+  const first = activeTargets.value[0];
   // activeTargets contains resolved colors
-  const css = first.currentColorCss
-  pickerSyncflag = true
-  if (css) pickerColor.value = css
-  nextTick(() => { pickerSyncflag = false })
+  const css = first.currentColorCss;
+  pickerSyncflag = true;
+  if (css) pickerColor.value = css;
+  nextTick(() => {
+    pickerSyncflag = false;
+  });
 }
 
 function syncPickerToColorValue(v) {
-  const hex = extractPrimaryCssColor(v)
-  pickerSyncflag = true
-  if (hex) pickerColor.value = hex
-  nextTick(() => { pickerSyncflag = false })
+  const hex = extractPrimaryCssColor(v);
+  pickerSyncflag = true;
+  if (hex) pickerColor.value = hex;
+  nextTick(() => {
+    pickerSyncflag = false;
+  });
 }
 
 /* ---------------- Actions ---------------- */
@@ -620,346 +766,358 @@ function syncPickerToColorValue(v) {
 // Toggle "Edit Mode" for a tag
 function toggleEditTagMode(tag) {
   if (editingTagId.value === tag) {
-    exitTagEditMode()
+    exitTagEditMode();
   } else {
-    editingTagId.value = tag
+    editingTagId.value = tag;
   }
 }
 
 function exitTagEditMode() {
-  editingTagId.value = null
+  editingTagId.value = null;
 }
 
 // Apply Tag to Selection
 function applyTag(tag) {
   // If we were editing a tag, maybe we should stop?
   // Let's assume clicking a swatch means "I want to use this on my layer"
-  if (editingTagId.value) exitTagEditMode()
+  if (editingTagId.value) exitTagEditMode();
 
-  store.applyTagToActivePaletteTargets(tag)
-  syncAdvancedFromSelection()
+  store.applyTagToActivePaletteTargets(tag);
+  syncAdvancedFromSelection();
   // Force picker sync visually to show the resolved color
-  const v = palette.value[tag]
-  syncPickerToColorValue(v)
+  const v = palette.value[tag];
+  syncPickerToColorValue(v);
 }
 
 // Rename Tag (Direct Input)
 async function onTagRename(oldTag, newNameRaw) {
-  const newName = (newNameRaw || '').trim()
+  const newName = (newNameRaw || "").trim();
   if (!newName || newName === oldTag) {
     // Revert input visual if needed? Vue :value binding handles it on re-render usually,
     // but forcing a refresh might be needed if strictly equal.
-    return
+    return;
   }
 
   if (palette.value[newName]) {
-    await DialogService.alert(t('palette.messages.tagNameExists') || 'Tag name exists')
+    await DialogService.alert(t("palette.messages.tagNameExists") || "Tag name exists");
     // Force UI revert
-    return
+    return;
   }
 
   // Perform expensive rename (search and replace in all stacks)
-  performRename(oldTag, newName)
+  performRename(oldTag, newName);
 }
 
 function performRename(oldTag, newTag) {
   try {
-    const newStacks = deepClone(store.stacks || [])
+    const newStacks = deepClone(store.stacks || []);
 
     const renameTagRefText = (text) => {
-      if (typeof text !== 'string') return text
-      if (text === oldTag) return newTag
+      if (typeof text !== "string") return text;
+      if (text === oldTag) return newTag;
 
-      const parsed = PaletteService.parseTagOffsetRef(text)
+      const parsed = PaletteService.parseTagOffsetRef(text);
       if (parsed.isTagOffsetRef && parsed.tag === oldTag) {
-        return PaletteService.formatTagOffsetRef(newTag, parsed.offset)
+        return PaletteService.formatTagOffsetRef(newTag, parsed.offset);
       }
-      return text
-    }
+      return text;
+    };
 
     const replaceTagRefsDeep = (node) => {
-      if (!node || typeof node !== 'object') return
+      if (!node || typeof node !== "object") return;
 
       if (Array.isArray(node)) {
         for (let i = 0; i < node.length; i++) {
-          if (typeof node[i] === 'string') {
-            node[i] = renameTagRefText(node[i])
+          if (typeof node[i] === "string") {
+            node[i] = renameTagRefText(node[i]);
           } else {
-            replaceTagRefsDeep(node[i])
+            replaceTagRefsDeep(node[i]);
           }
         }
-        return
+        return;
       }
 
-      if (typeof node.Color === 'string') {
-        node.Color = renameTagRefText(node.Color)
+      if (typeof node.Color === "string") {
+        node.Color = renameTagRefText(node.Color);
       } else if (Array.isArray(node.Color)) {
         for (let i = 0; i < node.Color.length; i++) {
-          if (typeof node.Color[i] === 'string') {
-            node.Color[i] = renameTagRefText(node.Color[i])
+          if (typeof node.Color[i] === "string") {
+            node.Color[i] = renameTagRefText(node.Color[i]);
           }
         }
       }
 
-      if (typeof node.colorText === 'string') {
-        node.colorText = renameTagRefText(node.colorText)
+      if (typeof node.colorText === "string") {
+        node.colorText = renameTagRefText(node.colorText);
       }
-      if (typeof node.currentColorText === 'string') {
-        node.currentColorText = renameTagRefText(node.currentColorText)
+      if (typeof node.currentColorText === "string") {
+        node.currentColorText = renameTagRefText(node.currentColorText);
       }
 
       for (const key of Object.keys(node)) {
-        if (key === 'Color' || key === 'colorText' || key === 'currentColorText') continue
-        const value = node[key]
-        if (value && typeof value === 'object') {
-          replaceTagRefsDeep(value)
+        if (key === "Color" || key === "colorText" || key === "currentColorText")
+          continue;
+        const value = node[key];
+        if (value && typeof value === "object") {
+          replaceTagRefsDeep(value);
         }
       }
-    }
+    };
 
     for (const el of newStacks) {
-      if (!el || !Array.isArray(el.data)) continue
+      if (!el || !Array.isArray(el.data)) continue;
       for (const part of el.data) {
-        replaceTagRefsDeep(part)
+        replaceTagRefsDeep(part);
       }
     }
 
-    const newFocused = deepClone(store.focusedPart)
-    if (newFocused) replaceTagRefsDeep(newFocused)
+    const newFocused = deepClone(store.focusedPart);
+    if (newFocused) replaceTagRefsDeep(newFocused);
 
-    const newTargets = deepClone(store.activePaletteTargets || [])
-    replaceTagRefsDeep(newTargets)
+    const newTargets = deepClone(store.activePaletteTargets || []);
+    replaceTagRefsDeep(newTargets);
 
-    const pm = deepClone(store.paletteMap || {})
-    pm[newTag] = pm[oldTag]
-    delete pm[oldTag]
+    const pm = deepClone(store.paletteMap || {});
+    pm[newTag] = pm[oldTag];
+    delete pm[oldTag];
 
-    store.stacks = newStacks
-    if (newFocused) store._updateFocusedPartInPlace(newFocused)
-    store.activePaletteTargets = newTargets
-    store.paletteMap = pm
+    store.stacks = newStacks;
+    if (newFocused) store._updateFocusedPartInPlace(newFocused);
+    store.activePaletteTargets = newTargets;
+    store.paletteMap = pm;
 
     if (editingTagId.value === oldTag) {
-      editingTagId.value = newTag
+      editingTagId.value = newTag;
     }
 
-    store._refreshAllLayerEntriesFromPalette()
-    store.refreshMergedAppearanceData()
-
+    store._refreshAllLayerEntriesFromPalette();
+    store.refreshMergedAppearanceData();
   } catch (e) {
-    console.error('Rename failed', e)
+    console.error("Rename failed", e);
   }
 }
 
 // Delete Tag (with Undo Toast)
 function handleDeleteTag(tag) {
   // Immediately delete the tag
-  store.deletePaletteTag(tag)
-  
+  store.deletePaletteTag(tag);
+
   // Clear editing mode if this was the tag being edited
-  if (editingTagId.value === tag) exitTagEditMode()
-  
+  if (editingTagId.value === tag) exitTagEditMode();
+
   // Show undo toast with 5 second window
   DialogService.showUndoToast({
-    message: t('palette.messages.tagDeleted', { tag }),
-    undoLabel: t('common.undo'),
+    message: t("palette.messages.tagDeleted", { tag }),
+    undoLabel: t("common.undo"),
     duration: 5000,
     onUndo: () => {
-      store.undo()
-    }
-  })
+      store.undo();
+    },
+  });
 }
 
 /* ---------------- Saved Colors Logic ---------------- */
 
 function applySavedColor(idx) {
-  const color = savedColors.value[idx]
-  store.applyColorToActivePaletteTargets(color)
-  syncPickerToColorValue(color)
+  const color = savedColors.value[idx];
+  store.applyColorToActivePaletteTargets(color);
+  syncPickerToColorValue(color);
 }
 
 function addCurrentToSaved() {
   // Add whatever is in the picker
-  const hex = normalizePickerOutput(pickerColor.value)
-  if (hex) store.addSavedColor(hex)
+  const hex = normalizePickerOutput(pickerColor.value);
+  if (hex) store.addSavedColor(hex);
 }
 
 function deleteSavedColor(idx) {
-  store.deleteSavedColor(idx)
-  
+  store.deleteSavedColor(idx);
+
   // Show undo toast with 5 second window
   DialogService.showUndoToast({
-    message: t('palette.messages.colorDeleted'),
-    undoLabel: t('common.undo'),
+    message: t("palette.messages.colorDeleted"),
+    undoLabel: t("common.undo"),
     duration: 5000,
     onUndo: () => {
-      store.undo()
-    }
-  })
+      store.undo();
+    },
+  });
 }
 
 function handleClearAllSaved() {
   // Immediately clear all saved colors
   if (store.clearSavedColors) {
-    store.clearSavedColors()
+    store.clearSavedColors();
   } else {
     // Fallback if store method is not available
     for (let i = savedColors.value.length - 1; i >= 0; i--) {
-      store.deleteSavedColor(i)
+      store.deleteSavedColor(i);
     }
   }
-  
+
   // Show undo toast with 5 second window
   DialogService.showUndoToast({
-    message: t('palette.messages.allColorsDeletd'),
-    undoLabel: t('common.undo'),
+    message: t("palette.messages.allColorsDeletd"),
+    undoLabel: t("common.undo"),
     duration: 5000,
     onUndo: () => {
-      store.undo()
-    }
-  })
+      store.undo();
+    },
+  });
 }
 
 function createTagFromCurrent() {
-  const hex = normalizePickerOutput(pickerColor.value)
-  if (hex) store.createTagAndReplaceInStacks(hex)
+  const hex = normalizePickerOutput(pickerColor.value);
+  if (hex) store.createTagAndReplaceInStacks(hex);
 }
 
 function toggleAdvanced() {
-  if (store.workspaceMode === 'easy' && collapsedAdvanced.value) {
-    collapsedAdvanced.value = false
-    return
+  if (store.workspaceMode === "easy" && collapsedAdvanced.value) {
+    collapsedAdvanced.value = false;
+    return;
   }
-  collapsedAdvanced.value = !collapsedAdvanced.value
+  collapsedAdvanced.value = !collapsedAdvanced.value;
 }
 
 function resetAdvancedOffset() {
-  if (!canApplyAdvanced.value) return
-  offsetH.value = 0
-  offsetL.value = 0
-  offsetS.value = 0
-  store.resetTagOffsetToTag(advancedBaseTag.value)
+  if (!canApplyAdvanced.value) return;
+  offsetH.value = 0;
+  offsetL.value = 0;
+  offsetS.value = 0;
+  store.resetTagOffsetToTag(advancedBaseTag.value);
 }
 
 function detachAdvancedToRaw() {
-  if (!canDetachAdvanced.value) return
+  if (!canDetachAdvanced.value) return;
 
-  const currentText = String(firstActiveTarget.value?.currentColorText || '').trim()
-  const parsedCurrent = PaletteService.parseTagOffsetRef(currentText)
+  const currentText = String(firstActiveTarget.value?.currentColorText || "").trim();
+  const parsedCurrent = PaletteService.parseTagOffsetRef(currentText);
 
   if (parsedCurrent.isTagOffsetRef) {
-    store.detachTagOffsetToRaw({ ref: currentText })
-    return
+    store.detachTagOffsetToRaw({ ref: currentText });
+    return;
   }
 
   if (advancedBaseTag.value) {
     const ref = PaletteService.formatTagOffsetRef(advancedBaseTag.value, {
       h: offsetH.value,
       l: offsetL.value,
-      s: offsetS.value
-    })
-    store.detachTagOffsetToRaw({ ref })
+      s: offsetS.value,
+    });
+    store.detachTagOffsetToRaw({ ref });
   }
 }
 
 function convertAdvancedToHls() {
-  if (!canSuggestOffset.value) return
-  const targetText = String(firstActiveTarget.value?.currentColorText || '').trim()
-  if (!targetText) return
+  if (!canSuggestOffset.value) return;
+  const targetText = String(firstActiveTarget.value?.currentColorText || "").trim();
+  if (!targetText) return;
 
-  const parsed = PaletteService.parseTagOffsetRef(targetText)
+  const parsed = PaletteService.parseTagOffsetRef(targetText);
   if (parsed.isTagOffsetRef && parsed.tag) {
-    advancedBaseTag.value = parsed.tag
-    offsetH.value = parsed.offset.h
-    offsetL.value = parsed.offset.l
-    offsetS.value = parsed.offset.s
+    advancedBaseTag.value = parsed.tag;
+    offsetH.value = parsed.offset.h;
+    offsetL.value = parsed.offset.l;
+    offsetS.value = parsed.offset.s;
   } else {
-    suggestOffsetFromCurrent()
+    suggestOffsetFromCurrent();
   }
 
-  if (!advancedBaseTag.value) return
+  if (!advancedBaseTag.value) return;
   store.applyTagOffsetToActivePaletteTargets({
     tag: advancedBaseTag.value,
     offset: {
       h: offsetH.value,
       l: offsetL.value,
-      s: offsetS.value
-    }
-  })
+      s: offsetS.value,
+    },
+  });
 }
 
 function suggestOffsetFromCurrent() {
-  if (!canSuggestOffset.value) return
-  const targetText = String(firstActiveTarget.value?.currentColorText || '').trim()
-  if (!targetText) return
+  if (!canSuggestOffset.value) return;
+  const targetText = String(firstActiveTarget.value?.currentColorText || "").trim();
+  if (!targetText) return;
 
-  const parsed = PaletteService.parseTagOffsetRef(targetText)
+  const parsed = PaletteService.parseTagOffsetRef(targetText);
   if (parsed.isTagOffsetRef && parsed.tag) {
-    advancedBaseTag.value = parsed.tag
-    offsetH.value = parsed.offset.h
-    offsetL.value = parsed.offset.l
-    offsetS.value = parsed.offset.s
-    return
+    advancedBaseTag.value = parsed.tag;
+    offsetH.value = parsed.offset.h;
+    offsetL.value = parsed.offset.l;
+    offsetS.value = parsed.offset.s;
+    return;
   }
 
-  const baseColor = extractPrimaryCssColor(palette.value[advancedBaseTag.value])
-  let targetColor = targetText
+  const baseColor = extractPrimaryCssColor(palette.value[advancedBaseTag.value]);
+  let targetColor = targetText;
 
   if (targetText in palette.value) {
-    targetColor = extractPrimaryCssColor(palette.value[targetText])
+    targetColor = extractPrimaryCssColor(palette.value[targetText]);
   }
 
-  const diff = getHlsOffsetBetweenColors(baseColor, targetColor)
-  if (!diff.ok) return
+  const diff = getHlsOffsetBetweenColors(baseColor, targetColor);
+  if (!diff.ok) return;
 
-  offsetH.value = diff.offset.h
-  offsetL.value = diff.offset.l
-  offsetS.value = diff.offset.s
+  offsetH.value = diff.offset.h;
+  offsetL.value = diff.offset.l;
+  offsetS.value = diff.offset.s;
 }
 
-function toggleSaved() { collapsedSaved.value = !collapsedSaved.value }
-function toggleTags() { collapsedTags.value = !collapsedTags.value }
+function toggleSaved() {
+  collapsedSaved.value = !collapsedSaved.value;
+}
+function toggleTags() {
+  collapsedTags.value = !collapsedTags.value;
+}
 
 /* ---------------- Helpers ---------------- */
 
 function normalizePickerOutput(val) {
-  if (!val) return null
-  if (typeof val === 'string') return val
-  if (val.hex) return val.hex
-  return String(val)
+  if (!val) return null;
+  if (typeof val === "string") return val;
+  if (val.hex) return val.hex;
+  return String(val);
 }
 
 function extractPrimaryCssColor(v) {
-  if (!v) return null
-  if (typeof v === 'string') return v
-  if (Array.isArray(v)) return v.length ? String(v[0]) : null
-  return String(v)
+  if (!v) return null;
+  if (typeof v === "string") return v;
+  if (Array.isArray(v)) return v.length ? String(v[0]) : null;
+  return String(v);
 }
 
 function deepClone(v) {
-  try { return JSON.parse(JSON.stringify(v)) } catch (e) { return v }
+  try {
+    return JSON.parse(JSON.stringify(v));
+  } catch (e) {
+    return v;
+  }
 }
 
 function savedSwatchStyle(v) {
-  const c = extractPrimaryCssColor(v)
-  return c ? { background: c } : { background: 'var(--color-bg-base, #fff)' }
+  const c = extractPrimaryCssColor(v);
+  return c ? { background: c } : { background: "var(--color-bg-base, #fff)" };
 }
 
 function swatchStyle(tag) {
-  const v = palette.value[tag]
-  const c = extractPrimaryCssColor(v)
-  return c ? { background: c } : { background: 'transparent', border: '1px solid var(--color-border-base, #e2e8f0)' }
+  const v = palette.value[tag];
+  const c = extractPrimaryCssColor(v);
+  return c
+    ? { background: c }
+    : {
+        background: "transparent",
+        border: "1px solid var(--color-border-base, #e2e8f0)",
+      };
 }
 
 function valText(tag) {
-  const v = palette.value[tag]
-  return typeof v === 'string' ? v : JSON.stringify(v)
+  const v = palette.value[tag];
+  return typeof v === "string" ? v : JSON.stringify(v);
 }
 
 function savedText(v) {
-  return typeof v === 'string' ? v : JSON.stringify(v)
+  return typeof v === "string" ? v : JSON.stringify(v);
 }
-
 </script>
 
 <style scoped>
@@ -970,7 +1128,7 @@ function savedText(v) {
   width: 100%;
   max-width: 100%;
   background: var(--color-bg-base, #fff);
-  font-family: 'Segoe UI', sans-serif;
+  font-family: "Segoe UI", sans-serif;
   color: var(--color-text-primary, #0f172a);
   overflow: hidden;
 }
@@ -1419,7 +1577,6 @@ function savedText(v) {
 
   color: var(--color-error, #ef4444);
 
- 
   display: flex;
   align-items: center;
   justify-content: top;
@@ -1432,7 +1589,6 @@ function savedText(v) {
   opacity: 0;
   transition: opacity 0.1s, background 0.1s;
 }
-
 
 .saved-swatch-item:hover .delete-overlay {
   opacity: 1;

@@ -28,6 +28,8 @@ import * as PriorityActions from '@/studio/priority-actions.js'
 import * as AssetActions from '@/studio/asset-actions.js'
 import * as StorageActions from '@/studio/storage-actions.js'
 import * as SaveActions from '@/studio/save-actions.js'
+import { getStudioFacade } from '@/studio/StudioFacade'
+import { isStudioFacadeEnabled } from '@/config/featureFlags'
 
 /*
   NOTE:
@@ -163,6 +165,10 @@ export const useStudioStore = defineStore('studio', {
 
     paletteUpdateFlag: 0,
 
+    // Palette realtime update session (used for drag interactions)
+    _paletteRealtimeMode: false,
+    _paletteRealtimeDirty: false,
+
     // Performance: refresh scheduler instance
     _refreshScheduler: new RefreshScheduler(),
 
@@ -225,7 +231,9 @@ export const useStudioStore = defineStore('studio', {
     historyPanelVisible: false,
     // Studio V2 UI state
     workspaceMode: 'pro', // fixed to 'pro'
-    taskStage: 'assemble', // 'assemble' | 'replace' | 'polish' | 'commit'
+    // Deprecated: legacy stage state machine is no longer used for UI gating.
+    // Keep this field only for backward compatibility with older callers.
+    taskStage: 'assemble', // legacy: 'assemble' | 'replace' | 'polish' | 'commit'
     activeContextPanel: 'inspector', // 'inspector' | 'asset' | 'palette'
     panelStates: {
       inspector: 'pinned',
@@ -243,7 +251,13 @@ export const useStudioStore = defineStore('studio', {
     lastSaveTime: null,
     saveStatus: 'idle', // 'idle' | 'saving' | 'saved' | 'error'
     _saveStatusTimeout: null, // Track timeout for status indicator
-    currentSaveId: null // ID of currently loaded save
+    currentSaveId: null, // ID of currently loaded save
+
+    // Preview stack management: coordinates hover previews between components
+    // Structure: [{ id, priority, preview, source, timestamp }, ...]
+    // Higher priority previews take precedence over lower ones
+    _previewStack: [],
+    _activePreviewId: null // ID of currently active preview
   }),
 
   getters: {
@@ -349,7 +363,102 @@ export const useStudioStore = defineStore('studio', {
     },
 
     // -------------------------
-    // Part UID utilities
+    // Preview Stack Management
+    // -------------------------
+    // Coordinates preview rendering between components (Inspector vs Selector)
+    // Ensures only the highest-priority preview is rendered
+
+    /**
+     * Push a preview onto the stack
+     * @param {string} id - Unique identifier for this preview (e.g., 'asset-hover', 'layer-blink')
+     * @param {number} priority - Higher priority takes precedence (0-10, layer-blink: 2, asset-hover: 1)
+     * @param {object} previewData - The preview appearance data to render
+     * @param {string} source - Description of preview source (for debugging)
+     */
+    pushPreview(id, priority, previewData, source = '') {
+      if (!id || typeof priority !== 'number') return
+
+      // Remove if already exists (to update)
+      this._previewStack = this._previewStack.filter(p => p.id !== id)
+
+      // Add new preview entry
+      this._previewStack.push({
+        id,
+        priority,
+        preview: previewData,
+        source,
+        timestamp: Date.now()
+      })
+
+      // Update active preview
+      this._updateActivePreview()
+    },
+
+    /**
+     * Remove a preview from the stack
+     * @param {string} id - ID of preview to remove
+     */
+    popPreview(id) {
+      if (!id) return
+
+      this._previewStack = this._previewStack.filter(p => p.id !== id)
+
+      // Update active preview
+      this._updateActivePreview()
+    },
+
+    /**
+     * Internal: Update active preview based on max priority
+     */
+    _updateActivePreview() {
+      if (this._previewStack.length === 0) {
+        // No previews active: restore original merged appearance
+        this._activePreviewId = null
+        this.refreshMergedAppearanceData()
+        return
+      }
+
+      // Find highest priority preview
+      let highestPriority = -1
+      let activePreview = null
+
+      for (const preview of this._previewStack) {
+        if (preview.priority > highestPriority) {
+          highestPriority = preview.priority
+          activePreview = preview
+        }
+      }
+
+      if (!activePreview) return
+
+      // Only update if active preview changed
+      if (this._activePreviewId !== activePreview.id) {
+        this._activePreviewId = activePreview.id
+        this.mergedAppearanceData = activePreview.preview
+
+        // Render preview
+        try {
+          const activeRenderer = this.useOptimizedRenderer ? this.previewRenderer : this.renderer
+          if (activeRenderer && typeof activeRenderer.renderPreviewWithItem === 'function') {
+            activeRenderer.renderPreviewWithItem(activePreview.preview)
+          }
+        } catch (e) {
+          console.warn('[studioStore] Failed to render preview:', e)
+        }
+      }
+    },
+
+    /**
+     * Check if a preview source is currently active
+     * @param {string} id - Preview ID to check
+     * @returns {boolean}
+     */
+    isPreviewActive(id) {
+      return this._activePreviewId === id
+    },
+
+    // -------------------------
+    // Preview tool management
     // -------------------------
     ensurePartUid(part) {
       if (!part || typeof part !== 'object') return null
@@ -386,9 +495,7 @@ export const useStudioStore = defineStore('studio', {
     clearReplaceTarget() {
       const result = FocusActions.clearReplaceTargetState()
       this.replaceTarget = result.replaceTarget
-      if (this.taskStage === 'replace') {
-        this.setTaskStage('polish')
-      }
+      // Deprecated flow: clearing replace target no longer mutates taskStage.
       if (this.activeContextPanel === 'asset' && this.pinnedPanel !== 'asset') {
         this.openContextPanel('inspector', 'replace-cleared')
       }
@@ -400,22 +507,9 @@ export const useStudioStore = defineStore('studio', {
     },
 
     setTaskStage(stage = 'assemble') {
-      const allowed = new Set(['assemble', 'replace', 'polish', 'commit'])
-      const nextStage = allowed.has(stage) ? stage : 'assemble'
-      this.taskStage = nextStage
-
-      if (nextStage === 'replace') {
-        this.openContextPanel('asset', 'task-stage-replace')
-      } else if ((nextStage === 'polish' || nextStage === 'assemble') && this.pinnedPanel !== 'asset') {
-        if (this.activeContextPanel === 'asset') {
-          this.openContextPanel('inspector', 'task-stage-' + nextStage)
-        }
-      }
-
-      if (nextStage !== 'polish' && this.panelStates.layer !== 'pinned') {
-        this.panelStates.layer = this.workspaceMode === 'pro' ? this.panelStates.layer : 'hidden'
-      }
-
+      // Deprecated no-op: keep API shape for old call sites but disable stage-driven UI branching.
+      // Preserve a stable value to avoid leaking stale persisted states.
+      this.taskStage = 'assemble'
       this.persistUiLayout()
     },
 
@@ -450,9 +544,7 @@ export const useStudioStore = defineStore('studio', {
         this.palettePanelVisible = false
       }
 
-      if (reason === 'part-selected' && this.taskStage !== 'replace') {
-        this.taskStage = 'replace'
-      }
+      // Deprecated flow: part selection should not mutate legacy taskStage.
 
       this.persistUiLayout()
     },
@@ -563,10 +655,8 @@ export const useStudioStore = defineStore('studio', {
         const pinned = localStorage.getItem('studio.ui.pinnedPanel')
         this.pinnedPanel = pinned || null
 
-        const stage = localStorage.getItem('studio.ui.lastTaskStage')
-        if (stage && ['assemble', 'replace', 'polish', 'commit'].includes(stage)) {
-          this.taskStage = stage
-        }
+        // Deprecated: ignore persisted legacy task stage.
+        this.taskStage = 'assemble'
 
         if (this.panelStates.palette !== 'hidden') this.palettePanelVisible = true
         if (this.panelStates.history !== 'hidden') this.historyPanelVisible = true
@@ -585,7 +675,7 @@ export const useStudioStore = defineStore('studio', {
         localStorage.setItem('studio.ui.workspaceMode', this.workspaceMode)
         localStorage.setItem('studio.ui.panelStates', JSON.stringify(this.panelStates))
         localStorage.setItem('studio.ui.pinnedPanel', this.pinnedPanel || '')
-        localStorage.setItem('studio.ui.lastTaskStage', this.taskStage)
+        // Deprecated: no longer persist taskStage.
       } catch (e) {
         // ignore storage write failures
       }
@@ -913,15 +1003,64 @@ export const useStudioStore = defineStore('studio', {
           }
         }
       } finally {
+        try { this.endPaletteRealtimeUpdate({ commit: true }) } catch (e) { console.warn(e) }
         try { this.clearPaletteMode() } catch (e) { console.warn(e) }
       }
       this.persistUiLayout()
     },
 
+    beginPaletteRealtimeUpdate() {
+      this._paletteRealtimeMode = true
+    },
+
+    execute(command, options = {}) {
+      return getStudioFacade(this).execute(command, options)
+    },
+
+    beginInteraction(kind = 'palette', meta = {}) {
+      return getStudioFacade(this).beginInteraction(kind, meta)
+    },
+
+    applyDelta(delta = {}) {
+      return getStudioFacade(this).applyDelta(delta)
+    },
+
+    commitInteraction() {
+      return getStudioFacade(this).commitInteraction()
+    },
+
+    cancelInteraction() {
+      return getStudioFacade(this).cancelInteraction()
+    },
+
+    endPaletteRealtimeUpdate({ commit = true } = {}) {
+      const shouldCommit = !!commit && this._paletteRealtimeDirty
+      this._paletteRealtimeMode = false
+      this._paletteRealtimeDirty = false
+
+      if (!shouldCommit) return false
+
+      // Commit deferred heavy work once after drag interaction settles.
+      this._schedulePartUpdate()
+      this._scheduleRefresh()
+      this.pushHistorySnapshot()
+      return true
+    },
+
     // -------------------------
     // apply/modify palette targets (OPTIMIZED)
     // -------------------------
-    applyColorToActivePaletteTargets(newColor) {
+    applyColorToActivePaletteTargets(newColor, options = {}) {
+      if (!options?._fromFacade && isStudioFacadeEnabled()) {
+        return this.execute({
+          type: 'palette.applyColor',
+          payload: { newColor },
+          meta: { deferCommit: options?.deferCommit === true }
+        })
+      }
+
+      const deferCommit = options?.deferCommit === true || this._paletteRealtimeMode === true
+
       const changed = PaletteActions.applyColorToTargets(this, newColor, {
         paletteModeActive: this.paletteModeActive,
         activePaletteTargets: this.activePaletteTargets,
@@ -929,19 +1068,27 @@ export const useStudioStore = defineStore('studio', {
         findPartByUid: this.findPartByUid.bind(this),
         _buildLayerEntriesWithCache: this._buildLayerEntriesWithCache.bind(this),
         _scheduleLayerRefresh: this._scheduleLayerRefresh.bind(this),
-        _schedulePartUpdate: this._schedulePartUpdate.bind(this),
+        _schedulePartUpdate: deferCommit ? (() => {}) : this._schedulePartUpdate.bind(this),
         triggerFocusedPartUpdate: this.triggerFocusedPartUpdate.bind(this),
-        pushHistorySnapshotThrottled: this.pushHistorySnapshotThrottled.bind(this),
+        pushHistorySnapshotThrottled: deferCommit ? (() => {}) : this.pushHistorySnapshotThrottled.bind(this),
         _resolveColorCssFromText: this._resolveColorCssFromText.bind(this)
       })
 
       if (changed) {
+        if (deferCommit) this._paletteRealtimeDirty = true
         this._scheduleRefresh()
       }
       return changed
     },
 
-    applyTagToActivePaletteTargets(tag) {
+    applyTagToActivePaletteTargets(tag, options = {}) {
+      if (!options?._fromFacade && isStudioFacadeEnabled()) {
+        return this.execute({
+          type: 'palette.applyTag',
+          payload: { tag }
+        })
+      }
+
       return PaletteActions.applyTagToTargets(this, tag, {
         paletteModeActive: this.paletteModeActive,
         activePaletteTargets: this.activePaletteTargets,
@@ -956,7 +1103,14 @@ export const useStudioStore = defineStore('studio', {
       })
     },
 
-    applyTagOffsetToActivePaletteTargets(payload = {}) {
+    applyTagOffsetToActivePaletteTargets(payload = {}, options = {}) {
+      if (!options?._fromFacade && isStudioFacadeEnabled()) {
+        return this.execute({
+          type: 'palette.applyTagOffset',
+          payload
+        })
+      }
+
       const changed = PaletteActions.applyTagOffsetToTargets(this, payload, {
         paletteModeActive: this.paletteModeActive,
         activePaletteTargets: this.activePaletteTargets,
@@ -976,7 +1130,14 @@ export const useStudioStore = defineStore('studio', {
       return changed
     },
 
-    resetTagOffsetToTag(tag) {
+    resetTagOffsetToTag(tag, options = {}) {
+      if (!options?._fromFacade && isStudioFacadeEnabled()) {
+        return this.execute({
+          type: 'palette.resetTagOffset',
+          payload: { tag }
+        })
+      }
+
       const changed = PaletteActions.clearTagOffsetOnTargets(this, { tag }, {
         paletteModeActive: this.paletteModeActive,
         activePaletteTargets: this.activePaletteTargets,
@@ -1066,7 +1227,14 @@ export const useStudioStore = defineStore('studio', {
       this._scheduleRefresh()
     },
 
-    updatePaletteTag(tag, newValue) {
+    updatePaletteTag(tag, newValue, options = {}) {
+      if (!options?._fromFacade && isStudioFacadeEnabled()) {
+        return this.execute({
+          type: 'palette.updateTag',
+          payload: { tag, newValue }
+        })
+      }
+
       const result = PaletteActions.updatePaletteTag(this, tag, newValue, {
         paletteMap: this.paletteMap,
         stacks: this.stacks,

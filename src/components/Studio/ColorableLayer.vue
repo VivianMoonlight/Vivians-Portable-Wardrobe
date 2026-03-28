@@ -254,13 +254,6 @@ const isPriorityPropertyFocused = computed(() => {
   )
 })
 
-// Auto-expand when focused or selected
-watch([() => isFocused.value, () => isSelected.value], ([focused, selected]) => {
-  if (focused || selected) {
-    collapsed.value = false
-  }
-})
-
 function setChipTextColor(bgColor) {
   // Simple luminance check for light/dark background
   if (!bgColor) return ''
@@ -679,28 +672,27 @@ function togglePaletteForEntry() {
   --text: var(--color-text-primary);
   --accent: var(--color-selection-single);
   --chip-border: var(--color-border-light);
-  border-radius: var(--radius-lg, 10px);
+  border-radius: var(--radius-md, 8px);
   border: 1px solid var(--panel-border);
   background: var(--bg);
   display: flex;
   flex-direction: column;
-  transition: box-shadow 0.12s ease;
+  transition: border-color 0.12s ease, background 0.12s ease;
   box-sizing: border-box;
 }
 
 [data-focused="1"] {
-  box-shadow: 0 0 0 3px var(--color-selection-single-bg);
   border-color: var(--color-selection-single-border);
+  background: var(--color-selection-single-bg);
 }
 
 [data-selected="1"] {
   background: var(--color-selection-multi-bg);
   border-color: var(--color-selection-multi-border);
-  box-shadow: 0 0 0 2px var(--color-selection-multi-bg);
 }
 
 [data-selected="1"][data-focused="1"] {
-  box-shadow: 0 0 0 3px var(--color-selection-multi-border);
+  border-color: var(--color-selection-multi-border);
 }
 
 /* Header */
@@ -710,10 +702,10 @@ function togglePaletteForEntry() {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 12px;
-  border-radius: var(--radius-lg, 9px) var(--radius-lg, 9px) 0 0;
-  border-bottom: 1px dashed rgba(240, 238, 251, 0.9);
-  background: linear-gradient(90deg, var(--header-bg-a) 60%, var(--header-bg-b) 100%);
+  padding: 8px 10px;
+  border-radius: var(--radius-md, 7px) var(--radius-md, 7px) 0 0;
+  border-bottom: 1px solid var(--color-border-light);
+  background: var(--header-bg-a);
   font-size: 14px;
 }
 
@@ -765,7 +757,7 @@ function togglePaletteForEntry() {
 
 /* Body */
 .color-main-body {
-  padding: 10px 14px;
+  padding: 10px 12px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -897,7 +889,6 @@ function togglePaletteForEntry() {
   font-weight: 600;
   font-size: 12px;
   border: 1px solid var(--color-border-light);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2);
 }
 
 
@@ -920,7 +911,7 @@ function togglePaletteForEntry() {
 .sublayer-list {
   padding: 8px 14px 12px 24px;
   background: var(--color-bg-surface);
-  border-top: 1px dashed var(--color-border-light);
+  border-top: 1px solid var(--color-border-light);
   border-radius: 0 0 9px 9px;
 }
 
