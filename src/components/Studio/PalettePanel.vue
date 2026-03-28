@@ -343,6 +343,7 @@ let deleteTagTimer = null;
 let clearSavedTimer = null;
 let pickerSyncflag = false;
 let realtimeCommitTimer = null;
+let paletteInteractionActive = false;
 
 // Responsive Screen Size Tracking
 const screenSize = ref("md"); // 'xs' | 'sm' | 'md' | 'lg'
@@ -377,15 +378,13 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener("resize", updateScreenSize);
+  updateStoreFromPicker.cancel?.();
+  applyAdvancedRealtime.cancel?.();
   if (realtimeCommitTimer) {
     clearTimeout(realtimeCommitTimer);
     realtimeCommitTimer = null;
   }
-  try {
-    store.endPaletteRealtimeUpdate?.({ commit: true });
-  } catch (e) {
-    console.warn(e);
-  }
+  commitPaletteInteraction();
 });
 
 watch([collapsedAdvanced, () => store.workspaceMode], ([collapsed, mode]) => {
@@ -537,6 +536,46 @@ watch(tagKeys, (keys) => {
 
 /* ---------------- Picker Logic ---------------- */
 
+function beginPaletteInteraction() {
+  if (paletteInteractionActive) return;
+  try {
+    store.beginInteraction?.("palette", { source: "PalettePanel" });
+  } catch (e) {
+    try {
+      store.beginPaletteRealtimeUpdate?.();
+    } catch (innerError) {
+      console.warn(innerError);
+    }
+  }
+  paletteInteractionActive = true;
+}
+
+function commitPaletteInteraction() {
+  if (!paletteInteractionActive) return;
+  paletteInteractionActive = false;
+  try {
+    if (typeof store.commitInteraction === "function") {
+      store.commitInteraction();
+      return;
+    }
+  } catch (e) {
+    console.warn(e);
+  }
+  try {
+    store.endPaletteRealtimeUpdate?.({ commit: true });
+  } catch (e) {
+    console.warn(e);
+  }
+}
+
+function schedulePaletteInteractionCommit() {
+  if (realtimeCommitTimer) clearTimeout(realtimeCommitTimer);
+  realtimeCommitTimer = setTimeoutHost(() => {
+    realtimeCommitTimer = null;
+    commitPaletteInteraction();
+  }, 220);
+}
+
 // 1. Sync Picker -> Store (Throttled)
 const updateStoreFromPicker = throttle((val) => {
   const hex = normalizePickerOutput(val);
@@ -547,23 +586,16 @@ const updateStoreFromPicker = throttle((val) => {
     // Mode A: Editing a Tag Definition
     store.updatePaletteTag(editingTagId.value, hex);
   } else {
-    // Mode B: Editing the Active Selection(s)
-    // Note: If the active selection is currently using a Tag,
-    // this will override the tag with a raw color (breaking the link),
-    // which is usually expected behavior in "Direct" mode.
-    // Realtime mode: during drag only update layer entries + preview.
-    // Expensive part rebuild and history are committed once after idle.
-    store.beginPaletteRealtimeUpdate?.();
-    store.applyColorToActivePaletteTargets(hex, { deferCommit: true });
-    if (realtimeCommitTimer) clearTimeout(realtimeCommitTimer);
-    realtimeCommitTimer = setTimeoutHost(() => {
-      realtimeCommitTimer = null;
-      try {
-        store.endPaletteRealtimeUpdate?.({ commit: true });
-      } catch (e) {
-        console.warn(e);
-      }
-    }, 220);
+    // Mode B: Editing active selection through transaction API.
+    beginPaletteInteraction();
+    const changed = store.applyDelta?.({
+      type: "palette.applyColor",
+      payload: { newColor: hex },
+    });
+    if (changed === false) {
+      store.applyColorToActivePaletteTargets(hex, { deferCommit: true });
+    }
+    schedulePaletteInteractionCommit();
   }
 }, 100);
 
@@ -726,14 +758,23 @@ function syncAdvancedFromSelection() {
 const applyAdvancedRealtime = throttle(() => {
   if (advancedSyncing.value) return;
   if (!canApplyAdvanced.value) return;
-  store.applyTagOffsetToActivePaletteTargets({
+  beginPaletteInteraction();
+  const payload = {
     tag: advancedBaseTag.value,
     offset: {
       h: offsetH.value,
       l: offsetL.value,
       s: offsetS.value,
     },
+  };
+  const changed = store.applyDelta?.({
+    type: "palette.applyTagOffset",
+    payload,
   });
+  if (changed === false) {
+    store.applyTagOffsetToActivePaletteTargets(payload, { deferCommit: true });
+  }
+  schedulePaletteInteractionCommit();
 }, 120);
 
 watch([advancedBaseTag, offsetH, offsetL, offsetS], () => {

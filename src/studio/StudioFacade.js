@@ -26,9 +26,15 @@ class StudioFacade {
       case 'palette.applyTag':
         return this.store.applyTagToActivePaletteTargets(payload.tag, { _fromFacade: true })
       case 'palette.applyTagOffset':
-        return this.store.applyTagOffsetToActivePaletteTargets(payload, { _fromFacade: true })
+        return this.store.applyTagOffsetToActivePaletteTargets(payload, {
+          deferCommit: meta.deferCommit === true,
+          _fromFacade: true
+        })
       case 'palette.resetTagOffset':
-        return this.store.resetTagOffsetToTag(payload.tag, { _fromFacade: true })
+        return this.store.resetTagOffsetToTag(payload.tag, {
+          deferCommit: meta.deferCommit === true,
+          _fromFacade: true
+        })
       case 'palette.updateTag':
         return this.store.updatePaletteTag(payload.tag, payload.newValue, { _fromFacade: true })
       default:
@@ -52,8 +58,15 @@ class StudioFacade {
 
     const kind = this.activeInteraction.kind
     if (kind === 'palette') {
-      if (delta.type === 'palette.applyColor') {
-        return this.execute({ type: delta.type, payload: delta.payload, meta: { deferCommit: true } })
+      if (typeof delta.type === 'string' && delta.type.trim()) {
+        const normalizedType = delta.type.trim()
+        if (['palette.applyColor', 'palette.applyTagOffset', 'palette.resetTagOffset'].includes(normalizedType)) {
+          return this.execute({
+            type: normalizedType,
+            payload: delta.payload || {},
+            meta: { deferCommit: true }
+          })
+        }
       }
       if (Object.prototype.hasOwnProperty.call(delta, 'newColor')) {
         return this.execute({
@@ -101,9 +114,15 @@ class StudioFacade {
       case 'palette.applyTag':
         return this.store.applyTagToActivePaletteTargets(payload.tag, { _fromFacade: true })
       case 'palette.applyTagOffset':
-        return this.store.applyTagOffsetToActivePaletteTargets(payload, { _fromFacade: true })
+        return this.store.applyTagOffsetToActivePaletteTargets(payload, {
+          deferCommit: meta.deferCommit === true,
+          _fromFacade: true
+        })
       case 'palette.resetTagOffset':
-        return this.store.resetTagOffsetToTag(payload.tag, { _fromFacade: true })
+        return this.store.resetTagOffsetToTag(payload.tag, {
+          deferCommit: meta.deferCommit === true,
+          _fromFacade: true
+        })
       case 'palette.updateTag':
         return this.store.updatePaletteTag(payload.tag, payload.newValue, { _fromFacade: true })
       default:

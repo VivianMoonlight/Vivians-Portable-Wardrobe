@@ -1013,6 +1013,25 @@ export const useStudioStore = defineStore('studio', {
       this._paletteRealtimeMode = true
     },
 
+    _finalizePaletteMutation(changed, { deferCommit = false, throttleHistory = true } = {}) {
+      if (!changed) return false
+
+      if (deferCommit) {
+        this._paletteRealtimeDirty = true
+        this._scheduleRefresh()
+        return true
+      }
+
+      this._schedulePartUpdate()
+      this._scheduleRefresh()
+      if (throttleHistory) {
+        this.pushHistorySnapshotThrottled()
+      } else {
+        this.pushHistorySnapshot()
+      }
+      return true
+    },
+
     execute(command, options = {}) {
       return getStudioFacade(this).execute(command, options)
     },
@@ -1040,11 +1059,8 @@ export const useStudioStore = defineStore('studio', {
 
       if (!shouldCommit) return false
 
-      // Commit deferred heavy work once after drag interaction settles.
-      this._schedulePartUpdate()
-      this._scheduleRefresh()
-      this.pushHistorySnapshot()
-      return true
+      // Commit deferred heavy work once after interaction settles.
+      return this._finalizePaletteMutation(true, { deferCommit: false, throttleHistory: false })
     },
 
     // -------------------------
@@ -1068,17 +1084,13 @@ export const useStudioStore = defineStore('studio', {
         findPartByUid: this.findPartByUid.bind(this),
         _buildLayerEntriesWithCache: this._buildLayerEntriesWithCache.bind(this),
         _scheduleLayerRefresh: this._scheduleLayerRefresh.bind(this),
-        _schedulePartUpdate: deferCommit ? (() => {}) : this._schedulePartUpdate.bind(this),
+        _schedulePartUpdate: (() => {}),
         triggerFocusedPartUpdate: this.triggerFocusedPartUpdate.bind(this),
-        pushHistorySnapshotThrottled: deferCommit ? (() => {}) : this.pushHistorySnapshotThrottled.bind(this),
+        pushHistorySnapshotThrottled: (() => {}),
         _resolveColorCssFromText: this._resolveColorCssFromText.bind(this)
       })
 
-      if (changed) {
-        if (deferCommit) this._paletteRealtimeDirty = true
-        this._scheduleRefresh()
-      }
-      return changed
+      return this._finalizePaletteMutation(changed, { deferCommit })
     },
 
     applyTagToActivePaletteTargets(tag, options = {}) {
@@ -1089,27 +1101,34 @@ export const useStudioStore = defineStore('studio', {
         })
       }
 
-      return PaletteActions.applyTagToTargets(this, tag, {
+      const deferCommit = options?.deferCommit === true || this._paletteRealtimeMode === true
+
+      const changed = PaletteActions.applyTagToTargets(this, tag, {
         paletteModeActive: this.paletteModeActive,
         activePaletteTargets: this.activePaletteTargets,
         stacks: this.stacks,
         findPartByUid: this.findPartByUid.bind(this),
         _buildLayerEntriesWithCache: this._buildLayerEntriesWithCache.bind(this),
         _scheduleLayerRefresh: this._scheduleLayerRefresh.bind(this),
-        _schedulePartUpdate: this._schedulePartUpdate.bind(this),
+        _schedulePartUpdate: (() => {}),
         triggerFocusedPartUpdate: this.triggerFocusedPartUpdate.bind(this),
-        pushHistorySnapshotThrottled: this.pushHistorySnapshotThrottled.bind(this),
+        pushHistorySnapshotThrottled: (() => {}),
         _resolveColorCssFromText: this._resolveColorCssFromText.bind(this)
       })
+
+      return this._finalizePaletteMutation(changed, { deferCommit })
     },
 
     applyTagOffsetToActivePaletteTargets(payload = {}, options = {}) {
       if (!options?._fromFacade && isStudioFacadeEnabled()) {
         return this.execute({
           type: 'palette.applyTagOffset',
-          payload
+          payload,
+          meta: { deferCommit: options?.deferCommit === true }
         })
       }
+
+      const deferCommit = options?.deferCommit === true || this._paletteRealtimeMode === true
 
       const changed = PaletteActions.applyTagOffsetToTargets(this, payload, {
         paletteModeActive: this.paletteModeActive,
@@ -1118,25 +1137,25 @@ export const useStudioStore = defineStore('studio', {
         findPartByUid: this.findPartByUid.bind(this),
         _buildLayerEntriesWithCache: this._buildLayerEntriesWithCache.bind(this),
         _scheduleLayerRefresh: this._scheduleLayerRefresh.bind(this),
-        _schedulePartUpdate: this._schedulePartUpdate.bind(this),
+        _schedulePartUpdate: (() => {}),
         triggerFocusedPartUpdate: this.triggerFocusedPartUpdate.bind(this),
-        pushHistorySnapshotThrottled: this.pushHistorySnapshotThrottled.bind(this),
+        pushHistorySnapshotThrottled: (() => {}),
         _resolveColorCssFromText: this._resolveColorCssFromText.bind(this)
       })
 
-      if (changed) {
-        this._scheduleRefresh()
-      }
-      return changed
+      return this._finalizePaletteMutation(changed, { deferCommit })
     },
 
     resetTagOffsetToTag(tag, options = {}) {
       if (!options?._fromFacade && isStudioFacadeEnabled()) {
         return this.execute({
           type: 'palette.resetTagOffset',
-          payload: { tag }
+          payload: { tag },
+          meta: { deferCommit: options?.deferCommit === true }
         })
       }
+
+      const deferCommit = options?.deferCommit === true || this._paletteRealtimeMode === true
 
       const changed = PaletteActions.clearTagOffsetOnTargets(this, { tag }, {
         paletteModeActive: this.paletteModeActive,
@@ -1145,16 +1164,13 @@ export const useStudioStore = defineStore('studio', {
         findPartByUid: this.findPartByUid.bind(this),
         _buildLayerEntriesWithCache: this._buildLayerEntriesWithCache.bind(this),
         _scheduleLayerRefresh: this._scheduleLayerRefresh.bind(this),
-        _schedulePartUpdate: this._schedulePartUpdate.bind(this),
+        _schedulePartUpdate: (() => {}),
         triggerFocusedPartUpdate: this.triggerFocusedPartUpdate.bind(this),
-        pushHistorySnapshotThrottled: this.pushHistorySnapshotThrottled.bind(this),
+        pushHistorySnapshotThrottled: (() => {}),
         _resolveColorCssFromText: this._resolveColorCssFromText.bind(this)
       })
 
-      if (changed) {
-        this._scheduleRefresh()
-      }
-      return changed
+      return this._finalizePaletteMutation(changed, { deferCommit })
     },
 
     detachTagOffsetToRaw(payload = {}) {
@@ -1235,6 +1251,8 @@ export const useStudioStore = defineStore('studio', {
         })
       }
 
+      const deferCommit = options?.deferCommit === true || this._paletteRealtimeMode === true
+
       const result = PaletteActions.updatePaletteTag(this, tag, newValue, {
         paletteMap: this.paletteMap,
         stacks: this.stacks,
@@ -1242,16 +1260,15 @@ export const useStudioStore = defineStore('studio', {
         findPartByUid: this.findPartByUid.bind(this),
         _buildLayerEntriesWithCache: this._buildLayerEntriesWithCache.bind(this),
         _scheduleLayerRefresh: this._scheduleLayerRefresh.bind(this),
-        _schedulePartUpdate: this._schedulePartUpdate.bind(this),
+        _schedulePartUpdate: (() => {}),
         triggerFocusedPartUpdate: this.triggerFocusedPartUpdate.bind(this),
-        pushHistorySnapshotThrottled: this.pushHistorySnapshotThrottled.bind(this)
+        pushHistorySnapshotThrottled: (() => {})
       })
 
       this.paletteMap = result.paletteMap
       if (result._scheduleLayerRefresh) {
         this._scheduleLayerRefresh()
-        this._scheduleRefresh()
-        this.pushHistorySnapshotThrottled()
+        this._finalizePaletteMutation(true, { deferCommit })
       }
       return true
     },
