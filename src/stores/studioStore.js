@@ -29,7 +29,8 @@ import * as AssetActions from '@/studio/asset-actions.js'
 import * as StorageActions from '@/studio/storage-actions.js'
 import * as SaveActions from '@/studio/save-actions.js'
 import { getStudioFacade } from '@/studio/StudioFacade'
-import { isStudioFacadeEnabled } from '@/config/featureFlags'
+import { createStudioRenderPipeline } from '@/studio/StudioRenderPipeline'
+import { isStudioFacadeEnabled, isStudioRenderPipelineEnabled } from '@/config/featureFlags'
 
 /*
   NOTE:
@@ -124,6 +125,12 @@ export const useStudioStore = defineStore('studio', {
 
     // Config flag to toggle between renderers (for testing/fallback)
     useOptimizedRenderer: true,
+
+    renderPipeline: createStudioRenderPipeline({
+      assetApi: AssetApi,
+      paletteService: Palette
+    }),
+    _renderPipelineLastStats: null,
 
     // NEW: Only use focusedPartIndex to locate the focused part
     focusedPartIndex: {
@@ -712,13 +719,38 @@ export const useStudioStore = defineStore('studio', {
      */
     _doRefreshMergedAppearanceData() {
       // Choose renderer based on config
-      const activeRenderer = this.useOptimizedRenderer ? this.previewRenderer : this.renderer;
+      const activeRenderer = this.useOptimizedRenderer ? this.previewRenderer : this.renderer
 
+      if (isStudioRenderPipelineEnabled() && this.renderPipeline) {
+        const result = this.renderPipeline.render({
+          stacks: this.stacks,
+          paletteMap: this.paletteMap,
+          activeRenderer,
+          previousMergedAppearanceData: this.mergedAppearanceData,
+          reconstructStacks: (stacks) => this._reconstructStacksForRender(stacks)
+        })
+
+        this._renderPipelineLastStats = result?.stats || null
+        if (result?.mergedAppearanceData) {
+          this.mergedAppearanceData = result.mergedAppearanceData
+        }
+        return
+      }
+
+      this._renderPipelineLastStats = null
       try { activeRenderer.removeCanvas(this.mergedAppearanceData) } catch (e) { console.warn(e) }
+      const unexpanded = {
+        data: AssetApi.stackOutfitData(this._reconstructStacksForRender(this.stacks)),
+        type: 'outfit'
+      }
+      this.mergedAppearanceData = Palette.expandedAppearanceForRendering(unexpanded, this.paletteMap)
+      activeRenderer.renderPreviewWithItem(this.mergedAppearanceData)
+    },
 
-      // Reconstruct parts from attached layerEntries (if present) before stacking. 
-      const reconstructedStacks = this.stacks.map(el => {
-        const data = Array.isArray(el.data) ? el.data : []
+    _reconstructStacksForRender(stacks = this.stacks) {
+      const sourceStacks = Array.isArray(stacks) ? stacks : []
+      return sourceStacks.map(el => {
+        const data = Array.isArray(el?.data) ? el.data : []
         const reconstructed = data.map(p => {
           try {
             if (p && Array.isArray(p.layerEntries) && p.layerEntries.length) {
@@ -729,20 +761,10 @@ export const useStudioStore = defineStore('studio', {
           } catch (e) {
             // fallback to original part if reconstruction fails
           }
-          // Use fastClone instead of JSON.parse/stringify
           return fastClone(p)
         })
-        return { data: reconstructed, filterList: el.filterList }
+        return { data: reconstructed, filterList: el?.filterList }
       })
-
-      const unexpanded = {
-        data: AssetApi.stackOutfitData(reconstructedStacks),
-        type: 'outfit'
-      }
-
-      // expand tags using pure function
-      this.mergedAppearanceData = Palette.expandedAppearanceForRendering(unexpanded, this.paletteMap)
-      activeRenderer.renderPreviewWithItem(this.mergedAppearanceData)
     },
 
     // -------------------------
@@ -1034,6 +1056,14 @@ export const useStudioStore = defineStore('studio', {
 
     execute(command, options = {}) {
       return getStudioFacade(this).execute(command, options)
+    },
+
+    query(name, params = {}) {
+      return getStudioFacade(this).query(name, params)
+    },
+
+    getQueryNames() {
+      return getStudioFacade(this).getQueryNames()
     },
 
     beginInteraction(kind = 'palette', meta = {}) {

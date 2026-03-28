@@ -1,9 +1,16 @@
 import { isStudioFacadeEnabled } from '@/config/featureFlags'
+import { createStudioCommandBus } from '@/studio/StudioCommandBus'
+import { queryStudio, getStudioQueryNames } from '@/studio/StudioQueryService'
+import { createTransactionCoordinator } from '@/studio/TransactionCoordinator'
 
 class StudioFacade {
   constructor(store) {
     this.store = store
-    this.activeInteraction = null
+    this.commandBus = createStudioCommandBus(store)
+    this.transactionCoordinator = createTransactionCoordinator({
+      store,
+      executeCommand: this.execute.bind(this)
+    })
   }
 
   execute(command, options = {}) {
@@ -17,91 +24,34 @@ class StudioFacade {
       return this._executeLegacy(type, payload, meta, options)
     }
 
-    switch (type) {
-      case 'palette.applyColor':
-        return this.store.applyColorToActivePaletteTargets(payload.newColor, {
-          deferCommit: meta.deferCommit === true,
-          _fromFacade: true
-        })
-      case 'palette.applyTag':
-        return this.store.applyTagToActivePaletteTargets(payload.tag, { _fromFacade: true })
-      case 'palette.applyTagOffset':
-        return this.store.applyTagOffsetToActivePaletteTargets(payload, {
-          deferCommit: meta.deferCommit === true,
-          _fromFacade: true
-        })
-      case 'palette.resetTagOffset':
-        return this.store.resetTagOffsetToTag(payload.tag, {
-          deferCommit: meta.deferCommit === true,
-          _fromFacade: true
-        })
-      case 'palette.updateTag':
-        return this.store.updatePaletteTag(payload.tag, payload.newValue, { _fromFacade: true })
-      default:
-        return this._executeLegacy(type, payload, meta, options)
-    }
+    const handled = this.commandBus.execute({ type, payload, meta })
+    if (handled !== false) return handled
+
+    return this._executeLegacy(type, payload, meta, options)
+  }
+
+  query(name, params = {}) {
+    return queryStudio(this.store, name, params)
+  }
+
+  getQueryNames() {
+    return getStudioQueryNames()
   }
 
   beginInteraction(kind = 'palette', meta = {}) {
-    this.activeInteraction = { kind, meta }
-
-    if (kind === 'palette') {
-      this.store.beginPaletteRealtimeUpdate()
-      return true
-    }
-
-    return false
+    return this.transactionCoordinator.beginInteraction(kind, meta)
   }
 
   applyDelta(delta = {}) {
-    if (!this.activeInteraction) return false
-
-    const kind = this.activeInteraction.kind
-    if (kind === 'palette') {
-      if (typeof delta.type === 'string' && delta.type.trim()) {
-        const normalizedType = delta.type.trim()
-        if (['palette.applyColor', 'palette.applyTagOffset', 'palette.resetTagOffset'].includes(normalizedType)) {
-          return this.execute({
-            type: normalizedType,
-            payload: delta.payload || {},
-            meta: { deferCommit: true }
-          })
-        }
-      }
-      if (Object.prototype.hasOwnProperty.call(delta, 'newColor')) {
-        return this.execute({
-          type: 'palette.applyColor',
-          payload: { newColor: delta.newColor },
-          meta: { deferCommit: true }
-        })
-      }
-    }
-
-    return false
+    return this.transactionCoordinator.applyDelta(delta)
   }
 
   commitInteraction() {
-    if (!this.activeInteraction) return false
-    const { kind } = this.activeInteraction
-    this.activeInteraction = null
-
-    if (kind === 'palette') {
-      return this.store.endPaletteRealtimeUpdate({ commit: true })
-    }
-
-    return false
+    return this.transactionCoordinator.commitInteraction()
   }
 
   cancelInteraction() {
-    if (!this.activeInteraction) return false
-    const { kind } = this.activeInteraction
-    this.activeInteraction = null
-
-    if (kind === 'palette') {
-      return this.store.endPaletteRealtimeUpdate({ commit: false })
-    }
-
-    return false
+    return this.transactionCoordinator.cancelInteraction()
   }
 
   _executeLegacy(type, payload, meta, options) {
