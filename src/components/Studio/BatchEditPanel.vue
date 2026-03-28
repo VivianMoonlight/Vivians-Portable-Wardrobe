@@ -215,7 +215,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from "vue";
+import { ref, computed, watch, onBeforeUnmount } from "vue";
 import { useI18n } from "vue-i18n";
 import { useStudioStore } from "@/stores/studioStore.js";
 import { throttle } from "@/utils/performance.js";
@@ -244,6 +244,8 @@ const priorityValue = ref(0);
 
 // Visual Move
 const visualMoveEnabled = ref(false);
+const batchInteractionActive = ref(false);
+const batchInteractionCommitTimerId = ref(null);
 
 // Computed
 const hasSelections = computed(
@@ -259,6 +261,43 @@ const colorableCount = computed(() => {
 });
 
 // Methods
+
+function beginBatchEditInteraction() {
+  if (batchInteractionActive.value) return;
+  try {
+    store.beginInteraction("batch-edit", { source: "BatchEditPanel" });
+    batchInteractionActive.value = true;
+  } catch (e) {
+    batchInteractionActive.value = false;
+  }
+}
+
+function clearBatchEditInteractionCommitTimer() {
+  const timerId = batchInteractionCommitTimerId.value;
+  if (timerId !== null) {
+    clearTimeout(timerId);
+    batchInteractionCommitTimerId.value = null;
+  }
+}
+
+function commitBatchEditInteraction() {
+  if (!batchInteractionActive.value) return;
+  clearBatchEditInteractionCommitTimer();
+  batchInteractionActive.value = false;
+  try {
+    store.commitInteraction();
+  } catch (e) {
+    /* ignore */
+  }
+}
+
+function scheduleBatchEditInteractionCommit(delayMs = 160) {
+  clearBatchEditInteractionCommitTimer();
+  batchInteractionCommitTimerId.value = setTimeout(() => {
+    batchInteractionCommitTimerId.value = null;
+    commitBatchEditInteraction();
+  }, Math.max(0, Number(delayMs) || 0));
+}
 
 function showFeedback(message, type = "success") {
   feedbackMessage.value = message;
@@ -307,7 +346,25 @@ const applyOpacity = throttle(
       // Set property focus to indicate batch editing mode
       store.setPropertyFocus("opacity");
 
-      const result = store.batchUpdateOpacity(opacityValue.value, opacityMode.value);
+      const parsedValue = Number(opacityValue.value);
+      if (!Number.isFinite(parsedValue)) return;
+
+      const normalizedValue =
+        opacityMode.value === "relative"
+          ? Math.max(-100, Math.min(100, parsedValue))
+          : Math.max(0, Math.min(100, parsedValue));
+
+      beginBatchEditInteraction();
+
+      const result = store.execute({
+        type: "batch.updateOpacity",
+        payload: {
+          value: normalizedValue,
+          mode: opacityMode.value,
+        },
+        meta: { deferCommit: true },
+      });
+      scheduleBatchEditInteractionCommit();
       setResultSummary(result);
       if (result.success) {
         showFeedback(
@@ -339,9 +396,40 @@ const applyOffset = throttle(
       // Set property focus to indicate batch editing mode
       store.setPropertyFocus("drawing");
 
-      const x = offsetX.value || 0;
-      const y = offsetY.value || 0;
-      const result = store.batchUpdateOffset(x, y, offsetMode.value);
+      const parsedX = Number(offsetX.value);
+      const parsedY = Number(offsetY.value);
+
+      const x =
+        offsetMode.value === "relative"
+          ? Number.isFinite(parsedX)
+            ? parsedX
+            : 0
+          : Number.isFinite(parsedX)
+          ? parsedX
+          : null;
+      const y =
+        offsetMode.value === "relative"
+          ? Number.isFinite(parsedY)
+            ? parsedY
+            : 0
+          : Number.isFinite(parsedY)
+          ? parsedY
+          : null;
+
+      if (offsetMode.value === "absolute" && x === null && y === null) return;
+
+      beginBatchEditInteraction();
+
+      const result = store.execute({
+        type: "batch.updateOffset",
+        payload: {
+          x,
+          y,
+          mode: offsetMode.value,
+        },
+        meta: { deferCommit: true },
+      });
+      scheduleBatchEditInteractionCommit();
       setResultSummary(result);
       if (result.success) {
         showFeedback(
@@ -373,7 +461,20 @@ const applyPriority = throttle(
       // Set property focus to indicate batch editing mode
       store.setPropertyFocus("priority");
 
-      const result = store.batchUpdatePriority(priorityValue.value, priorityMode.value);
+      const parsedValue = Number(priorityValue.value);
+      if (!Number.isFinite(parsedValue)) return;
+
+      beginBatchEditInteraction();
+
+      const result = store.execute({
+        type: "batch.updatePriority",
+        payload: {
+          value: parsedValue,
+          mode: priorityMode.value,
+        },
+        meta: { deferCommit: true },
+      });
+      scheduleBatchEditInteractionCommit();
       setResultSummary(result);
       if (result.success) {
         showFeedback(
@@ -449,6 +550,15 @@ watch(
   () => store.selectedLayers.length,
   (newCount, oldCount) => {
     if (newCount === 0 && oldCount > 0) {
+      clearBatchEditInteractionCommitTimer();
+      if (batchInteractionActive.value) {
+        commitBatchEditInteraction();
+      }
+
+      applyOpacity.cancel();
+      applyOffset.cancel();
+      applyPriority.cancel();
+
       // Reset to defaults when selection is cleared
       opacityValue.value = 100;
       opacityMode.value = "absolute";
@@ -471,6 +581,21 @@ watch(
     visualMoveEnabled.value = newTool === "move";
   }
 );
+
+onBeforeUnmount(() => {
+  applyOpacity.flush();
+  applyOffset.flush();
+  applyPriority.flush();
+
+  clearBatchEditInteractionCommitTimer();
+  if (batchInteractionActive.value) {
+    commitBatchEditInteraction();
+  }
+
+  applyOpacity.cancel();
+  applyOffset.cancel();
+  applyPriority.cancel();
+});
 </script>
 
 <style scoped>

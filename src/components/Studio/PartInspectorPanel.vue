@@ -253,6 +253,45 @@ const layerEntriesLocal = ref([])            // local deep-cloned copy used by c
 const focusedPartKey = ref(null)             // snapshot key for current focusedPart
 const layerHoverBlinkTimerId = ref(null)
 const layerHoverBlinkState = ref(null)
+const layerEditInteractionActive = ref(false)
+const layerEditCommitTimerId = ref(null)
+
+function beginLayerEditInteraction() {
+  if (layerEditInteractionActive.value) return
+  try {
+    store.beginInteraction('layer-edit', { source: 'PartInspectorPanel' })
+    layerEditInteractionActive.value = true
+  } catch (e) {
+    layerEditInteractionActive.value = false
+  }
+}
+
+function clearLayerEditCommitTimer() {
+  const timerId = layerEditCommitTimerId.value
+  if (timerId !== null) {
+    hostWindow.clearTimeout(timerId)
+    layerEditCommitTimerId.value = null
+  }
+}
+
+function commitLayerEditInteraction() {
+  if (!layerEditInteractionActive.value) return
+  clearLayerEditCommitTimer()
+  layerEditInteractionActive.value = false
+  try {
+    store.commitInteraction()
+  } catch (e) {
+    /* ignore */
+  }
+}
+
+function scheduleLayerEditInteractionCommit(delayMs = 160) {
+  clearLayerEditCommitTimer()
+  layerEditCommitTimerId.value = hostWindow.setTimeout(() => {
+    layerEditCommitTimerId.value = null
+    commitLayerEditInteraction()
+  }, Math.max(0, Number(delayMs) || 0))
+}
 
 // helper to build a stable key for focusedPart snapshot
 function buildPartKey(p) {
@@ -403,12 +442,14 @@ function onTypeChange(e) {
     delete newProp.TypeRecord
   }
 
-  // Use the store's property update method which handles refresh
-  store._updateFocusedPartProperty('Property', newProp)
-  
-  // Force a full update cycle to ensure layers and preview catch up
-  store.RebuildAllStacksLayerEntriesFromParts()
-  store.refreshMergedAppearanceData()
+  store.execute({
+    type: 'part.updateProperty',
+    payload: {
+      property: newProp,
+      rebuildLayers: true,
+      refresh: true
+    }
+  })
 }
 
 /* ------- Vibrating Item Logic ------- */
@@ -460,12 +501,14 @@ function onVibratorModeChange(e) {
     }
   }
 
-  // Use the store's property update method which handles refresh
-  store._updateFocusedPartProperty('Property', newProp)
-  
-  // Force a full update cycle to ensure layers and preview catch up
-  store.RebuildAllStacksLayerEntriesFromParts()
-  store.refreshMergedAppearanceData()
+  store.execute({
+    type: 'part.updateProperty',
+    payload: {
+      property: newProp,
+      rebuildLayers: true,
+      refresh: true
+    }
+  })
 }
 
 /* ------- Modular Asset Logic (New) ------- */
@@ -507,10 +550,14 @@ function onModularChange(moduleKey, e) {
   newTR[moduleKey] = val
   newProp.TypeRecord = newTR
   
-  // Update store and trigger refresh
-  store._updateFocusedPartProperty('Property', newProp)
-  store.RebuildAllStacksLayerEntriesFromParts()
-  store.refreshMergedAppearanceData()
+  store.execute({
+    type: 'part.updateProperty',
+    payload: {
+      property: newProp,
+      rebuildLayers: true,
+      refresh: true
+    }
+  })
 }
 
 /* ------- Text Item Logic ------- */
@@ -580,8 +627,14 @@ function onTextFieldInput(fieldKey, maxLength, e) {
 
   const newProp = { ...(part.value.Property || {}) }
   newProp[fieldKey] = nextVal
-  store._updateFocusedPartProperty('Property', newProp)
-  store.refreshMergedAppearanceData()
+  store.execute({
+    type: 'part.updateProperty',
+    payload: {
+      property: newProp,
+      rebuildLayers: false,
+      refresh: true
+    }
+  })
 }
 
 /* ------- Description / Group 编辑（简化） ------- */
@@ -672,7 +725,13 @@ function onSaveLayer(payload) {
   const copy = layerEntriesLocal.value.map((m) => (m.layerIndex === idx ? JSON.parse(JSON.stringify(newLayer)) : JSON.parse(JSON.stringify(m))))
   // persist via store; updatePartFromLayerEntries will reconstruct part & update stacks/focusedPart
   try {
-    store.updatePartFromLayerEntries(copy)
+    beginLayerEditInteraction()
+    store.execute({
+      type: 'part.updateLayerEntries',
+      payload: { entries: copy },
+      meta: { deferCommit: true }
+    })
+    scheduleLayerEditInteractionCommit()
     // after update, re-sync local entries to canonical translated entries
     try {
       const latest = Array.isArray(store.translatedLayerEntries) ? store.translatedLayerEntries : []
@@ -929,6 +988,10 @@ function handleKeydown(e) {
 }
 
 onBeforeUnmount(() => {
+  clearLayerEditCommitTimer()
+  if (layerEditInteractionActive.value) {
+    commitLayerEditInteraction()
+  }
   stopLayerHoverBlink()
 })
 </script>

@@ -75,6 +75,66 @@ class StudioFacade {
         })
       case 'palette.updateTag':
         return this.store.updatePaletteTag(payload.tag, payload.newValue, { _fromFacade: true })
+      case 'part.updateProperty':
+        return this.store.applyFocusedPartProperty(payload.property, {
+          rebuildLayers: payload.rebuildLayers !== false,
+          refresh: payload.refresh !== false,
+          deferCommit: meta.deferCommit === true,
+          _fromFacade: true
+        })
+      case 'part.updateLayerEntries':
+        return this.store.updatePartFromLayerEntries(payload.entries, {
+          deferCommit: meta.deferCommit === true,
+          _fromFacade: true
+        })
+      case 'layer.updatePartEntries':
+        return this.store.updatePartLayerEntries(payload.part, payload.entries, {
+          deferRefresh: meta.deferCommit === true,
+          _fromFacade: true
+        })
+      case 'layer.batchUpdatePartEntries':
+        return this.store.batchUpdatePartLayerEntries(payload.updates, {
+          deferCommit: meta.deferCommit === true,
+          _fromFacade: true
+        })
+      case 'batch.updateOpacity':
+        return this.store.batchUpdateOpacity(payload.value, payload.mode, {
+          deferCommit: meta.deferCommit === true,
+          _fromFacade: true
+        })
+      case 'batch.updateOffset':
+        return this.store.batchUpdateOffset(payload.x, payload.y, payload.mode, {
+          deferCommit: meta.deferCommit === true,
+          _fromFacade: true
+        })
+      case 'batch.updatePriority':
+        return this.store.batchUpdatePriority(payload.value, payload.mode, {
+          deferCommit: meta.deferCommit === true,
+          _fromFacade: true
+        })
+      case 'batch.updateColor':
+        return this.store.batchUpdateColor(payload.colorValue, {
+          deferCommit: meta.deferCommit === true,
+          _fromFacade: true
+        })
+      case 'asset.apply':
+        return this.store.applyAssetToSelectedStack(payload.asset, payload.replaceTarget, {
+          _fromFacade: true
+        })
+      case 'history.jump':
+        return this.store.jumpToHistoryState(payload.steps, { _fromFacade: true })
+      case 'history.clear':
+        return this.store.clearHistory({ _fromFacade: true })
+      case 'saves.save':
+        return this.store.saveStudioSession(payload.name, { _fromFacade: true })
+      case 'saves.load':
+        return this.store.loadStudioSession(payload.id, { _fromFacade: true })
+      case 'saves.delete':
+        return this.store.deleteStudioSession(payload.id, { _fromFacade: true })
+      case 'saves.rename':
+        return this.store.renameStudioSession(payload.id, payload.newName, { _fromFacade: true })
+      case 'stack.rename':
+        return this.store.renameStack(payload.stackIndex, payload.newName, { _fromFacade: true })
       default:
         return false
     }

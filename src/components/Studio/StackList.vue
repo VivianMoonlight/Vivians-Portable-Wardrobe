@@ -440,12 +440,10 @@ function commitRename(idx) {
   if (!nextName || !store.stacks[idx]) return
   if (String(store.stacks[idx].name || '').trim() === nextName) return
 
-  const nextStacks = [...store.stacks]
-  nextStacks[idx] = { ...nextStacks[idx], name: nextName }
-  store.stacks = nextStacks
-
-  try { store.refreshMergedAppearanceData && store.refreshMergedAppearanceData() } catch (e) { }
-  try { store.pushHistorySnapshot && store.pushHistorySnapshot() } catch (e) { }
+  store.execute({
+    type: 'stack.rename',
+    payload: { stackIndex: idx, newName: nextName }
+  })
 }
 
 function cancelRename() {

@@ -54,20 +54,58 @@ export function debounce(func, wait = 0) {
  * Throttle function execution
  * @param {Function} func - Function to throttle
  * @param {number} limit - Time limit in ms
+ * @param {Object} options - Throttle options
+ * @param {boolean} options.leading - Execute on the leading edge (default: true)
+ * @param {boolean} options.trailing - Execute latest call on trailing edge (default: false)
  * @returns {Function} Throttled function
  */
-export function throttle(func, limit = 100) {
-  let inThrottle = false
+export function throttle(func, limit = 100, options = {}) {
+  const { leading = true, trailing = false } = options || {}
   let timeoutId = null
+  let pendingArgs = null
+  let pendingThis = null
+  let hasPendingTrailingCall = false
+
+  const clearPending = () => {
+    pendingArgs = null
+    pendingThis = null
+    hasPendingTrailingCall = false
+  }
+
+  const timerHandler = () => {
+    timeoutId = null
+
+    if (trailing && hasPendingTrailingCall && pendingArgs) {
+      const args = pendingArgs
+      const ctx = pendingThis
+      clearPending()
+      func.apply(ctx, args)
+      return
+    }
+
+    clearPending()
+  }
 
   const throttled = function executedFunction(...args) {
-    if (inThrottle) return
-    func.apply(this, args)
-    inThrottle = true
-    timeoutId = setTimeout(() => {
-      inThrottle = false
-      timeoutId = null
-    }, limit)
+    if (timeoutId === null) {
+      if (leading) {
+        func.apply(this, args)
+        clearPending()
+      } else if (trailing) {
+        pendingArgs = args
+        pendingThis = this
+        hasPendingTrailingCall = true
+      }
+
+      timeoutId = setTimeout(timerHandler, limit)
+      return
+    }
+
+    if (!trailing) return
+
+    pendingArgs = args
+    pendingThis = this
+    hasPendingTrailingCall = true
   }
 
   throttled.cancel = () => {
@@ -75,11 +113,24 @@ export function throttle(func, limit = 100) {
       clearTimeout(timeoutId)
       timeoutId = null
     }
-    inThrottle = false
+    clearPending()
   }
 
   throttled.flush = () => {
-    throttled.cancel()
+    if (timeoutId !== null) {
+      clearTimeout(timeoutId)
+      timeoutId = null
+    }
+
+    if (trailing && hasPendingTrailingCall && pendingArgs) {
+      const args = pendingArgs
+      const ctx = pendingThis
+      clearPending()
+      func.apply(ctx, args)
+      return
+    }
+
+    clearPending()
   }
 
   return throttled

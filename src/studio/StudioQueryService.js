@@ -66,6 +66,83 @@ function getRenderStats(store) {
   }
 }
 
+function getMutationStats(store) {
+  const stats = cloneValue(store?._mutationStats || {})
+  return {
+    ...stats,
+    paletteRealtimeMode: !!store?._paletteRealtimeMode,
+    paletteRealtimeDirty: !!store?._paletteRealtimeDirty,
+    editorRealtimeMode: !!store?._editorRealtimeMode,
+    editorRealtimeDirty: !!store?._editorRealtimeDirty,
+    pendingMergedRefresh: !!store?._pendingMergedRefresh,
+    pendingLayerRefresh: !!store?._pendingLayerRefresh
+  }
+}
+
+function getInteractionState(store) {
+  const paletteActive = !!store?._paletteRealtimeMode
+  const editorActive = !!store?._editorRealtimeMode
+  return {
+    paletteActive,
+    editorActive,
+    activeKind: paletteActive ? 'palette' : (editorActive ? 'editor' : 'none'),
+    hasPendingCommit: !!store?._paletteRealtimeDirty || !!store?._editorRealtimeDirty,
+    selectedCount: Array.isArray(store?.selectedLayers) ? store.selectedLayers.length : 0,
+    selectionMode: store?.selectionMode || 'single',
+    focusedPartIndex: cloneValue(store?.focusedPartIndex || null)
+  }
+}
+
+function getHistoryState(store) {
+  try {
+    const history = typeof store?.getFullHistory === 'function' ? (store.getFullHistory() || {}) : {}
+    const undoCount = Number(history?.undoCount || 0)
+    const redoCount = Number(history?.redoCount || 0)
+    const undoStack = Array.isArray(history?.undoStack) ? history.undoStack : []
+    const redoStack = Array.isArray(history?.redoStack) ? history.redoStack : []
+    return {
+      canUndo: undoCount > 0,
+      canRedo: redoCount > 0,
+      undoCount,
+      redoCount,
+      undoStackSize: undoStack.length,
+      redoStackSize: redoStack.length,
+      latestUndo: cloneValue(undoStack[0] || null),
+      latestRedo: cloneValue(redoStack[0] || null)
+    }
+  } catch (e) {
+    return {
+      canUndo: false,
+      canRedo: false,
+      undoCount: 0,
+      redoCount: 0,
+      undoStackSize: 0,
+      redoStackSize: 0,
+      latestUndo: null,
+      latestRedo: null,
+      error: String(e?.message || e || 'history-unavailable')
+    }
+  }
+}
+
+function getDirtyScopes(store) {
+  const scopes = {
+    palette: !!store?._paletteRealtimeDirty,
+    editor: !!store?._editorRealtimeDirty,
+    pendingMergedRefresh: !!store?._pendingMergedRefresh,
+    pendingLayerRefresh: !!store?._pendingLayerRefresh
+  }
+  const active = Object.entries(scopes)
+    .filter(([key, value]) => key !== 'pendingMergedRefresh' && key !== 'pendingLayerRefresh' && value)
+    .map(([key]) => key)
+
+  return {
+    ...scopes,
+    activeScopes: active,
+    hasDirty: active.length > 0
+  }
+}
+
 function getSelectionSummary(store) {
   const selectedLayers = Array.isArray(store?.selectedLayers) ? store.selectedLayers : []
   return {
@@ -85,7 +162,11 @@ const QUERY_HANDLERS = Object.freeze({
   activePaletteTargets: getActivePaletteTargets,
   focusedLayer: getFocusedLayer,
   renderStats: getRenderStats,
-  selectionSummary: getSelectionSummary
+  selectionSummary: getSelectionSummary,
+  mutationStats: getMutationStats,
+  interactionState: getInteractionState,
+  historyState: getHistoryState,
+  dirtyScopes: getDirtyScopes
 })
 
 export function queryStudio(store, name, params = {}) {

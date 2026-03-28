@@ -846,7 +846,10 @@ function doRedo() {
 }
 
 function jumpToLatest() {
-  store.jumpToHistoryState && store.jumpToHistoryState(0)
+  store.execute && store.execute({
+    type: 'history.jump',
+    payload: { steps: 0 }
+  })
 }
 
 /* ----------------------- IMPORT / EXPORT ----------------------- */

@@ -165,7 +165,10 @@ function jumpToRedoState(index) {
   
   // Number of redo steps needed
   const steps = index + 1
-  store.jumpToHistoryState(steps)
+  store.execute({
+    type: 'history.jump',
+    payload: { steps }
+  })
 }
 
 // Jump to a specific undo state
@@ -174,7 +177,10 @@ function jumpToUndoState(index) {
   
   // Number of undo steps needed (index 0 is most recent, so we undo (undoStack.length - index) times)
   const steps = -(undoStack.value.length - index)
-  store.jumpToHistoryState(steps)
+  store.execute({
+    type: 'history.jump',
+    payload: { steps }
+  })
 }
 
 // Clear history with confirmation
@@ -186,7 +192,10 @@ async function handleClearHistory() {
   )
   
   if (confirmed) {
-    store.clearHistory()
+    store.execute({
+      type: 'history.clear',
+      payload: {}
+    })
   }
 }
 

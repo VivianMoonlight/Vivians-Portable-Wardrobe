@@ -636,9 +636,13 @@ async function applyAsset(asset) {
   }
 
   try {
-    const res = await (store.applyAssetToSelectedStack
-      ? store.applyAssetToSelectedStack(asset, replaceTarget.value)
-      : null);
+    const res = await store.execute({
+      type: "asset.apply",
+      payload: {
+        asset,
+        replaceTarget: replaceTarget.value,
+      },
+    });
 
     if (!res) {
       console.warn("applyAsset: store.applyAssetToSelectedStack failed or returned null");

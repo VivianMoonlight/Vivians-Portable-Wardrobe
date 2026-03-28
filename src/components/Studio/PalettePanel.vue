@@ -538,34 +538,14 @@ watch(tagKeys, (keys) => {
 
 function beginPaletteInteraction() {
   if (paletteInteractionActive) return;
-  try {
-    store.beginInteraction?.("palette", { source: "PalettePanel" });
-  } catch (e) {
-    try {
-      store.beginPaletteRealtimeUpdate?.();
-    } catch (innerError) {
-      console.warn(innerError);
-    }
-  }
+  store.beginInteraction?.("palette", { source: "PalettePanel" });
   paletteInteractionActive = true;
 }
 
 function commitPaletteInteraction() {
   if (!paletteInteractionActive) return;
   paletteInteractionActive = false;
-  try {
-    if (typeof store.commitInteraction === "function") {
-      store.commitInteraction();
-      return;
-    }
-  } catch (e) {
-    console.warn(e);
-  }
-  try {
-    store.endPaletteRealtimeUpdate?.({ commit: true });
-  } catch (e) {
-    console.warn(e);
-  }
+  store.commitInteraction?.();
 }
 
 function schedulePaletteInteractionCommit() {
@@ -851,88 +831,12 @@ async function onTagRename(oldTag, newNameRaw) {
 
 function performRename(oldTag, newTag) {
   try {
-    const newStacks = deepClone(store.stacks || []);
-
-    const renameTagRefText = (text) => {
-      if (typeof text !== "string") return text;
-      if (text === oldTag) return newTag;
-
-      const parsed = PaletteService.parseTagOffsetRef(text);
-      if (parsed.isTagOffsetRef && parsed.tag === oldTag) {
-        return PaletteService.formatTagOffsetRef(newTag, parsed.offset);
-      }
-      return text;
-    };
-
-    const replaceTagRefsDeep = (node) => {
-      if (!node || typeof node !== "object") return;
-
-      if (Array.isArray(node)) {
-        for (let i = 0; i < node.length; i++) {
-          if (typeof node[i] === "string") {
-            node[i] = renameTagRefText(node[i]);
-          } else {
-            replaceTagRefsDeep(node[i]);
-          }
-        }
-        return;
-      }
-
-      if (typeof node.Color === "string") {
-        node.Color = renameTagRefText(node.Color);
-      } else if (Array.isArray(node.Color)) {
-        for (let i = 0; i < node.Color.length; i++) {
-          if (typeof node.Color[i] === "string") {
-            node.Color[i] = renameTagRefText(node.Color[i]);
-          }
-        }
-      }
-
-      if (typeof node.colorText === "string") {
-        node.colorText = renameTagRefText(node.colorText);
-      }
-      if (typeof node.currentColorText === "string") {
-        node.currentColorText = renameTagRefText(node.currentColorText);
-      }
-
-      for (const key of Object.keys(node)) {
-        if (key === "Color" || key === "colorText" || key === "currentColorText")
-          continue;
-        const value = node[key];
-        if (value && typeof value === "object") {
-          replaceTagRefsDeep(value);
-        }
-      }
-    };
-
-    for (const el of newStacks) {
-      if (!el || !Array.isArray(el.data)) continue;
-      for (const part of el.data) {
-        replaceTagRefsDeep(part);
-      }
-    }
-
-    const newFocused = deepClone(store.focusedPart);
-    if (newFocused) replaceTagRefsDeep(newFocused);
-
-    const newTargets = deepClone(store.activePaletteTargets || []);
-    replaceTagRefsDeep(newTargets);
-
-    const pm = deepClone(store.paletteMap || {});
-    pm[newTag] = pm[oldTag];
-    delete pm[oldTag];
-
-    store.stacks = newStacks;
-    if (newFocused) store._updateFocusedPartInPlace(newFocused);
-    store.activePaletteTargets = newTargets;
-    store.paletteMap = pm;
+    const ok = store.renamePaletteTagAndReferences(oldTag, newTag);
+    if (!ok) return;
 
     if (editingTagId.value === oldTag) {
       editingTagId.value = newTag;
     }
-
-    store._refreshAllLayerEntriesFromPalette();
-    store.refreshMergedAppearanceData();
   } catch (e) {
     console.error("Rename failed", e);
   }
@@ -1125,14 +1029,6 @@ function extractPrimaryCssColor(v) {
   if (typeof v === "string") return v;
   if (Array.isArray(v)) return v.length ? String(v[0]) : null;
   return String(v);
-}
-
-function deepClone(v) {
-  try {
-    return JSON.parse(JSON.stringify(v));
-  } catch (e) {
-    return v;
-  }
 }
 
 function savedSwatchStyle(v) {

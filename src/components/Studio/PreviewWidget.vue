@@ -223,37 +223,62 @@ const updateLayerPosition = throttle((layerIdx, newLeft, newTop) => {
     layer.drawingTop = Math.round(newTop)
 
     // Commit to store
-    store.updatePartFromLayerEntries(entriesCopy)
+    store.execute({
+      type: 'part.updateLayerEntries',
+      payload: { entries: entriesCopy },
+      meta: { deferCommit: true }
+    })
   }
-}, 32) // ~30fps throttle
+}, 32, { leading: true, trailing: true }) // ~30fps throttle
 
 // Throttled multi-layer update
 const updateMultipleLayersOffset = throttle((deltaX, deltaY) => {
-  // Get all selected layers and update each with absolute position based on their initial offset + delta
   const layersData = store.getSelectedLayersData()
-  
+  const partsMap = new Map()
+
   for (let i = 0; i < layersData.length && i < multiLayerStartOffsets.value.length; i++) {
-    const { layer } = layersData[i]
-    const startOffset = multiLayerStartOffsets.value[i]
-    
-    layer.drawingLeft = Math.round(startOffset.left + deltaX)
-    layer.drawingTop = Math.round(startOffset.top + deltaY)
-    if (layer.subLayers) {
-      layer.subLayers.forEach((subLayer) => {
-        subLayer.drawingLeft = layer.drawingLeft
-        subLayer.drawingTop = layer.drawingTop
+    const target = layersData[i]
+    const part = target?.part
+    if (!part || !Array.isArray(part.layerEntries)) continue
+
+    const layerIndex = Number(target?.selection?.layerIndex)
+    if (!Number.isFinite(layerIndex)) continue
+
+    const partKey = part._uid || `${target?.selection?.stackIndex ?? 's'}:${target?.selection?.partIndex ?? 'p'}`
+    if (!partsMap.has(partKey)) {
+      partsMap.set(partKey, {
+        part,
+        entries: part.layerEntries.map(entry => ({ ...entry }))
+      })
+    }
+
+    const startOffset = multiLayerStartOffsets.value[i] || { left: 0, top: 0 }
+    const nextLeft = Math.round((startOffset.left || 0) + deltaX)
+    const nextTop = Math.round((startOffset.top || 0) + deltaY)
+
+    const group = partsMap.get(partKey)
+    const entry = group.entries.find(e => Number(e?.layerIndex) === layerIndex) || group.entries[layerIndex]
+    if (!entry) continue
+
+    entry.drawingLeft = nextLeft
+    entry.drawingTop = nextTop
+    if (Array.isArray(entry.subLayers)) {
+      entry.subLayers.forEach(subLayer => {
+        subLayer.drawingLeft = nextLeft
+        subLayer.drawingTop = nextTop
       })
     }
   }
-  
-  // Trigger refresh
-  if (layersData.length > 0) {
-    store._scheduleLayerRefresh()
-    store._schedulePartUpdate()
-    store._scheduleRefresh()
-    store.triggerFocusedPartUpdate()
+
+  const updates = Array.from(partsMap.values())
+  if (updates.length > 0) {
+    store.execute({
+      type: 'layer.batchUpdatePartEntries',
+      payload: { updates },
+      meta: { deferCommit: true }
+    })
   }
-}, 32) // ~30fps throttle
+}, 32, { leading: true, trailing: true }) // ~30fps throttle
 
 // -------------------------------------------------------------
 // Interaction Handlers (Pointer Logic)
@@ -288,6 +313,9 @@ function onPointerDown(e) {
           left: layer.drawingLeft || 0,
           top: layer.drawingTop || 0
         }))
+        
+        // Begin transaction for multi-layer drag
+        store.beginInteraction('preview-move')
       } else {
         // Single layer dragging (existing behavior)
         const idx = store.getPrimaryMoveLayerIndex(part)
@@ -310,6 +338,9 @@ function onPointerDown(e) {
         }
         dragStartPointer.value = { x: e.clientX, y: e.clientY }
         isDraggingLayer.value = true
+        
+        // Begin transaction for single-layer drag
+        store.beginInteraction('preview-move')
       }
     }
   } else {
@@ -362,15 +393,19 @@ function onPointerMove(e) {
 function onPointerUp(e) {
   if (pointerId.value !== null && e.pointerId !== pointerId.value) return
 
+  const hadDrag = isDraggingLayer.value || isDraggingMultipleLayers.value
+
   // Cleanup Move
   if (isDraggingLayer.value) {
     isDraggingLayer.value = false
-    updateLayerPosition.cancel() // clear any pending throttle
+    updateLayerPosition.flush()
+    updateLayerPosition.cancel()
   }
 
   if (isDraggingMultipleLayers.value) {
     isDraggingMultipleLayers.value = false
-    updateMultipleLayersOffset.cancel() // clear any pending throttle
+    updateMultipleLayersOffset.flush()
+    updateMultipleLayersOffset.cancel()
     multiLayerStartOffsets.value = []
   }
 
@@ -382,6 +417,41 @@ function onPointerUp(e) {
     if (c) c.releasePointerCapture && c.releasePointerCapture(e.pointerId)
   } catch (err) { /* ignore */ }
   pointerId.value = null
+
+  // Commit the preview-move interaction if we were dragging
+  if (activeTool.value === 'move' && store && hadDrag) {
+    store.commitInteraction()
+  }
+}
+
+function onPointerCancel(e) {
+  if (pointerId.value !== null && e.pointerId !== pointerId.value) return
+
+  // Cleanup Move
+  if (isDraggingLayer.value) {
+    isDraggingLayer.value = false
+    updateLayerPosition.cancel()
+  }
+
+  if (isDraggingMultipleLayers.value) {
+    isDraggingMultipleLayers.value = false
+    updateMultipleLayersOffset.cancel()
+    multiLayerStartOffsets.value = []
+  }
+
+  // Cleanup View
+  isPanning.value = false
+
+  try {
+    const c = canvas.value
+    if (c) c.releasePointerCapture && c.releasePointerCapture(e.pointerId)
+  } catch (err) { /* ignore */ }
+  pointerId.value = null
+
+  // Cancel the interaction without committing
+  if (store) {
+    store.cancelInteraction()
+  }
 }
 
 // Wheel zoom — zoom towards pointer
@@ -438,6 +508,7 @@ onMounted(() => {
     c.addEventListener('pointerdown', onPointerDown)
     hostWindow.addEventListener('pointermove', onPointerMove, { passive: false })
     hostWindow.addEventListener('pointerup', onPointerUp)
+    hostWindow.addEventListener('pointercancel', onPointerCancel)
     c.addEventListener('wheel', onWheel, { passive: false })
     c.addEventListener('dblclick', onDoubleClick)
   }
@@ -453,6 +524,9 @@ onBeforeUnmount(() => {
   }
   hostWindow.removeEventListener('pointermove', onPointerMove)
   hostWindow.removeEventListener('pointerup', onPointerUp)
+  hostWindow.removeEventListener('pointercancel', onPointerCancel)
+  updateLayerPosition.flush()
+  updateMultipleLayersOffset.flush()
   updateLayerPosition.cancel()
   updateMultipleLayersOffset.cancel()
 })

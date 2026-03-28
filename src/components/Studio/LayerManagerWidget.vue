@@ -261,12 +261,13 @@ const throttledStoreUpdate = throttle(async (updates) => {
         }
     }
 
-    // 2. Commit all
-    for (const val of partsMap.values()) {
-        store.updatePartLayerEntries(val.part, val.entries)
+    const updatesPayload = Array.from(partsMap.values())
+    if (updatesPayload.length > 0) {
+        store.execute({
+            type: 'layer.batchUpdatePartEntries',
+            payload: { updates: updatesPayload }
+        })
     }
-
-    store.refreshMergedAppearanceData()
 }, 200)
 
 function checkAutoScroll(e) {

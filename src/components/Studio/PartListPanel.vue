@@ -275,6 +275,7 @@ const hoveredPartForBlink = ref(null);
 const partHoverBlinkSuppressedByControls = ref(false);
 const partHoverBlinkSuppressUntil = ref(0);
 const partHoverBlinkResumeTimerId = ref(null);
+const PART_HOVER_PREVIEW_ID = "part-hover-blink";
 
 /* ----------------------
    Helpers for keys
@@ -842,8 +843,7 @@ function _ensureFilterListForSelected() {
       if (n) names.add(n);
     }
     const arr = Array.from(names);
-    // set reactively: assign a new array
-    store.stacks[store.selectedIndex].filterList = arr;
+    store.setSelectedStackFilterList(arr, { refresh: false });
     return arr;
   }
   return sel.filterList.slice();
@@ -910,15 +910,8 @@ function _buildHoverBlinkAppearance(context, visible) {
 function _applyPartHoverBlinkFrame(context, visible) {
   const appearance = _buildHoverBlinkAppearance(context, visible);
   if (!appearance) return;
-  const activeRenderer = store.useOptimizedRenderer
-    ? store.previewRenderer
-    : store.renderer;
-  store.mergedAppearanceData = appearance;
-  try {
-    activeRenderer.renderPreviewWithItem(appearance);
-  } catch (e) {
-    /* ignore */
-  }
+  // Route through centralized preview stack so hover-preview lifecycle is consistent.
+  store.pushPreview(PART_HOVER_PREVIEW_ID, 0, appearance, "part-hover-blink");
 }
 
 function _clearPartHoverBlinkResumeTimer() {
@@ -1077,12 +1070,8 @@ function stopPartHoverBlink() {
 
   const context = partHoverBlinkState.value;
   partHoverBlinkState.value = null;
+  store.popPreview(PART_HOVER_PREVIEW_ID);
   if (!context) return;
-  try {
-    store.refreshMergedAppearanceData();
-  } catch (e) {
-    /* ignore */
-  }
 }
 
 function clearPartHoverBlinkState() {
@@ -1110,12 +1099,7 @@ function togglePartVisibility(part) {
   const pos = fl.indexOf(slotName);
   if (pos === -1) fl.push(slotName);
   else fl.splice(pos, 1);
-  store.stacks[idx].filterList = fl;
-  try {
-    store.refreshMergedAppearanceData();
-  } catch (e) {
-    /* ignore */
-  }
+  store.setSelectedStackFilterList(fl);
 }
 
 /* Group visibility: toggle all slot names for group (based on getAllSlotsForGroup) */
@@ -1154,12 +1138,7 @@ function toggleGroupVisibility(gid) {
     groupSlots.forEach((n) => s.add(n));
     fl = Array.from(s);
   }
-  store.stacks[idx].filterList = fl;
-  try {
-    store.refreshMergedAppearanceData();
-  } catch (e) {
-    /* ignore */
-  }
+  store.setSelectedStackFilterList(fl);
 }
 
 /* All visibility: toggle show/hide all for selected element */
@@ -1179,7 +1158,7 @@ function toggleAllVisibility() {
   const sel = selected.value;
   if (!sel.filterList || !Array.isArray(sel.filterList)) {
     // currently considered visible; toggle to hide -> set empty filterList
-    store.stacks[idx].filterList = [];
+    store.setSelectedStackFilterList([]);
   } else {
     // if empty -> restore to all present slots in element
     if (sel.filterList.length === 0) {
@@ -1188,16 +1167,11 @@ function toggleAllVisibility() {
         const n = getPartSlotName(p);
         if (n) names.add(n);
       }
-      store.stacks[idx].filterList = Array.from(names);
+      store.setSelectedStackFilterList(Array.from(names));
     } else {
       // currently visible (non-empty) -> hide (empty)
-      store.stacks[idx].filterList = [];
+      store.setSelectedStackFilterList([]);
     }
-  }
-  try {
-    store.refreshMergedAppearanceData();
-  } catch (e) {
-    /* ignore */
   }
 }
 
@@ -1245,16 +1219,9 @@ function confirmPartDelete(part, idx, gid) {
         return p !== part;
       }
     });
-    store.stacks[si] = Object.assign({}, store.stacks[si], { data: newData });
+    store.replaceSelectedStackData(newData, { recordHistory: true });
     // cleanup armed state
     armedParts.value.delete(key);
-    store.pushHistorySnapshot();
-    // refresh preview
-    try {
-      store.refreshMergedAppearanceData();
-    } catch (e) {
-      /* ignore */
-    }
   } catch (e) {
     console.error("confirmPartDelete failed", e);
   }
@@ -1283,16 +1250,11 @@ function confirmGroupDelete(gid) {
   try {
     const orig = selected.value.data || [];
     const newData = orig.filter((p) => classifyGroup(p) !== gid);
-    store.stacks[si] = Object.assign({}, store.stacks[si], { data: newData });
+    store.replaceSelectedStackData(newData);
     armedGroups.value.delete(gid);
     // also clear any per-part armed keys that belonged to this group
     for (const key of Array.from(armedParts.value)) {
       if (String(key).startsWith(gid + "::")) armedParts.value.delete(key);
-    }
-    try {
-      store.refreshMergedAppearanceData();
-    } catch (e) {
-      /* ignore */
     }
   } catch (e) {
     console.error("confirmGroupDelete failed", e);
@@ -1315,16 +1277,11 @@ function confirmAllDelete() {
   const si = store.selectedIndex;
   if (si < 0) return;
   try {
-    store.stacks[si] = Object.assign({}, store.stacks[si], { data: [] });
+    store.replaceSelectedStackData([]);
     armedAll.value = false;
     // clear related armed states
     armedGroups.value.clear();
     armedParts.value.clear();
-    try {
-      store.refreshMergedAppearanceData();
-    } catch (e) {
-      /* ignore */
-    }
   } catch (e) {
     console.error("confirmAllDelete failed", e);
   }

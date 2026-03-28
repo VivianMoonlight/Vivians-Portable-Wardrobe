@@ -4,6 +4,20 @@ const PALETTE_DELTA_COMMANDS = Object.freeze([
   'palette.resetTagOffset'
 ])
 
+const EDITOR_KINDS = Object.freeze([
+  'preview-move',
+  'layer-edit',
+  'batch-edit',
+  'priority-drag'
+])
+
+const EDITOR_DELTA_COMMANDS = Object.freeze([
+  'part.updateProperty',
+  'part.updateLayerEntries',
+  'layer.updatePartEntries',
+  'layer.batchUpdatePartEntries'
+])
+
 export class TransactionCoordinator {
   constructor({ store, executeCommand } = {}) {
     this.store = store
@@ -19,6 +33,11 @@ export class TransactionCoordinator {
       return true
     }
 
+    if (EDITOR_KINDS.includes(kind)) {
+      this.store.beginEditorRealtimeUpdate()
+      return true
+    }
+
     return false
   }
 
@@ -26,25 +45,43 @@ export class TransactionCoordinator {
     if (!this.activeInteraction) return false
 
     const kind = this.activeInteraction.kind
-    if (kind !== 'palette') return false
 
-    if (typeof delta.type === 'string' && delta.type.trim()) {
-      const normalizedType = delta.type.trim()
-      if (PALETTE_DELTA_COMMANDS.includes(normalizedType)) {
+    if (kind === 'palette') {
+      if (typeof delta.type === 'string' && delta.type.trim()) {
+        const normalizedType = delta.type.trim()
+        if (PALETTE_DELTA_COMMANDS.includes(normalizedType)) {
+          return this.executeCommand({
+            type: normalizedType,
+            payload: delta.payload || {},
+            meta: { deferCommit: true }
+          })
+        }
+      }
+
+      if (Object.prototype.hasOwnProperty.call(delta, 'newColor')) {
         return this.executeCommand({
-          type: normalizedType,
-          payload: delta.payload || {},
+          type: 'palette.applyColor',
+          payload: { newColor: delta.newColor },
           meta: { deferCommit: true }
         })
       }
+
+      return false
     }
 
-    if (Object.prototype.hasOwnProperty.call(delta, 'newColor')) {
-      return this.executeCommand({
-        type: 'palette.applyColor',
-        payload: { newColor: delta.newColor },
-        meta: { deferCommit: true }
-      })
+    if (EDITOR_KINDS.includes(kind)) {
+      if (typeof delta.type === 'string' && delta.type.trim()) {
+        const normalizedType = delta.type.trim()
+        if (EDITOR_DELTA_COMMANDS.includes(normalizedType)) {
+          return this.executeCommand({
+            type: normalizedType,
+            payload: delta.payload || {},
+            meta: { deferCommit: true }
+          })
+        }
+      }
+
+      return false
     }
 
     return false
@@ -59,6 +96,10 @@ export class TransactionCoordinator {
       return this.store.endPaletteRealtimeUpdate({ commit: true })
     }
 
+    if (EDITOR_KINDS.includes(kind)) {
+      return this.store.endEditorRealtimeUpdate({ commit: true })
+    }
+
     return false
   }
 
@@ -69,6 +110,10 @@ export class TransactionCoordinator {
 
     if (kind === 'palette') {
       return this.store.endPaletteRealtimeUpdate({ commit: false })
+    }
+
+    if (EDITOR_KINDS.includes(kind)) {
+      return this.store.endEditorRealtimeUpdate({ commit: false })
     }
 
     return false
