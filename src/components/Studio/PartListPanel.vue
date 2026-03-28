@@ -276,6 +276,7 @@ const partHoverBlinkSuppressedByControls = ref(false);
 const partHoverBlinkSuppressUntil = ref(0);
 const partHoverBlinkResumeTimerId = ref(null);
 const PART_HOVER_PREVIEW_ID = "part-hover-blink";
+const DISABLE_PART_HOVER_BLINK = true;
 
 /* ----------------------
    Helpers for keys
@@ -930,6 +931,10 @@ function _isPartHoverBlinkSuppressed() {
 }
 
 function _schedulePartHoverBlinkResumeIfNeeded() {
+  if (DISABLE_PART_HOVER_BLINK) {
+    _clearPartHoverBlinkResumeTimer();
+    return;
+  }
   _clearPartHoverBlinkResumeTimer();
   if (partHoverBlinkSuppressedByControls.value) return;
   if (!hoveredPartForBlink.value) return;
@@ -952,6 +957,11 @@ function _schedulePartHoverBlinkResumeIfNeeded() {
 }
 
 function suspendPartHoverBlink(durationMs = 700) {
+  if (DISABLE_PART_HOVER_BLINK) {
+    _clearPartHoverBlinkResumeTimer();
+    stopPartHoverBlink();
+    return;
+  }
   const until = Date.now() + Math.max(0, durationMs);
   if (until > partHoverBlinkSuppressUntil.value) {
     partHoverBlinkSuppressUntil.value = until;
@@ -997,6 +1007,10 @@ function onPartControlsMouseLeave() {
 }
 
 function startPartHoverBlink(part) {
+  if (DISABLE_PART_HOVER_BLINK) {
+    stopPartHoverBlink();
+    return;
+  }
   if (!hasSelected.value || !part) return;
 
   // Don't start part blink if asset hover (higher priority) is active

@@ -53,6 +53,7 @@ export class OptimizedRenderService {
             normalizationRuns: 0,
             normalizationFallbacks: 0
         };
+        this._lastNormalizationEnabled = isFastPathNormalizationEnabled();
     }
 
     /**
@@ -87,7 +88,7 @@ export class OptimizedRenderService {
             // Store default appearance (filter out invalid items, extract raw objects)
             this.defaultAppearance = (this.displayCharacter.Appearance || [])
                 .map(item => toRaw(item))
-                .filter(item => 
+                .filter(item =>
                     item && item.Asset && item.Asset.Group
                 );
             return true;
@@ -125,10 +126,10 @@ export class OptimizedRenderService {
         return Number.isFinite(numericOpacity) ? numericOpacity : 1;
     }
 
-    _buildComparableBundle(rawBundleData) {
+    _buildComparableBundle(rawBundleData, normalizationEnabled = isFastPathNormalizationEnabled()) {
         if (!Array.isArray(rawBundleData)) return [];
 
-        if (!isFastPathNormalizationEnabled()) {
+        if (!normalizationEnabled) {
             return rawBundleData;
         }
 
@@ -139,6 +140,47 @@ export class OptimizedRenderService {
             this.perfStats.normalizationFallbacks++;
             console.warn('[OptimizedRenderService] Fast-path normalization fallback:', e);
             return rawBundleData;
+        }
+    }
+
+    _buildBundleMap(bundleData = []) {
+        if (!Array.isArray(bundleData)) return null;
+
+        const map = new Map();
+        for (const bundleItem of bundleData) {
+            const groupName = this._getBundleGroupName(bundleItem);
+            if (!groupName || map.has(groupName)) {
+                return null;
+            }
+            map.set(groupName, bundleItem);
+        }
+        return map;
+    }
+
+    _sortBundleDataByGroup(bundleData = []) {
+        if (!Array.isArray(bundleData)) return [];
+
+        return bundleData.sort((left, right) => {
+            const leftGroup = String(this._getBundleGroupName(left) || '');
+            const rightGroup = String(this._getBundleGroupName(right) || '');
+            return leftGroup.localeCompare(rightGroup);
+        });
+    }
+
+    _updateFastPathCaches(rawBundleData, comparableBundleData = null) {
+        const nextRawCache = Array.isArray(rawBundleData) ? structuredClone(rawBundleData) : [];
+        const nextComparableSource = Array.isArray(comparableBundleData) ? comparableBundleData : rawBundleData;
+        const nextComparableCache = Array.isArray(nextComparableSource) ? structuredClone(nextComparableSource) : [];
+
+        this.previousDataCache = this._sortBundleDataByGroup(nextRawCache);
+        this.previousComparableCache = this._sortBundleDataByGroup(nextComparableCache);
+    }
+
+    invalidateFastPathCaches({ clearAppearanceCache = false } = {}) {
+        this.previousDataCache = [];
+        this.previousComparableCache = [];
+        if (clearAppearanceCache) {
+            this.previousAppearanceCache.clear();
         }
     }
 
@@ -157,7 +199,10 @@ export class OptimizedRenderService {
 
         const previousOpacity = this._getOpacityValue(previousBundleItem);
         const nextOpacity = this._getOpacityValue(nextBundleItem);
-        if (previousOpacity === 1 && nextOpacity < 1) {
+        const crossesOpacityBoundary =
+            (previousOpacity === 1 && nextOpacity < 1) ||
+            (previousOpacity < 1 && nextOpacity === 1);
+        if (crossesOpacityBoundary) {
             return false;
         }
 
@@ -218,46 +263,42 @@ export class OptimizedRenderService {
             return false;
         }
 
-        const previousMap = new Map();
-        const nextMap = new Map();
-        const nextRawMap = new Map();
+        const previousComparableMap = this._buildBundleMap(previousComparable);
+        const nextComparableMap = this._buildBundleMap(comparableData);
+        const previousRawMap = this._buildBundleMap(this.previousDataCache);
+        const nextRawMap = this._buildBundleMap(newBundleData);
 
-        for (const previousItem of previousComparable) {
-            const groupName = this._getBundleGroupName(previousItem);
-            if (!groupName || previousMap.has(groupName)) {
-                return false;
-            }
-            previousMap.set(groupName, previousItem);
+        if (!previousComparableMap || !nextComparableMap || !previousRawMap || !nextRawMap) {
+            return false;
         }
 
-        for (const nextItem of comparableData) {
-            const groupName = this._getBundleGroupName(nextItem);
-            if (!groupName || nextMap.has(groupName)) {
-                return false;
-            }
-            nextMap.set(groupName, nextItem);
-        }
-
-        for (const nextRawItem of newBundleData) {
-            const groupName = this._getBundleGroupName(nextRawItem);
-            if (!groupName || nextRawMap.has(groupName)) {
-                return false;
-            }
-            nextRawMap.set(groupName, nextRawItem);
-        }
-
-        if (previousMap.size !== nextMap.size) {
+        if (previousComparableMap.size !== nextComparableMap.size || previousRawMap.size !== nextRawMap.size) {
             return false;
         }
 
         const changedItems = [];
-        for (const [groupName, nextItem] of nextMap.entries()) {
-            const previousItem = previousMap.get(groupName);
-            if (!previousItem) {
+        for (const [groupName, nextComparableItem] of nextComparableMap.entries()) {
+            const previousComparableItem = previousComparableMap.get(groupName);
+            if (!previousComparableItem) {
                 return false;
             }
-            if (!isEqual(previousItem, nextItem)) {
-                changedItems.push({ groupName, previousItem, nextItem });
+
+            const previousRawItem = previousRawMap.get(groupName);
+            const nextRawItem = nextRawMap.get(groupName);
+            if (!previousRawItem || !nextRawItem) {
+                return false;
+            }
+
+            const comparableChanged = !isEqual(previousComparableItem, nextComparableItem);
+            const rawChanged = !isEqual(previousRawItem, nextRawItem);
+
+            if (!comparableChanged && rawChanged && !this._isSafeGeneralParamUpdate(previousRawItem, nextRawItem)) {
+                // Normalization can hide unrelated object updates; only allow raw-safe updates.
+                return false;
+            }
+
+            if (comparableChanged || rawChanged) {
+                changedItems.push({ groupName, previousRawItem, nextRawItem });
             }
         }
 
@@ -265,32 +306,27 @@ export class OptimizedRenderService {
             return true;
         }
 
-        if (!changedItems.every(({ previousItem, nextItem }) => this._isSafeGeneralParamUpdate(previousItem, nextItem))) {
+        if (!changedItems.every(({ previousRawItem, nextRawItem }) => this._isSafeGeneralParamUpdate(previousRawItem, nextRawItem))) {
             return false;
         }
 
-        for (const { groupName } of changedItems) {
-            const nextItem = nextRawMap.get(groupName);
-            if (!nextItem) {
-                return false;
-            }
-
+        for (const { groupName, nextRawItem } of changedItems) {
             const appearanceItem = toRaw(this.displayCharacter.Appearance.find(current => current?.Asset?.Group?.Name === groupName));
             if (!appearanceItem) {
                 return false;
             }
 
-            appearanceItem.Color = structuredClone(toRaw(nextItem.Color));
+            appearanceItem.Color = structuredClone(toRaw(nextRawItem.Color));
             if (!appearanceItem.Property) {
                 appearanceItem.Property = {};
             }
 
-            if (Object.prototype.hasOwnProperty.call(nextItem.Property || {}, 'Shift')) {
-                appearanceItem.Property.Shift = structuredClone(toRaw(nextItem.Property.Shift));
+            if (Object.prototype.hasOwnProperty.call(nextRawItem.Property || {}, 'Shift')) {
+                appearanceItem.Property.Shift = structuredClone(toRaw(nextRawItem.Property.Shift));
             }
 
-            if (Object.prototype.hasOwnProperty.call(nextItem.Property || {}, 'Opacity')) {
-                appearanceItem.Property.Opacity = nextItem.Property.Opacity;
+            if (Object.prototype.hasOwnProperty.call(nextRawItem.Property || {}, 'Opacity')) {
+                appearanceItem.Property.Opacity = nextRawItem.Property.Opacity;
             }
         }
 
@@ -340,7 +376,7 @@ export class OptimizedRenderService {
 
         try {
             let rawItemData = toRaw(item.data);
-            
+
             // Filter out null/undefined items and items without proper structure
             if (Array.isArray(rawItemData)) {
                 rawItemData = rawItemData.filter(bundleItem => {
@@ -358,10 +394,16 @@ export class OptimizedRenderService {
                 });
             }
 
+            const normalizationEnabled = isFastPathNormalizationEnabled();
+            if (this._lastNormalizationEnabled !== normalizationEnabled) {
+                this.previousComparableCache = [];
+                this._lastNormalizationEnabled = normalizationEnabled;
+            }
+            const comparableData = this._buildComparableBundle(rawItemData, normalizationEnabled);
+
             // Update character appearance using persistent instance
             const family = this.displayCharacter.AssetFamily || 'Female3DCG';
             const memberNumber = this.displayCharacter.MemberNumber;
-
 
             // Apply new appearance data
             if (options.useLoadFromBundle) {
@@ -374,13 +416,11 @@ export class OptimizedRenderService {
             } else {
                 const perfStart = performance.now();
                 this.perfStats.totalRenders++;
-                const comparableData = this._buildComparableBundle(rawItemData);
 
                 const usedFastPath = this._tryApplyGeneralParamUpdate(rawItemData, comparableData);
                 if (usedFastPath) {
                     this.perfStats.fastPathHits++;
-                    this.previousDataCache = structuredClone(rawItemData).sort((a, b) => a.Group.localeCompare(b.Group));
-                    this.previousComparableCache = structuredClone(comparableData).sort((a, b) => a.Group.localeCompare(b.Group));
+                    this._updateFastPathCaches(rawItemData, comparableData);
                     hostWindow.CharacterRefresh(toRaw(this.displayCharacter));
 
                     console.log(`[Perf] Fast path: ${(performance.now() - perfStart).toFixed(2)}ms`);
@@ -401,26 +441,24 @@ export class OptimizedRenderService {
 
                 // Build maps for efficient lookup
                 const previousBundleMap = new Map();
-                this.previousDataCache.forEach(item => {
-                    const groupName = this._getBundleGroupName(item);
-                    if (groupName) previousBundleMap.set(groupName, item);
+                this.previousDataCache.forEach(bundleItem => {
+                    const groupName = this._getBundleGroupName(bundleItem);
+                    if (groupName) previousBundleMap.set(groupName, bundleItem);
                 });
 
                 const newBundleMap = new Map();
-                rawItemData.forEach(item => {
-                    const groupName = this._getBundleGroupName(item);
-                    if (groupName) newBundleMap.set(groupName, item);
+                rawItemData.forEach(bundleItem => {
+                    const groupName = this._getBundleGroupName(bundleItem);
+                    if (groupName) newBundleMap.set(groupName, bundleItem);
                 });
 
                 // Identify changed items
                 const changedGroups = new Set();
-                const addedGroups = new Set();
-                
+
                 // Check for changes and additions
                 for (const [groupName, newBundle] of newBundleMap.entries()) {
                     const prevBundle = previousBundleMap.get(groupName);
                     if (!prevBundle) {
-                        addedGroups.add(groupName);
                         changedGroups.add(groupName);
                     } else if (!isEqual(prevBundle, newBundle)) {
                         changedGroups.add(groupName);
@@ -447,37 +485,37 @@ export class OptimizedRenderService {
                     if (changedGroups.has(groupName)) {
                         // Process changed/added items
                         itemsProcessed++;
-                        
+
                         const bundleItemWithoutProperties = { ...toRaw(bundleItem) };
                         delete bundleItemWithoutProperties.Property;
-                        
+
                         const baseItem = hostWindow.ServerBundledItemToAppearanceItem(
                             family,
                             toRaw(bundleItemWithoutProperties)
                         );
-                        
+
                         hostWindow.ValidationSanitizeProperties(
                             toRaw(this.displayCharacter),
                             toRaw(baseItem)
                         );
-                        
+
                         // Merge properties
                         const finalbundleItem = toRaw(bundleItem);
                         finalbundleItem.Property = {
                             ...baseItem.Property,
                             ...toRaw(bundleItem.Property)
                         };
-                        
+
                         const finalItem = hostWindow.ServerBundledItemToAppearanceItem(
                             family,
                             toRaw(finalbundleItem)
                         );
-                        
+
                         hostWindow.ValidationSanitizeProperties(
                             toRaw(this.displayCharacter),
                             toRaw(finalItem)
                         );
-                        
+
                         // Validate item has required structure before adding
                         if (finalItem && finalItem.Asset && finalItem.Asset.Group) {
                             newAppearance.push(toRaw(finalItem));
@@ -547,9 +585,9 @@ export class OptimizedRenderService {
 
                 // Extract raw objects from all items before assignment
                 this.displayCharacter.Appearance = newAppearance
-                    .map(item => toRaw(item))
-                    .filter(item => 
-                        item && item.Asset && item.Asset.Group
+                    .map(appearanceItem => toRaw(appearanceItem))
+                    .filter(appearanceItem =>
+                        appearanceItem && appearanceItem.Asset && appearanceItem.Asset.Group
                     );
 
                 // Update stats
@@ -560,8 +598,8 @@ export class OptimizedRenderService {
                 console.log(`[Perf] Incremental render: ${perfTime}ms (processed: ${itemsProcessed}, reused: ${itemsReused})`);
                 console.log(`[Perf] Stats: ${this.perfStats.fastPathHits} fast, ${this.perfStats.incrementalHits} incremental, ${this.perfStats.fullReloadHits} full of ${this.perfStats.totalRenders} total`);
             }
-            this.previousDataCache = structuredClone(rawItemData).sort((a, b) => a.Group.localeCompare(b.Group));
-            this.previousComparableCache = structuredClone(this._buildComparableBundle(rawItemData)).sort((a, b) => a.Group.localeCompare(b.Group));
+
+            this._updateFastPathCaches(rawItemData, comparableData);
 
             // Refresh only once
             hostWindow.CharacterRefresh(toRaw(this.displayCharacter));
@@ -580,8 +618,6 @@ export class OptimizedRenderService {
             console.warn('[OptimizedRenderService] renderPreviewWithItem error:', e);
         }
     }
-
-
 
     /**
      * Remove canvas for item
@@ -615,9 +651,7 @@ export class OptimizedRenderService {
         this.canvasRegistry = new WeakMap();
 
         // Clear caches
-        this.previousAppearanceCache.clear();
-        this.previousDataCache = [];
-        this.previousComparableCache = [];
+        this.invalidateFastPathCaches({ clearAppearanceCache: true });
 
         // Delete persistent character
         if (this.displayCharacter) {

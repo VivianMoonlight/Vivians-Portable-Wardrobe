@@ -253,6 +253,7 @@ const layerEntriesLocal = ref([])            // local deep-cloned copy used by c
 const focusedPartKey = ref(null)             // snapshot key for current focusedPart
 const layerHoverBlinkTimerId = ref(null)
 const layerHoverBlinkState = ref(null)
+const DISABLE_LAYER_HOVER_BLINK = true
 const layerEditInteractionActive = ref(false)
 const layerEditCommitTimerId = ref(null)
 
@@ -827,6 +828,10 @@ function _applyLayerHoverBlinkFrame(context, visible) {
 }
 
 function startLayerHoverBlink(layerIndices) {
+  if (DISABLE_LAYER_HOVER_BLINK) {
+    stopLayerHoverBlink()
+    return
+  }
   if (!hasPart.value || !Array.isArray(layerIndices) || layerIndices.length === 0) return
   const stackIndex = Number(store.focusedPartIndex?.stackIndex)
   const partIndex = Number(store.focusedPartIndex?.partIndex)

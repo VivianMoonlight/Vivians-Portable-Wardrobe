@@ -2037,6 +2037,10 @@ export const useStudioStore = defineStore('studio', {
 
     RebuildAllStacksLayerEntriesFromParts() {
       try {
+        this.previewRenderer?.invalidateFastPathCaches?.({ clearAppearanceCache: true })
+      } catch (e) { console.warn(e) }
+
+      try {
         const newStacks = this.stacks.map(el => {
           const copy = fastClone(el)
           if (Array.isArray(copy.data)) {
