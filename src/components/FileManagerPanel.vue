@@ -41,7 +41,7 @@
                         </nav>
                     </div>
                     <div class="fm-header-actions">
-                        <button class="close-btn" @click="requestClose" aria-label="关闭">&times;</button>
+                        <button class="close-btn" @click="requestClose" :aria-label="t('studio.closeTitle')">&times;</button>
                     </div>
                 </header>
 
@@ -61,12 +61,12 @@
                             <button class="left-action-btn save-btn" :title="t('fileManagerPanel.saveCharacter')"
                                 @click.stop="saveCharacterToFolder">
 
-                                <span class="la-text">Save</span>
+                                <span class="la-text">{{ t('fileManagerPanel.saveCharacter') }}</span>
                             </button>
                             <button class="left-action-btn import-btn" :title="t('fileManagerPanel.importBCX')"
                                 @click.stop="importBCX">
 
-                                <span class="la-text">Import BCX</span>
+                                <span class="la-text">{{ t('fileManagerPanel.importBCX') }}</span>
                             </button>
                         </div>
                     </aside>
@@ -184,6 +184,7 @@ import { ExternalAdapter } from '@/utils/external_adapters.js'
 import { useStudioStore } from '@/stores/studioStore.js'
 import { useWorkbenchStore } from '@/stores/workbenchStore.js'
 import { PlayerHost, hostWindow, doc } from '@/utils/host-window.js'
+import { MOBILE_LAYOUT_BREAKPOINT } from '@/config/uiLayout.js'
 import { useTheme, injectTheme } from '@/services/ThemeService'
 import * as DialogService from '@/services/DialogService.js'
 
@@ -194,7 +195,6 @@ const theme = useTheme()
 const { setTheme, currentTheme } = theme
 
 const WINDOW_MARGIN = 12 // 保持与 CSS 中的 margin/间距一致
-const MOBILE_BREAKPOINT = 900
 
 const props = defineProps({
     visible: { type: Boolean, default: false },
@@ -786,7 +786,7 @@ function escHandler(e) {
 const prevOverflowX = ref('')
 
 function updateIsMobile() {
-    isMobile.value = hostWindow.innerWidth < MOBILE_BREAKPOINT
+    isMobile.value = hostWindow.innerWidth < MOBILE_LAYOUT_BREAKPOINT
 }
 
 watch(isMobile, (v) => {

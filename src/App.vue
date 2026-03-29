@@ -57,6 +57,7 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useTheme, provideTheme } from './services/ThemeService'
 import FileManagerPanel from './components/FileManagerPanel.vue'
 import { hostWindow } from './utils/host-window.js'
+import { MOBILE_LAYOUT_BREAKPOINT } from './config/uiLayout.js'
 import logo from './assets/logo.png'
 
 const showPanel = ref(false)
@@ -67,7 +68,6 @@ const launcherY = ref(100)
 const launcherSize = ref(64)
 const hasCustomLauncherPosition = ref(false)
 const suppressNextToggle = ref(false)
-const MOBILE_BREAKPOINT = 640
 const LAUNCHER_STORAGE_KEY = 'vpw-launcher-position-v1'
 
 let pointerId = null
@@ -86,7 +86,7 @@ const themeClass = computed(() => getThemeClass())
 provideTheme(theme)
 
 function updateIsMobile() {
-  isMobile.value = hostWindow.innerWidth < MOBILE_BREAKPOINT
+  isMobile.value = hostWindow.innerWidth < MOBILE_LAYOUT_BREAKPOINT
 }
 
 function onWindowResize() {
@@ -461,7 +461,7 @@ function closePanel() {
 }
 
 /* Mobile: position theme toggle near launcher */
-@media (max-width: 640px) {
+@media (max-width: 900px) {
   .vpw-theme-toggle-btn {
     left: calc(50% + 48px);
     bottom: calc(var(--safe-area-bottom) + 24px);

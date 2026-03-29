@@ -49,7 +49,7 @@
   display: block !important;
 }
 
-@media (min-width: 640px) {
+@media (min-width: 900px) {
   .vpw-u-show-mobile {
     display: none !important;
   }
@@ -59,7 +59,7 @@
   display: none !important;
 }
 
-@media (min-width: 640px) {
+@media (min-width: 900px) {
   .vpw-u-show-desktop {
     display: revert !important;
   }

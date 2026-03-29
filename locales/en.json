@@ -422,19 +422,9 @@
     "moveHintMultiple": "Drag to move {count} layers together"
   },
   "layerManager": {
-    "ariaLabel": "Layer order panel",
-    "listAriaLabel": "Layer order list",
     "title": "Layer Order",
     "emptyTip": "No layers available",
-    "emptyTipNoSelection": "Select a stack to view layer order",
-    "emptyTipNoLayers": "No layers available",
-    "layersBadge": "layers",
-    "dragHint": "Drag to reorder. Keyboard: Alt+Arrow Up/Down",
-    "groupHint": "Grouped layers: {count}",
-    "lockedReason": "This layer is locked and cannot be reordered",
-    "reorderAnnounce": "{name} moved to priority {priority}",
-    "reorderToast": "Updated order for {name} to priority {priority}",
-    "undoLabel": "Undo"
+    "layersBadge": "layers"
   },
   "layerGroup": {
     "collapse": "Collapse",

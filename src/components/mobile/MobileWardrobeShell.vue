@@ -2,7 +2,7 @@
   <div class="mobile-shell" role="dialog" :aria-label="t('fileManagerPanel.ariaLabel')">
     <header class="mobile-header">
       <div class="mobile-title">{{ t('fileManagerPanel.title') }}</div>
-      <button class="mobile-close" @click="emit('close')" aria-label="关闭">&times;</button>
+      <button class="mobile-close" @click="emit('close')" :aria-label="t('studio.closeTitle')">&times;</button>
     </header>
 
     <nav class="mobile-main-tabs" role="tablist" :aria-label="t('fileManagerPanel.tabAriaLabel')">
@@ -85,7 +85,7 @@
         </div>
       </div>
 
-      <nav class="mobile-sub-tabs" role="tablist" :aria-label="'Workspace panes'">
+      <nav class="mobile-sub-tabs" role="tablist" :aria-label="t('fileManagerPanel.tabAriaLabel')">
         <button
           v-for="pane in subTabs"
           :key="pane.id"
@@ -170,9 +170,9 @@ const activePane = computed(() => {
 })
 
 const subTabs = computed(() => [
-  { id: 'preview', label: '预览' },
-  { id: 'wardrobe', label: activeMainTab.value === 'history' ? '历史' : '衣柜' },
-  { id: 'filter', label: 'Filter' }
+  { id: 'preview', label: t('previewWidget.title') },
+  { id: 'wardrobe', label: activeMainTab.value === 'history' ? t('fileManagerPanel.tabHistory') : t('fileManagerPanel.tabWardrobe') },
+  { id: 'filter', label: t('filterManager.ariaLabel') }
 ])
 
 const paneOrder = ['preview', 'wardrobe', 'filter']

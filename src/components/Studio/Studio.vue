@@ -422,6 +422,7 @@ import { useStudioStore } from '@/stores/studioStore'
 import { useFileSystemStore } from '@/stores/fileSystemStore'
 import { ExternalAdapter } from '@/utils/external_adapters'
 import { hostWindow, doc } from '@/utils/host-window.js'
+import { MOBILE_LAYOUT_BREAKPOINT } from '@/config/uiLayout.js'
 import { injectTheme } from '@/services/ThemeService'
 import { useUndoRedo } from '@/services/UndoRedoService'
 import { useAutoSave } from '@/services/AutoSaveService'
@@ -479,7 +480,6 @@ const resizeDir = ref(null)
 const pointerStart = ref({ x: 0, y: 0 })
 const startRect = ref({ x: 0, y: 0, w: 0, h: 0 })
 
-const MOBILE_BREAKPOINT = 900
 const isMobile = ref(false)
 const mobileTab = computed({
   get: () => store.mobileTab,
@@ -648,7 +648,7 @@ function onPointerUp() {
 }
 
 function updateIsMobile() {
-  isMobile.value = hostWindow.innerWidth < MOBILE_BREAKPOINT
+  isMobile.value = hostWindow.innerWidth < MOBILE_LAYOUT_BREAKPOINT
 }
 
 function onWindowResize() {
