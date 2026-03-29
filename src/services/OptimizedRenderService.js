@@ -333,6 +333,93 @@ export class OptimizedRenderService {
         return true;
     }
 
+    _syncAppearanceCacheFromCharacter() {
+        this.previousAppearanceCache.clear();
+        const appearanceList = Array.isArray(this.displayCharacter?.Appearance)
+            ? this.displayCharacter.Appearance
+            : [];
+
+        for (const appearanceItem of appearanceList) {
+            const groupName = appearanceItem?.Asset?.Group?.Name;
+            if (!groupName) continue;
+            this.previousAppearanceCache.set(groupName, toRaw(appearanceItem));
+        }
+    }
+
+    _applyFullReload(rawBundleData, family, memberNumber, reason = 'unknown') {
+        hostWindow.ServerAppearanceLoadFromBundle(
+            toRaw(this.displayCharacter),
+            family,
+            rawBundleData,
+            memberNumber
+        );
+
+        this.perfStats.fullReloadHits++;
+        this._syncAppearanceCacheFromCharacter();
+        console.log(`[Perf] Full reload (${reason})`);
+    }
+
+    _drawPreviewFrame(rawItemData, ctx, canvas) {
+        this.drawCallbacks.drawPreview({
+            data: rawItemData,
+            ctx,
+            canvas,
+            width: canvas.width,
+            height: canvas.height,
+            character: toRaw(this.displayCharacter)
+        });
+    }
+
+    _finalizeRenderFrame(rawItemData, comparableData, ctx, canvas) {
+        this._updateFastPathCaches(rawItemData, comparableData);
+        hostWindow.CharacterRefresh(toRaw(this.displayCharacter));
+        this._drawPreviewFrame(rawItemData, ctx, canvas);
+    }
+
+    _collectIncrementalChangedGroups({
+        previousRawMap,
+        nextRawMap,
+        previousComparableMap = null,
+        nextComparableMap = null
+    }) {
+        const changedGroups = new Set();
+        const hasComparableMaps = previousComparableMap instanceof Map && nextComparableMap instanceof Map;
+
+        for (const [groupName, nextRawItem] of nextRawMap.entries()) {
+            const previousRawItem = previousRawMap.get(groupName);
+            if (!previousRawItem) {
+                changedGroups.add(groupName);
+                continue;
+            }
+
+            const rawChanged = !isEqual(previousRawItem, nextRawItem);
+            let comparableChanged = null;
+
+            if (hasComparableMaps) {
+                const previousComparableItem = previousComparableMap.get(groupName);
+                const nextComparableItem = nextComparableMap.get(groupName);
+
+                if (!previousComparableItem || !nextComparableItem) {
+                    return null;
+                }
+
+                comparableChanged = !isEqual(previousComparableItem, nextComparableItem);
+
+                if (!comparableChanged && rawChanged && !this._isSafeGeneralParamUpdate(previousRawItem, nextRawItem)) {
+                    // Comparable says unchanged, but raw object changed with non-safe fields.
+                    // Force caller to choose full reload to keep host state correct.
+                    return null;
+                }
+            }
+
+            if (comparableChanged || rawChanged) {
+                changedGroups.add(groupName);
+            }
+        }
+
+        return changedGroups;
+    }
+
     /**
      * Render preview with optimized character reuse
      */
@@ -404,66 +491,52 @@ export class OptimizedRenderService {
             // Update character appearance using persistent instance
             const family = this.displayCharacter.AssetFamily || 'Female3DCG';
             const memberNumber = this.displayCharacter.MemberNumber;
+            this.perfStats.totalRenders++;
+            const perfStart = performance.now();
 
             // Apply new appearance data
             if (options.useLoadFromBundle) {
-                hostWindow.ServerAppearanceLoadFromBundle(
-                    toRaw(this.displayCharacter),
-                    family,
-                    rawItemData,
-                    memberNumber
-                );
+                this._applyFullReload(rawItemData, family, memberNumber, 'forced-option');
             } else {
-                const perfStart = performance.now();
-                this.perfStats.totalRenders++;
-
                 const usedFastPath = this._tryApplyGeneralParamUpdate(rawItemData, comparableData);
                 if (usedFastPath) {
                     this.perfStats.fastPathHits++;
-                    this._updateFastPathCaches(rawItemData, comparableData);
-                    hostWindow.CharacterRefresh(toRaw(this.displayCharacter));
-
                     console.log(`[Perf] Fast path: ${(performance.now() - perfStart).toFixed(2)}ms`);
-                    this.drawCallbacks.drawPreview({
-                        data: rawItemData,
-                        ctx: ctx,
-                        canvas: canvas,
-                        width: canvas.width,
-                        height: canvas.height,
-                        character: toRaw(this.displayCharacter)
-                    });
+                    this._finalizeRenderFrame(rawItemData, comparableData, ctx, canvas);
                     return;
                 }
 
                 // OPTIMIZED INCREMENTAL UPDATE
                 // Only process changed items, reuse cached Appearance for unchanged items
-                this.perfStats.incrementalHits++;
-
-                // Build maps for efficient lookup
-                const previousBundleMap = new Map();
-                this.previousDataCache.forEach(bundleItem => {
-                    const groupName = this._getBundleGroupName(bundleItem);
-                    if (groupName) previousBundleMap.set(groupName, bundleItem);
-                });
-
-                const newBundleMap = new Map();
-                rawItemData.forEach(bundleItem => {
-                    const groupName = this._getBundleGroupName(bundleItem);
-                    if (groupName) newBundleMap.set(groupName, bundleItem);
-                });
-
-                // Identify changed items
-                const changedGroups = new Set();
-
-                // Check for changes and additions
-                for (const [groupName, newBundle] of newBundleMap.entries()) {
-                    const prevBundle = previousBundleMap.get(groupName);
-                    if (!prevBundle) {
-                        changedGroups.add(groupName);
-                    } else if (!isEqual(prevBundle, newBundle)) {
-                        changedGroups.add(groupName);
-                    }
+                // Build maps for efficient lookup. If duplicate groups are detected,
+                // fall back to host bundle loader to preserve ordering semantics.
+                const previousBundleMap = this._buildBundleMap(this.previousDataCache);
+                const newBundleMap = this._buildBundleMap(rawItemData);
+                if (!previousBundleMap || !newBundleMap) {
+                    this._applyFullReload(rawItemData, family, memberNumber, 'duplicate-or-invalid-group');
+                    this._finalizeRenderFrame(rawItemData, comparableData, ctx, canvas);
+                    return;
                 }
+
+                const previousComparable = Array.isArray(this.previousComparableCache) && this.previousComparableCache.length
+                    ? this.previousComparableCache
+                    : this.previousDataCache;
+                const previousComparableMap = this._buildBundleMap(previousComparable);
+                const nextComparableMap = this._buildBundleMap(comparableData);
+
+                const changedGroups = this._collectIncrementalChangedGroups({
+                    previousRawMap: previousBundleMap,
+                    nextRawMap: newBundleMap,
+                    previousComparableMap,
+                    nextComparableMap
+                });
+                if (!changedGroups) {
+                    this._applyFullReload(rawItemData, family, memberNumber, 'unsafe-hidden-raw-change');
+                    this._finalizeRenderFrame(rawItemData, comparableData, ctx, canvas);
+                    return;
+                }
+
+                this.perfStats.incrementalHits++;
 
                 // Check for removals (items in previous but not in new)
                 const removedGroups = new Set();
@@ -599,20 +672,7 @@ export class OptimizedRenderService {
                 console.log(`[Perf] Stats: ${this.perfStats.fastPathHits} fast, ${this.perfStats.incrementalHits} incremental, ${this.perfStats.fullReloadHits} full of ${this.perfStats.totalRenders} total`);
             }
 
-            this._updateFastPathCaches(rawItemData, comparableData);
-
-            // Refresh only once
-            hostWindow.CharacterRefresh(toRaw(this.displayCharacter));
-
-            // Draw with callback
-            this.drawCallbacks.drawPreview({
-                data: rawItemData,
-                ctx: ctx,
-                canvas: canvas,
-                width: canvas.width,
-                height: canvas.height,
-                character: toRaw(this.displayCharacter) // Pass persistent character
-            });
+            this._finalizeRenderFrame(rawItemData, comparableData, ctx, canvas);
 
         } catch (e) {
             console.warn('[OptimizedRenderService] renderPreviewWithItem error:', e);

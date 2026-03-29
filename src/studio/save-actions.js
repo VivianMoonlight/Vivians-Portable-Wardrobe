@@ -9,6 +9,14 @@ import { hostWindow, setTimeoutHost, clearTimeoutHost } from '@/utils/host-windo
 import { StudioStorageService } from '@/services/StudioStorageService'
 import { SAVE_STATUS_IDLE, SAVE_STATUS_SAVING, SAVE_STATUS_SAVED, SAVE_STATUS_ERROR } from './constants.js'
 
+function getPersistableStacks(state) {
+  const sourceStacks = toRaw(state.stacks)
+  if (typeof state?._sanitizeStacksForPersistence === 'function') {
+    return state._sanitizeStacksForPersistence(sourceStacks)
+  }
+  return sourceStacks
+}
+
 /**
  * Enable auto-save
  * @returns {Object} Updated state
@@ -32,11 +40,12 @@ export function disableAutoSave() {
  */
 export async function saveToLocalStorage(state) {
   try {
+    const persistableStacks = getPersistableStacks(state)
     const dataToSave = {
       version: '1.0',
       timestamp: Date.now(),
       data: {
-        stacks: toRaw(state.stacks),
+        stacks: persistableStacks,
         paletteMap: toRaw(state.paletteMap),
         _paletteNextCounter: state._paletteNextCounter,
         _partUidCounter: state._partUidCounter,
@@ -180,8 +189,9 @@ export async function getAutoSaveInfo() {
  * @returns {Object} Save result { success, saveStatus, lastSaveTime, error }
  */
 export function autoSave(state) {
+  const persistableStacks = getPersistableStacks(state)
   const data = {
-    stacks: toRaw(state.stacks),
+    stacks: persistableStacks,
     paletteMap: toRaw(state.paletteMap),
     _paletteNextCounter: state._paletteNextCounter,
     _partUidCounter: state._partUidCounter,
@@ -211,8 +221,9 @@ export function autoSave(state) {
  * @returns {Object} Save result { success, id, saveStatus, lastSaveTime, error }
  */
 export function saveStudioSession(state, name) {
+  const persistableStacks = getPersistableStacks(state)
   const data = {
-    stacks: toRaw(state.stacks),
+    stacks: persistableStacks,
     paletteMap: toRaw(state.paletteMap),
     _paletteNextCounter: state._paletteNextCounter,
     _partUidCounter: state._partUidCounter,

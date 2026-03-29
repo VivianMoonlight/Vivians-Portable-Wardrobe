@@ -30,7 +30,11 @@ import * as StorageActions from '@/studio/storage-actions.js'
 import * as SaveActions from '@/studio/save-actions.js'
 import { getStudioFacade } from '@/studio/StudioFacade'
 import { createStudioRenderPipeline } from '@/studio/StudioRenderPipeline'
-import { isStudioFacadeEnabled, isStudioRenderPipelineEnabled } from '@/config/featureFlags'
+import {
+  isStudioFacadeEnabled,
+  isStudioRenderPipelineEnabled,
+  isRenderReconstructFromLayerEntriesEnabled
+} from '@/config/featureFlags'
 
 /*
   NOTE:
@@ -789,22 +793,63 @@ export const useStudioStore = defineStore('studio', {
 
     _reconstructStacksForRender(stacks = this.stacks) {
       const sourceStacks = Array.isArray(stacks) ? stacks : []
+      const useLegacyLayerEntriesReconstruct = isRenderReconstructFromLayerEntriesEnabled()
+
       return sourceStacks.map(el => {
         const data = Array.isArray(el?.data) ? el.data : []
-        const reconstructed = data.map(p => {
-          try {
-            if (p && Array.isArray(p.layerEntries) && p.layerEntries.length) {
-              const asset = (typeof this.resolveAssetForPart === 'function') ? this.resolveAssetForPart(p) : null
-              const newPart = LayerTranslator.reconstructPartFromLayerEntries(p.layerEntries, p, { originalAsset: asset })
-              if (newPart) return newPart
+        const reconstructed = data.map(part => {
+          const clonedPart = fastClone(part)
+          if (!clonedPart || typeof clonedPart !== 'object') return clonedPart
+
+          if (useLegacyLayerEntriesReconstruct) {
+            try {
+              if (Array.isArray(clonedPart.layerEntries) && clonedPart.layerEntries.length) {
+                const asset = (typeof this.resolveAssetForPart === 'function') ? this.resolveAssetForPart(clonedPart) : null
+                const rebuiltPart = LayerTranslator.reconstructPartFromLayerEntries(clonedPart.layerEntries, clonedPart, { originalAsset: asset })
+                if (rebuiltPart) {
+                  return rebuiltPart
+                }
+              }
+            } catch (e) {
+              // Fall through to Part truth clone.
             }
-          } catch (e) {
-            // fallback to original part if reconstruction fails
           }
-          return fastClone(p)
+
+          // Render domain consumes Part as source-of-truth; layerEntries remains UI/editor projection.
+          if (Object.prototype.hasOwnProperty.call(clonedPart, 'layerEntries')) {
+            delete clonedPart.layerEntries
+          }
+
+          return clonedPart
         })
         return { data: reconstructed, filterList: el?.filterList }
       })
+    },
+
+    _sanitizeStacksForPersistence(stacks = this.stacks) {
+      const sourceStacks = Array.isArray(stacks) ? stacks : []
+      const sanitizedStacks = fastClone(sourceStacks)
+
+      const stripDerivedLayerEntries = (parts) => {
+        if (!Array.isArray(parts)) return
+        for (const part of parts) {
+          if (!part || typeof part !== 'object') continue
+          if (Object.prototype.hasOwnProperty.call(part, 'layerEntries')) {
+            delete part.layerEntries
+          }
+          if (Array.isArray(part.drawData)) {
+            stripDerivedLayerEntries(part.drawData)
+          }
+        }
+      }
+
+      for (const stack of sanitizedStacks) {
+        if (stack && typeof stack === 'object' && Array.isArray(stack.data)) {
+          stripDerivedLayerEntries(stack.data)
+        }
+      }
+
+      return sanitizedStacks
     },
 
     // -------------------------
@@ -2695,7 +2740,7 @@ export const useStudioStore = defineStore('studio', {
     loadStacksFromLocalStorage() {
       const result = StorageActions.loadStacksFromLocalStorage()
       if (result) {
-        this.stacks = result.stacks
+        this.stacks = this._sanitizeStacksForPersistence(result.stacks)
         if (result._partUidCounter) {
           this._partUidCounter = result._partUidCounter
         }
@@ -2737,7 +2782,7 @@ export const useStudioStore = defineStore('studio', {
           resolve(false)
           return
         }
-        this.stacks = result.stacks
+        this.stacks = this._sanitizeStacksForPersistence(result.stacks)
         if (result._partUidCounter) {
           this._partUidCounter = result._partUidCounter
         }
@@ -2783,7 +2828,7 @@ export const useStudioStore = defineStore('studio', {
         }
         const { data } = result
         if (data.stacks) {
-          this.stacks = data.stacks
+          this.stacks = this._sanitizeStacksForPersistence(data.stacks)
         }
         if (data.paletteMap) {
           this.paletteMap = data.paletteMap
@@ -3542,7 +3587,7 @@ export const useStudioStore = defineStore('studio', {
           // Capture minimal necessary state for undo/redo
           // mergedAppearanceData is derived and will be regenerated on restore
           return {
-            stacks: fastClone(this.stacks),
+            stacks: this._sanitizeStacksForPersistence(this.stacks),
             paletteMap: fastClone(this.paletteMap),
             _paletteNextCounter: this._paletteNextCounter,
             focusedPartIndex: fastClone(this.focusedPartIndex),
@@ -3555,7 +3600,7 @@ export const useStudioStore = defineStore('studio', {
         },
         restoreState: (snapshot) => {
           // Restore state from snapshot
-          this.stacks = fastClone(snapshot.stacks)
+          this.stacks = this._sanitizeStacksForPersistence(snapshot.stacks)
           this.paletteMap = fastClone(snapshot.paletteMap)
           this._paletteNextCounter = snapshot._paletteNextCounter || 1
           this.focusedPartIndex = fastClone(snapshot.focusedPartIndex)
@@ -3821,7 +3866,7 @@ export const useStudioStore = defineStore('studio', {
       // Restore data from result
       const data = result.data
       if (data.stacks) {
-        this.stacks = data.stacks
+        this.stacks = this._sanitizeStacksForPersistence(data.stacks)
       }
       if (data.paletteMap) {
         this.paletteMap = data.paletteMap
@@ -3986,7 +4031,7 @@ export const useStudioStore = defineStore('studio', {
       }
 
       const { data } = result
-      this.stacks = data.stacks || []
+      this.stacks = this._sanitizeStacksForPersistence(data.stacks || [])
       this.paletteMap = data.paletteMap || {}
       this._paletteNextCounter = data._paletteNextCounter || 0
       this._partUidCounter = data._partUidCounter || 0
