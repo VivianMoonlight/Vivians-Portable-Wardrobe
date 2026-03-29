@@ -15,6 +15,47 @@ export function buildLayerKey(stackIndex, partIndex, layerIndex) {
   return `${stackIndex}-${partIndex}-${layerIndex}`
 }
 
+function resolveLayerEntries(state, part) {
+  if (!part) return []
+
+  if (typeof state?.getLayerEntriesForPart === 'function') {
+    const entries = state.getLayerEntriesForPart(part, { forceRebuild: false, clone: false })
+    if (Array.isArray(entries)) return entries
+  }
+
+  return Array.isArray(part.layerEntries) ? part.layerEntries : []
+}
+
+function resolveSelectionLayerIndex(target) {
+  const direct = Number(target?.selection?.layerIndex)
+  if (Number.isFinite(direct)) return direct
+
+  const fallback = Number(target?.layer?.layerIndex)
+  return Number.isFinite(fallback) ? fallback : null
+}
+
+function buildPartDeltaUpdates(targets = [], buildDelta) {
+  const partMap = new Map()
+
+  for (const target of targets) {
+    const part = target?.part
+    if (!part) continue
+
+    const selection = target?.selection || {}
+    const key = part._uid || `${selection.stackIndex ?? 's'}:${selection.partIndex ?? 'p'}`
+    if (!partMap.has(key)) {
+      partMap.set(key, { part, deltas: [] })
+    }
+
+    const delta = buildDelta(target)
+    if (!delta) continue
+
+    partMap.get(key).deltas.push(delta)
+  }
+
+  return Array.from(partMap.values()).filter(update => Array.isArray(update.deltas) && update.deltas.length > 0)
+}
+
 /**
  * Toggle layer selection (add or remove)
  * @param {Object} state - Current store state
@@ -72,7 +113,8 @@ export function isLayerSelected(state, layerInfo) {
  */
 export function selectAllLayers(state) {
   const fp = state.focusedPart
-  if (!fp || !Array.isArray(fp.layerEntries)) {
+  const layerEntries = resolveLayerEntries(state, fp)
+  if (!fp || !Array.isArray(layerEntries)) {
     console.warn('[selection-actions] selectAllLayers: no focused part or layer entries')
     return { selectedLayers: state.selectedLayers }
   }
@@ -84,7 +126,7 @@ export function selectAllLayers(state) {
   }
 
   // Select all layers in the focused part
-  const newSelections = fp.layerEntries.map((layer) => {
+  const newSelections = layerEntries.map((layer) => {
     const key = buildLayerKey(idx.stackIndex, idx.partIndex, layer.layerIndex)
     return {
       stackIndex: idx.stackIndex,
@@ -114,7 +156,8 @@ export function clearLayerSelection() {
  */
 export function selectLayerRange(state, fromIndex, toIndex) {
   const fp = state.focusedPart
-  if (!fp || !Array.isArray(fp.layerEntries)) {
+  const layerEntries = resolveLayerEntries(state, fp)
+  if (!fp || !Array.isArray(layerEntries)) {
     console.warn('[selection-actions] selectLayerRange: no focused part or layer entries')
     return { selectedLayers: state.selectedLayers }
   }
@@ -129,7 +172,7 @@ export function selectLayerRange(state, fromIndex, toIndex) {
   const end = Math.max(fromIndex, toIndex)
 
   const newSelections = []
-  for (let layerIndex = start; layerIndex <= end && layerIndex < fp.layerEntries.length; layerIndex++) {
+  for (let layerIndex = start; layerIndex <= end && layerIndex < layerEntries.length; layerIndex++) {
     const key = buildLayerKey(idx.stackIndex, idx.partIndex, layerIndex)
     // Only add if not already selected
     if (!state.selectedLayers.some(l => l._key === key)) {
@@ -163,9 +206,10 @@ export function getSelectedLayersData(state) {
       if (sel.partIndex < 0 || sel.partIndex >= stack.data.length) continue
 
       const part = stack.data[sel.partIndex]
-      if (!part || !Array.isArray(part.layerEntries)) continue
+      const layerEntries = resolveLayerEntries(state, part)
+      if (!Array.isArray(layerEntries)) continue
 
-      const layer = part.layerEntries.find(l => l.layerIndex === sel.layerIndex)
+      const layer = layerEntries.find(l => l.layerIndex === sel.layerIndex)
       if (!layer) continue
 
       results.push({
@@ -220,27 +264,32 @@ export function batchUpdateOpacity(state, value, mode = 'absolute') {
   }
 
   let updatedCount = 0
-
-  for (const target of targets) {
+  const updates = buildPartDeltaUpdates(targets, (target) => {
     try {
       const { layer } = target
+      const layerIndex = resolveSelectionLayerIndex(target)
+      if (!Number.isFinite(layerIndex)) return null
 
       let newOpacity
       if (mode === 'relative') {
-        const currentOpacity = (layer.opacity != null ? layer.opacity : 1) * 100
+        const currentOpacity = (layer?.opacity != null ? layer.opacity : 1) * 100
         newOpacity = Math.max(0, Math.min(100, currentOpacity + value)) / 100
       } else {
         newOpacity = Math.max(0, Math.min(100, value)) / 100
       }
 
-      layer.opacity = newOpacity
       updatedCount++
+      return {
+        layerIndex,
+        opacity: newOpacity
+      }
     } catch (e) {
-      console.warn('[selection-actions] batchUpdateOpacity: error updating layer', target, e)
+      console.warn('[selection-actions] batchUpdateOpacity: error preparing delta', target, e)
+      return null
     }
-  }
+  })
 
-  return { success: true, updatedCount, selectedLayers: state.selectedLayers }
+  return { success: true, updatedCount, selectedLayers: state.selectedLayers, updates }
 }
 
 /**
@@ -261,48 +310,71 @@ export function batchUpdateOffset(state, x, y, mode = 'absolute') {
   }
 
   let updatedCount = 0
-
-  for (const target of targets) {
+  const updates = buildPartDeltaUpdates(targets, (target) => {
     try {
       const { layer } = target
+      const layerIndex = resolveSelectionLayerIndex(target)
+      if (!Number.isFinite(layerIndex)) return null
 
+      const delta = { layerIndex }
       if (mode === 'relative') {
-        const currentLeft = layer.drawingLeft != null ? layer.drawingLeft : 0
-        const currentTop = layer.drawingTop != null ? layer.drawingTop : 0
-        layer.drawingLeft = currentLeft + (x || 0)
-        layer.drawingTop = currentTop + (y || 0)
-        if (layer.subLayers && Array.isArray(layer.subLayers)) {
-          for (const subLayer of layer.subLayers) {
+        const currentLeft = layer?.drawingLeft != null ? layer.drawingLeft : 0
+        const currentTop = layer?.drawingTop != null ? layer.drawingTop : 0
+        delta.drawingLeft = currentLeft + (x || 0)
+        delta.drawingTop = currentTop + (y || 0)
+      } else {
+        delta.drawingLeft = x != null ? x : (layer?.drawingLeft || 0)
+        delta.drawingTop = y != null ? y : (layer?.drawingTop || 0)
+      }
+
+      const subLayerDeltas = []
+      if (Array.isArray(layer?.subLayers)) {
+        for (const subLayer of layer.subLayers) {
+          const subLayerIndex = Number(subLayer?.layerIndex)
+          if (!Number.isFinite(subLayerIndex)) continue
+
+          const subDelta = { layerIndex: subLayerIndex }
+          let subChanged = false
+
+          if (mode === 'relative') {
             if (subLayer.drawingLeft != null) {
-              subLayer.drawingLeft += (x || 0)
+              subDelta.drawingLeft = subLayer.drawingLeft + (x || 0)
+              subChanged = true
             }
             if (subLayer.drawingTop != null) {
-              subLayer.drawingTop += (y || 0)
+              subDelta.drawingTop = subLayer.drawingTop + (y || 0)
+              subChanged = true
+            }
+          } else {
+            if (subLayer.drawingLeft != null) {
+              subDelta.drawingLeft = x != null ? x : (subLayer.drawingLeft || 0)
+              subChanged = true
+            }
+            if (subLayer.drawingTop != null) {
+              subDelta.drawingTop = y != null ? y : (subLayer.drawingTop || 0)
+              subChanged = true
             }
           }
-        }
-      } else {
-        layer.drawingLeft = x != null ? x : (layer.drawingLeft || 0)
-        layer.drawingTop = y != null ? y : (layer.drawingTop || 0)
-        if (layer.subLayers && Array.isArray(layer.subLayers)) {
-          for (const subLayer of layer.subLayers) {
-            if (subLayer.drawingLeft != null) {
-              subLayer.drawingLeft = x != null ? x : (subLayer.drawingLeft || 0)
-            }
-            if (subLayer.drawingTop != null) {
-              subLayer.drawingTop = y != null ? y : (subLayer.drawingTop || 0)
-            }
+
+          if (subChanged) {
+            subLayerDeltas.push(subDelta)
           }
         }
       }
 
-      updatedCount++
-    } catch (e) {
-      console.warn('[selection-actions] batchUpdateOffset: error updating layer', target, e)
-    }
-  }
+      if (subLayerDeltas.length > 0) {
+        delta.subLayers = subLayerDeltas
+      }
 
-  return { success: true, updatedCount, selectedLayers: state.selectedLayers }
+      updatedCount++
+      return delta
+    } catch (e) {
+      console.warn('[selection-actions] batchUpdateOffset: error preparing delta', target, e)
+      return null
+    }
+  })
+
+  return { success: true, updatedCount, selectedLayers: state.selectedLayers, updates }
 }
 
 /**
@@ -323,34 +395,38 @@ export function batchUpdateColor(state, colorValue, _resolveColorCssFromText) {
 
   let updatedCount = 0
   let skippedCount = 0
-
-  for (const target of targets) {
+  const updates = buildPartDeltaUpdates(targets, (target) => {
     try {
       const { layer } = target
-
-      // Only update colorable layers
-      if (!layer.isColorable) {
+      if (!layer?.isColorable) {
         skippedCount++
-        continue
+        return null
       }
 
-      layer.colorText = colorValue === undefined || colorValue === null ? '' : String(colorValue)
+      const layerIndex = resolveSelectionLayerIndex(target)
+      if (!Number.isFinite(layerIndex)) return null
 
-      // Update colorCss
+      const colorText = colorValue === undefined || colorValue === null ? '' : String(colorValue)
       try {
-        const resolvedCss = _resolveColorCssFromText(layer.colorText)
-        layer.colorCss = resolvedCss
+        if (typeof _resolveColorCssFromText === 'function') {
+          _resolveColorCssFromText(colorText)
+        }
       } catch (e) {
-        layer.colorCss = null
+        // Keep behavior tolerant: invalid/unknown text still writes colorText.
       }
 
       updatedCount++
+      return {
+        layerIndex,
+        colorText
+      }
     } catch (e) {
-      console.warn('[selection-actions] batchUpdateColor: error updating layer', target, e)
+      console.warn('[selection-actions] batchUpdateColor: error preparing delta', target, e)
+      return null
     }
-  }
+  })
 
-  return { success: true, updatedCount, skippedCount, selectedLayers: state.selectedLayers }
+  return { success: true, updatedCount, skippedCount, selectedLayers: state.selectedLayers, updates }
 }
 
 /**
@@ -370,28 +446,33 @@ export function batchUpdatePriority(state, value, mode = 'absolute') {
   }
 
   let updatedCount = 0
-
-  for (const target of targets) {
+  const updates = buildPartDeltaUpdates(targets, (target) => {
     try {
       const { layer } = target
+      const layerIndex = resolveSelectionLayerIndex(target)
+      if (!Number.isFinite(layerIndex)) return null
 
+      let nextPriority
       if (mode === 'relative') {
-        const currentPriority = layer.overridePriority != null ? layer.overridePriority : (layer.defaultPriority || 0)
-        const newPriority = currentPriority + (value || 0)
-        layer.overridePriority = newPriority
-        layer.isOverridePriority = true
+        const currentPriority = layer?.overridePriority != null ? layer.overridePriority : (layer?.defaultPriority || 0)
+        nextPriority = currentPriority + (value || 0)
       } else {
-        layer.overridePriority = value != null ? value : (layer.defaultPriority || 0)
-        layer.isOverridePriority = true
+        nextPriority = value != null ? value : (layer?.defaultPriority || 0)
       }
 
       updatedCount++
+      return {
+        layerIndex,
+        isOverridePriority: true,
+        overridePriority: nextPriority
+      }
     } catch (e) {
-      console.warn('[selection-actions] batchUpdatePriority: error updating layer', target, e)
+      console.warn('[selection-actions] batchUpdatePriority: error preparing delta', target, e)
+      return null
     }
-  }
+  })
 
-  return { success: true, updatedCount, selectedLayers: state.selectedLayers }
+  return { success: true, updatedCount, selectedLayers: state.selectedLayers, updates }
 }
 
 /**
@@ -409,7 +490,7 @@ export function applyBatchEdit(state, operation, payload, _resolveColorCssFromTe
     case 'offset':
       return batchUpdateOffset(state, payload.x, payload.y, payload.mode)
     case 'color':
-      return batchUpdateColor(state, payload.value, _resolveColorCssFromText)
+      return batchUpdateColor(state, payload.colorValue ?? payload.value, _resolveColorCssFromText)
     case 'priority':
       return batchUpdatePriority(state, payload.value, payload.mode)
     default:

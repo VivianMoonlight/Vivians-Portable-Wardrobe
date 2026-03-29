@@ -212,23 +212,49 @@ function refresh() {
 // -------------------------------------------------------------
 const updateLayerPosition = throttle((layerIdx, newLeft, newTop) => {
   const part = store.focusedPart
-  if (!part || !Array.isArray(part.layerEntries)) return
+  if (!part) return
 
-  // Create a clean copy of layer entries to modify
-  const entriesCopy = part.layerEntries.map(e => ({ ...e }))
-  const layer = entriesCopy[layerIdx]
+  const entries = typeof store.getLayerEntriesForPart === 'function'
+    ? store.getLayerEntriesForPart(part, { forceRebuild: false, clone: false })
+    : []
+  if (!Array.isArray(entries) || entries.length === 0) return
 
-  if (layer) {
-    layer.drawingLeft = Math.round(newLeft)
-    layer.drawingTop = Math.round(newTop)
+  const directLayer = entries.find(entry => Number(entry?.layerIndex) === Number(layerIdx))
+  const layer = directLayer || entries[layerIdx]
+  if (!layer) return
 
-    // Commit to store
-    store.execute({
-      type: 'part.updateLayerEntries',
-      payload: { entries: entriesCopy },
-      meta: { deferCommit: true }
-    })
+  const layerIndex = Number(layer.layerIndex)
+  if (!Number.isFinite(layerIndex)) return
+
+  const delta = {
+    layerIndex,
+    drawingLeft: Math.round(newLeft),
+    drawingTop: Math.round(newTop)
   }
+
+  if (Array.isArray(layer.subLayers) && layer.subLayers.length > 0) {
+    const subLayers = layer.subLayers
+      .map(sub => {
+        const subIndex = Number(sub?.layerIndex)
+        if (!Number.isFinite(subIndex)) return null
+        return {
+          layerIndex: subIndex,
+          drawingLeft: Math.round(newLeft),
+          drawingTop: Math.round(newTop)
+        }
+      })
+      .filter(Boolean)
+
+    if (subLayers.length > 0) {
+      delta.subLayers = subLayers
+    }
+  }
+
+  store.execute({
+    type: 'part.applyLayerDeltas',
+    payload: { part, deltas: [delta] },
+    meta: { deferCommit: true }
+  })
 }, 32, { leading: true, trailing: true }) // ~30fps throttle
 
 // Throttled multi-layer update
@@ -239,7 +265,7 @@ const updateMultipleLayersOffset = throttle((deltaX, deltaY) => {
   for (let i = 0; i < layersData.length && i < multiLayerStartOffsets.value.length; i++) {
     const target = layersData[i]
     const part = target?.part
-    if (!part || !Array.isArray(part.layerEntries)) continue
+    if (!part) continue
 
     const layerIndex = Number(target?.selection?.layerIndex)
     if (!Number.isFinite(layerIndex)) continue
@@ -248,7 +274,7 @@ const updateMultipleLayersOffset = throttle((deltaX, deltaY) => {
     if (!partsMap.has(partKey)) {
       partsMap.set(partKey, {
         part,
-        entries: part.layerEntries.map(entry => ({ ...entry }))
+        deltas: []
       })
     }
 
@@ -257,23 +283,38 @@ const updateMultipleLayersOffset = throttle((deltaX, deltaY) => {
     const nextTop = Math.round((startOffset.top || 0) + deltaY)
 
     const group = partsMap.get(partKey)
-    const entry = group.entries.find(e => Number(e?.layerIndex) === layerIndex) || group.entries[layerIndex]
-    if (!entry) continue
-
-    entry.drawingLeft = nextLeft
-    entry.drawingTop = nextTop
-    if (Array.isArray(entry.subLayers)) {
-      entry.subLayers.forEach(subLayer => {
-        subLayer.drawingLeft = nextLeft
-        subLayer.drawingTop = nextTop
-      })
+    const currentLayer = target?.layer
+    const delta = {
+      layerIndex,
+      drawingLeft: nextLeft,
+      drawingTop: nextTop
     }
+
+    if (Array.isArray(currentLayer?.subLayers) && currentLayer.subLayers.length > 0) {
+      const subLayers = currentLayer.subLayers
+        .map(sub => {
+          const subIndex = Number(sub?.layerIndex)
+          if (!Number.isFinite(subIndex)) return null
+          return {
+            layerIndex: subIndex,
+            drawingLeft: nextLeft,
+            drawingTop: nextTop
+          }
+        })
+        .filter(Boolean)
+
+      if (subLayers.length > 0) {
+        delta.subLayers = subLayers
+      }
+    }
+
+    group.deltas.push(delta)
   }
 
   const updates = Array.from(partsMap.values())
   if (updates.length > 0) {
     store.execute({
-      type: 'layer.batchUpdatePartEntries',
+      type: 'layer.batchApplyLayerDeltas',
       payload: { updates },
       meta: { deferCommit: true }
     })
@@ -296,7 +337,11 @@ function onPointerDown(e) {
   if (activeTool.value === 'move') {
     // --- MOVE MODE ---
     const part = store.focusedPart
-    if (part && Array.isArray(part.layerEntries) && part.layerEntries.length > 0) {
+    const entries = part && typeof store.getLayerEntriesForPart === 'function'
+      ? store.getLayerEntriesForPart(part, { forceRebuild: false, clone: false })
+      : []
+
+    if (part && Array.isArray(entries) && entries.length > 0) {
       // Check if we're in multi-selection mode with multiple layers
       const isMultiMode = store.selectionMode === 'multiple'
       const selectedCount = store.selectedLayers.length
@@ -330,8 +375,10 @@ function onPointerDown(e) {
           store.setPropertyFocus('drawing')
         }
 
-        const layer = part.layerEntries[idx]
-        targetLayerIndex.value = idx
+        const layer = entries.find(entry => Number(entry?.layerIndex) === Number(idx)) || entries[idx]
+        if (!layer) return
+
+        targetLayerIndex.value = Number.isFinite(Number(layer.layerIndex)) ? Number(layer.layerIndex) : idx
         dragStartLayerVals.value = {
           left: layer.drawingLeft || 0,
           top: layer.drawingTop || 0

@@ -243,28 +243,34 @@ function onDragStart(e, item) {
 // Throttle Store Updates
 const throttledStoreUpdate = throttle(async (updates) => {
     // updates: Array of { part, layerIndex, priority }
-
-    // 1. Group by Part
-    const partsMap = new Map() // partUid -> { part, entries }
+    const partsMap = new Map() // partUid -> { part, deltas }
 
     for (const up of updates) {
-        const p = up.part
-        if (!partsMap.has(p._uid)) {
-            // Deep clone entries
-            const entries = p.layerEntries.map(e => ({ ...e }))
-            partsMap.set(p._uid, { part: p, entries })
+        const p = up?.part
+        if (!p) continue
+
+        const layerIndex = Number(up?.layerIndex)
+        if (!Number.isFinite(layerIndex)) continue
+
+        const priority = Number(up?.priority)
+        if (!Number.isFinite(priority)) continue
+
+        const key = p._uid || p
+        if (!partsMap.has(key)) {
+            partsMap.set(key, { part: p, deltas: [] })
         }
-        const group = partsMap.get(p._uid)
-        if (group.entries[up.layerIndex]) {
-            group.entries[up.layerIndex].overridePriority = up.priority
-            group.entries[up.layerIndex].isOverridePriority = true
-        }
+
+        partsMap.get(key).deltas.push({
+            layerIndex,
+            isOverridePriority: true,
+            overridePriority: priority
+        })
     }
 
-    const updatesPayload = Array.from(partsMap.values())
+    const updatesPayload = Array.from(partsMap.values()).filter(up => Array.isArray(up.deltas) && up.deltas.length > 0)
     if (updatesPayload.length > 0) {
         store.execute({
-            type: 'layer.batchUpdatePartEntries',
+            type: 'layer.batchApplyLayerDeltas',
             payload: { updates: updatesPayload }
         })
     }

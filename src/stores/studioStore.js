@@ -439,7 +439,12 @@ export const useStudioStore = defineStore('studio', {
     popPreview(id) {
       if (!id) return
 
-      this._previewStack = this._previewStack.filter(p => p.id !== id)
+      const nextStack = this._previewStack.filter(p => p.id !== id)
+      if (nextStack.length === this._previewStack.length) {
+        return
+      }
+
+      this._previewStack = nextStack
 
       // Update active preview
       this._updateActivePreview()
@@ -1819,8 +1824,19 @@ export const useStudioStore = defineStore('studio', {
       return entries
     },
 
+    getLayerEntriesForPart(part, { forceRebuild = false, clone = false } = {}) {
+      if (!part) return []
+
+      let entries = this._buildLayerEntriesWithCache(part, forceRebuild) || []
+      if ((!Array.isArray(entries) || entries.length === 0) && Array.isArray(part.layerEntries)) {
+        entries = part.layerEntries
+      }
+
+      return clone ? fastClone(entries) : entries
+    },
+
     buildLayerEntriesForPart(part) {
-      const entries = this._buildLayerEntriesWithCache(part)
+      const entries = this.getLayerEntriesForPart(part, { forceRebuild: false, clone: false })
       this.translatedLayerEntries = entries
       return entries
     },
@@ -1832,6 +1848,370 @@ export const useStudioStore = defineStore('studio', {
         return []
       }
       return this.buildLayerEntriesForPart(fp)
+    },
+
+    _findLayerEntryByIndex(entries, layerIndex) {
+      if (!Array.isArray(entries)) return null
+      const normalizedIndex = Number(layerIndex)
+      if (!Number.isFinite(normalizedIndex)) return null
+
+      const direct = entries.find(entry => Number(entry?.layerIndex) === normalizedIndex)
+      if (direct) return direct
+
+      for (const entry of entries) {
+        if (!entry || !Array.isArray(entry.subLayers)) continue
+        const sub = entry.subLayers.find(item => Number(item?.layerIndex) === normalizedIndex)
+        if (sub) return sub
+      }
+
+      return null
+    },
+
+    _deriveLayerDeltas(previousEntries = [], nextEntries = []) {
+      if (!Array.isArray(previousEntries) || !Array.isArray(nextEntries)) return null
+      if (previousEntries.length !== nextEntries.length) return null
+
+      const deltas = []
+
+      for (const nextEntry of nextEntries) {
+        const layerIndex = Number(nextEntry?.layerIndex)
+        if (!Number.isFinite(layerIndex)) return null
+
+        const previousEntry = this._findLayerEntryByIndex(previousEntries, layerIndex)
+        if (!previousEntry) return null
+
+        const delta = { layerIndex }
+        let changed = false
+
+        if ((previousEntry.colorText ?? '') !== (nextEntry?.colorText ?? '')) {
+          delta.colorText = nextEntry?.colorText ?? ''
+          changed = true
+        }
+
+        if ((previousEntry.opacity ?? 1) !== (nextEntry?.opacity ?? 1)) {
+          delta.opacity = nextEntry?.opacity ?? 1
+          changed = true
+        }
+
+        if ((previousEntry.drawingLeft ?? null) !== (nextEntry?.drawingLeft ?? null)) {
+          delta.drawingLeft = nextEntry?.drawingLeft ?? null
+          changed = true
+        }
+
+        if ((previousEntry.drawingTop ?? null) !== (nextEntry?.drawingTop ?? null)) {
+          delta.drawingTop = nextEntry?.drawingTop ?? null
+          changed = true
+        }
+
+        if (
+          (previousEntry.isOverridePriority ?? false) !== (nextEntry?.isOverridePriority ?? false) ||
+          (previousEntry.overridePriority ?? null) !== (nextEntry?.overridePriority ?? null)
+        ) {
+          delta.isOverridePriority = !!nextEntry?.isOverridePriority
+          delta.overridePriority = nextEntry?.overridePriority ?? null
+          changed = true
+        }
+
+        const previousSubLayers = Array.isArray(previousEntry.subLayers) ? previousEntry.subLayers : []
+        const nextSubLayers = Array.isArray(nextEntry?.subLayers) ? nextEntry.subLayers : []
+        if (previousSubLayers.length !== nextSubLayers.length) return null
+
+        const subLayerDeltas = []
+        for (const nextSub of nextSubLayers) {
+          const subLayerIndex = Number(nextSub?.layerIndex)
+          if (!Number.isFinite(subLayerIndex)) return null
+
+          const previousSub = previousSubLayers.find(item => Number(item?.layerIndex) === subLayerIndex)
+          if (!previousSub) return null
+
+          const subDelta = { layerIndex: subLayerIndex }
+          let subChanged = false
+
+          if ((previousSub.opacity ?? 1) !== (nextSub?.opacity ?? 1)) {
+            subDelta.opacity = nextSub?.opacity ?? 1
+            subChanged = true
+          }
+          if ((previousSub.drawingLeft ?? null) !== (nextSub?.drawingLeft ?? null)) {
+            subDelta.drawingLeft = nextSub?.drawingLeft ?? null
+            subChanged = true
+          }
+          if ((previousSub.drawingTop ?? null) !== (nextSub?.drawingTop ?? null)) {
+            subDelta.drawingTop = nextSub?.drawingTop ?? null
+            subChanged = true
+          }
+
+          if (subChanged) subLayerDeltas.push(subDelta)
+        }
+
+        if (subLayerDeltas.length > 0) {
+          delta.subLayers = subLayerDeltas
+          changed = true
+        }
+
+        if (changed) deltas.push(delta)
+      }
+
+      return deltas
+    },
+
+    _applyLayerDeltasToEntries(entries = [], deltas = []) {
+      if (!Array.isArray(entries) || !Array.isArray(deltas) || deltas.length === 0) return false
+
+      let changed = false
+
+      for (const delta of deltas) {
+        const layerIndex = Number(delta?.layerIndex)
+        if (!Number.isFinite(layerIndex)) continue
+
+        const entry = this._findLayerEntryByIndex(entries, layerIndex)
+        if (!entry) continue
+
+        if (Object.prototype.hasOwnProperty.call(delta, 'colorText')) {
+          const nextColorText = delta.colorText === undefined || delta.colorText === null ? '' : String(delta.colorText)
+          entry.colorText = nextColorText
+          try {
+            entry.colorCss = this._resolveColorCssFromText(nextColorText)
+          } catch (e) {
+            entry.colorCss = null
+          }
+          changed = true
+        }
+
+        if (Object.prototype.hasOwnProperty.call(delta, 'opacity')) {
+          const numericOpacity = Number(delta.opacity)
+          entry.opacity = Number.isFinite(numericOpacity) ? numericOpacity : 1
+          changed = true
+        }
+
+        if (Object.prototype.hasOwnProperty.call(delta, 'drawingLeft')) {
+          const numericLeft = Number(delta.drawingLeft)
+          entry.drawingLeft = delta.drawingLeft === null || delta.drawingLeft === undefined
+            ? null
+            : (Number.isFinite(numericLeft) ? numericLeft : null)
+          changed = true
+        }
+
+        if (Object.prototype.hasOwnProperty.call(delta, 'drawingTop')) {
+          const numericTop = Number(delta.drawingTop)
+          entry.drawingTop = delta.drawingTop === null || delta.drawingTop === undefined
+            ? null
+            : (Number.isFinite(numericTop) ? numericTop : null)
+          changed = true
+        }
+
+        if (Object.prototype.hasOwnProperty.call(delta, 'isOverridePriority')) {
+          entry.isOverridePriority = !!delta.isOverridePriority
+          changed = true
+        }
+
+        if (Object.prototype.hasOwnProperty.call(delta, 'overridePriority')) {
+          const numericPriority = Number(delta.overridePriority)
+          entry.overridePriority = delta.overridePriority === null || delta.overridePriority === undefined
+            ? entry.defaultPriority
+            : (Number.isFinite(numericPriority) ? numericPriority : entry.defaultPriority)
+          changed = true
+        }
+
+        const subLayerDeltas = Array.isArray(delta.subLayers) ? delta.subLayers : []
+        if (subLayerDeltas.length > 0 && Array.isArray(entry.subLayers)) {
+          for (const subDelta of subLayerDeltas) {
+            const subLayerIndex = Number(subDelta?.layerIndex)
+            if (!Number.isFinite(subLayerIndex)) continue
+
+            const sub = entry.subLayers.find(item => Number(item?.layerIndex) === subLayerIndex)
+            if (!sub) continue
+
+            if (Object.prototype.hasOwnProperty.call(subDelta, 'opacity')) {
+              const numericOpacity = Number(subDelta.opacity)
+              sub.opacity = Number.isFinite(numericOpacity) ? numericOpacity : 1
+              changed = true
+            }
+
+            if (Object.prototype.hasOwnProperty.call(subDelta, 'drawingLeft')) {
+              const numericLeft = Number(subDelta.drawingLeft)
+              sub.drawingLeft = subDelta.drawingLeft === null || subDelta.drawingLeft === undefined
+                ? null
+                : (Number.isFinite(numericLeft) ? numericLeft : null)
+              changed = true
+            }
+
+            if (Object.prototype.hasOwnProperty.call(subDelta, 'drawingTop')) {
+              const numericTop = Number(subDelta.drawingTop)
+              sub.drawingTop = subDelta.drawingTop === null || subDelta.drawingTop === undefined
+                ? null
+                : (Number.isFinite(numericTop) ? numericTop : null)
+              changed = true
+            }
+          }
+        }
+      }
+
+      return changed
+    },
+
+    _resolvePartLocation(part = null) {
+      if (!part) {
+        const stackIndex = Number(this.focusedPartIndex?.stackIndex)
+        const partIndex = Number(this.focusedPartIndex?.partIndex)
+        if (!Number.isFinite(stackIndex) || !Number.isFinite(partIndex)) return null
+
+        const stack = this.stacks[stackIndex]
+        const partRef = stack && Array.isArray(stack.data) ? stack.data[partIndex] : null
+        if (!partRef) return null
+
+        return { partRef, stackIndex, partIndex }
+      }
+
+      const uid = part._uid || this.ensurePartUid(part)
+      if (uid) {
+        const found = this.findPartByUid(uid)
+        if (found?.partRef) {
+          return {
+            partRef: found.partRef,
+            stackIndex: found.stackIndex,
+            partIndex: found.partIndex
+          }
+        }
+      }
+
+      for (let stackIndex = 0; stackIndex < this.stacks.length; stackIndex++) {
+        const stack = this.stacks[stackIndex]
+        if (!stack || !Array.isArray(stack.data)) continue
+        for (let partIndex = 0; partIndex < stack.data.length; partIndex++) {
+          if (stack.data[partIndex] === part) {
+            return { partRef: part, stackIndex, partIndex }
+          }
+        }
+      }
+
+      return null
+    },
+
+    _applyPartLayerDeltasInternal(part, deltas = []) {
+      if (!Array.isArray(deltas) || deltas.length === 0) return null
+
+      const location = this._resolvePartLocation(part)
+      if (!location?.partRef) return null
+
+      const sourcePart = location.partRef
+      const sourceEntries = this.getLayerEntriesForPart(sourcePart, { forceRebuild: false, clone: true })
+      if (!Array.isArray(sourceEntries) || sourceEntries.length === 0) return null
+
+      const nextEntries = fastClone(sourceEntries)
+      const changed = this._applyLayerDeltasToEntries(nextEntries, deltas)
+      if (!changed) return null
+
+      const asset = this.resolveAssetForPart(sourcePart)
+      const rebuilt = LayerTranslator.reconstructPartFromLayerEntries(nextEntries, sourcePart, { originalAsset: asset })
+      if (!rebuilt) return null
+
+      const uid = sourcePart._uid || this.ensurePartUid(sourcePart)
+      try { rebuilt._uid = uid } catch (e) { console.warn(e) }
+
+      const rebuiltClone = fastClone(rebuilt)
+      rebuiltClone.layerEntries = this.getLayerEntriesForPart(rebuiltClone, { forceRebuild: true, clone: true })
+
+      const stack = this.stacks[location.stackIndex]
+      if (!stack || !Array.isArray(stack.data)) return null
+
+      const nextStack = { ...stack, data: stack.data.slice() }
+      nextStack.data[location.partIndex] = rebuiltClone
+
+      const nextStacks = this.stacks.slice()
+      nextStacks[location.stackIndex] = nextStack
+      this.stacks = nextStacks
+
+      return { location, updatedPart: rebuiltClone }
+    },
+
+    applyPartLayerDeltas(part, deltas = [], options = {}) {
+      if (!options?._fromFacade && isStudioFacadeEnabled()) {
+        return this.execute({
+          type: 'part.applyLayerDeltas',
+          payload: { part, deltas },
+          meta: { deferCommit: options?.deferCommit === true }
+        })
+      }
+
+      const result = this._applyPartLayerDeltasInternal(part, deltas)
+      if (!result) return false
+
+      const isFocusedTarget =
+        this.focusedPartIndex?.stackIndex === result.location.stackIndex &&
+        this.focusedPartIndex?.partIndex === result.location.partIndex
+
+      if (isFocusedTarget) {
+        this.triggerFocusedPartUpdate()
+      }
+
+      this._finalizeMutation({
+        changed: true,
+        deferCommit: options?.deferCommit === true,
+        scope: 'editor',
+        historyMode: 'none',
+        schedulePart: false,
+        touchFocusedPart: false
+      })
+
+      if (isFocusedTarget) {
+        this.translateFocusedPartToLayers()
+        return this.focusedPart
+      }
+
+      return result.updatedPart
+    },
+
+    batchApplyPartLayerDeltas(updates = [], options = {}) {
+      if (!options?._fromFacade && isStudioFacadeEnabled()) {
+        return this.execute({
+          type: 'layer.batchApplyLayerDeltas',
+          payload: { updates },
+          meta: { deferCommit: options?.deferCommit === true }
+        })
+      }
+
+      if (!Array.isArray(updates) || updates.length === 0) {
+        return {
+          success: false,
+          updatedCount: 0,
+          changedParts: 0,
+          reason: 'No updates provided'
+        }
+      }
+
+      let changedCount = 0
+      for (const update of updates) {
+        const result = this._applyPartLayerDeltasInternal(update?.part, update?.deltas)
+        if (result) {
+          const isFocusedTarget =
+            this.focusedPartIndex?.stackIndex === result.location.stackIndex &&
+            this.focusedPartIndex?.partIndex === result.location.partIndex
+          if (isFocusedTarget) {
+            this.triggerFocusedPartUpdate()
+          }
+          changedCount += 1
+        }
+      }
+
+      this._finalizeMutation({
+        changed: changedCount > 0,
+        deferCommit: options?.deferCommit === true,
+        scope: 'editor',
+        historyMode: 'none',
+        schedulePart: false,
+        touchFocusedPart: false
+      })
+
+      if (changedCount > 0) {
+        this.translateFocusedPartToLayers()
+      }
+
+      return {
+        success: changedCount > 0,
+        updatedCount: changedCount,
+        changedParts: changedCount,
+        reason: changedCount > 0 ? null : 'No part was updated'
+      }
     },
 
     /**
@@ -1848,6 +2228,17 @@ export const useStudioStore = defineStore('studio', {
 
       const fp = this.focusedPart
       if (!entries || !fp) return null
+
+      const previousEntries = this.getLayerEntriesForPart(fp, { forceRebuild: false, clone: true })
+      const deltas = this._deriveLayerDeltas(previousEntries, entries)
+      if (Array.isArray(deltas)) {
+        if (deltas.length === 0) return this.focusedPart
+        const updated = this.applyPartLayerDeltas(fp, deltas, {
+          deferCommit: options?.deferCommit === true,
+          _fromFacade: true
+        })
+        if (updated) return this.focusedPart
+      }
 
       try {
         const asset = this.resolveAssetForPart(fp)
@@ -1909,6 +2300,16 @@ export const useStudioStore = defineStore('studio', {
       }
 
       if (!part || !entries) return
+
+      const previousEntries = this.getLayerEntriesForPart(part, { forceRebuild: false, clone: true })
+      const deltas = this._deriveLayerDeltas(previousEntries, entries)
+      if (Array.isArray(deltas)) {
+        if (deltas.length === 0) return false
+        return this.applyPartLayerDeltas(part, deltas, {
+          deferCommit: options?.deferRefresh === true,
+          _fromFacade: true
+        })
+      }
 
       // 1. Calculate new part data
       const newPart = this.UpdateSpecificPartFromLayerEntries(part, entries)
@@ -2880,14 +3281,24 @@ export const useStudioStore = defineStore('studio', {
       const deferCommit = options?.deferCommit === true || this._editorRealtimeMode === true
 
       const result = SelectionActions.batchUpdateOpacity(this, value, mode)
+      if (!result.success) return result
 
-      if (result.success) {
-        this._finalizeMutation({
-          changed: true,
-          deferCommit,
-          scope: 'batch',
-          historyMode: deferCommit ? 'none' : 'immediate'
-        })
+      const updates = Array.isArray(result.updates) ? result.updates : []
+      if (updates.length === 0) {
+        return result
+      }
+
+      const applyResult = this.batchApplyPartLayerDeltas(updates, {
+        deferCommit,
+        _fromFacade: true
+      })
+
+      if (!applyResult?.success) {
+        return {
+          ...result,
+          success: false,
+          reason: applyResult?.reason || 'Failed to apply opacity updates'
+        }
       }
 
       return result
@@ -2911,14 +3322,24 @@ export const useStudioStore = defineStore('studio', {
       const deferCommit = options?.deferCommit === true || this._editorRealtimeMode === true
 
       const result = SelectionActions.batchUpdateOffset(this, x, y, mode)
+      if (!result.success) return result
 
-      if (result.success) {
-        this._finalizeMutation({
-          changed: true,
-          deferCommit,
-          scope: 'batch',
-          historyMode: deferCommit ? 'none' : 'immediate'
-        })
+      const updates = Array.isArray(result.updates) ? result.updates : []
+      if (updates.length === 0) {
+        return result
+      }
+
+      const applyResult = this.batchApplyPartLayerDeltas(updates, {
+        deferCommit,
+        _fromFacade: true
+      })
+
+      if (!applyResult?.success) {
+        return {
+          ...result,
+          success: false,
+          reason: applyResult?.reason || 'Failed to apply offset updates'
+        }
       }
 
       return result
@@ -2940,14 +3361,24 @@ export const useStudioStore = defineStore('studio', {
       const deferCommit = options?.deferCommit === true || this._editorRealtimeMode === true
 
       const result = SelectionActions.batchUpdateColor(this, colorValue, this._resolveColorCssFromText.bind(this))
+      if (!result.success) return result
 
-      if (result.success) {
-        this._finalizeMutation({
-          changed: true,
-          deferCommit,
-          scope: 'batch',
-          historyMode: deferCommit ? 'none' : 'immediate'
-        })
+      const updates = Array.isArray(result.updates) ? result.updates : []
+      if (updates.length === 0) {
+        return result
+      }
+
+      const applyResult = this.batchApplyPartLayerDeltas(updates, {
+        deferCommit,
+        _fromFacade: true
+      })
+
+      if (!applyResult?.success) {
+        return {
+          ...result,
+          success: false,
+          reason: applyResult?.reason || 'Failed to apply color updates'
+        }
       }
 
       return result
@@ -2970,14 +3401,24 @@ export const useStudioStore = defineStore('studio', {
       const deferCommit = options?.deferCommit === true || this._editorRealtimeMode === true
 
       const result = SelectionActions.batchUpdatePriority(this, value, mode)
+      if (!result.success) return result
 
-      if (result.success) {
-        this._finalizeMutation({
-          changed: true,
-          deferCommit,
-          scope: 'batch',
-          historyMode: deferCommit ? 'none' : 'immediate'
-        })
+      const updates = Array.isArray(result.updates) ? result.updates : []
+      if (updates.length === 0) {
+        return result
+      }
+
+      const applyResult = this.batchApplyPartLayerDeltas(updates, {
+        deferCommit,
+        _fromFacade: true
+      })
+
+      if (!applyResult?.success) {
+        return {
+          ...result,
+          success: false,
+          reason: applyResult?.reason || 'Failed to apply priority updates'
+        }
       }
 
       return result
@@ -3028,14 +3469,24 @@ export const useStudioStore = defineStore('studio', {
 
       const deferCommit = options?.deferCommit === true || this._editorRealtimeMode === true
       const result = SelectionActions.applyBatchEdit(this, operation, payload, this._resolveColorCssFromText.bind(this))
+      if (!result.success) return result
 
-      if (result.success) {
-        this._finalizeMutation({
-          changed: true,
-          deferCommit,
-          scope: 'batch',
-          historyMode: deferCommit ? 'none' : 'immediate'
-        })
+      const updates = Array.isArray(result.updates) ? result.updates : []
+      if (updates.length === 0) {
+        return result
+      }
+
+      const applyResult = this.batchApplyPartLayerDeltas(updates, {
+        deferCommit,
+        _fromFacade: true
+      })
+
+      if (!applyResult?.success) {
+        return {
+          ...result,
+          success: false,
+          reason: applyResult?.reason || 'Failed to apply batch updates'
+        }
       }
 
       return result

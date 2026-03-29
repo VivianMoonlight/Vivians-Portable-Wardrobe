@@ -87,6 +87,11 @@ class StudioFacade {
           deferCommit: meta.deferCommit === true,
           _fromFacade: true
         })
+      case 'part.applyLayerDeltas':
+        return this.store.applyPartLayerDeltas(payload.part, payload.deltas, {
+          deferCommit: meta.deferCommit === true,
+          _fromFacade: true
+        })
       case 'layer.updatePartEntries':
         return this.store.updatePartLayerEntries(payload.part, payload.entries, {
           deferRefresh: meta.deferCommit === true,
@@ -94,6 +99,11 @@ class StudioFacade {
         })
       case 'layer.batchUpdatePartEntries':
         return this.store.batchUpdatePartLayerEntries(payload.updates, {
+          deferCommit: meta.deferCommit === true,
+          _fromFacade: true
+        })
+      case 'layer.batchApplyLayerDeltas':
+        return this.store.batchApplyPartLayerDeltas(payload.updates, {
           deferCommit: meta.deferCommit === true,
           _fromFacade: true
         })

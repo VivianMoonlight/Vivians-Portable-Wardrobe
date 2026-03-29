@@ -959,7 +959,6 @@ function _schedulePartHoverBlinkResumeIfNeeded() {
 function suspendPartHoverBlink(durationMs = 700) {
   if (DISABLE_PART_HOVER_BLINK) {
     _clearPartHoverBlinkResumeTimer();
-    stopPartHoverBlink();
     return;
   }
   const until = Date.now() + Math.max(0, durationMs);
@@ -1008,7 +1007,6 @@ function onPartControlsMouseLeave() {
 
 function startPartHoverBlink(part) {
   if (DISABLE_PART_HOVER_BLINK) {
-    stopPartHoverBlink();
     return;
   }
   if (!hasSelected.value || !part) return;

@@ -312,12 +312,12 @@ const refreshFunction = async (p) => {
     return
   }
 
-  // Prefer part.layerEntries attached in stacks if present and non-empty.
+  // Resolve entries from store source-of-truth first.
   let entries = null
   try {
-    if (Array.isArray(p.layerEntries) && p.layerEntries.length) {
-      // deep clone to avoid prop mutation
-      entries = JSON.parse(JSON.stringify(p.layerEntries))
+    if (typeof store.getLayerEntriesForPart === 'function') {
+      const resolved = store.getLayerEntriesForPart(p, { forceRebuild: false, clone: true })
+      entries = Array.isArray(resolved) ? resolved : []
     } else {
       // build from translator (store.buildLayerEntriesForPart will set store.translatedLayerEntries as side-effect)
       const built = store.buildLayerEntriesForPart(p) || []
@@ -698,6 +698,85 @@ function focusFirstEditInput() {
   }, 12)
 }
 
+function _buildLayerDeltaForSave(previousLayer, nextLayer) {
+  const nextIndex = Number(nextLayer?.layerIndex)
+  const previousIndex = Number(previousLayer?.layerIndex)
+  const layerIndex = Number.isFinite(nextIndex) ? nextIndex : previousIndex
+  if (!Number.isFinite(layerIndex)) return null
+
+  const delta = { layerIndex }
+  let changed = false
+
+  if ((previousLayer?.colorText ?? '') !== (nextLayer?.colorText ?? '')) {
+    delta.colorText = nextLayer?.colorText ?? ''
+    changed = true
+  }
+
+  if ((previousLayer?.opacity ?? 1) !== (nextLayer?.opacity ?? 1)) {
+    delta.opacity = nextLayer?.opacity ?? 1
+    changed = true
+  }
+
+  if ((previousLayer?.drawingLeft ?? null) !== (nextLayer?.drawingLeft ?? null)) {
+    delta.drawingLeft = nextLayer?.drawingLeft ?? null
+    changed = true
+  }
+
+  if ((previousLayer?.drawingTop ?? null) !== (nextLayer?.drawingTop ?? null)) {
+    delta.drawingTop = nextLayer?.drawingTop ?? null
+    changed = true
+  }
+
+  if (
+    (previousLayer?.isOverridePriority ?? false) !== (nextLayer?.isOverridePriority ?? false) ||
+    (previousLayer?.overridePriority ?? null) !== (nextLayer?.overridePriority ?? null)
+  ) {
+    delta.isOverridePriority = !!nextLayer?.isOverridePriority
+    delta.overridePriority = nextLayer?.overridePriority ?? null
+    changed = true
+  }
+
+  const previousSubLayers = Array.isArray(previousLayer?.subLayers) ? previousLayer.subLayers : []
+  const nextSubLayers = Array.isArray(nextLayer?.subLayers) ? nextLayer.subLayers : []
+  if (nextSubLayers.length > 0) {
+    const subLayerDeltas = []
+    for (const subLayer of nextSubLayers) {
+      const subIndex = Number(subLayer?.layerIndex)
+      if (!Number.isFinite(subIndex)) continue
+
+      const previousSub = previousSubLayers.find(item => Number(item?.layerIndex) === subIndex)
+      if (!previousSub) continue
+
+      const subDelta = { layerIndex: subIndex }
+      let subChanged = false
+
+      if ((previousSub?.opacity ?? 1) !== (subLayer?.opacity ?? 1)) {
+        subDelta.opacity = subLayer?.opacity ?? 1
+        subChanged = true
+      }
+      if ((previousSub?.drawingLeft ?? null) !== (subLayer?.drawingLeft ?? null)) {
+        subDelta.drawingLeft = subLayer?.drawingLeft ?? null
+        subChanged = true
+      }
+      if ((previousSub?.drawingTop ?? null) !== (subLayer?.drawingTop ?? null)) {
+        subDelta.drawingTop = subLayer?.drawingTop ?? null
+        subChanged = true
+      }
+
+      if (subChanged) {
+        subLayerDeltas.push(subDelta)
+      }
+    }
+
+    if (subLayerDeltas.length > 0) {
+      delta.subLayers = subLayerDeltas
+      changed = true
+    }
+  }
+
+  return changed ? delta : null
+}
+
 /* ------- Child save handler: validate snapshot then persist ------- */
 function onSaveLayer(payload) {
   // payload: { index, layer }
@@ -724,15 +803,30 @@ function onSaveLayer(payload) {
 
   // Defensive clone of local entries, replace index
   const copy = layerEntriesLocal.value.map((m) => (m.layerIndex === idx ? JSON.parse(JSON.stringify(newLayer)) : JSON.parse(JSON.stringify(m))))
-  // persist via store; updatePartFromLayerEntries will reconstruct part & update stacks/focusedPart
   try {
+    const previousLayer = layerEntriesLocal.value.find((entry) => Number(entry?.layerIndex) === Number(idx)) || null
+    const semanticDelta = _buildLayerDeltaForSave(previousLayer, newLayer)
+    const hasLayerChanged = JSON.stringify(previousLayer || {}) !== JSON.stringify(newLayer || {})
+
     beginLayerEditInteraction()
-    store.execute({
-      type: 'part.updateLayerEntries',
-      payload: { entries: copy },
-      meta: { deferCommit: true }
-    })
+
+    if (semanticDelta) {
+      store.execute({
+        type: 'part.applyLayerDeltas',
+        payload: { part: part.value, deltas: [semanticDelta] },
+        meta: { deferCommit: true }
+      })
+    } else if (hasLayerChanged) {
+      // Fallback bridge for unsupported edits during migration.
+      store.execute({
+        type: 'part.updateLayerEntries',
+        payload: { entries: copy },
+        meta: { deferCommit: true }
+      })
+    }
+
     scheduleLayerEditInteractionCommit()
+
     // after update, re-sync local entries to canonical translated entries
     try {
       const latest = Array.isArray(store.translatedLayerEntries) ? store.translatedLayerEntries : []
