@@ -1,5 +1,5 @@
 <template>
-    <div class="layer-manager-panel">
+    <div class="layer-manager-panel" role="region" :aria-label="t('layerManager.ariaLabel') || t('layerManager.title')">
         <!-- Header (Simple Title) -->
         <div class="lm-header">
             <div class="lm-title">
@@ -7,28 +7,38 @@
             </div>
         </div>
 
+        <p class="sr-only" aria-live="polite">{{ liveMessage }}</p>
+
         <!-- List Area -->
         <div class="lm-body custom-scroll" ref="listBodyRef">
             <div v-if="displayList.length === 0" class="empty-tip">
-                {{ t('layerManager.emptyTip') }}
+                {{ emptyTip }}
             </div>
 
-            <div v-else class="layer-list">
+            <div v-else class="layer-list" role="listbox" :aria-label="t('layerManager.listAriaLabel')">
                 <div v-for="item in displayList" :key="item.uniqueId" class="layer-item" :class="{
                     'is-group': item.isGroup,
                     'is-locked': item.locked,
                     'active': isPartActive(item.partUid),
+                    'is-focused': isFocusedItem(item),
                     'drag-over-top': dropTarget === item.uniqueId && dropPosition === 'top',
                     'drag-over-bottom': dropTarget === item.uniqueId && dropPosition === 'bottom',
                     'drag-over-middle': dropTarget === item.uniqueId && dropPosition === 'middle'
-                }" :draggable="!item.locked" @dragstart="onDragStart($event, item)"
+                }" :id="`lm-item-${item.uniqueId}`" :data-lm-id="item.uniqueId" :tabindex="getTabIndex(item)"
+                    :aria-selected="isFocusedItem(item) ? 'true' : 'false'" :aria-disabled="item.locked ? 'true' : 'false'"
+                    :aria-grabbed="draggedItem && draggedItem.uniqueId === item.uniqueId ? 'true' : 'false'"
+                    :title="item.locked ? t('layerManager.lockedReason') : (item.isGroup ? t('layerManager.groupHint', { count: item.children.length }) : t('layerManager.dragHint'))"
+                    :draggable="!item.locked" @dragstart="onDragStart($event, item)"
                     @dragover.prevent="onDragOver($event, item)" @dragleave="onDragLeave($event, item)"
-                    @drop="onDrop($event, item)" @dragend="onDragEnd" @click="focusItemPart(item)">
+                    @drop="onDrop($event, item)" @dragend="onDragEnd" @focus="onItemFocus(item)"
+                    @keydown.stop="onItemKeydown($event, item)" @click="handleItemClick(item)">
                     <!-- Color Strip -->
                     <div class="color-strip" :style="{ background: item.color }"></div>
 
                     <!-- Content -->
                     <div class="item-content">
+                        <div class="drag-handle" :class="{ 'is-hidden': item.locked }" aria-hidden="true">⋮⋮</div>
+
                         <!-- Icon: Lock or Fold state -->
                         <div class="item-icon" @click.stop="toggleGroup(item)">
                             <span v-if="item.locked">🔒</span>
@@ -53,14 +63,21 @@
 
                     <!-- Sub-list (Only if group and expanded) -->
                     <div v-if="item.isGroup && isGroupExpanded(item)" class="sub-list-container">
-                        <div v-for="child in item.children" :key="child.uniqueId" class="sub-item" :class="{
+                        <div v-for="child in item.children" :key="child.uniqueId" class="sub-item" :id="`lm-item-${child.uniqueId}`"
+                            :data-lm-id="child.uniqueId" :tabindex="getTabIndex(child)" :class="{
+                                'is-focused': isFocusedItem(child),
                             'drag-over-top': dropTarget === child.uniqueId && dropPosition === 'top',
                             'drag-over-bottom': dropTarget === child.uniqueId && dropPosition === 'bottom',
                             'drag-over-middle': dropTarget === child.uniqueId && dropPosition === 'middle'
-                        }" draggable="true" @dragstart.stop="onDragStart($event, child)"
+                        }" :aria-selected="isFocusedItem(child) ? 'true' : 'false'"
+                            :aria-grabbed="draggedItem && draggedItem.uniqueId === child.uniqueId ? 'true' : 'false'"
+                            :title="t('layerManager.dragHint')" draggable="true"
+                            @dragstart.stop="onDragStart($event, child)" @focus="onItemFocus(child)"
                             @dragover.prevent.stop="onDragOver($event, child)"
                             @dragleave.stop="onDragLeave($event, child)" @drop.stop="onDrop($event, child)"
-                            @dragend.stop="onDragEnd" @click.stop="focusItemPart(child)">
+                            @dragend.stop="onDragEnd" @keydown.stop="onItemKeydown($event, child)"
+                            @click.stop="handleItemClick(child)">
+                            <span class="sub-drag-handle" aria-hidden="true">⋮⋮</span>
                             <span class="sub-color-dot" :style="{ background: item.color }"></span>
                             <span class="sub-name">{{ child.layerName }}</span>
                             <span class="sub-prio">{{ child.priority }}</span>
@@ -73,11 +90,12 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useStudioStore } from '@/stores/studioStore'
 import { isHiddenGroup } from '@/config/filterGroupConfig'
 import { throttle } from '@/utils/performance.js'
+import { showUndoToast } from '@/services/DialogService.js'
 
 const { t } = useI18n()
 const store = useStudioStore()
@@ -89,9 +107,19 @@ const listBodyRef = ref(null)
 const dropTarget = ref(null) // uniqueId
 const dropPosition = ref(null) // 'top' | 'middle' | 'bottom'
 const draggedItem = ref(null)
+const focusedItemId = ref(null)
+const liveMessage = ref('')
 
 // --- Grouping State ---
 const expandedGroupKeys = ref(new Set())
+let dismissUndoToast = null
+
+const emptyTip = computed(() => {
+    if (!store.selectedElement) {
+        return t('layerManager.emptyTipNoSelection')
+    }
+    return t('layerManager.emptyTipNoLayers')
+})
 
 // --- Data Calculation ---
 
@@ -189,10 +217,175 @@ const displayList = computed(() => {
     return groupedList
 })
 
+const visibleFlatItems = computed(() => {
+    const rows = []
+    for (const item of displayList.value) {
+        rows.push(item)
+        if (item.isGroup && isGroupExpanded(item)) {
+            rows.push(...item.children)
+        }
+    }
+    return rows
+})
+
+watch(visibleFlatItems, (rows) => {
+    if (!rows.length) {
+        focusedItemId.value = null
+        return
+    }
+
+    const exists = rows.some(row => row.uniqueId === focusedItemId.value)
+    if (!exists) {
+        focusedItemId.value = rows[0].uniqueId
+    }
+}, { immediate: true })
+
 // --- Interactions ---
 
 function isPartActive(uid) {
     return store.focusedPart && store.focusedPart._uid === uid
+}
+
+function isFocusedItem(item) {
+    return focusedItemId.value === item.uniqueId
+}
+
+function getTabIndex(item) {
+    if (!visibleFlatItems.value.length) return -1
+    if (!focusedItemId.value) {
+        return visibleFlatItems.value[0].uniqueId === item.uniqueId ? 0 : -1
+    }
+    return isFocusedItem(item) ? 0 : -1
+}
+
+function onItemFocus(item) {
+    focusedItemId.value = item.uniqueId
+}
+
+function focusRowByOffset(currentUniqueId, offset) {
+    const rows = visibleFlatItems.value
+    if (!rows.length) return
+
+    let currentIndex = rows.findIndex(row => row.uniqueId === currentUniqueId)
+    if (currentIndex < 0) currentIndex = 0
+
+    const nextIndex = Math.max(0, Math.min(rows.length - 1, currentIndex + offset))
+    const target = rows[nextIndex]
+    if (!target) return
+
+    focusedItemId.value = target.uniqueId
+
+    nextTick(() => {
+        const el = listBodyRef.value?.querySelector(`[data-lm-id="${target.uniqueId}"]`)
+        if (el && typeof el.focus === 'function') {
+            el.focus()
+        }
+        if (el && typeof el.scrollIntoView === 'function') {
+            el.scrollIntoView({ block: 'nearest' })
+        }
+    })
+}
+
+function buildPriorityUpdates(item, newPri) {
+    if (!item || item.locked) return []
+
+    if (item.isGroup) {
+        return item.children.map(c => ({
+            part: c.rawPart,
+            layerIndex: c.layerIndex,
+            priority: newPri
+        }))
+    }
+
+    return [{
+        part: item.rawPart,
+        layerIndex: item.layerIndex,
+        priority: newPri
+    }]
+}
+
+function announcePriorityChange(item, newPri) {
+    if (!item) return
+    const label = item.isGroup
+        ? `${item.partName} (${item.children.length} ${t('layerManager.layersBadge')})`
+        : `${item.partName} - ${item.layerName}`
+
+    liveMessage.value = t('layerManager.reorderAnnounce', {
+        name: label,
+        priority: String(newPri)
+    })
+}
+
+function showReorderFeedback(item, newPri) {
+    if (dismissUndoToast && typeof dismissUndoToast === 'function') {
+        dismissUndoToast()
+    }
+
+    const label = item.isGroup ? item.partName : item.layerName
+    dismissUndoToast = showUndoToast({
+        message: t('layerManager.reorderToast', {
+            name: label,
+            priority: String(newPri)
+        }),
+        undoLabel: t('layerManager.undoLabel'),
+        duration: 3600,
+        onUndo: () => store.undo()
+    })
+}
+
+function applyPriorityDelta(item, delta) {
+    if (!item || item.locked) return
+    const nextPriority = Number(item.priority) + Number(delta)
+    if (!Number.isFinite(nextPriority)) return
+
+    const updates = buildPriorityUpdates(item, nextPriority)
+    if (!updates.length) return
+
+    applyLayerPriorityUpdates(updates)
+    announcePriorityChange(item, nextPriority)
+    showReorderFeedback(item, nextPriority)
+}
+
+function onItemKeydown(e, item) {
+    if (!item) return
+
+    const key = e.key
+    const hasNoModifier = !e.altKey && !e.ctrlKey && !e.metaKey
+
+    if (key === 'ArrowDown' && hasNoModifier) {
+        e.preventDefault()
+        focusRowByOffset(item.uniqueId, 1)
+        return
+    }
+
+    if (key === 'ArrowUp' && hasNoModifier) {
+        e.preventDefault()
+        focusRowByOffset(item.uniqueId, -1)
+        return
+    }
+
+    if ((key === 'Enter' || key === ' ') && hasNoModifier) {
+        e.preventDefault()
+        handleItemClick(item)
+        return
+    }
+
+    if (item.isGroup && (key === 'ArrowRight' || key === 'ArrowLeft') && hasNoModifier) {
+        e.preventDefault()
+        if (key === 'ArrowRight' && !isGroupExpanded(item)) {
+            toggleGroup(item, true)
+        }
+        if (key === 'ArrowLeft' && isGroupExpanded(item)) {
+            toggleGroup(item, false)
+        }
+        return
+    }
+
+    if ((key === 'ArrowUp' || key === 'ArrowDown') && e.altKey) {
+        e.preventDefault()
+        const delta = key === 'ArrowUp' ? 1 : -1
+        applyPriorityDelta(item, delta)
+    }
 }
 
 function focusItemPart(item) {
@@ -216,12 +409,29 @@ function focusItemPart(item) {
     }
 }
 
-function toggleGroup(item) {
-    if (!item.isGroup) return
+function handleItemClick(item) {
+    focusedItemId.value = item.uniqueId
+    focusItemPart(item)
+}
+
+function toggleGroup(item, forceExpanded = null) {
+    if (!item.isGroup || item.locked) return
     const k = item.uniqueId
+
+    if (forceExpanded === true) {
+        expandedGroupKeys.value.add(k)
+        return
+    }
+
+    if (forceExpanded === false) {
+        expandedGroupKeys.value.delete(k)
+        return
+    }
+
     if (expandedGroupKeys.value.has(k)) {
         expandedGroupKeys.value.delete(k)
-    } else {
+    }
+    else {
         expandedGroupKeys.value.add(k)
     }
 }
@@ -237,11 +447,11 @@ function onDragStart(e, item) {
         return
     }
     draggedItem.value = item
+    focusedItemId.value = item.uniqueId
     e.dataTransfer.effectAllowed = 'move'
 }
 
-// Throttle Store Updates
-const throttledStoreUpdate = throttle(async (updates) => {
+function applyLayerPriorityUpdates(updates) {
     // updates: Array of { part, layerIndex, priority }
     const partsMap = new Map() // partUid -> { part, deltas }
 
@@ -274,6 +484,11 @@ const throttledStoreUpdate = throttle(async (updates) => {
             payload: { updates: updatesPayload }
         })
     }
+}
+
+// Throttle Store Updates
+const throttledStoreUpdate = throttle(async (updates) => {
+    applyLayerPriorityUpdates(updates)
 }, 200)
 
 function checkAutoScroll(e) {
@@ -319,18 +534,7 @@ function onDragOver(e, targetItem) {
     if (draggedItem.value.priority === newPri) return
 
     // Build updates
-    const updates = []
-    if (draggedItem.value.isGroup) {
-        draggedItem.value.children.forEach(c => {
-            updates.push({ part: c.rawPart, layerIndex: c.layerIndex, priority: newPri })
-        })
-    } else {
-        updates.push({
-            part: draggedItem.value.rawPart,
-            layerIndex: draggedItem.value.layerIndex,
-            priority: newPri
-        })
-    }
+    const updates = buildPriorityUpdates(draggedItem.value, newPri)
 
     throttledStoreUpdate(updates)
 }
@@ -340,6 +544,19 @@ function onDragLeave(e, item) {
 }
 
 function onDrop(e, targetItem) {
+    if (draggedItem.value && targetItem && targetItem.uniqueId !== draggedItem.value.uniqueId) {
+        let finalPriority = targetItem.priority
+        if (dropPosition.value === 'top') finalPriority = targetItem.priority + 1
+        if (dropPosition.value === 'bottom') finalPriority = targetItem.priority - 1
+
+        if (draggedItem.value.priority !== finalPriority) {
+            const updates = buildPriorityUpdates(draggedItem.value, finalPriority)
+            applyLayerPriorityUpdates(updates)
+            announcePriorityChange(draggedItem.value, finalPriority)
+            showReorderFeedback(draggedItem.value, finalPriority)
+        }
+    }
+
     onDragEnd()
 }
 
@@ -429,6 +646,11 @@ function onDragEnd() {
     background: var(--color-info-bg, #eef6ff);
 }
 
+.layer-item.is-focused,
+.sub-item.is-focused {
+    box-shadow: inset 0 0 0 2px var(--color-selection-single-border, rgba(65, 122, 237, 0.2));
+}
+
 .layer-item.is-locked {
     background: var(--color-bg-panel, #f9f9f9);
     cursor: not-allowed;
@@ -470,6 +692,18 @@ function onDragEnd() {
     /* indent for color strip */
     min-height: 32px;
     gap: 8px;
+}
+
+.drag-handle {
+    width: 12px;
+    color: var(--color-text-muted, #94a3b8);
+    font-size: 11px;
+    letter-spacing: -1px;
+    flex-shrink: 0;
+}
+
+.drag-handle.is-hidden {
+    visibility: hidden;
 }
 
 .item-icon {
@@ -544,6 +778,21 @@ function onDragEnd() {
     border-bottom: 1px solid transparent;
 }
 
+.sub-item:focus-visible,
+.layer-item:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 2px var(--color-selection-single, #417aed);
+}
+
+.sub-drag-handle {
+    width: 12px;
+    color: var(--color-text-muted, #94a3b8);
+    font-size: 10px;
+    letter-spacing: -1px;
+    margin-right: 6px;
+    flex-shrink: 0;
+}
+
 .sub-item:hover {
     background: var(--color-bg-hover, #f1f5f9);
 }
@@ -581,5 +830,17 @@ function onDragEnd() {
 
 .sub-item.drag-over-middle {
     background: var(--color-selection-single-bg, rgba(65, 122, 237, 0.08));
+}
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
 }
 </style>

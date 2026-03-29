@@ -818,10 +818,9 @@ function onSaveLayer(payload) {
       })
     } else if (hasLayerChanged) {
       // Fallback bridge for unsupported edits during migration.
-      store.execute({
-        type: 'part.updateLayerEntries',
-        payload: { entries: copy },
-        meta: { deferCommit: true }
+      store.updatePartFromLayerEntries(copy, {
+        deferCommit: true,
+        _fromFacade: true
       })
     }
 

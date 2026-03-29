@@ -422,9 +422,19 @@
     "moveHintMultiple": "拖动以同时移动 {count} 个图层"
   },
   "layerManager": {
+    "ariaLabel": "图层顺序面板",
+    "listAriaLabel": "图层顺序列表",
     "title": "图层顺序",
     "emptyTip": "暂无可用图层",
-    "layersBadge": "个图层"
+    "emptyTipNoSelection": "请选择一个 stack 查看图层顺序",
+    "emptyTipNoLayers": "当前没有可排序图层",
+    "layersBadge": "个图层",
+    "dragHint": "拖拽可排序。键盘：Alt+方向上/下",
+    "groupHint": "分组图层：{count}",
+    "lockedReason": "该图层已锁定，无法调整顺序",
+    "reorderAnnounce": "{name} 已移动到优先级 {priority}",
+    "reorderToast": "已将 {name} 调整到优先级 {priority}",
+    "undoLabel": "撤销"
   },
   "layerGroup": {
     "collapse": "折叠",

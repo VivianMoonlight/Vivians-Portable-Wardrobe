@@ -13,10 +13,7 @@ const EDITOR_KINDS = Object.freeze([
 
 const EDITOR_DELTA_COMMANDS = Object.freeze([
   'part.updateProperty',
-  'part.updateLayerEntries',
   'part.applyLayerDeltas',
-  'layer.updatePartEntries',
-  'layer.batchUpdatePartEntries',
   'layer.batchApplyLayerDeltas'
 ])
 

@@ -25,19 +25,7 @@ function createEditorHandlers(store) {
       deferCommit: meta.deferCommit === true,
       _fromFacade: true
     }),
-    'part.updateLayerEntries': (payload, meta) => store.updatePartFromLayerEntries(payload.entries, {
-      deferCommit: meta.deferCommit === true,
-      _fromFacade: true
-    }),
     'part.applyLayerDeltas': (payload, meta) => store.applyPartLayerDeltas(payload.part, payload.deltas, {
-      deferCommit: meta.deferCommit === true,
-      _fromFacade: true
-    }),
-    'layer.updatePartEntries': (payload, meta) => store.updatePartLayerEntries(payload.part, payload.entries, {
-      deferRefresh: meta.deferCommit === true,
-      _fromFacade: true
-    }),
-    'layer.batchUpdatePartEntries': (payload, meta) => store.batchUpdatePartLayerEntries(payload.updates, {
       deferCommit: meta.deferCommit === true,
       _fromFacade: true
     }),

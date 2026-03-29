@@ -1277,7 +1277,7 @@ export const useStudioStore = defineStore('studio', {
       const scopeDefaults = {
         palette: {
           scheduleLayer: false,
-          schedulePart: true,
+          schedulePart: false,
           scheduleRefresh: true,
           refreshMerged: false,
           touchFocusedPart: false,
@@ -1285,7 +1285,7 @@ export const useStudioStore = defineStore('studio', {
         },
         editor: {
           scheduleLayer: false,
-          schedulePart: true,
+          schedulePart: false,
           scheduleRefresh: true,
           refreshMerged: false,
           touchFocusedPart: false,
@@ -1293,7 +1293,7 @@ export const useStudioStore = defineStore('studio', {
         },
         batch: {
           scheduleLayer: true,
-          schedulePart: true,
+          schedulePart: false,
           scheduleRefresh: true,
           refreshMerged: false,
           touchFocusedPart: true,
@@ -1557,10 +1557,39 @@ export const useStudioStore = defineStore('studio', {
 
     batchUpdatePartLayerEntries(updates = [], options = {}) {
       if (!options?._fromFacade && isStudioFacadeEnabled()) {
-        return this.execute({
-          type: 'layer.batchUpdatePartEntries',
-          payload: { updates },
-          meta: { deferCommit: options?.deferCommit === true }
+        const sourceUpdates = Array.isArray(updates) ? updates : []
+        const deltaUpdates = []
+        let canUseDeltaPath = true
+
+        for (const update of sourceUpdates) {
+          const part = update?.part
+          const entries = update?.entries
+          if (!part || !Array.isArray(entries)) continue
+
+          const previousEntries = this.getLayerEntriesForPart(part, { forceRebuild: false, clone: true })
+          const deltas = this._deriveLayerDeltas(previousEntries, entries)
+          if (!Array.isArray(deltas)) {
+            canUseDeltaPath = false
+            break
+          }
+
+          if (deltas.length > 0) {
+            deltaUpdates.push({ part, deltas })
+          }
+        }
+
+        if (canUseDeltaPath) {
+          if (deltaUpdates.length === 0) return false
+          return this.execute({
+            type: 'layer.batchApplyLayerDeltas',
+            payload: { updates: deltaUpdates },
+            meta: { deferCommit: options?.deferCommit === true }
+          })
+        }
+
+        return this.batchUpdatePartLayerEntries(sourceUpdates, {
+          deferCommit: options?.deferCommit === true,
+          _fromFacade: true
         })
       }
 
@@ -1587,6 +1616,97 @@ export const useStudioStore = defineStore('studio', {
     // -------------------------
     // apply/modify palette targets (OPTIMIZED)
     // -------------------------
+    _collectPaletteTargetDeltaUpdates(colorText) {
+      if (!this.paletteModeActive) return []
+
+      const targets = Array.isArray(this.activePaletteTargets) ? this.activePaletteTargets : []
+      if (!targets.length) return []
+
+      const updatesByPart = new Map()
+
+      for (const target of targets) {
+        let stackIndex = (typeof target?.stackIndex === 'number') ? target.stackIndex : null
+        let partIndex = (typeof target?.partIndex === 'number') ? target.partIndex : null
+        let partRef = null
+
+        if (target?.uid) {
+          const found = this.findPartByUid(target.uid)
+          if (found?.partRef) {
+            partRef = found.partRef
+            if (stackIndex === null) stackIndex = found.stackIndex
+            if (partIndex === null) partIndex = found.partIndex
+          }
+        }
+
+        if (!partRef && typeof stackIndex === 'number' && typeof partIndex === 'number') {
+          const stack = this.stacks[stackIndex]
+          partRef = stack && Array.isArray(stack.data) ? stack.data[partIndex] : null
+        }
+
+        if (!partRef) continue
+
+        const resolvedLayerIndex = this._resolveLayerIndexFromPaletteTarget(partRef, Number(target?.layerIndex))
+        if (!Number.isFinite(resolvedLayerIndex)) continue
+
+        const partKey = partRef._uid || `${stackIndex ?? 's'}:${partIndex ?? 'p'}`
+        if (!updatesByPart.has(partKey)) {
+          updatesByPart.set(partKey, {
+            part: partRef,
+            deltas: [],
+            _layerIndexSet: new Set()
+          })
+        }
+
+        const update = updatesByPart.get(partKey)
+        if (update._layerIndexSet.has(resolvedLayerIndex)) continue
+
+        update._layerIndexSet.add(resolvedLayerIndex)
+        update.deltas.push({
+          layerIndex: resolvedLayerIndex,
+          colorText
+        })
+      }
+
+      return Array.from(updatesByPart.values())
+        .filter(update => Array.isArray(update.deltas) && update.deltas.length > 0)
+        .map(({ part, deltas }) => ({ part, deltas }))
+    },
+
+    _applyPaletteColorViaLayerDeltas(colorText) {
+      const updates = this._collectPaletteTargetDeltaUpdates(colorText)
+      if (!updates.length) {
+        return { changed: false, updatedCount: 0 }
+      }
+
+      let changedCount = 0
+      let focusedChanged = false
+
+      for (const update of updates) {
+        const result = this._applyPartLayerDeltasInternal(update.part, update.deltas)
+        if (!result) continue
+
+        changedCount += 1
+        const isFocusedTarget =
+          this.focusedPartIndex?.stackIndex === result.location.stackIndex &&
+          this.focusedPartIndex?.partIndex === result.location.partIndex
+        if (isFocusedTarget) {
+          focusedChanged = true
+        }
+      }
+
+      if (changedCount > 0) {
+        if (focusedChanged) {
+          this.triggerFocusedPartUpdate()
+        }
+        this.translateFocusedPartToLayers()
+      }
+
+      return {
+        changed: changedCount > 0,
+        updatedCount: changedCount
+      }
+    },
+
     applyColorToActivePaletteTargets(newColor, options = {}) {
       if (!options?._fromFacade && isStudioFacadeEnabled()) {
         return this.execute({
@@ -1597,19 +1717,24 @@ export const useStudioStore = defineStore('studio', {
       }
 
       const deferCommit = options?.deferCommit === true || this._paletteRealtimeMode === true
+      const normalizedColorText = newColor === undefined || newColor === null ? '' : String(newColor)
 
-      const changed = PaletteActions.applyColorToTargets(this, newColor, {
-        paletteModeActive: this.paletteModeActive,
-        activePaletteTargets: this.activePaletteTargets,
-        stacks: this.stacks,
-        findPartByUid: this.findPartByUid.bind(this),
-        _buildLayerEntriesWithCache: this._buildLayerEntriesWithCache.bind(this),
-        _scheduleLayerRefresh: this._scheduleLayerRefresh.bind(this),
-        _schedulePartUpdate: (() => {}),
-        triggerFocusedPartUpdate: this.triggerFocusedPartUpdate.bind(this),
-        pushHistorySnapshotThrottled: (() => {}),
-        _resolveColorCssFromText: this._resolveColorCssFromText.bind(this)
-      })
+      let changed = this._applyPaletteColorViaLayerDeltas(normalizedColorText).changed
+
+      if (!changed) {
+        changed = PaletteActions.applyColorToTargets(this, normalizedColorText, {
+          paletteModeActive: this.paletteModeActive,
+          activePaletteTargets: this.activePaletteTargets,
+          stacks: this.stacks,
+          findPartByUid: this.findPartByUid.bind(this),
+          _buildLayerEntriesWithCache: this._buildLayerEntriesWithCache.bind(this),
+          _scheduleLayerRefresh: this._scheduleLayerRefresh.bind(this),
+          _schedulePartUpdate: (() => {}),
+          triggerFocusedPartUpdate: this.triggerFocusedPartUpdate.bind(this),
+          pushHistorySnapshotThrottled: (() => {}),
+          _resolveColorCssFromText: this._resolveColorCssFromText.bind(this)
+        })
+      }
 
       return this._finalizePaletteMutation(changed, { deferCommit })
     },
@@ -1622,22 +1747,10 @@ export const useStudioStore = defineStore('studio', {
         })
       }
 
-      const deferCommit = options?.deferCommit === true || this._paletteRealtimeMode === true
-
-      const changed = PaletteActions.applyTagToTargets(this, tag, {
-        paletteModeActive: this.paletteModeActive,
-        activePaletteTargets: this.activePaletteTargets,
-        stacks: this.stacks,
-        findPartByUid: this.findPartByUid.bind(this),
-        _buildLayerEntriesWithCache: this._buildLayerEntriesWithCache.bind(this),
-        _scheduleLayerRefresh: this._scheduleLayerRefresh.bind(this),
-        _schedulePartUpdate: (() => {}),
-        triggerFocusedPartUpdate: this.triggerFocusedPartUpdate.bind(this),
-        pushHistorySnapshotThrottled: (() => {}),
-        _resolveColorCssFromText: this._resolveColorCssFromText.bind(this)
+      return this.applyColorToActivePaletteTargets(tag, {
+        deferCommit: options?.deferCommit === true,
+        _fromFacade: true
       })
-
-      return this._finalizePaletteMutation(changed, { deferCommit })
     },
 
     applyTagOffsetToActivePaletteTargets(payload = {}, options = {}) {
@@ -1649,22 +1762,16 @@ export const useStudioStore = defineStore('studio', {
         })
       }
 
-      const deferCommit = options?.deferCommit === true || this._paletteRealtimeMode === true
+      const tag = String(payload?.tag || '').trim()
+      if (!tag) return false
 
-      const changed = PaletteActions.applyTagOffsetToTargets(this, payload, {
-        paletteModeActive: this.paletteModeActive,
-        activePaletteTargets: this.activePaletteTargets,
-        stacks: this.stacks,
-        findPartByUid: this.findPartByUid.bind(this),
-        _buildLayerEntriesWithCache: this._buildLayerEntriesWithCache.bind(this),
-        _scheduleLayerRefresh: this._scheduleLayerRefresh.bind(this),
-        _schedulePartUpdate: (() => {}),
-        triggerFocusedPartUpdate: this.triggerFocusedPartUpdate.bind(this),
-        pushHistorySnapshotThrottled: (() => {}),
-        _resolveColorCssFromText: this._resolveColorCssFromText.bind(this)
+      const ref = Palette.formatTagOffsetRef(tag, payload?.offset || {})
+      if (!ref) return false
+
+      return this.applyColorToActivePaletteTargets(ref, {
+        deferCommit: options?.deferCommit === true,
+        _fromFacade: true
       })
-
-      return this._finalizePaletteMutation(changed, { deferCommit })
     },
 
     resetTagOffsetToTag(tag, options = {}) {
@@ -1676,22 +1783,13 @@ export const useStudioStore = defineStore('studio', {
         })
       }
 
-      const deferCommit = options?.deferCommit === true || this._paletteRealtimeMode === true
+      const normalizedTag = String(tag || '').trim()
+      if (!normalizedTag) return false
 
-      const changed = PaletteActions.clearTagOffsetOnTargets(this, { tag }, {
-        paletteModeActive: this.paletteModeActive,
-        activePaletteTargets: this.activePaletteTargets,
-        stacks: this.stacks,
-        findPartByUid: this.findPartByUid.bind(this),
-        _buildLayerEntriesWithCache: this._buildLayerEntriesWithCache.bind(this),
-        _scheduleLayerRefresh: this._scheduleLayerRefresh.bind(this),
-        _schedulePartUpdate: (() => {}),
-        triggerFocusedPartUpdate: this.triggerFocusedPartUpdate.bind(this),
-        pushHistorySnapshotThrottled: (() => {}),
-        _resolveColorCssFromText: this._resolveColorCssFromText.bind(this)
+      return this.applyColorToActivePaletteTargets(normalizedTag, {
+        deferCommit: options?.deferCommit === true,
+        _fromFacade: true
       })
-
-      return this._finalizePaletteMutation(changed, { deferCommit })
     },
 
     detachTagOffsetToRaw(payload = {}) {
@@ -2264,10 +2362,23 @@ export const useStudioStore = defineStore('studio', {
      */
     updatePartFromLayerEntries(entries, options = {}) {
       if (!options?._fromFacade && isStudioFacadeEnabled()) {
-        return this.execute({
-          type: 'part.updateLayerEntries',
-          payload: { entries },
-          meta: { deferCommit: options?.deferCommit === true }
+        const fp = this.focusedPart
+        if (entries && fp) {
+          const previousEntries = this.getLayerEntriesForPart(fp, { forceRebuild: false, clone: true })
+          const deltas = this._deriveLayerDeltas(previousEntries, entries)
+          if (Array.isArray(deltas)) {
+            if (deltas.length === 0) return this.focusedPart
+            return this.execute({
+              type: 'part.applyLayerDeltas',
+              payload: { part: fp, deltas },
+              meta: { deferCommit: options?.deferCommit === true }
+            })
+          }
+        }
+
+        return this.updatePartFromLayerEntries(entries, {
+          deferCommit: options?.deferCommit === true,
+          _fromFacade: true
         })
       }
 
@@ -2337,10 +2448,22 @@ export const useStudioStore = defineStore('studio', {
      */
     updatePartLayerEntries(part, entries, options = {}) {
       if (!options?._fromFacade && isStudioFacadeEnabled()) {
-        return this.execute({
-          type: 'layer.updatePartEntries',
-          payload: { part, entries },
-          meta: { deferCommit: options?.deferRefresh === true }
+        if (part && Array.isArray(entries)) {
+          const previousEntries = this.getLayerEntriesForPart(part, { forceRebuild: false, clone: true })
+          const deltas = this._deriveLayerDeltas(previousEntries, entries)
+          if (Array.isArray(deltas)) {
+            if (deltas.length === 0) return false
+            return this.execute({
+              type: 'part.applyLayerDeltas',
+              payload: { part, deltas },
+              meta: { deferCommit: options?.deferRefresh === true }
+            })
+          }
+        }
+
+        return this.updatePartLayerEntries(part, entries, {
+          deferRefresh: options?.deferRefresh === true,
+          _fromFacade: true
         })
       }
 
@@ -3092,21 +3215,24 @@ export const useStudioStore = defineStore('studio', {
     },
 
     _resolveLayerIndexFromPaletteTarget(part, targetLayerIndex) {
-      if (!part || !Array.isArray(part.layerEntries) || typeof targetLayerIndex !== 'number') return null
+      if (!part || typeof targetLayerIndex !== 'number') return null
 
-      const byColorableIndex = part.layerEntries.find(le => le && le.isColorable && le.colorableIndex === targetLayerIndex)
+      const entries = this.getLayerEntriesForPart(part, { forceRebuild: false, clone: false })
+      if (!Array.isArray(entries) || entries.length === 0) return null
+
+      const byColorableIndex = entries.find(le => le && le.isColorable && le.colorableIndex === targetLayerIndex)
       if (byColorableIndex && typeof byColorableIndex.layerIndex === 'number') {
         return byColorableIndex.layerIndex
       }
 
       let colorableCounter = -1
-      for (const entry of part.layerEntries) {
+      for (const entry of entries) {
         if (!entry || !entry.isColorable) continue
         colorableCounter += 1
         if (colorableCounter === targetLayerIndex) return entry.layerIndex
       }
 
-      const byLayerIndex = part.layerEntries.find(le => le && le.layerIndex === targetLayerIndex)
+      const byLayerIndex = entries.find(le => le && le.layerIndex === targetLayerIndex)
       return byLayerIndex ? byLayerIndex.layerIndex : null
     },
 
