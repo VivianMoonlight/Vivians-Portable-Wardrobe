@@ -757,6 +757,8 @@ function onSearchInput() {
   gap: 8px;
   box-sizing: border-box;
   padding-left: 8px;
+  min-width: 0;
+  min-height: 0;
 }
 
 /* header */
@@ -765,6 +767,7 @@ function onSearchInput() {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  min-width: 0;
 }
 
 .header h4 {
@@ -778,6 +781,9 @@ function onSearchInput() {
   display: flex;
   gap: 8px;
   align-items: center;
+  min-width: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .search-input {
@@ -786,7 +792,8 @@ function onSearchInput() {
   border: 1px solid var(--color-border-light, #f1f5f9);
   background: var(--color-bg-base, #fff);
   font-size: 13px;
-  min-width: 150px;
+  width: min(220px, 100%);
+  min-width: 0;
   box-sizing: border-box;
 }
 
@@ -803,6 +810,8 @@ function onSearchInput() {
 /* body */
 .body {
   flex: 1;
+  min-width: 0;
+  min-height: 0;
   overflow: auto;
   padding: 8px;
   border-radius: var(--radius-md, 8px);
@@ -890,7 +899,7 @@ function onSearchInput() {
   font-weight: 700;
   color: var(--color-text-primary, #0f172a);
   font-size: 13px;
-  max-width: 220px;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

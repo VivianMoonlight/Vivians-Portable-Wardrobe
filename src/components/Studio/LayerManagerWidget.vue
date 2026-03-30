@@ -357,6 +357,8 @@ function onDragEnd() {
     display: flex;
     flex-direction: column;
     height: 100%;
+    min-width: 0;
+    min-height: 0;
     /* Fill parent */
     overflow: hidden;
     background: var(--color-bg-surface, #fafbfc);
@@ -384,6 +386,8 @@ function onDragEnd() {
 
 .lm-body {
     flex: 1;
+    min-width: 0;
+    min-height: 0;
     overflow-y: auto;
     background: var(--color-bg-surface, #fafbfc);
     padding: var(--space-xs, 4px) 0;

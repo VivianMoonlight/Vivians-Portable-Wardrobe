@@ -89,14 +89,49 @@ function createSavesHandlers(store) {
     }),
     'saves.rename': (payload) => store.renameStudioSession(payload.id, payload.newName, {
       _fromFacade: true
+    }),
+    'saves.restoreLocal': () => store.restoreFromLocalStorage({
+      _fromFacade: true
     })
   }
 }
 
 function createStackHandlers(store) {
   return {
+    'stack.add': (payload) => store.addElement(payload.element, {
+      _fromFacade: true
+    }),
+    'stack.remove': (payload) => store.removeElement(payload.index, {
+      _fromFacade: true
+    }),
+    'stack.move': (payload) => store.moveElement(payload.fromIdx, payload.toIdx, {
+      _fromFacade: true
+    }),
     'stack.rename': (payload) => store.renameStack(payload.stackIndex, payload.newName, {
       _fromFacade: true
+    })
+  }
+}
+
+function createStorageHandlers(store) {
+  return {
+    'storage.loadStacksLocal': () => store.loadStacksFromLocalStorage({
+      _fromFacade: true
+    }),
+    'storage.loadPaletteLocal': () => store.loadPaletteFromLocalStorage({
+      _fromFacade: true
+    }),
+    'storage.importStacks': (payload, meta) => store.importStacksFromJsonFile(payload.file, {
+      _fromFacade: true,
+      atomicHistory: meta.atomicHistory !== false
+    }),
+    'storage.importPalette': (payload, meta) => store.importPaletteFromJsonFile(payload.file, {
+      _fromFacade: true,
+      atomicHistory: meta.atomicHistory !== false
+    }),
+    'storage.importSnapshot': (payload, meta) => store.importStudioSnapshotFromFile(payload.file, {
+      _fromFacade: true,
+      atomicHistory: meta.atomicHistory !== false
     })
   }
 }
@@ -111,7 +146,8 @@ export class StudioCommandBus {
       ...createAssetHandlers(store),
       ...createHistoryHandlers(store),
       ...createSavesHandlers(store),
-      ...createStackHandlers(store)
+      ...createStackHandlers(store),
+      ...createStorageHandlers(store)
     }
   }
 

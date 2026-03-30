@@ -128,8 +128,35 @@ class StudioFacade {
         return this.store.deleteStudioSession(payload.id, { _fromFacade: true })
       case 'saves.rename':
         return this.store.renameStudioSession(payload.id, payload.newName, { _fromFacade: true })
+      case 'saves.restoreLocal':
+        return this.store.restoreFromLocalStorage({ _fromFacade: true })
+      case 'stack.add':
+        return this.store.addElement(payload.element, { _fromFacade: true })
+      case 'stack.remove':
+        return this.store.removeElement(payload.index, { _fromFacade: true })
+      case 'stack.move':
+        return this.store.moveElement(payload.fromIdx, payload.toIdx, { _fromFacade: true })
       case 'stack.rename':
         return this.store.renameStack(payload.stackIndex, payload.newName, { _fromFacade: true })
+      case 'storage.loadStacksLocal':
+        return this.store.loadStacksFromLocalStorage({ _fromFacade: true })
+      case 'storage.loadPaletteLocal':
+        return this.store.loadPaletteFromLocalStorage({ _fromFacade: true })
+      case 'storage.importStacks':
+        return this.store.importStacksFromJsonFile(payload.file, {
+          _fromFacade: true,
+          atomicHistory: meta.atomicHistory !== false
+        })
+      case 'storage.importPalette':
+        return this.store.importPaletteFromJsonFile(payload.file, {
+          _fromFacade: true,
+          atomicHistory: meta.atomicHistory !== false
+        })
+      case 'storage.importSnapshot':
+        return this.store.importStudioSnapshotFromFile(payload.file, {
+          _fromFacade: true,
+          atomicHistory: meta.atomicHistory !== false
+        })
       default:
         return false
     }

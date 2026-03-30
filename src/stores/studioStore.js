@@ -1028,7 +1028,15 @@ export const useStudioStore = defineStore('studio', {
     // -------------------------
     // stack manipulation
     // -------------------------
-    async addElement(el) {
+    async addElement(el, options = {}) {
+      if (!options?._fromFacade && isStudioFacadeEnabled()) {
+        return this.execute({
+          type: 'stack.add',
+          payload: { element: el },
+          meta: {}
+        })
+      }
+
       if (!this.assetIndex || Object.keys(this.assetIndex).length === 0 ||
           !this.assetGroupsRaw || this.assetGroupsRaw.length === 0) {
         await this.loadAssetData()
@@ -1044,6 +1052,8 @@ export const useStudioStore = defineStore('studio', {
       })
 
       if (result.element !== null) {
+        this.pushHistorySnapshot()
+
         // Element is already in the returned stacks, just assign
         this.stacks = result.stacks
         this.selectedIndex = result.selectedIndex
@@ -1051,11 +1061,21 @@ export const useStudioStore = defineStore('studio', {
         this._paletteNextCounter = result._paletteNextCounter
         this._paletteVersion = result._paletteVersion
         this.refreshMergedAppearanceData()
-        this.pushHistorySnapshot()
+        return true
       }
+
+      return false
     },
 
-    removeElement(idx) {
+    removeElement(idx, options = {}) {
+      if (!options?._fromFacade && isStudioFacadeEnabled()) {
+        return this.execute({
+          type: 'stack.remove',
+          payload: { index: idx },
+          meta: {}
+        })
+      }
+
       const result = StackActions.removeElementFromStacks(this, idx, {
         renderer: this.renderer,
         stacks: this.stacks,
@@ -1064,24 +1084,42 @@ export const useStudioStore = defineStore('studio', {
         pushHistorySnapshot: this.pushHistorySnapshot.bind(this)
       })
 
+      if (!result?.changed) {
+        return false
+      }
+
       this.stacks = result.stacks
       this.selectedIndex = result.selectedIndex
       this.focusedPartIndex = result.focusedPartIndex
       this._scheduleRefresh()
+      return true
     },
 
-    moveElement(fromIdx, toIdx) {
+    moveElement(fromIdx, toIdx, options = {}) {
+      if (!options?._fromFacade && isStudioFacadeEnabled()) {
+        return this.execute({
+          type: 'stack.move',
+          payload: { fromIdx, toIdx },
+          meta: {}
+        })
+      }
+
       const result = StackActions.moveElementInStacks(this, fromIdx, toIdx, {
         stacks: this.stacks,
         selectedIndex: this.selectedIndex,
         focusedPartIndex: this.focusedPartIndex,
-        _scheduleRefresh: this._scheduleRefresh.bind(this)
+        pushHistorySnapshot: this.pushHistorySnapshot.bind(this)
       })
+
+      if (!result?.changed) {
+        return false
+      }
 
       this.stacks = result.stacks
       this.selectedIndex = result.selectedIndex
       this.focusedPartIndex = result.focusedPartIndex
       this._scheduleRefresh()
+      return true
     },
 
     setSelectedStackFilterList(filterList = [], options = {}) {
@@ -3032,9 +3070,21 @@ export const useStudioStore = defineStore('studio', {
       return StorageActions.persistStacksToLocalStorage(this)
     },
 
-    loadStacksFromLocalStorage() {
+    loadStacksFromLocalStorage(options = {}) {
+      if (!options?._fromFacade && isStudioFacadeEnabled()) {
+        return this.execute({
+          type: 'storage.loadStacksLocal',
+          payload: {},
+          meta: { atomicHistory: options?.atomicHistory !== false }
+        })
+      }
+
       const result = StorageActions.loadStacksFromLocalStorage()
       if (result) {
+        if (options?.atomicHistory !== false) {
+          this.pushHistorySnapshot()
+        }
+
         this.stacks = this._sanitizeStacksForPersistence(result.stacks)
         if (result._partUidCounter) {
           this._partUidCounter = result._partUidCounter
@@ -3051,9 +3101,21 @@ export const useStudioStore = defineStore('studio', {
       return StorageActions.persistPaletteToLocalStorage(this)
     },
 
-    loadPaletteFromLocalStorage() {
+    loadPaletteFromLocalStorage(options = {}) {
+      if (!options?._fromFacade && isStudioFacadeEnabled()) {
+        return this.execute({
+          type: 'storage.loadPaletteLocal',
+          payload: {},
+          meta: { atomicHistory: options?.atomicHistory !== false }
+        })
+      }
+
       const result = StorageActions.loadPaletteFromLocalStorage()
       if (result) {
+        if (options?.atomicHistory !== false) {
+          this.pushHistorySnapshot()
+        }
+
         this.paletteMap = result.paletteMap || {}
         this._paletteVersion++
         if (result._paletteNextCounter) {
@@ -3070,76 +3132,106 @@ export const useStudioStore = defineStore('studio', {
       return StorageActions.exportStacksToJsonFile(this, filename)
     },
 
-    importStacksFromJsonFile(file) {
-      return new Promise(async (resolve) => {
-        const result = await StorageActions.importStacksFromJsonFile(file)
-        if (!result.success) {
-          resolve(false)
-          return
-        }
-        this.stacks = this._sanitizeStacksForPersistence(result.stacks)
-        if (result._partUidCounter) {
-          this._partUidCounter = result._partUidCounter
-        }
-        this.RebuildAllStacksLayerEntriesFromParts()
-        this._refreshAllLayerEntriesFromPalette()
-        this.refreshMergedAppearanceData()
-        resolve(true)
-      })
+    async importStacksFromJsonFile(file, options = {}) {
+      if (!options?._fromFacade && isStudioFacadeEnabled()) {
+        return this.execute({
+          type: 'storage.importStacks',
+          payload: { file },
+          meta: { atomicHistory: options?.atomicHistory !== false }
+        })
+      }
+
+      const result = await StorageActions.importStacksFromJsonFile(file)
+      if (!result.success) {
+        return false
+      }
+
+      if (options?.atomicHistory !== false) {
+        this.pushHistorySnapshot()
+      }
+
+      this.stacks = this._sanitizeStacksForPersistence(result.stacks)
+      if (result._partUidCounter) {
+        this._partUidCounter = result._partUidCounter
+      }
+      this.RebuildAllStacksLayerEntriesFromParts()
+      this._refreshAllLayerEntriesFromPalette()
+      this.refreshMergedAppearanceData()
+      return true
     },
 
     exportPaletteToJsonFile(filename = 'palette.json') {
       return StorageActions.exportPaletteToJsonFile(this, filename)
     },
 
-    importPaletteFromJsonFile(file) {
-      return new Promise(async (resolve) => {
-        const result = await StorageActions.importPaletteFromJsonFile(file)
-        if (!result.success) {
-          resolve(false)
-          return
-        }
-        this.paletteMap = result.paletteMap
-        this._paletteVersion++
-        if (result._paletteNextCounter) {
-          this._paletteNextCounter = result._paletteNextCounter
-        }
-        this._refreshAllLayerEntriesFromPalette()
-        this.refreshMergedAppearanceData()
-        resolve(true)
-      })
+    async importPaletteFromJsonFile(file, options = {}) {
+      if (!options?._fromFacade && isStudioFacadeEnabled()) {
+        return this.execute({
+          type: 'storage.importPalette',
+          payload: { file },
+          meta: { atomicHistory: options?.atomicHistory !== false }
+        })
+      }
+
+      const result = await StorageActions.importPaletteFromJsonFile(file)
+      if (!result.success) {
+        return false
+      }
+
+      if (options?.atomicHistory !== false) {
+        this.pushHistorySnapshot()
+      }
+
+      this.paletteMap = result.paletteMap
+      this._paletteVersion++
+      if (result._paletteNextCounter) {
+        this._paletteNextCounter = result._paletteNextCounter
+      }
+      this._refreshAllLayerEntriesFromPalette()
+      this.refreshMergedAppearanceData()
+      return true
     },
 
     exportStudioSnapshot(filename = 'studio_snapshot.json') {
       return StorageActions.exportStudioSnapshot(this, filename)
     },
 
-    importStudioSnapshotFromFile(file) {
-      return new Promise(async (resolve) => {
-        const result = await StorageActions.importStudioSnapshotFromFile(file)
-        if (!result.success) {
-          resolve(false)
-          return
-        }
-        const { data } = result
-        if (data.stacks) {
-          this.stacks = this._sanitizeStacksForPersistence(data.stacks)
-        }
-        if (data.paletteMap) {
-          this.paletteMap = data.paletteMap
-          this._paletteVersion++
-        }
-        if (data._paletteNextCounter) {
-          this._paletteNextCounter = data._paletteNextCounter
-        }
-        if (data._partUidCounter) {
-          this._partUidCounter = data._partUidCounter
-        }
-        this.RebuildAllStacksLayerEntriesFromParts()
-        this._refreshAllLayerEntriesFromPalette()
-        this.refreshMergedAppearanceData()
-        resolve(true)
-      })
+    async importStudioSnapshotFromFile(file, options = {}) {
+      if (!options?._fromFacade && isStudioFacadeEnabled()) {
+        return this.execute({
+          type: 'storage.importSnapshot',
+          payload: { file },
+          meta: { atomicHistory: options?.atomicHistory !== false }
+        })
+      }
+
+      const result = await StorageActions.importStudioSnapshotFromFile(file)
+      if (!result.success) {
+        return false
+      }
+
+      if (options?.atomicHistory !== false) {
+        this.pushHistorySnapshot()
+      }
+
+      const { data } = result
+      if (data.stacks) {
+        this.stacks = this._sanitizeStacksForPersistence(data.stacks)
+      }
+      if (data.paletteMap) {
+        this.paletteMap = data.paletteMap
+        this._paletteVersion++
+      }
+      if (data._paletteNextCounter) {
+        this._paletteNextCounter = data._paletteNextCounter
+      }
+      if (data._partUidCounter) {
+        this._partUidCounter = data._partUidCounter
+      }
+      this.RebuildAllStacksLayerEntriesFromParts()
+      this._refreshAllLayerEntriesFromPalette()
+      this.refreshMergedAppearanceData()
+      return true
     },
 
     getMergedAppearanceForExport() {
@@ -4154,11 +4246,23 @@ export const useStudioStore = defineStore('studio', {
     /**
      * Restore state from localStorage
      */
-    async restoreFromLocalStorage() {
+    async restoreFromLocalStorage(options = {}) {
+      if (!options?._fromFacade && isStudioFacadeEnabled()) {
+        return this.execute({
+          type: 'saves.restoreLocal',
+          payload: {},
+          meta: { atomicHistory: options?.atomicHistory !== false }
+        })
+      }
+
       const result = await SaveActions.restoreFromLocalStorage()
 
       if (!result.restored) {
         return result
+      }
+
+      if (options?.atomicHistory !== false) {
+        this.pushHistorySnapshot()
       }
 
       // Restore data from result
@@ -4326,6 +4430,10 @@ export const useStudioStore = defineStore('studio', {
 
       if (!result.success) {
         return { success: false, error: result.error }
+      }
+
+      if (options?.atomicHistory !== false) {
+        this.pushHistorySnapshot()
       }
 
       const { data } = result

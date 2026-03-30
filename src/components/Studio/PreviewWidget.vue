@@ -657,6 +657,7 @@ watch(() => store.mergedAppearanceData, () => updatePreview(), { deep: true })
   padding: 8px;
   box-sizing: border-box;
   height: 100%;
+  min-width: 0;
   min-height: 0;
 }
 
@@ -666,6 +667,7 @@ watch(() => store.mergedAppearanceData, () => updatePreview(), { deep: true })
   align-items: center;
   justify-content: center;
   position: relative;
+  min-width: 0;
   min-height: 0;
   overflow: hidden;
   background: var(--color-bg-surface);

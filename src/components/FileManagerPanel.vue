@@ -1114,17 +1114,28 @@ function onWindowResize() {
 .tab-panel {
     width: 100%;
     height: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
 }
 
 .tab-panel-studio {
     display: flex;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
     min-height: 0;
     overflow: hidden;
 }
 
 .tab-panel-studio > * {
     flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
     min-height: 0;
+    overflow: hidden;
 }
 
 .fm-main.fm-main-studio {

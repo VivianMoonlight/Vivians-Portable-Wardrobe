@@ -413,18 +413,24 @@
 
           <div v-if="showHistoryTray" class="history-tray" :class="{ expanded: isHistoryPanelEnabled }" @pointerdown.stop>
             <div class="history-tray-summary">
-              <button
-                type="button"
-                class="history-tray-toggle"
-                :aria-expanded="isHistoryPanelEnabled"
-                @click="toggleHistoryPanel"
-              >
-                <span>{{ isHistoryPanelEnabled ? 'Hide History' : 'Show History' }}</span>
-              </button>
-              <div class="history-tray-actions">
-                <BaseButton variant="ghost" size="sm" @click="doUndo" :disabled="!canUndo">Undo</BaseButton>
-                <BaseButton variant="ghost" size="sm" @click="doRedo" :disabled="!canRedo">Redo</BaseButton>
-                <BaseButton variant="ghost" size="sm" @click="jumpToLatest" :disabled="!canRedo">Jump Latest</BaseButton>
+              <div class="history-tray-meta" aria-hidden="true">
+                <span class="history-tray-caption">{{ t('history.title') }}</span>
+                <span class="history-tray-state">{{ canRedo ? t('history.hasFutureState') : t('history.currentState') }}</span>
+              </div>
+              <div class="history-tray-controls">
+                <button
+                  type="button"
+                  class="history-tray-toggle"
+                  :aria-expanded="isHistoryPanelEnabled"
+                  @click="toggleHistoryPanel"
+                >
+                  <span>{{ isHistoryPanelEnabled ? t('studio.hideHistory') : t('studio.showHistory') }}</span>
+                </button>
+                <div class="history-tray-actions">
+                  <BaseButton variant="ghost" size="sm" @click="doUndo" :disabled="!canUndo" :title="t('history.undoAction')">{{ t('history.undoAction') }}</BaseButton>
+                  <BaseButton variant="ghost" size="sm" @click="doRedo" :disabled="!canRedo" :title="t('history.redoAction')">{{ t('history.redoAction') }}</BaseButton>
+                  <BaseButton variant="ghost" size="sm" @click="jumpToLatest" :disabled="!canUndo && !canRedo" :title="t('history.jumpLatest')">{{ t('history.jumpLatest') }}</BaseButton>
+                </div>
               </div>
             </div>
 
@@ -608,7 +614,10 @@ const panelStyle = computed(() => {
       inset: 'auto',
       width: '100%',
       height: '100%',
+      maxWidth: '100%',
       maxHeight: '100%',
+      minWidth: '0',
+      minHeight: '0',
       zIndex: 'auto'
     }
   }
@@ -1131,14 +1140,23 @@ async function clearAutoSave() {
   position: relative;
   inset: auto;
   width: 100%;
+  inline-size: 100%;
+  max-inline-size: 100%;
   height: 100%;
+  min-width: 0;
+  min-height: 0;
   pointer-events: auto;
   z-index: auto;
+  overflow: hidden;
 }
 
 .studio-theme-root {
   width: 100%;
+  inline-size: 100%;
+  max-inline-size: 100%;
   height: 100%;
+  min-width: 0;
+  min-height: 0;
 }
 
 .studio-container.embedded .studio-theme-root {
@@ -1149,6 +1167,9 @@ async function clearAutoSave() {
 
 .studio-container.embedded .studio-theme-root > .studio-window {
   flex: 1 1 auto;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   min-height: 0;
 }
 
@@ -1161,15 +1182,24 @@ async function clearAutoSave() {
   flex-direction: column;
   overflow: hidden;
   box-sizing: border-box;
+  min-width: 0;
+  min-height: 0;
   max-height: var(--panel-max-height-safe, calc(100dvh - 24px));
 }
 
 .studio-window.embedded {
   box-shadow: none;
   border-radius: 0;
+  width: 100%;
+  inline-size: 100%;
+  max-inline-size: 100%;
+  height: 100%;
+  max-width: 100%;
+  min-width: 0;
   min-height: 0;
   max-height: 100%;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: hidden;
 }
 
 /* --- Header & Toolbar --- */
@@ -1197,6 +1227,7 @@ async function clearAutoSave() {
   margin-right: var(--space-lg, 16px);
   opacity: 0.8;
   color: var(--color-text-tertiary, #64748b);
+  min-width: 0;
 }
 
 .header-title h3 {
@@ -1211,6 +1242,9 @@ async function clearAutoSave() {
   display: flex;
   align-items: center;
   gap: var(--space-xs, 4px);
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .tool-group {
@@ -1436,6 +1470,9 @@ async function clearAutoSave() {
 
 .studio-body {
   flex: 1;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   min-height: 0;
   display: flex;
   overflow: hidden;
@@ -1451,12 +1488,14 @@ async function clearAutoSave() {
   flex-direction: column;
   background: var(--color-bg-base, #ffffff);
   border-right: 1px solid var(--color-border-base, #e2e8f0);
+  min-width: 0;
   min-height: 0;
   overflow: hidden;
   position: relative;
 }
 
 .panel-section > * {
+  min-width: 0;
   min-height: 0;
 }
 
@@ -1474,12 +1513,6 @@ async function clearAutoSave() {
 }
 
 /* Individual Panel Widths */
-.studio-left {
-  width: auto;
-  min-width: 480px;
-  max-width: 480px;
-}
-
 .studio-structure {
   width: 420px;
   min-width: 350px;
@@ -1565,6 +1598,27 @@ async function clearAutoSave() {
   min-height: 0;
   border-left: 1px solid var(--color-border-base, #e2e8f0);
   border-right: none;
+}
+
+/* Embedded layout contract: outer bounds win, inner columns adapt */
+.studio-window.embedded .studio-structure {
+  width: auto;
+  flex: 0 1 clamp(220px, 28%, 420px);
+  min-width: 200px;
+  max-width: 420px;
+}
+
+.studio-window.embedded .studio-center {
+  width: auto;
+  flex: 1 1 42%;
+  min-width: 260px;
+}
+
+.studio-window.embedded .studio-context {
+  width: auto;
+  flex: 0 1 clamp(220px, 24%, 360px);
+  min-width: 200px;
+  max-width: 360px;
 }
 
 .stack-column {
@@ -1811,9 +1865,20 @@ async function clearAutoSave() {
   width: 320px;
   min-width: 280px;
   max-width: 420px;
+  min-height: 0;
   border-left: 1px solid var(--color-border-base, #e2e8f0);
   border-right: none;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   animation: tool-dock-slide-in 160ms ease-out;
+}
+
+.studio-window.embedded .studio-tool-dock {
+  width: auto;
+  flex: 0 1 clamp(220px, 24%, 340px);
+  min-width: 200px;
+  max-width: 340px;
 }
 
 .tool-dock-header {
@@ -1871,28 +1936,89 @@ async function clearAutoSave() {
 
 /* --- History Tray --- */
 .history-tray {
+  --history-tray-summary-height: 42px;
+  --history-tray-expanded-height: min(420px, calc(var(--dvh-safe, 100dvh) - 180px));
+  align-self: stretch;
+  width: 100%;
+  inline-size: 100%;
+  max-inline-size: 100%;
+  max-width: 100%;
+  min-width: 0;
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   border-top: 1px solid var(--color-border-base, #e2e8f0);
   background: var(--color-bg-base, #ffffff);
-  max-height: 42px;
-  transition: max-height 180ms ease;
+  max-height: var(--history-tray-summary-height);
+  transition:
+    max-height var(--transition-base, 0.2s) var(--transition-easing, ease),
+    box-shadow var(--transition-fast, 0.15s) var(--transition-easing, ease);
 }
 
 .history-tray.expanded {
-  max-height: 340px;
+  max-height: var(--history-tray-expanded-height);
+  box-shadow: 0 -8px 20px rgba(15, 23, 42, 0.08);
 }
 
 .history-tray-summary {
-  height: 42px;
+  flex: 0 0 auto;
+  width: 100%;
+  min-height: var(--history-tray-summary-height);
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  align-items: flex-start;
+  justify-content: flex-start;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 0 12px;
+  border-bottom: 1px solid transparent;
+  min-width: 0;
+  box-sizing: border-box;
+  background: var(--color-bg-surface, #f8fafc);
+}
+
+.history-tray.expanded .history-tray-summary {
+  border-bottom-color: var(--color-border-base, #e2e8f0);
+}
+
+.history-tray-meta {
+  flex: 1 1 0%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.history-tray-controls {
+  margin-left: auto;
+  flex: 0 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+
+.history-tray-caption {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-text-primary, #0f172a);
+}
+
+.history-tray-state {
+  font-size: 11px;
+  color: var(--color-text-tertiary, #64748b);
+  border: 1px solid var(--color-border-base, #e2e8f0);
+  border-radius: var(--radius-full, 9999px);
+  padding: 1px 8px;
+  background: var(--color-bg-base, #ffffff);
 }
 
 .history-tray-toggle {
   height: 28px;
+  flex-shrink: 0;
   border: 1px solid var(--color-border-base, #e2e8f0);
   border-radius: var(--radius-sm, 6px);
   background: var(--color-bg-base, #ffffff);
@@ -1901,21 +2027,46 @@ async function clearAutoSave() {
   cursor: pointer;
   font-size: 12px;
   font-weight: 600;
+  white-space: nowrap;
+  transition: all var(--transition-fast, 0.15s) var(--transition-easing, ease);
+}
+
+.history-tray-toggle:hover {
+  border-color: var(--color-border-strong, #cbd5e1);
+  color: var(--color-text-primary, #1e293b);
+  background: var(--color-bg-surface, #f8fafc);
 }
 
 .history-tray-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 6px;
+  min-width: 0;
+  flex-wrap: wrap;
+  max-width: 100%;
 }
 
 .history-tray-body {
-  height: 298px;
-  border-top: 1px solid var(--color-border-base, #e2e8f0);
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
   overflow: hidden;
+  background: var(--color-bg-base, #ffffff);
+}
+
+.studio-window.embedded .history-tray {
+  --history-tray-expanded-height: min(
+    380px,
+    max(180px, calc(100% - var(--toolbar-height, 52px) - 120px))
+  );
 }
 
 .history-tray-body > * {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
   height: 100%;
   min-height: 0;
 }
@@ -1999,19 +2150,31 @@ async function clearAutoSave() {
 }
 
 @media (max-width: 860px) {
+  .history-tray {
+    --history-tray-summary-height: 54px;
+    --history-tray-expanded-height: min(430px, calc(var(--dvh-safe, 100dvh) - 130px));
+  }
+
   .history-tray-summary {
-    flex-wrap: wrap;
-    height: auto;
-    min-height: 42px;
+    justify-content: flex-start;
+    min-height: var(--history-tray-summary-height);
     padding: 6px 10px;
   }
 
-  .history-tray {
-    max-height: 54px;
+  .history-tray-meta {
+    width: 100%;
+    flex-basis: 100%;
   }
 
-  .history-tray.expanded {
-    max-height: 360px;
+  .history-tray-controls {
+    margin-left: auto;
+    width: 100%;
+  }
+}
+
+@media (max-height: 760px) {
+  .history-tray {
+    --history-tray-expanded-height: min(340px, calc(var(--dvh-safe, 100dvh) - 140px));
   }
 }
 
