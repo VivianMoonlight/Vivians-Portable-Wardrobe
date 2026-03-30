@@ -27,7 +27,8 @@
       </div>
     </div>
 
-    <div class="history-timeline" ref="timelineRef">
+    <div class="history-timeline" ref="timelineRef" v-if="hasHistory">
+      <div class="history-sequence">
       <!-- Redo stack (future states) - reversed order for proper visual flow -->
       <div
         v-for="(item, index) in reversedRedoStack"
@@ -74,15 +75,16 @@
           <div class="item-timestamp">{{ formatTimestamp(item.timestamp) }}</div>
         </div>
       </div>
-
-      <!-- Empty state -->
-      <div v-if="!hasHistory" class="empty-state">
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <circle cx="12" cy="12" r="10"></circle>
-          <polyline points="12 6 12 12 16 14"></polyline>
-        </svg>
-        <p>{{ t('history.emptyState') }}</p>
       </div>
+    </div>
+
+    <!-- Empty state -->
+    <div v-else class="empty-state">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <circle cx="12" cy="12" r="10"></circle>
+        <polyline points="12 6 12 12 16 14"></polyline>
+      </svg>
+      <p>{{ t('history.emptyState') }}</p>
     </div>
   </div>
 </template>
@@ -210,7 +212,7 @@ function scrollToCurrentState() {
   
   const currentStateEl = timelineRef.value.querySelector('.current-state')
   if (currentStateEl) {
-    currentStateEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    currentStateEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
   }
 }
 </script>
@@ -225,7 +227,7 @@ function scrollToCurrentState() {
 }
 
 .history-header {
-  padding: var(--space-md, 12px);
+  padding: var(--space-sm, 8px) var(--space-md, 12px);
   border-bottom: 1px solid var(--color-border-base, #e2e8f0);
   display: flex;
   align-items: center;
@@ -266,11 +268,11 @@ function scrollToCurrentState() {
 }
 
 .history-stats {
-  padding: var(--space-sm, 8px) var(--space-md, 12px);
+  padding: 6px var(--space-md, 12px);
   background: var(--color-bg-hover, #f1f5f9);
   border-bottom: 1px solid var(--color-border-base, #e2e8f0);
   display: flex;
-  gap: var(--space-lg, 16px);
+  gap: var(--space-md, 12px);
   flex-shrink: 0;
 }
 
@@ -292,16 +294,30 @@ function scrollToCurrentState() {
 
 .history-timeline {
   flex: 1;
-  overflow-y: auto;
-  padding: var(--space-md, 12px);
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 10px 12px;
+}
+
+.history-sequence {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  min-width: max-content;
+  height: 100%;
 }
 
 .history-item {
   display: flex;
-  gap: var(--space-sm, 8px);
-  padding: var(--space-sm, 8px);
+  flex-direction: column;
+  gap: 8px;
+  width: 220px;
+  min-width: 220px;
+  padding: 10px;
   border-radius: var(--radius-sm, 6px);
-  transition: all 0.15s ease;
+  border: 1px solid var(--color-border-light, #f1f5f9);
+  background: var(--color-bg-surface, #f8fafc);
+  transition: background-color 0.15s ease, border-color 0.15s ease;
   position: relative;
 }
 
@@ -311,15 +327,15 @@ function scrollToCurrentState() {
 
 .history-item:not(.current-state):hover {
   background: var(--color-bg-hover, #f1f5f9);
+  border-color: var(--color-border-base, #cbd5e1);
 }
 
 .item-indicator {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  flex-shrink: 0;
-  width: 16px;
-  position: relative;
+  gap: 8px;
+  min-height: 14px;
 }
 
 .item-dot {
@@ -348,10 +364,9 @@ function scrollToCurrentState() {
 }
 
 .item-line {
-  position: absolute;
-  top: 12px;
-  width: 2px;
-  height: calc(100% + 16px);
+  width: 100%;
+  min-width: 26px;
+  height: 2px;
   background: var(--color-border-base, #e2e8f0);
 }
 
@@ -360,18 +375,20 @@ function scrollToCurrentState() {
 }
 
 .item-content {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 4px;
   flex: 1;
   min-width: 0;
-  padding-top: 1px;
 }
 
 .item-description {
   font-size: var(--font-size-sm, 12px);
   color: var(--color-text-primary, #1e293b);
   font-weight: var(--font-weight-medium, 500);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
 }
 
 .redo-item .item-description {
@@ -382,18 +399,17 @@ function scrollToCurrentState() {
 .item-timestamp {
   font-size: var(--font-size-xs, 11px);
   color: var(--color-text-tertiary, #94a3b8);
-  margin-top: 2px;
 }
 
 .current-state {
-  margin: var(--space-sm, 8px) 0;
+  border-color: var(--color-success, #10b981);
+  background: var(--color-success-bg, #ecfdf5);
 }
 
 .current-label {
   font-size: var(--font-size-sm, 12px);
   font-weight: var(--font-weight-semibold, 600);
   color: var(--color-success, #10b981);
-  padding-top: 1px;
 }
 
 .empty-state {
@@ -401,10 +417,11 @@ function scrollToCurrentState() {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: var(--space-2xl, 32px);
+  height: 100%;
+  padding: 20px;
   text-align: center;
   color: var(--color-text-tertiary, #94a3b8);
-  gap: var(--space-md, 12px);
+  gap: 10px;
 }
 
 .empty-state svg {
@@ -418,7 +435,7 @@ function scrollToCurrentState() {
 
 /* Scrollbar styling */
 .history-timeline::-webkit-scrollbar {
-  width: 8px;
+  height: 8px;
 }
 
 .history-timeline::-webkit-scrollbar-track {

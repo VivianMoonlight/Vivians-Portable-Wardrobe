@@ -53,7 +53,7 @@ defineProps({
   user-select: none;
 }
 
-.btn-base:disabled {
+.vpw-btn-base:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }

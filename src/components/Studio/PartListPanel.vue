@@ -126,19 +126,6 @@
             </div>
           </div>
 
-          <div class="breadcrumb" v-if="breadcrumbText">{{ breadcrumbText }}</div>
-
-          <div class="recent-strip" v-if="recentSlots.length > 0">
-            <button
-              v-for="recent in recentSlots"
-              :key="recent.key"
-              class="recent-chip"
-              @click="jumpToResult(recent, true)"
-            >
-              {{ recent.groupLabel }} / {{ recent.slotLabel }}
-            </button>
-          </div>
-
           <div
             v-for="row in activeGroupRows"
             :key="row.key"
@@ -260,7 +247,6 @@ const activeGroupId = ref(null);
 const activeSlotKey = ref(null);
 const highlightedSlotKey = ref(null);
 const highlightTimerId = ref(null);
-const recentSlotKeys = ref([]);
 
 // Armed / UI states for delete actions (delete arms kept local)
 const armedParts = ref(new Set()); // keys for parts prepared to delete (only one active at a time by behavior)
@@ -588,17 +574,6 @@ const activeGroupRows = computed(() => {
   return rows;
 });
 
-const breadcrumbText = computed(() => {
-  const gid = activeGroupId.value;
-  if (!gid) return "";
-  const groupLabel = getGroupDisplayName(gid);
-  const slotKey = activeSlotKey.value;
-  if (!slotKey) return `${groupLabel}`;
-  const row = activeGroupRows.value.find((r) => r.key === slotKey);
-  if (!row) return `${groupLabel}`;
-  return `${groupLabel} > ${row.slotLabel} > ${row.itemLabel}`;
-});
-
 const slotJumpIndex = computed(() => {
   const entries = [];
   for (const [gid, groupData] of Object.entries(grouped.value || {})) {
@@ -649,14 +624,6 @@ const slotJumpIndex = computed(() => {
   return entries;
 });
 
-const recentSlots = computed(() => {
-  const map = new Map(slotJumpIndex.value.map((item) => [item.key, item]));
-  return recentSlotKeys.value
-    .map((key) => map.get(key))
-    .filter(Boolean)
-    .slice(0, 10);
-});
-
 function setActiveGroup(gid) {
   if (!gid) return;
   activeGroupId.value = gid;
@@ -674,12 +641,6 @@ function setHighlightedSlot(slotKey) {
   }, 1300);
 }
 
-function rememberRecentSlot(slotKey) {
-  if (!slotKey) return;
-  const next = [slotKey, ...recentSlotKeys.value.filter((key) => key !== slotKey)];
-  recentSlotKeys.value = next.slice(0, 12);
-}
-
 function ensureSlotVisible(slotKey) {
   if (!rootEl.value || !slotKey) return;
   hostWindow.requestAnimationFrame(() => {
@@ -690,7 +651,7 @@ function ensureSlotVisible(slotKey) {
   });
 }
 
-function jumpToResult(result, markRecent = false) {
+function jumpToResult(result) {
   if (!result) return;
   if (checkIsHiddenGroup(result.gid) && !showHiddenGroups.value) {
     showHiddenGroups.value = true;
@@ -704,7 +665,6 @@ function jumpToResult(result, markRecent = false) {
   }
   setHighlightedSlot(result.key);
   ensureSlotVisible(result.key);
-  if (markRecent) rememberRecentSlot(result.key);
 }
 
 function jumpByGroupStep(step) {
@@ -726,7 +686,7 @@ function jumpByRowStep(step) {
     rows.findIndex((item) => item.key === activeSlotKey.value)
   );
   const nextIndex = Math.min(rows.length - 1, Math.max(0, currentIndex + step));
-  jumpToResult(rows[nextIndex], true);
+  jumpToResult(rows[nextIndex]);
 }
 
 function onPanelKeydown(event) {
@@ -1363,7 +1323,6 @@ watch(
       activeSlotKey.value = key;
       setHighlightedSlot(key);
       ensureSlotVisible(key);
-      rememberRecentSlot(key);
     }
   }
 );
@@ -1405,7 +1364,6 @@ watch(
       activeSlotKey.value = key;
       setHighlightedSlot(key);
       ensureSlotVisible(key);
-      rememberRecentSlot(key);
     }
   },
   { deep: true }
@@ -1674,33 +1632,6 @@ button:focus,
   background: var(--color-bg-base, #fff);
   z-index: 1;
   padding-bottom: 6px;
-}
-
-.breadcrumb {
-  font-size: 12px;
-  color: var(--color-text-secondary, #475569);
-  margin: 2px 0 8px;
-}
-
-.recent-strip {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 8px;
-}
-
-.recent-chip {
-  border: 1px solid var(--color-border-light, #f1f5f9);
-  border-radius: 999px;
-  background: var(--color-bg-base, #fff);
-  color: var(--color-text-secondary, #475569);
-  font-size: 11px;
-  padding: 4px 8px;
-  cursor: pointer;
-}
-
-.recent-chip:hover {
-  background: var(--color-bg-hover, #f1f5f9);
 }
 
 /* group card: 保持平面化 */

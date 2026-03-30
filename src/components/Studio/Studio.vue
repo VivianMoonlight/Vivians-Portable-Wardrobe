@@ -34,9 +34,9 @@
                   size="sm"
                   @pointerdown.stop.prevent 
                   @click="togglePalette"
-                  :title="store.palettePanelVisible ? t('studio.hidePalette') : t('studio.showPalette')"
-                  :aria-label="store.palettePanelVisible ? t('studio.hidePalette') : t('studio.showPalette')"
-                  :class="{ active: store.palettePanelVisible }"
+                  :title="showPalettePanel ? t('studio.hidePalette') : t('studio.showPalette')"
+                  :aria-label="showPalettePanel ? t('studio.hidePalette') : t('studio.showPalette')"
+                  :class="{ active: showPalettePanel }"
                 >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                     stroke-linecap="round" stroke-linejoin="round">
@@ -56,9 +56,9 @@
                   size="sm"
                   @pointerdown.stop.prevent 
                   @click="toggleLayerManager"
-                  :title="store.layerManagerActive ? t('studio.hideLayerManager') : t('studio.showLayerManager')"
-                  :aria-label="store.layerManagerActive ? t('studio.hideLayerManager') : t('studio.showLayerManager')"
-                  :class="{ active: store.layerManagerActive }"
+                  :title="isLayerManagerEnabled ? t('studio.hideLayerManager') : t('studio.showLayerManager')"
+                  :aria-label="isLayerManagerEnabled ? t('studio.hideLayerManager') : t('studio.showLayerManager')"
+                  :class="{ active: isLayerManagerEnabled }"
                 >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                     stroke-linecap="round" stroke-linejoin="round">
@@ -72,9 +72,9 @@
                   size="sm"
                   @pointerdown.stop.prevent 
                   @click="toggleHistoryPanel"
-                  :title="store.historyPanelVisible ? t('studio.hideHistory') : t('studio.showHistory')"
-                  :aria-label="store.historyPanelVisible ? t('studio.hideHistory') : t('studio.showHistory')"
-                  :class="{ active: store.historyPanelVisible }"
+                  :title="isHistoryPanelEnabled ? t('studio.hideHistory') : t('studio.showHistory')"
+                  :aria-label="isHistoryPanelEnabled ? t('studio.hideHistory') : t('studio.showHistory')"
+                  :class="{ active: isHistoryPanelEnabled }"
                 >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                     stroke-linecap="round" stroke-linejoin="round">
@@ -87,11 +87,12 @@
                   variant="ghost" 
                   icon-only 
                   size="sm"
+                  ref="savesButtonRef"
                   @pointerdown.stop.prevent 
                   @click="toggleSavesManager"
                   :title="t('studio.savesManager') || 'Manage Saves'"
                   :aria-label="t('studio.savesManager') || 'Manage Saves'"
-                  :class="{ active: showSavesManager }"
+                  :class="{ active: showStorageModal }"
                 >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                     stroke-linecap="round" stroke-linejoin="round">
@@ -346,13 +347,10 @@
                   <button class="folio-step" :class="{ active: activeLeftSheet === 'stack' }" :title="leftSheetLabels.stack" @click="setActiveLeftSheet('stack')">{{ leftSheetLabels.stack }}</button>
                   <span class="folio-sep">→</span>
                   <button class="folio-step" :class="{ active: activeLeftSheet === 'part' }" :title="leftSheetLabels.part" @click="setActiveLeftSheet('part')">{{ leftSheetLabels.part }}</button>
-                  <span class="folio-sep">→</span>
-                  <button class="folio-step" :class="{ active: activeLeftSheet === 'layer' }" :title="leftSheetLabels.layer" @click="setActiveLeftSheet('layer')">{{ leftSheetLabels.layer }}</button>
                 </div>
 
                 <div v-show="activeLeftSheet === 'stack'" class="structure-stack"><StackList @stack-selected="onStackEntrySelected" /></div>
                 <div v-show="activeLeftSheet === 'part'" class="structure-parts"><PartListPanel @part-focused="onPartEntrySelected" /></div>
-                <div v-show="activeLeftSheet === 'layer'" class="structure-layers"><PartInspectorPanel /></div>
               </div>
             </aside>
 
@@ -360,10 +358,9 @@
               <PreviewWidget />
             </aside>
 
-            <aside v-if="!isMobile || mobileTab === 'property'" class="panel-section studio-context">
-              <PartInspectorPanel v-if="isMobile && store.activeContextPanel === 'inspector'" />
-              <AssetSelectorPanel v-else-if="store.activeContextPanel === 'asset'" />
-              <PalettePanel v-else-if="store.activeContextPanel === 'palette'" />
+            <aside v-if="showContextHost" class="panel-section studio-context">
+              <AssetSelectorPanel v-if="activeContextPanelId === 'asset'" />
+              <PartInspectorPanel v-else-if="activeContextPanelId === 'inspector'" />
             </aside>
 
             <aside v-if="isMobile && mobileTab === 'replace'" class="panel-section studio-context">
@@ -374,23 +371,66 @@
               <HistoryPanel />
             </aside>
 
-            <aside v-if="showLayerManager" class="panel-section studio-layer-manager">
-              <LayerManagerWidget />
-            </aside>
-
-            <aside v-if="showFullHistory" class="panel-section studio-history">
-              <HistoryPanel />
-            </aside>
-
-            <aside v-if="showSavesManager" class="panel-section saves-manager-panel">
-              <SavesManager @close="toggleSavesManager" />
+            <aside v-if="showToolDock" class="panel-section studio-tool-dock" :class="{ 'is-open': showToolDock }">
+              <div class="tool-dock-header" @pointerdown.stop>
+                <div class="tool-dock-tabs" role="tablist" aria-label="Tool dock panels">
+                  <button
+                    class="tool-dock-tab"
+                    type="button"
+                    role="tab"
+                    :class="{ active: activeToolDockPanel === 'layer' }"
+                    :aria-selected="activeToolDockPanel === 'layer'"
+                    @click="openToolDockPanel('layer')"
+                  >
+                    Layers
+                  </button>
+                  <button
+                    class="tool-dock-tab"
+                    type="button"
+                    role="tab"
+                    :class="{ active: activeToolDockPanel === 'palette' }"
+                    :aria-selected="activeToolDockPanel === 'palette'"
+                    @click="openToolDockPanel('palette')"
+                  >
+                    Palette
+                  </button>
+                </div>
+                <button
+                  class="tool-dock-close"
+                  type="button"
+                  @click="closeToolDock"
+                  aria-label="Close tool dock"
+                >
+                  ×
+                </button>
+              </div>
+              <div class="tool-dock-content">
+                <LayerManagerWidget v-if="activeToolDockPanel === 'layer'" />
+                <PalettePanel v-else />
+              </div>
             </aside>
           </div>
 
-          <div v-if="showMiniHistory" class="mini-history-bar" @pointerdown.stop>
-            <BaseButton variant="ghost" size="sm" @click="doUndo" :disabled="!canUndo">Undo</BaseButton>
-            <BaseButton variant="ghost" size="sm" @click="doRedo" :disabled="!canRedo">Redo</BaseButton>
-            <BaseButton variant="ghost" size="sm" @click="jumpToLatest" :disabled="!canRedo">Jump Latest</BaseButton>
+          <div v-if="showHistoryTray" class="history-tray" :class="{ expanded: isHistoryPanelEnabled }" @pointerdown.stop>
+            <div class="history-tray-summary">
+              <button
+                type="button"
+                class="history-tray-toggle"
+                :aria-expanded="isHistoryPanelEnabled"
+                @click="toggleHistoryPanel"
+              >
+                <span>{{ isHistoryPanelEnabled ? 'Hide History' : 'Show History' }}</span>
+              </button>
+              <div class="history-tray-actions">
+                <BaseButton variant="ghost" size="sm" @click="doUndo" :disabled="!canUndo">Undo</BaseButton>
+                <BaseButton variant="ghost" size="sm" @click="doRedo" :disabled="!canRedo">Redo</BaseButton>
+                <BaseButton variant="ghost" size="sm" @click="jumpToLatest" :disabled="!canRedo">Jump Latest</BaseButton>
+              </div>
+            </div>
+
+            <div v-if="isHistoryPanelEnabled" class="history-tray-body">
+              <HistoryPanel />
+            </div>
           </div>
         </div>
       </div>
@@ -402,6 +442,27 @@
     <input ref="paletteFileInput" type="file" accept="application/json" style="display:none"
       @change="onPaletteFileSelected" />
   </component>
+
+  <teleport to="body">
+    <div
+      v-if="showStorageModal"
+      class="studio-storage-modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      :aria-label="t('studio.savesManager') || 'Manage Saves'"
+      @click="onStorageOverlayClick"
+    >
+      <div class="studio-storage-modal" @click.stop>
+        <header class="studio-storage-modal-header">
+          <h4>{{ t('studio.savesManager') || 'Manage Saves' }}</h4>
+          <button type="button" class="studio-storage-modal-close" @click="closeSavesManager" aria-label="Close storage manager">×</button>
+        </header>
+        <div class="studio-storage-modal-body">
+          <SavesManager @close="closeSavesManager" />
+        </div>
+      </div>
+    </div>
+  </teleport>
 </template>
 
 <script setup>
@@ -458,6 +519,7 @@ const autoSaveControls = useAutoSave(store, {
 // Auto-restore state
 const showRestoreBanner = ref(false)
 const restoreInfo = ref(null)
+const savesButtonRef = ref(null)
 
 // Inject theme
 const injectedTheme = injectTheme()
@@ -489,10 +551,27 @@ const mobileTab = computed({
   }
 })
 
-const showLayerManager = computed(() => store.workspaceMode === 'pro' && store.panelStates.layer !== 'hidden')
-const showFullHistory = computed(() => store.panelStates.history !== 'hidden' && !isMobile.value)
-const showMiniHistory = computed(() => !isMobile.value && !showFullHistory.value)
-const showSavesManager = computed(() => store.workspaceMode === 'pro' && store.panelStates.saves !== 'hidden')
+const showLayerManager = computed(() => store.workspaceMode === 'pro' && store.panelRuntime?.layer?.state !== 'hidden')
+const showPalettePanel = computed(() => store.panelRuntime?.palette?.state !== 'hidden')
+const isLayerManagerEnabled = computed(() => store.workspaceMode === 'pro' && store.panelRuntime?.layer?.state !== 'hidden')
+const isHistoryPanelEnabled = computed(() => store.panelRuntime?.history?.state !== 'hidden')
+const activeContextPanelId = computed(() => store.hostActivePanels?.context || null)
+const showContextHost = computed(() => {
+  if (isMobile.value && mobileTab.value !== 'property') return false
+  const panelId = activeContextPanelId.value
+  if (panelId !== 'inspector' && panelId !== 'asset') return false
+  return store.panelRuntime?.[panelId]?.state !== 'hidden'
+})
+const showToolDock = computed(() => !isMobile.value && (showLayerManager.value || showPalettePanel.value))
+const showHistoryTray = computed(() => !isMobile.value)
+const showStorageModal = computed(() => !isMobile.value && store.panelRuntime?.saves?.state !== 'hidden')
+const activeToolDockPanel = computed(() => {
+  const activePanel = store.hostActivePanels?.toolDock || null
+  if (activePanel === 'layer' || activePanel === 'palette') return activePanel
+  if (showLayerManager.value) return 'layer'
+  if (showPalettePanel.value) return 'palette'
+  return 'layer'
+})
 const canUndo = computed(() => !!store.canUndo && store.canUndo())
 const canRedo = computed(() => !!store.canRedo && store.canRedo())
 const activeLeftSheet = ref('part')
@@ -501,30 +580,13 @@ const selectedStackName = computed(() => {
   const raw = stack?.name || stack?.Name
   return (typeof raw === 'string' && raw.trim()) ? raw.trim() : 'stack'
 })
-const focusedPartName = computed(() => {
-  const part = store.focusedPart
-  if (!part) return 'part'
-  const asset = store.resolveAssetForPart ? store.resolveAssetForPart(part) : null
-  const raw =
-    asset?.Description ||
-    asset?.Desc ||
-    asset?.description ||
-    (store.getGroupDescriptionForPart ? store.getGroupDescriptionForPart(part) : null) ||
-    part?.Asset?.Description ||
-    part?.Asset?.Group?.Description ||
-    part?.Name ||
-    part?.name ||
-    part?.Asset?.Name
-  return (typeof raw === 'string' && raw.trim()) ? raw.trim() : 'part'
-})
 const leftSheetLabels = computed(() => ({
   stack: 'stacks',
-  part: selectedStackName.value,
-  layer: focusedPartName.value
+  part: selectedStackName.value
 }))
 
 function setActiveLeftSheet(sheet) {
-  if (!['stack', 'part', 'layer'].includes(sheet)) return
+  if (!['stack', 'part'].includes(sheet)) return
   activeLeftSheet.value = sheet
 }
 
@@ -535,9 +597,8 @@ function onStackEntrySelected() {
 }
 
 function onPartEntrySelected() {
-  if (activeLeftSheet.value === 'part') {
-    activeLeftSheet.value = 'layer'
-  }
+  activeLeftSheet.value = 'part'
+  store.openContextPanel('inspector', 'studio-part-focused')
 }
 
 const panelStyle = computed(() => {
@@ -695,7 +756,14 @@ watch(() => props.visible, async (v) => {
 
 function escHandler(e) {
   if (props.embedded) return
-  if (e.key === 'Escape') close()
+  if (e.key !== 'Escape') return
+
+  if (showStorageModal.value) {
+    closeSavesManager()
+    return
+  }
+
+  close()
 }
 
 onMounted(async () => {
@@ -812,29 +880,77 @@ function exitVisualMoveMode() {
   store.previewTool = 'view'
 }
 
-function togglePalette() {
-  if (store.activeContextPanel === 'palette' && store.panelStates.palette !== 'pinned') {
-    store.closePalettePanel()
-    store.openContextPanel('inspector', 'palette-close')
+function openToolDockPanel(panel) {
+  if (panel === 'layer') {
+    store.openPanel('layer', {
+      host: 'toolDock',
+      state: 'pinned',
+      reason: 'studio-tool-dock-layer'
+    })
     return
   }
-  store.openPalettePanel([])
-  store.openContextPanel('palette', 'palette-toggle')
+
+  if (panel === 'palette') {
+    store.openPalettePanel([])
+    return
+  }
+}
+
+function closeToolDock() {
+  if (showPalettePanel.value) {
+    store.closePanel('palette', { reason: 'studio-close-tool-dock' })
+  }
+  if (showLayerManager.value) {
+    store.closePanel('layer', { reason: 'studio-close-tool-dock' })
+  }
+}
+
+function togglePalette() {
+  if (showPalettePanel.value) {
+    closeToolDock()
+    return
+  }
+  openToolDockPanel('palette')
 }
 
 function toggleLayerManager() {
-  const nextVisible = store.panelStates.layer === 'hidden'
-  store.setPanelState('layer', nextVisible ? 'pinned' : 'hidden')
+  if (showLayerManager.value) {
+    closeToolDock()
+    return
+  }
+  openToolDockPanel('layer')
 }
 
 function toggleHistoryPanel() {
-  const nextVisible = store.panelStates.history === 'hidden'
-  store.setPanelState('history', nextVisible ? 'pinned' : 'hidden')
+  store.togglePanel('history', {
+    host: 'bottomTray',
+    state: 'pinned',
+    reason: 'studio-toggle-history'
+  })
 }
 
 function toggleSavesManager() {
-  const nextVisible = store.panelStates.saves === 'hidden'
-  store.setPanelState('saves', nextVisible ? 'pinned' : 'hidden')
+  store.togglePanel('saves', {
+    host: 'modal',
+    state: 'pinned',
+    reason: 'studio-toggle-saves'
+  })
+}
+
+function closeSavesManager() {
+  store.closePanel('saves', { reason: 'studio-close-saves' })
+  nextTick(() => {
+    const candidate = savesButtonRef.value?.$el || savesButtonRef.value
+    if (candidate && typeof candidate.focus === 'function') {
+      candidate.focus()
+    }
+  })
+}
+
+function onStorageOverlayClick(e) {
+  if (e.target === e.currentTarget) {
+    closeSavesManager()
+  }
 }
 
 function doUndo() {
@@ -930,9 +1046,9 @@ const saveStatusText = computed(() => {
     case 'saving':
       return 'Saving...'
     case 'saved':
-      return 'Saved ✓'
+      return 'Saved'
     case 'error':
-      return 'Error ✗'
+      return 'Error'
     default:
       return ''
   }
@@ -999,6 +1115,8 @@ async function clearAutoSave() {
   }
 }
 </script>
+
+
 
 <style scoped>
 .studio-container {
@@ -1686,5 +1804,220 @@ async function clearAutoSave() {
 .banner-slide-leave-to {
   transform: translateY(-100%);
   opacity: 0;
+}
+
+/* --- Tool Dock --- */
+.studio-tool-dock {
+  width: 320px;
+  min-width: 280px;
+  max-width: 420px;
+  border-left: 1px solid var(--color-border-base, #e2e8f0);
+  border-right: none;
+  animation: tool-dock-slide-in 160ms ease-out;
+}
+
+.tool-dock-header {
+  height: 40px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--color-border-base, #e2e8f0);
+  background: var(--color-bg-surface, #f8fafc);
+}
+
+.tool-dock-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tool-dock-tab {
+  height: 28px;
+  border: 1px solid var(--color-border-base, #e2e8f0);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--color-bg-base, #ffffff);
+  color: var(--color-text-secondary, #64748b);
+  padding: 0 10px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.tool-dock-tab.active {
+  border-color: var(--color-primary, #2563eb);
+  color: var(--color-primary, #2563eb);
+  background: var(--color-info-bg, #eff6ff);
+}
+
+.tool-dock-close {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--color-border-base, #e2e8f0);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--color-bg-base, #ffffff);
+  color: var(--color-text-secondary, #64748b);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.tool-dock-content {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* --- History Tray --- */
+.history-tray {
+  flex-shrink: 0;
+  border-top: 1px solid var(--color-border-base, #e2e8f0);
+  background: var(--color-bg-base, #ffffff);
+  max-height: 42px;
+  transition: max-height 180ms ease;
+}
+
+.history-tray.expanded {
+  max-height: 340px;
+}
+
+.history-tray-summary {
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 12px;
+}
+
+.history-tray-toggle {
+  height: 28px;
+  border: 1px solid var(--color-border-base, #e2e8f0);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--color-bg-base, #ffffff);
+  color: var(--color-text-secondary, #475569);
+  padding: 0 10px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.history-tray-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.history-tray-body {
+  height: 298px;
+  border-top: 1px solid var(--color-border-base, #e2e8f0);
+  overflow: hidden;
+}
+
+.history-tray-body > * {
+  height: 100%;
+  min-height: 0;
+}
+
+/* --- Storage Modal --- */
+.studio-storage-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10200;
+  background: rgba(15, 23, 42, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.studio-storage-modal {
+  width: min(860px, calc(100vw - 40px));
+  height: min(680px, calc(100vh - 48px));
+  background: var(--color-bg-base, #ffffff);
+  border: 1px solid var(--color-border-base, #e2e8f0);
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: var(--shadow-2xl, 0 10px 40px rgba(0, 0, 0, 0.2));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.studio-storage-modal-header {
+  height: 44px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--color-border-base, #e2e8f0);
+  background: var(--color-bg-surface, #f8fafc);
+}
+
+.studio-storage-modal-header h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary, #1e293b);
+}
+
+.studio-storage-modal-close {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--color-border-base, #e2e8f0);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--color-bg-base, #ffffff);
+  color: var(--color-text-secondary, #64748b);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.studio-storage-modal-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+@keyframes tool-dock-slide-in {
+  from {
+    transform: translateX(-16px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@media (max-width: 1100px) {
+  .studio-tool-dock {
+    width: 300px;
+    min-width: 260px;
+  }
+}
+
+@media (max-width: 860px) {
+  .history-tray-summary {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 42px;
+    padding: 6px 10px;
+  }
+
+  .history-tray {
+    max-height: 54px;
+  }
+
+  .history-tray.expanded {
+    max-height: 360px;
+  }
+}
+
+@media (max-height: 700px) {
+  .studio-storage-modal {
+    height: min(560px, calc(100vh - 20px));
+  }
 }
 </style>

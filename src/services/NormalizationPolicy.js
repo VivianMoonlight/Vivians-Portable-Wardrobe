@@ -55,6 +55,29 @@ function normalizeOpacity(opacity) {
   return clamp(toFiniteNumber(opacity, 1), 0, 1)
 }
 
+function normalizeLayerOverrides(layerOverrides) {
+  if (!Array.isArray(layerOverrides)) return null
+
+  return layerOverrides.map((overrideEntry) => {
+    if (!overrideEntry || typeof overrideEntry !== 'object') return null
+
+    const normalizedEntry = {}
+    if (Object.prototype.hasOwnProperty.call(overrideEntry, 'DrawingLeft')) {
+      normalizedEntry.DrawingLeft = normalizeStructured(overrideEntry.DrawingLeft)
+    }
+    if (Object.prototype.hasOwnProperty.call(overrideEntry, 'DrawingTop')) {
+      normalizedEntry.DrawingTop = normalizeStructured(overrideEntry.DrawingTop)
+    }
+
+    return Object.keys(normalizedEntry).length > 0 ? normalizedEntry : null
+  })
+}
+
+function normalizeOverridePriority(overridePriority) {
+  if (overridePriority === undefined || overridePriority === null) return null
+  return normalizeStructured(overridePriority)
+}
+
 function normalizeBundleItemForComparator(bundleItem) {
   if (!bundleItem || typeof bundleItem !== 'object') return null
 
@@ -69,7 +92,9 @@ function normalizeBundleItemForComparator(bundleItem) {
     Color: normalizeColor(bundleItem.Color),
     Property: {
       Shift: normalizeShift(property.Shift),
-      Opacity: normalizeOpacity(property.Opacity)
+      Opacity: normalizeOpacity(property.Opacity),
+      LayerOverrides: normalizeLayerOverrides(property.LayerOverrides),
+      OverridePriority: normalizeOverridePriority(property.OverridePriority)
     }
   }
 }
