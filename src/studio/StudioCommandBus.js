@@ -24,7 +24,10 @@ function createPaletteHandlers(store) {
       historyMeta: buildHistoryMeta('palette.applyColor', payload, meta),
       _fromFacade: true
     }),
-    'palette.applyTag': (payload) => store.applyTagToActivePaletteTargets(payload.tag, { _fromFacade: true }),
+    'palette.applyTag': (payload, meta) => store.applyTagToActivePaletteTargets(payload.tag, {
+      historyMeta: buildHistoryMeta('palette.applyTag', payload, meta),
+      _fromFacade: true
+    }),
     'palette.applyTagOffset': (payload, meta) => store.applyTagOffsetToActivePaletteTargets(payload, {
       deferCommit: meta.deferCommit === true,
       historyMeta: buildHistoryMeta('palette.applyTagOffset', payload, meta),
@@ -88,7 +91,8 @@ function createBatchHandlers(store) {
 
 function createAssetHandlers(store) {
   return {
-    'asset.apply': (payload) => store.applyAssetToSelectedStack(payload.asset, payload.replaceTarget, {
+    'asset.apply': (payload, meta) => store.applyAssetToSelectedStack(payload.asset, payload.replaceTarget, {
+      historyMeta: buildHistoryMeta('asset.apply', payload, meta),
       _fromFacade: true
     })
   }
@@ -124,7 +128,8 @@ function createSavesHandlers(store) {
 
 function createStackHandlers(store) {
   return {
-    'stack.rename': (payload) => store.renameStack(payload.stackIndex, payload.newName, {
+    'stack.rename': (payload, meta) => store.renameStack(payload.stackIndex, payload.newName, {
+      historyMeta: buildHistoryMeta('stack.rename', payload, meta),
       _fromFacade: true
     })
   }

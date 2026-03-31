@@ -276,14 +276,29 @@ function clearLayerEditCommitTimer() {
 }
 
 function commitLayerEditInteraction() {
-  if (!layerEditInteractionActive.value) return
+  if (!layerEditInteractionActive.value) return false
   clearLayerEditCommitTimer()
   layerEditInteractionActive.value = false
+
+  let committed = false
   try {
-    store.commitInteraction()
+    committed = !!store.commitInteraction()
   } catch (e) {
-    /* ignore */
+    committed = false
   }
+
+  if (!committed) {
+    try {
+      committed = !!store.forceEndRealtimeScope?.('editor', {
+        commit: true,
+        interactionKind: 'layer-edit'
+      })
+    } catch (e) {
+      committed = false
+    }
+  }
+
+  return committed
 }
 
 function scheduleLayerEditInteractionCommit(delayMs = 160) {
@@ -658,12 +673,10 @@ function saveDescription() {
   if (!hasPart.value) { editingDescription.value = false; return }
   const desc = (editDescription.value ?? '').trim()
   if (!desc || desc === partDescription.value) { editingDescription.value = false; return }
-  const updated = { ...part.value, Description: desc }
-  if (updated.Asset && typeof updated.Asset === 'object') {
-    updated.Asset = { ...updated.Asset, Description: desc }
-  }
-  store.focusPart(updated)
-  try { store.translateFocusedPartToLayers() } catch (e) { }
+  store.applyFocusedPartMetadata?.({
+    Description: desc,
+    Asset: { Description: desc }
+  })
   editingDescription.value = false
 }
 function cancelDescription() { editingDescription.value = false }
@@ -679,12 +692,10 @@ function saveGroup() {
   const g = (editGroup.value ?? '').trim()
   const old = part.value?.Group || ''
   if (!g || g === old) { editingGroup.value = false; return }
-  const updated = { ...part.value, Group: g }
-  if (updated.Asset && typeof updated.Asset === 'object') {
-    updated.Asset = { ...updated.Asset, Group: { ...(updated.Asset.Group || {}), Name: g } }
-  }
-  store.focusPart(updated)
-  try { store.translateFocusedPartToLayers() } catch (e) { }
+  store.applyFocusedPartMetadata?.({
+    Group: g,
+    Asset: { Group: { Name: g } }
+  })
   editingGroup.value = false
 }
 function cancelGroup() { editingGroup.value = false }
@@ -1087,8 +1098,12 @@ function handleKeydown(e) {
 
 onBeforeUnmount(() => {
   clearLayerEditCommitTimer()
-  if (layerEditInteractionActive.value) {
-    commitLayerEditInteraction()
+  const committed = commitLayerEditInteraction()
+  if (!committed) {
+    store.forceEndRealtimeScope?.('editor', {
+      commit: true,
+      interactionKind: 'layer-edit'
+    })
   }
   stopLayerHoverBlink()
 })

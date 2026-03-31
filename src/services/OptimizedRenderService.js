@@ -126,6 +126,38 @@ export class OptimizedRenderService {
         return Number.isFinite(numericOpacity) ? numericOpacity : 1;
     }
 
+    _getOpacityEntries(rawOpacity) {
+        if (rawOpacity === undefined || rawOpacity === null) {
+            return [1];
+        }
+
+        if (Array.isArray(rawOpacity)) {
+            return rawOpacity.map((entry) => {
+                const n = Number(entry);
+                return Number.isFinite(n) ? n : 1;
+            });
+        }
+
+        if (typeof rawOpacity === 'object') {
+            const values = Object.values(rawOpacity);
+            if (!values.length) {
+                return [1];
+            }
+            return values.map((entry) => {
+                const n = Number(entry);
+                return Number.isFinite(n) ? n : 1;
+            });
+        }
+
+        const numericOpacity = Number(rawOpacity);
+        return [Number.isFinite(numericOpacity) ? numericOpacity : 1];
+    }
+
+    _isFullyOpaqueOpacity(rawOpacity) {
+        const entries = this._getOpacityEntries(rawOpacity);
+        return entries.every(value => value >= 1);
+    }
+
     _buildComparableBundle(rawBundleData, normalizationEnabled = isFastPathNormalizationEnabled()) {
         if (!Array.isArray(rawBundleData)) return [];
 
@@ -197,11 +229,9 @@ export class OptimizedRenderService {
             return false;
         }
 
-        const previousOpacity = this._getOpacityValue(previousBundleItem);
-        const nextOpacity = this._getOpacityValue(nextBundleItem);
-        const crossesOpacityBoundary =
-            (previousOpacity === 1 && nextOpacity < 1) ||
-            (previousOpacity < 1 && nextOpacity === 1);
+        const previousOpaque = this._isFullyOpaqueOpacity(previousBundleItem?.Property?.Opacity);
+        const nextOpaque = this._isFullyOpaqueOpacity(nextBundleItem?.Property?.Opacity);
+        const crossesOpacityBoundary = previousOpaque !== nextOpaque;
         if (crossesOpacityBoundary) {
             return false;
         }
@@ -216,11 +246,15 @@ export class OptimizedRenderService {
         const {
             Shift: previousShift,
             Opacity: previousOpacityProperty,
+            LayerOverrides: previousLayerOverrides,
+            OverridePriority: previousOverridePriority,
             ...previousPropertyRest
         } = previousProperty || {};
         const {
             Shift: nextShift,
             Opacity: nextOpacityProperty,
+            LayerOverrides: nextLayerOverrides,
+            OverridePriority: nextOverridePriority,
             ...nextPropertyRest
         } = nextProperty || {};
 
@@ -235,6 +269,12 @@ export class OptimizedRenderService {
             return true;
         }
         if (!isEqual(previousOpacityProperty, nextOpacityProperty)) {
+            return true;
+        }
+        if (!isEqual(previousLayerOverrides, nextLayerOverrides)) {
+            return true;
+        }
+        if (!isEqual(previousOverridePriority, nextOverridePriority)) {
             return true;
         }
 
@@ -310,23 +350,43 @@ export class OptimizedRenderService {
             return false;
         }
 
-        for (const { groupName, nextRawItem } of changedItems) {
+        for (const { groupName, previousRawItem, nextRawItem } of changedItems) {
             const appearanceItem = toRaw(this.displayCharacter.Appearance.find(current => current?.Asset?.Group?.Name === groupName));
             if (!appearanceItem) {
                 return false;
             }
 
-            appearanceItem.Color = structuredClone(toRaw(nextRawItem.Color));
+            const previousProperty = previousRawItem?.Property || {};
+            const nextProperty = nextRawItem?.Property || {};
+
+            if (Object.prototype.hasOwnProperty.call(nextRawItem, 'Color')) {
+                appearanceItem.Color = structuredClone(toRaw(nextRawItem.Color));
+            } else if (Object.prototype.hasOwnProperty.call(previousRawItem || {}, 'Color')) {
+                delete appearanceItem.Color;
+            }
+
             if (!appearanceItem.Property) {
                 appearanceItem.Property = {};
             }
 
-            if (Object.prototype.hasOwnProperty.call(nextRawItem.Property || {}, 'Shift')) {
-                appearanceItem.Property.Shift = structuredClone(toRaw(nextRawItem.Property.Shift));
-            }
+            const applyOrDeleteProperty = (propertyKey) => {
+                if (Object.prototype.hasOwnProperty.call(nextProperty, propertyKey)) {
+                    appearanceItem.Property[propertyKey] = structuredClone(toRaw(nextProperty[propertyKey]));
+                    return;
+                }
 
-            if (Object.prototype.hasOwnProperty.call(nextRawItem.Property || {}, 'Opacity')) {
-                appearanceItem.Property.Opacity = nextRawItem.Property.Opacity;
+                if (Object.prototype.hasOwnProperty.call(previousProperty, propertyKey)) {
+                    delete appearanceItem.Property[propertyKey];
+                }
+            };
+
+            applyOrDeleteProperty('Shift');
+            applyOrDeleteProperty('Opacity');
+            applyOrDeleteProperty('LayerOverrides');
+            applyOrDeleteProperty('OverridePriority');
+
+            if (Object.keys(appearanceItem.Property).length === 0) {
+                delete appearanceItem.Property;
             }
         }
 

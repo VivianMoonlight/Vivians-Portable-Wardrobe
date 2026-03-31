@@ -384,7 +384,13 @@ onUnmounted(() => {
     clearTimeout(realtimeCommitTimer);
     realtimeCommitTimer = null;
   }
-  commitPaletteInteraction();
+  const committed = commitPaletteInteraction();
+  if (!committed) {
+    store.forceEndRealtimeScope?.("palette", {
+      commit: true,
+      interactionKind: "palette",
+    });
+  }
 });
 
 watch([collapsedAdvanced, () => store.workspaceMode], ([collapsed, mode]) => {
@@ -543,9 +549,28 @@ function beginPaletteInteraction() {
 }
 
 function commitPaletteInteraction() {
-  if (!paletteInteractionActive) return;
+  if (!paletteInteractionActive) return false;
   paletteInteractionActive = false;
-  store.commitInteraction?.();
+
+  let committed = false;
+  try {
+    committed = !!store.commitInteraction?.();
+  } catch (e) {
+    committed = false;
+  }
+
+  if (!committed) {
+    try {
+      committed = !!store.forceEndRealtimeScope?.("palette", {
+        commit: true,
+        interactionKind: "palette",
+      });
+    } catch (e) {
+      committed = false;
+    }
+  }
+
+  return committed;
 }
 
 function schedulePaletteInteractionCommit() {
@@ -564,7 +589,9 @@ const updateStoreFromPicker = throttle((val) => {
 
   if (editingTagId.value) {
     // Mode A: Editing a Tag Definition
-    store.updatePaletteTag(editingTagId.value, hex);
+    beginPaletteInteraction();
+    store.updatePaletteTag(editingTagId.value, hex, { deferCommit: true });
+    schedulePaletteInteractionCommit();
   } else {
     // Mode B: Editing active selection through transaction API.
     beginPaletteInteraction();

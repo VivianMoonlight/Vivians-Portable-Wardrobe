@@ -17,6 +17,10 @@ const EDITOR_DELTA_COMMANDS = Object.freeze([
   'layer.batchApplyLayerDeltas'
 ])
 
+function isEditorKind(kind) {
+  return EDITOR_KINDS.includes(kind)
+}
+
 export class TransactionCoordinator {
   constructor({ store, executeCommand } = {}) {
     this.store = store
@@ -24,18 +28,66 @@ export class TransactionCoordinator {
     this.activeInteraction = null
   }
 
-  beginInteraction(kind = 'palette', meta = {}) {
-    this.activeInteraction = { kind, meta }
-
+  _finalizeInteractionByKind(kind, { commit = true } = {}) {
     if (kind === 'palette') {
-      this.store.beginPaletteRealtimeUpdate(kind)
+      return this.store.endPaletteRealtimeUpdate({
+        commit,
+        interactionKind: kind
+      })
+    }
+
+    if (isEditorKind(kind)) {
+      return this.store.endEditorRealtimeUpdate({
+        commit,
+        interactionKind: kind
+      })
+    }
+
+    return false
+  }
+
+  _drainActiveInteraction({ commit = true } = {}) {
+    if (!this.activeInteraction) return false
+
+    const { kind } = this.activeInteraction
+    this.activeInteraction = null
+
+    return this._finalizeInteractionByKind(kind, { commit })
+  }
+
+  beginInteraction(kind = 'palette', meta = {}) {
+    const normalizedKind = String(kind || '').trim() || 'palette'
+
+    if (this.activeInteraction?.kind === normalizedKind) {
+      this.activeInteraction = {
+        kind: normalizedKind,
+        meta: {
+          ...(this.activeInteraction?.meta || {}),
+          ...(meta || {})
+        }
+      }
       return true
     }
 
-    if (EDITOR_KINDS.includes(kind)) {
-      this.store.beginEditorRealtimeUpdate(kind)
+    // Always settle previous interaction before switching kinds, otherwise
+    // deferred history commits can be lost when the single-slot state is overwritten.
+    if (this.activeInteraction) {
+      this._drainActiveInteraction({ commit: true })
+    }
+
+    this.activeInteraction = { kind: normalizedKind, meta }
+
+    if (normalizedKind === 'palette') {
+      this.store.beginPaletteRealtimeUpdate(normalizedKind)
       return true
     }
+
+    if (isEditorKind(normalizedKind)) {
+      this.store.beginEditorRealtimeUpdate(normalizedKind)
+      return true
+    }
+
+    this.activeInteraction = null
 
     return false
   }
@@ -76,7 +128,7 @@ export class TransactionCoordinator {
       return false
     }
 
-    if (EDITOR_KINDS.includes(kind)) {
+    if (isEditorKind(kind)) {
       if (typeof delta.type === 'string' && delta.type.trim()) {
         const normalizedType = delta.type.trim()
         if (EDITOR_DELTA_COMMANDS.includes(normalizedType)) {
@@ -100,46 +152,12 @@ export class TransactionCoordinator {
 
   commitInteraction() {
     if (!this.activeInteraction) return false
-    const { kind } = this.activeInteraction
-    this.activeInteraction = null
-
-    if (kind === 'palette') {
-      return this.store.endPaletteRealtimeUpdate({
-        commit: true,
-        interactionKind: kind
-      })
-    }
-
-    if (EDITOR_KINDS.includes(kind)) {
-      return this.store.endEditorRealtimeUpdate({
-        commit: true,
-        interactionKind: kind
-      })
-    }
-
-    return false
+    return this._drainActiveInteraction({ commit: true })
   }
 
   cancelInteraction() {
     if (!this.activeInteraction) return false
-    const { kind } = this.activeInteraction
-    this.activeInteraction = null
-
-    if (kind === 'palette') {
-      return this.store.endPaletteRealtimeUpdate({
-        commit: false,
-        interactionKind: kind
-      })
-    }
-
-    if (EDITOR_KINDS.includes(kind)) {
-      return this.store.endEditorRealtimeUpdate({
-        commit: false,
-        interactionKind: kind
-      })
-    }
-
-    return false
+    return this._drainActiveInteraction({ commit: false })
   }
 
   getActiveInteraction() {

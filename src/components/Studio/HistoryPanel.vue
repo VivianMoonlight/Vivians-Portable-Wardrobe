@@ -62,9 +62,9 @@
             v-for="(item, index) in pastStack"
             :key="`undo-${index}`"
             class="history-item undo-item"
-            @click="jumpToUndoState(pastStack.length - 1 - index)"
-            @keydown.enter.prevent="jumpToUndoState(pastStack.length - 1 - index)"
-            @keydown.space.prevent="jumpToUndoState(pastStack.length - 1 - index)"
+            @click="jumpToUndoState(item)"
+            @keydown.enter.prevent="jumpToUndoState(item)"
+            @keydown.space.prevent="jumpToUndoState(item)"
             :title="getItemTitle(item, 'undo')"
             :aria-label="getItemTitle(item, 'undo')"
             tabindex="0"
@@ -94,9 +94,9 @@
             v-for="(item, index) in futureStack"
             :key="`redo-${index}`"
             class="history-item redo-item"
-            @click="jumpToRedoState(index)"
-            @keydown.enter.prevent="jumpToRedoState(index)"
-            @keydown.space.prevent="jumpToRedoState(index)"
+            @click="jumpToRedoState(item)"
+            @keydown.enter.prevent="jumpToRedoState(item)"
+            @keydown.space.prevent="jumpToRedoState(item)"
             :title="getItemTitle(item, 'redo')"
             :aria-label="getItemTitle(item, 'redo')"
             tabindex="0"
@@ -145,6 +145,11 @@ const store = useStudioStore();
 const timelineRef = ref(null);
 
 const historyData = computed(() => {
+  // Track store-level history revision so this computed invalidates when
+  // UndoRedoManager mutates internal stacks.
+  const revision = store.historyRevision;
+  void revision;
+
   try {
     return store.getFullHistory();
   } catch (e) {
@@ -162,10 +167,28 @@ const historyData = computed(() => {
 
 const undoStack = computed(() => historyData.value.undoStack || []);
 const redoStack = computed(() => historyData.value.redoStack || []);
-const pastStack = computed(() => [...undoStack.value].reverse());
-const futureStack = computed(() => redoStack.value);
+const currentState = computed(
+  () => historyData.value.current || undoStack.value[undoStack.value.length - 1] || null
+);
+const pastStack = computed(() => {
+  if (undoStack.value.length <= 1) return [];
+  const pastItems = undoStack.value.slice(0, -1);
+  const pastCount = pastItems.length;
+
+  // Keep timeline order as oldest -> latest -> current.
+  // Steps are negative distance from current snapshot.
+  return pastItems.map((item, index) => ({
+    ...item,
+    steps: -(pastCount - index),
+  }));
+});
+const futureStack = computed(() =>
+  [...redoStack.value]
+    .reverse()
+    .map((item, index) => ({ ...item, steps: index + 1 }))
+);
 const totalStates = computed(
-  () => historyData.value.undoCount + historyData.value.redoCount + 1
+  () => pastStack.value.length + futureStack.value.length + (currentState.value ? 1 : 0)
 );
 
 const hasHistory = computed(() => {
@@ -206,20 +229,18 @@ function getItemTitle(item, type) {
   return `${typeLabel}: ${item.description}${time ? "\n" + time : ""}`;
 }
 
-function jumpToRedoState(index) {
-  if (index < 0 || index >= redoStack.value.length) return;
-
-  const steps = index + 1;
+function jumpToRedoState(item) {
+  const steps = Number(item?.steps);
+  if (!Number.isFinite(steps) || steps <= 0) return;
   store.execute({
     type: "history.jump",
     payload: { steps },
   });
 }
 
-function jumpToUndoState(index) {
-  if (index < 0 || index >= undoStack.value.length) return;
-
-  const steps = -(undoStack.value.length - index);
+function jumpToUndoState(item) {
+  const steps = Number(item?.steps);
+  if (!Number.isFinite(steps) || steps >= 0) return;
   store.execute({
     type: "history.jump",
     payload: { steps },
@@ -293,7 +314,7 @@ function onTimelineWheel(e) {
 }
 
 watch(
-  () => historyData.value.undoCount + historyData.value.redoCount,
+  () => store.historyRevision,
   async () => {
     await nextTick();
     scrollToCurrentState();

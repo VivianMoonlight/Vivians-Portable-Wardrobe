@@ -907,7 +907,14 @@ function openToolDockPanel(panel) {
 
 function closeToolDock() {
   if (showPalettePanel.value) {
-    store.closePanel('palette', { reason: 'studio-close-tool-dock' })
+    if (typeof store.closePalettePanel === 'function') {
+      store.closePalettePanel({
+        forceClose: true,
+        reason: 'studio-close-tool-dock'
+      })
+    } else {
+      store.closePanel('palette', { reason: 'studio-close-tool-dock' })
+    }
   }
   if (showLayerManager.value) {
     store.closePanel('layer', { reason: 'studio-close-tool-dock' })

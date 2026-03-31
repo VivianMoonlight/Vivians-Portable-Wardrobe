@@ -126,12 +126,33 @@ class RefreshScheduler {
 const layerEntriesCache = new WeakMap()
 
 const DATA_HISTORY_ACTION_ALLOWLIST = new Set([
+  'part.updateMetadata',
+  'part.updateProperty',
   'part.applyLayerDeltas',
   'layer.batchApplyLayerDeltas',
   'batch.updateOpacity',
   'batch.updateOffset',
   'batch.updateColor',
-  'batch.updatePriority'
+  'batch.updatePriority',
+  'palette.applyColor',
+  'palette.applyTag',
+  'palette.applyTagOffset',
+  'palette.resetTagOffset',
+  'palette.updateTag',
+  'palette.createTagAndReplace',
+  'palette.renameTagReferences',
+  'palette.deleteTag',
+  'palette.clear',
+  'palette.savedColor.add',
+  'palette.savedColor.update',
+  'palette.savedColor.delete',
+  'palette.savedColor.clear',
+  'stack.add',
+  'stack.remove',
+  'stack.move',
+  'stack.clear',
+  'stack.rename',
+  'asset.apply'
 ])
 
 export const useStudioStore = defineStore('studio', {
@@ -296,6 +317,7 @@ export const useStudioStore = defineStore('studio', {
 
     // Undo/Redo Manager
     _undoRedoManager: null,
+    historyRevision: 0,
 
     // History panel visibility
     historyPanelVisible: false,
@@ -1065,17 +1087,19 @@ export const useStudioStore = defineStore('studio', {
         this._paletteNextCounter = result._paletteNextCounter
         this._paletteVersion = result._paletteVersion
         this.refreshMergedAppearanceData()
-        this.pushHistorySnapshot()
+        this.pushHistorySnapshot(this._normalizeHistoryMeta(null, 'stack.add'))
       }
     },
 
     removeElement(idx) {
+      if (idx < 0 || idx >= this.stacks.length) return
+
       const result = StackActions.removeElementFromStacks(this, idx, {
         renderer: this.renderer,
         stacks: this.stacks,
         selectedIndex: this.selectedIndex,
         focusedPartIndex: this.focusedPartIndex,
-        pushHistorySnapshot: this.pushHistorySnapshot.bind(this)
+        pushHistorySnapshot: () => this.pushHistorySnapshot(this._normalizeHistoryMeta(null, 'stack.remove'))
       })
 
       this.stacks = result.stacks
@@ -1085,6 +1109,10 @@ export const useStudioStore = defineStore('studio', {
     },
 
     moveElement(fromIdx, toIdx) {
+      if (fromIdx === toIdx) return
+      if (fromIdx < 0 || fromIdx >= this.stacks.length) return
+      if (toIdx < 0 || toIdx >= this.stacks.length) return
+
       const result = StackActions.moveElementInStacks(this, fromIdx, toIdx, {
         stacks: this.stacks,
         selectedIndex: this.selectedIndex,
@@ -1096,6 +1124,7 @@ export const useStudioStore = defineStore('studio', {
       this.selectedIndex = result.selectedIndex
       this.focusedPartIndex = result.focusedPartIndex
       this._scheduleRefresh()
+      this.pushHistorySnapshot(this._normalizeHistoryMeta(null, 'stack.move'))
     },
 
     setSelectedStackFilterList(filterList = [], options = {}) {
@@ -1160,6 +1189,10 @@ export const useStudioStore = defineStore('studio', {
     },
 
     clear() {
+      if (!Array.isArray(this.stacks) || this.stacks.length === 0) return
+
+      this.pushHistorySnapshot(this._normalizeHistoryMeta(null, 'stack.clear'))
+
       const result = StackActions.clearAllStacks(this, {
         renderer: this.renderer,
         focusedPartIndex: this.focusedPartIndex
@@ -1282,6 +1315,16 @@ export const useStudioStore = defineStore('studio', {
 
         this._scheduleLayerRefresh()
         this._scheduleRefresh()
+        this._finalizeMutation({
+          changed: true,
+          scope: 'palette',
+          historyMode: 'immediate',
+          historyMeta: this._normalizeHistoryMeta(null, 'palette.createTagAndReplace'),
+          scheduleLayer: false,
+          scheduleRefresh: false,
+          schedulePart: false,
+          touchFocusedPart: false
+        })
         return tag
       } catch (e) {
         console.warn('[studioStore] createTagAndReplaceInStacks failed', e)
@@ -1373,6 +1416,16 @@ export const useStudioStore = defineStore('studio', {
 
         this._refreshAllLayerEntriesFromPalette()
         this.refreshMergedAppearanceData()
+        this._finalizeMutation({
+          changed: true,
+          scope: 'palette',
+          historyMode: 'immediate',
+          historyMeta: this._normalizeHistoryMeta(null, 'palette.renameTagReferences'),
+          scheduleLayer: false,
+          scheduleRefresh: false,
+          schedulePart: false,
+          touchFocusedPart: false
+        })
         return true
       } catch (e) {
         console.warn('[studioStore] renamePaletteTagAndReferences failed', e)
@@ -1428,15 +1481,22 @@ export const useStudioStore = defineStore('studio', {
       this.paletteWorkMode = mode
     },
 
-    closePalettePanel() {
+    closePalettePanel(options = {}) {
+      const forceClose = options?.forceClose === true
+      const reason = String(options?.reason || 'close-palette-panel')
       try {
-        if (this.panelRuntime?.palette?.state !== PANEL_VISIBILITY.PINNED) {
-          this.closePanel('palette', { reason: 'close-palette-panel' })
+        if (forceClose || this.panelRuntime?.palette?.state !== PANEL_VISIBILITY.PINNED) {
+          this.closePanel('palette', { reason })
         }
       } finally {
         try {
           const committed = this.commitInteraction()
-          if (!committed) this.endPaletteRealtimeUpdate({ commit: true })
+          if (!committed) {
+            this.forceEndRealtimeScope('palette', {
+              commit: true,
+              interactionKind: 'palette'
+            })
+          }
         } catch (e) { console.warn(e) }
         try { this.clearPaletteMode() } catch (e) { console.warn(e) }
       }
@@ -1807,9 +1867,31 @@ export const useStudioStore = defineStore('studio', {
       // Commit deferred heavy work once after interaction settles.
       return this._finalizeEditorMutation(true, {
         deferCommit: false,
-        throttleHistory: true,
+        throttleHistory: false,
         historyMeta: pendingHistoryMeta
       })
+    },
+
+    forceEndRealtimeScope(scope = 'editor', { commit = true, historyMeta = null, interactionKind = null } = {}) {
+      const normalizedScope = String(scope || '').trim().toLowerCase()
+
+      if (normalizedScope === 'palette') {
+        return this.endPaletteRealtimeUpdate({
+          commit,
+          historyMeta,
+          interactionKind: interactionKind || this._paletteRealtimeInteractionKind || 'palette'
+        })
+      }
+
+      if (normalizedScope === 'editor') {
+        return this.endEditorRealtimeUpdate({
+          commit,
+          historyMeta,
+          interactionKind: interactionKind || this._editorRealtimeInteractionKind || 'editor'
+        })
+      }
+
+      return false
     },
 
     renameStack(stackIndex, newName, options = {}) {
@@ -1830,10 +1912,14 @@ export const useStudioStore = defineStore('studio', {
       const nextStacks = this.stacks.slice()
       nextStacks[stackIndex] = { ...nextStacks[stackIndex], name: normalizedName }
       this.stacks = nextStacks
+
+      const historyMeta = this._normalizeHistoryMeta(options?.historyMeta, 'stack.rename')
+
       return this._finalizeMutation({
         changed: true,
         scope: 'stack',
-        historyMode: 'immediate'
+        historyMode: 'immediate',
+        historyMeta
       })
     },
 
@@ -1853,13 +1939,146 @@ export const useStudioStore = defineStore('studio', {
       const changed = this._updateFocusedPartProperty('Property', fastClone(propertyValue || {}))
       if (!changed) return false
 
+      const deferCommit = options?.deferCommit === true || this._editorRealtimeMode === true
+      const historyMeta = this._normalizeHistoryMeta(
+        options?.historyMeta,
+        'part.updateProperty',
+        { interactionKind: this._editorRealtimeInteractionKind }
+      )
+
       if (options?.rebuildLayers !== false) {
         this.RebuildAllStacksLayerEntriesFromParts()
       } else if (options?.refresh !== false) {
         this._scheduleRefresh()
       }
 
-      return true
+      return this._finalizeMutation({
+        changed: true,
+        deferCommit,
+        scope: 'editor',
+        historyMode: deferCommit ? 'throttled' : 'immediate',
+        historyMeta,
+        scheduleLayer: false,
+        schedulePart: false,
+        scheduleRefresh: false,
+        touchFocusedPart: false
+      })
+    },
+
+    applyFocusedPartMetadata(patch = {}, options = {}) {
+      if (!patch || typeof patch !== 'object') return false
+
+      const location = this._resolvePartLocation(this.focusedPart)
+      if (!location?.partRef) return false
+
+      const sourcePart = location.partRef
+      const nextPart = fastClone(sourcePart)
+      let changed = false
+
+      if (Object.prototype.hasOwnProperty.call(patch, 'Name')) {
+        const nextName = String(patch.Name ?? '')
+        if ((nextPart.Name ?? '') !== nextName) {
+          nextPart.Name = nextName
+          changed = true
+        }
+      }
+
+      if (Object.prototype.hasOwnProperty.call(patch, 'Description')) {
+        const nextDescription = String(patch.Description ?? '')
+        if ((nextPart.Description ?? '') !== nextDescription) {
+          nextPart.Description = nextDescription
+          changed = true
+        }
+      }
+
+      if (Object.prototype.hasOwnProperty.call(patch, 'Group')) {
+        const nextGroup = String(patch.Group ?? '')
+        if ((nextPart.Group ?? '') !== nextGroup) {
+          nextPart.Group = nextGroup
+          changed = true
+        }
+      }
+
+      if (patch.Asset && typeof patch.Asset === 'object') {
+        const nextAsset = { ...(nextPart.Asset || {}) }
+
+        if (Object.prototype.hasOwnProperty.call(patch.Asset, 'Description')) {
+          const nextDescription = String(patch.Asset.Description ?? '')
+          if ((nextAsset.Description ?? '') !== nextDescription) {
+            nextAsset.Description = nextDescription
+            changed = true
+          }
+        }
+
+        if (Object.prototype.hasOwnProperty.call(patch.Asset, 'Name')) {
+          const nextName = String(patch.Asset.Name ?? '')
+          if ((nextAsset.Name ?? '') !== nextName) {
+            nextAsset.Name = nextName
+            changed = true
+          }
+        }
+
+        if (Object.prototype.hasOwnProperty.call(patch.Asset, 'Group')) {
+          const sourceGroup = nextAsset.Group && typeof nextAsset.Group === 'object' ? nextAsset.Group : {}
+          const patchGroup = patch.Asset.Group
+          const nextGroupObject = (patchGroup && typeof patchGroup === 'object')
+            ? { ...sourceGroup, ...patchGroup }
+            : { ...sourceGroup, Name: String(patchGroup ?? '') }
+
+          if (JSON.stringify(sourceGroup) !== JSON.stringify(nextGroupObject)) {
+            nextAsset.Group = nextGroupObject
+            changed = true
+          }
+        }
+
+        if (changed) {
+          nextPart.Asset = nextAsset
+        }
+      }
+
+      if (!changed) return false
+
+      const uid = sourcePart._uid || this.ensurePartUid(sourcePart)
+      if (uid) {
+        try { nextPart._uid = uid } catch (e) { console.warn(e) }
+      }
+
+      const stack = this.stacks[location.stackIndex]
+      if (!stack || !Array.isArray(stack.data)) return false
+
+      const nextStack = { ...stack, data: stack.data.slice() }
+      nextStack.data[location.partIndex] = nextPart
+
+      const nextStacks = this.stacks.slice()
+      nextStacks[location.stackIndex] = nextStack
+      this.stacks = nextStacks
+
+      this.triggerFocusedPartUpdate()
+
+      try {
+        this.translateFocusedPartToLayers()
+      } catch (e) {
+        // ignore translate errors, history capture should still happen
+      }
+
+      const deferCommit = options?.deferCommit === true || this._editorRealtimeMode === true
+      const historyMeta = this._normalizeHistoryMeta(
+        options?.historyMeta,
+        'part.updateMetadata',
+        { interactionKind: this._editorRealtimeInteractionKind }
+      )
+
+      return this._finalizeMutation({
+        changed: true,
+        deferCommit,
+        scope: 'editor',
+        historyMode: deferCommit ? 'throttled' : 'immediate',
+        historyMeta,
+        scheduleLayer: false,
+        schedulePart: false,
+        scheduleRefresh: false,
+        touchFocusedPart: false
+      })
     },
 
     batchUpdatePartLayerEntries(updates = [], options = {}) {
@@ -2057,7 +2276,17 @@ export const useStudioStore = defineStore('studio', {
         })
       }
 
-      return this._finalizePaletteMutation(changed, { deferCommit })
+      const historyMeta = this._normalizeHistoryMeta(
+        options?.historyMeta,
+        'palette.applyColor',
+        { interactionKind: this._paletteRealtimeInteractionKind }
+      )
+
+      return this._finalizePaletteMutation(changed, {
+        deferCommit,
+        throttleHistory: deferCommit,
+        historyMeta
+      })
     },
 
     applyTagToActivePaletteTargets(tag, options = {}) {
@@ -2070,6 +2299,11 @@ export const useStudioStore = defineStore('studio', {
 
       return this.applyColorToActivePaletteTargets(tag, {
         deferCommit: options?.deferCommit === true,
+        historyMeta: this._normalizeHistoryMeta(
+          options?.historyMeta,
+          'palette.applyTag',
+          { interactionKind: this._paletteRealtimeInteractionKind }
+        ),
         _fromFacade: true
       })
     },
@@ -2091,6 +2325,11 @@ export const useStudioStore = defineStore('studio', {
 
       return this.applyColorToActivePaletteTargets(ref, {
         deferCommit: options?.deferCommit === true,
+        historyMeta: this._normalizeHistoryMeta(
+          options?.historyMeta,
+          'palette.applyTagOffset',
+          { interactionKind: this._paletteRealtimeInteractionKind }
+        ),
         _fromFacade: true
       })
     },
@@ -2109,6 +2348,11 @@ export const useStudioStore = defineStore('studio', {
 
       return this.applyColorToActivePaletteTargets(normalizedTag, {
         deferCommit: options?.deferCommit === true,
+        historyMeta: this._normalizeHistoryMeta(
+          options?.historyMeta,
+          'palette.resetTagOffset',
+          { interactionKind: this._paletteRealtimeInteractionKind }
+        ),
         _fromFacade: true
       })
     },
@@ -2119,7 +2363,9 @@ export const useStudioStore = defineStore('studio', {
 
       const resolved = Palette.resolveTagOffsetColor(ref, this.paletteMap)
       if (!resolved?.ok || !resolved.color) return false
-      return this.applyColorToActivePaletteTargets(resolved.color)
+      return this.applyColorToActivePaletteTargets(resolved.color, {
+        historyMeta: this._normalizeHistoryMeta(null, 'palette.applyColor')
+      })
     },
 
     deletePaletteTag(tag) {
@@ -2143,7 +2389,7 @@ export const useStudioStore = defineStore('studio', {
         this._scheduleLayerRefresh()
         this.RebuildAllStacksLayerEntriesFromParts()
         this._scheduleRefresh()
-        this.pushHistorySnapshot()
+        this.pushHistorySnapshot(this._normalizeHistoryMeta(null, 'palette.deleteTag'))
       }
       return result._scheduleLayerRefresh
     },
@@ -2181,6 +2427,7 @@ export const useStudioStore = defineStore('studio', {
 
       this._scheduleLayerRefresh()
       this._scheduleRefresh()
+      this.pushHistorySnapshot(this._normalizeHistoryMeta(null, 'palette.clear'))
     },
 
     updatePaletteTag(tag, newValue, options = {}) {
@@ -2208,7 +2455,16 @@ export const useStudioStore = defineStore('studio', {
       this.paletteMap = result.paletteMap
       if (result._scheduleLayerRefresh) {
         this._scheduleLayerRefresh()
-        this._finalizePaletteMutation(true, { deferCommit })
+        const historyMeta = this._normalizeHistoryMeta(
+          options?.historyMeta,
+          'palette.updateTag',
+          { interactionKind: this._paletteRealtimeInteractionKind }
+        )
+        this._finalizePaletteMutation(true, {
+          deferCommit,
+          throttleHistory: deferCommit,
+          historyMeta
+        })
       }
       return true
     },
@@ -2220,6 +2476,7 @@ export const useStudioStore = defineStore('studio', {
       const result = PaletteActions.addSavedColor(this, value)
       this.savedColors = result.savedColors
       this._paletteVersion = result._paletteVersion
+      this.pushHistorySnapshot(this._normalizeHistoryMeta(null, 'palette.savedColor.add'))
       return true
     },
 
@@ -2228,6 +2485,7 @@ export const useStudioStore = defineStore('studio', {
       const result = PaletteActions.updateSavedColor(this, idx, newValue)
       this.savedColors = result.savedColors
       this._paletteVersion = result._paletteVersion
+      this.pushHistorySnapshot(this._normalizeHistoryMeta(null, 'palette.savedColor.update'))
       return true
     },
 
@@ -2236,7 +2494,7 @@ export const useStudioStore = defineStore('studio', {
       const result = PaletteActions.deleteSavedColor(this, idx)
       this.savedColors = result.savedColors
       this._paletteVersion = result._paletteVersion
-      this.pushHistorySnapshot()
+      this.pushHistorySnapshot(this._normalizeHistoryMeta(null, 'palette.savedColor.delete'))
       return true
     },
 
@@ -2244,7 +2502,7 @@ export const useStudioStore = defineStore('studio', {
       if (!this.savedColors || this.savedColors.length === 0) return false
       this.savedColors = []
       this._paletteVersion++
-      this.pushHistorySnapshot()
+      this.pushHistorySnapshot(this._normalizeHistoryMeta(null, 'palette.savedColor.clear'))
       return true
     },
 
@@ -3220,7 +3478,8 @@ export const useStudioStore = defineStore('studio', {
         this._finalizeMutation({
           changed: true,
           scope: 'asset',
-          historyMode: 'immediate'
+          historyMode: 'immediate',
+          historyMeta: this._normalizeHistoryMeta(options?.historyMeta, 'asset.apply')
         })
         this.onReplaceApplied()
         return this.focusedPart || null
@@ -4201,6 +4460,9 @@ export const useStudioStore = defineStore('studio', {
           if (this.focusedPartIndex.stackIndex !== null && this.focusedPartIndex.partIndex !== null) {
             this.triggerFocusedPartUpdate()
           }
+        },
+        onChange: () => {
+          this.historyRevision += 1
         },
         maxHistory: 100,
         throttleInterval: 150,
