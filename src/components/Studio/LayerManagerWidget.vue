@@ -73,7 +73,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useStudioStore } from '@/stores/studioStore'
 import { isHiddenGroup } from '@/config/filterGroupConfig'
@@ -89,6 +89,7 @@ const listBodyRef = ref(null)
 const dropTarget = ref(null) // uniqueId
 const dropPosition = ref(null) // 'top' | 'middle' | 'bottom'
 const draggedItem = ref(null)
+const priorityDragInteractionActive = ref(false)
 
 // --- Grouping State ---
 const expandedGroupKeys = ref(new Set())
@@ -236,6 +237,16 @@ function onDragStart(e, item) {
         e.preventDefault()
         return
     }
+
+    if (!priorityDragInteractionActive.value) {
+        try {
+            store.beginInteraction('priority-drag', { source: 'LayerManagerWidget' })
+            priorityDragInteractionActive.value = true
+        } catch (err) {
+            priorityDragInteractionActive.value = false
+        }
+    }
+
     draggedItem.value = item
     e.dataTransfer.effectAllowed = 'move'
 }
@@ -271,7 +282,12 @@ const throttledStoreUpdate = throttle(async (updates) => {
     if (updatesPayload.length > 0) {
         store.execute({
             type: 'layer.batchApplyLayerDeltas',
-            payload: { updates: updatesPayload }
+            payload: { updates: updatesPayload },
+            meta: {
+                deferCommit: true,
+                interactionKind: 'priority-drag',
+                source: 'LayerManagerWidget'
+            }
         })
     }
 }, 200)
@@ -344,11 +360,31 @@ function onDrop(e, targetItem) {
 }
 
 function onDragEnd() {
+    try { throttledStoreUpdate.flush && throttledStoreUpdate.flush() } catch (e) { /* ignore */ }
+
     dropTarget.value = null
     dropPosition.value = null
     draggedItem.value = null
     throttledStoreUpdate.cancel()
+
+    if (priorityDragInteractionActive.value) {
+        try {
+            store.commitInteraction()
+        } catch (err) {
+            try { store.cancelInteraction() } catch (e) { /* ignore */ }
+        } finally {
+            priorityDragInteractionActive.value = false
+        }
+    }
 }
+
+onBeforeUnmount(() => {
+    try { throttledStoreUpdate.cancel() } catch (e) { /* ignore */ }
+    if (priorityDragInteractionActive.value) {
+        try { store.cancelInteraction() } catch (e) { /* ignore */ }
+        priorityDragInteractionActive.value = false
+    }
+})
 
 </script>
 

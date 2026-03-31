@@ -85,7 +85,7 @@ export function removeElementFromStacks(state, idx, helpers) {
   const { renderer, stacks, selectedIndex, focusedPartIndex, pushHistorySnapshot } = helpers
 
   if (idx < 0 || idx >= stacks.length) {
-    return { stacks, changed: false }
+    return { stacks }
   }
 
   // Push to history before removing
@@ -115,8 +115,7 @@ export function removeElementFromStacks(state, idx, helpers) {
   return {
     stacks: newStacks,
     selectedIndex: newSelectedIndex,
-    focusedPartIndex: newFocusedPartIndex,
-    changed: true
+    focusedPartIndex: newFocusedPartIndex
   }
 }
 
@@ -129,19 +128,15 @@ export function removeElementFromStacks(state, idx, helpers) {
  * @returns {Object} Updated state
  */
 export function moveElementInStacks(state, fromIdx, toIdx, helpers) {
-  const { stacks, selectedIndex, focusedPartIndex, pushHistorySnapshot } = helpers
+  const { stacks, selectedIndex, focusedPartIndex, _scheduleRefresh } = helpers
 
-  if (fromIdx === toIdx) return { stacks, changed: false }
+  if (fromIdx === toIdx) return { stacks }
 
-  if (fromIdx < 0 || fromIdx >= stacks.length) return { stacks, changed: false }
-  if (toIdx < 0 || toIdx >= stacks.length) return { stacks, changed: false }
+  if (fromIdx < 0 || fromIdx >= stacks.length) return { stacks }
+  if (toIdx < 0 || toIdx >= stacks.length) return { stacks }
 
-  // Record pre-move state so undo reliably restores original ordering.
-  pushHistorySnapshot()
-
-  const nextStacks = stacks.slice()
-  const [item] = nextStacks.splice(fromIdx, 1)
-  const newStacks = [...nextStacks.slice(0, toIdx), item, ...nextStacks.slice(toIdx)]
+  const [item] = stacks.splice(fromIdx, 1)
+  const newStacks = [...stacks.slice(0, toIdx), item, ...stacks.slice(toIdx)]
 
   // Update selectedIndex
   let newSelectedIndex = selectedIndex
@@ -166,8 +161,7 @@ export function moveElementInStacks(state, fromIdx, toIdx, helpers) {
   return {
     stacks: newStacks,
     selectedIndex: newSelectedIndex,
-    focusedPartIndex: newFocusedPartIndex,
-    changed: true
+    focusedPartIndex: newFocusedPartIndex
   }
 }
 

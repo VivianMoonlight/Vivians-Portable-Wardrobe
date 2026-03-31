@@ -28,12 +28,12 @@ export class TransactionCoordinator {
     this.activeInteraction = { kind, meta }
 
     if (kind === 'palette') {
-      this.store.beginPaletteRealtimeUpdate()
+      this.store.beginPaletteRealtimeUpdate(kind)
       return true
     }
 
     if (EDITOR_KINDS.includes(kind)) {
-      this.store.beginEditorRealtimeUpdate()
+      this.store.beginEditorRealtimeUpdate(kind)
       return true
     }
 
@@ -52,7 +52,11 @@ export class TransactionCoordinator {
           return this.executeCommand({
             type: normalizedType,
             payload: delta.payload || {},
-            meta: { deferCommit: true }
+            meta: {
+              deferCommit: true,
+              interactionKind: kind,
+              source: this.activeInteraction?.meta?.source || null
+            }
           })
         }
       }
@@ -61,7 +65,11 @@ export class TransactionCoordinator {
         return this.executeCommand({
           type: 'palette.applyColor',
           payload: { newColor: delta.newColor },
-          meta: { deferCommit: true }
+          meta: {
+            deferCommit: true,
+            interactionKind: kind,
+            source: this.activeInteraction?.meta?.source || null
+          }
         })
       }
 
@@ -75,7 +83,11 @@ export class TransactionCoordinator {
           return this.executeCommand({
             type: normalizedType,
             payload: delta.payload || {},
-            meta: { deferCommit: true }
+            meta: {
+              deferCommit: true,
+              interactionKind: kind,
+              source: this.activeInteraction?.meta?.source || null
+            }
           })
         }
       }
@@ -92,11 +104,17 @@ export class TransactionCoordinator {
     this.activeInteraction = null
 
     if (kind === 'palette') {
-      return this.store.endPaletteRealtimeUpdate({ commit: true })
+      return this.store.endPaletteRealtimeUpdate({
+        commit: true,
+        interactionKind: kind
+      })
     }
 
     if (EDITOR_KINDS.includes(kind)) {
-      return this.store.endEditorRealtimeUpdate({ commit: true })
+      return this.store.endEditorRealtimeUpdate({
+        commit: true,
+        interactionKind: kind
+      })
     }
 
     return false
@@ -108,11 +126,17 @@ export class TransactionCoordinator {
     this.activeInteraction = null
 
     if (kind === 'palette') {
-      return this.store.endPaletteRealtimeUpdate({ commit: false })
+      return this.store.endPaletteRealtimeUpdate({
+        commit: false,
+        interactionKind: kind
+      })
     }
 
     if (EDITOR_KINDS.includes(kind)) {
-      return this.store.endEditorRealtimeUpdate({ commit: false })
+      return this.store.endEditorRealtimeUpdate({
+        commit: false,
+        interactionKind: kind
+      })
     }
 
     return false

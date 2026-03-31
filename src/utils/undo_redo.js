@@ -32,6 +32,37 @@
 
 import { fastClone } from '@/utils/clone.js'
 
+function normalizeHistoryMeta(historyMeta = null) {
+  if (!historyMeta || typeof historyMeta !== 'object') return null
+
+  const actionType = String(historyMeta.actionType || '').trim()
+  if (!actionType) return null
+
+  const normalized = { actionType }
+  const interactionKind = String(historyMeta.interactionKind || '').trim()
+  const source = String(historyMeta.source || '').trim()
+
+  if (interactionKind) normalized.interactionKind = interactionKind
+  if (source) normalized.source = source
+
+  const changedParts = Number(historyMeta.changedParts)
+  if (Number.isFinite(changedParts) && changedParts > 0) {
+    normalized.changedParts = changedParts
+  }
+
+  const deltaCount = Number(historyMeta.deltaCount)
+  if (Number.isFinite(deltaCount) && deltaCount > 0) {
+    normalized.deltaCount = deltaCount
+  }
+
+  return normalized
+}
+
+function resolveSnapshotDescription(historyMeta, transactionTag) {
+  if (historyMeta?.actionType) return historyMeta.actionType
+  return transactionTag || 'State Change'
+}
+
 /**
  * Compare two snapshots for equality
  */
@@ -68,10 +99,11 @@ export class UndoRedoManager {
     this.inTransaction = false
     this.transactionStartSnapshot = null
     this.transactionTag = null
+    this.transactionMeta = null
 
     // Throttle state
     this.throttleTimer = null
-    this.pendingSnapshot = null
+    this.pendingSnapshotMeta = null
 
     // Restore lock (to prevent recording during undo/redo)
     this.isRestoring = false
@@ -92,7 +124,7 @@ export class UndoRedoManager {
    * Start a transaction for merging high-frequency operations
    * @param {string} [tag] Optional tag for the transaction
    */
-  startTransaction(tag = null) {
+  startTransaction(tag = null, historyMeta = null) {
     if (this.inTransaction) {
       this._log('Warning: Already in transaction, ignoring startTransaction')
       return
@@ -100,7 +132,8 @@ export class UndoRedoManager {
 
     this.inTransaction = true
     this.transactionTag = tag
-    this.transactionStartSnapshot = this._captureSnapshot()
+    this.transactionMeta = normalizeHistoryMeta(historyMeta)
+    this.transactionStartSnapshot = this._captureSnapshot(this.transactionMeta)
     this._log('Transaction started:', tag)
   }
 
@@ -114,7 +147,7 @@ export class UndoRedoManager {
       return
     }
 
-    const endSnapshot = this._captureSnapshot()
+    const endSnapshot = this._captureSnapshot(this.transactionMeta)
     const changed = !snapshotsEqual(this.transactionStartSnapshot, endSnapshot)
 
     if (changed) {
@@ -129,6 +162,7 @@ export class UndoRedoManager {
     this.inTransaction = false
     this.transactionStartSnapshot = null
     this.transactionTag = null
+    this.transactionMeta = null
   }
 
   /**
@@ -143,13 +177,14 @@ export class UndoRedoManager {
     this.inTransaction = false
     this.transactionStartSnapshot = null
     this.transactionTag = null
+    this.transactionMeta = null
   }
 
   /**
    * Push a snapshot to history (with automatic deduplication)
    * If in transaction, this is ignored (state is captured at transaction end)
    */
-  pushSnapshot() {
+  pushSnapshot(historyMeta = null) {
     if (this.isRestoring) {
       this._log('Skipping pushSnapshot during restore')
       return
@@ -160,7 +195,7 @@ export class UndoRedoManager {
       return
     }
 
-    const snapshot = this._captureSnapshot()
+    const snapshot = this._captureSnapshot(historyMeta)
     this._pushToHistory(snapshot)
   }
 
@@ -168,12 +203,21 @@ export class UndoRedoManager {
    * Push a snapshot with throttling (useful for keyboard input, etc.)
    * @param {number} [delay] Optional custom delay (uses throttleInterval if not provided)
    */
-  pushSnapshotThrottled(delay = null) {
+  pushSnapshotThrottled(delay = null, historyMeta = null) {
     if (this.isRestoring || this.inTransaction) {
       return
     }
 
-    const actualDelay = delay !== null ? delay : this.throttleInterval
+    let resolvedDelay = delay
+    let resolvedMeta = historyMeta
+    if (resolvedDelay && typeof resolvedDelay === 'object' && resolvedMeta === null) {
+      resolvedMeta = resolvedDelay
+      resolvedDelay = null
+    }
+
+    this.pendingSnapshotMeta = normalizeHistoryMeta(resolvedMeta)
+
+    const actualDelay = resolvedDelay !== null ? resolvedDelay : this.throttleInterval
 
     // Clear existing timer
     if (this.throttleTimer) {
@@ -182,7 +226,9 @@ export class UndoRedoManager {
 
     // Schedule snapshot
     this.throttleTimer = setTimeout(() => {
-      this.pushSnapshot()
+      const pendingMeta = this.pendingSnapshotMeta
+      this.pendingSnapshotMeta = null
+      this.pushSnapshot(pendingMeta)
       this.throttleTimer = null
     }, actualDelay)
   }
@@ -190,17 +236,21 @@ export class UndoRedoManager {
   /**
    * Internal: Capture current state snapshot
    */
-  _captureSnapshot() {
+  _captureSnapshot(historyMeta = null) {
     if (!this.captureState || typeof this.captureState !== 'function') {
       throw new Error('captureState function not provided')
     }
 
     const state = this.captureState()
     const snapshot = fastClone(state)
+    const normalizedHistoryMeta = normalizeHistoryMeta(historyMeta) || this.transactionMeta
 
     // Add metadata
     snapshot._timestamp = Date.now()
-    snapshot._description = this.transactionTag || 'State Change'
+    snapshot._description = resolveSnapshotDescription(normalizedHistoryMeta, this.transactionTag)
+    if (normalizedHistoryMeta) {
+      snapshot._historyMeta = normalizedHistoryMeta
+    }
 
     return snapshot
   }
@@ -339,6 +389,7 @@ export class UndoRedoManager {
   clearHistory() {
     this.undoStack = []
     this.redoStack = []
+    this.pendingSnapshotMeta = null
     this._log('History cleared')
   }
 
@@ -366,12 +417,14 @@ export class UndoRedoManager {
         index,
         timestamp: snapshot._timestamp || null,
         description: snapshot._description || 'State Change',
+        historyMeta: snapshot._historyMeta || null,
         data: snapshot
       })),
       redoStack: this.redoStack.map((snapshot, index) => ({
         index,
         timestamp: snapshot._timestamp || null,
         description: snapshot._description || 'State Change',
+        historyMeta: snapshot._historyMeta || null,
         data: snapshot
       })),
       canUndo: this.undoStack.length > 0,

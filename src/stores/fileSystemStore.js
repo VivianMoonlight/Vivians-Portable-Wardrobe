@@ -128,7 +128,7 @@ export const useFileSystemStore = defineStore('fs', {
       this.setCharacter(character)
       this.loadAll()
       this.history.initFilter()
-      this.loadHistory()
+      //this.loadHistory()
       this.initFilterServiceDefault()
       this.characterItem = AssetApi.collectOutfitData(character)
       this.activeItem = { data: JSON.parse(JSON.stringify(this.characterItem)) } // deep copy
@@ -245,7 +245,7 @@ export const useFileSystemStore = defineStore('fs', {
       if (item === -1) {
         this.activeItem = { data: JSON.parse(JSON.stringify(this.characterItem)) } // deep copy
         this.updatePreviewItem()
-        this._scheduleHistoryAdd()
+        //this._scheduleHistoryAdd()
         return
       }
       if (!item || item.type === 'folder') {
@@ -255,7 +255,7 @@ export const useFileSystemStore = defineStore('fs', {
 
       this.activeItem = { data: item ? item.data : null }
       this.updatePreviewItem()
-      this._scheduleHistoryAdd()
+      //this._scheduleHistoryAdd()
     },
 
     // 新：从 FilterPanel 更新 activeFilters（传入数组或 Set）

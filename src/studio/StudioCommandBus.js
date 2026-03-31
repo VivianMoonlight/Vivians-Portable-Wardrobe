@@ -1,16 +1,38 @@
+function buildHistoryMeta(type, payload, meta = {}) {
+  const actionType = String(meta?.historyActionType || type || '').trim()
+  if (!actionType) return null
+
+  const historyMeta = { actionType }
+  const source = String(meta?.historySource || meta?.source || '').trim()
+  const interactionKind = String(meta?.interactionKind || '').trim()
+
+  if (source) historyMeta.source = source
+  if (interactionKind) historyMeta.interactionKind = interactionKind
+
+  if (type === 'layer.batchApplyLayerDeltas') {
+    const changedParts = Array.isArray(payload?.updates) ? payload.updates.length : 0
+    if (changedParts > 0) historyMeta.changedParts = changedParts
+  }
+
+  return historyMeta
+}
+
 function createPaletteHandlers(store) {
   return {
     'palette.applyColor': (payload, meta) => store.applyColorToActivePaletteTargets(payload.newColor, {
       deferCommit: meta.deferCommit === true,
+      historyMeta: buildHistoryMeta('palette.applyColor', payload, meta),
       _fromFacade: true
     }),
     'palette.applyTag': (payload) => store.applyTagToActivePaletteTargets(payload.tag, { _fromFacade: true }),
     'palette.applyTagOffset': (payload, meta) => store.applyTagOffsetToActivePaletteTargets(payload, {
       deferCommit: meta.deferCommit === true,
+      historyMeta: buildHistoryMeta('palette.applyTagOffset', payload, meta),
       _fromFacade: true
     }),
     'palette.resetTagOffset': (payload, meta) => store.resetTagOffsetToTag(payload.tag, {
       deferCommit: meta.deferCommit === true,
+      historyMeta: buildHistoryMeta('palette.resetTagOffset', payload, meta),
       _fromFacade: true
     }),
     'palette.updateTag': (payload) => store.updatePaletteTag(payload.tag, payload.newValue, { _fromFacade: true })
@@ -23,14 +45,17 @@ function createEditorHandlers(store) {
       rebuildLayers: payload.rebuildLayers !== false,
       refresh: payload.refresh !== false,
       deferCommit: meta.deferCommit === true,
+      historyMeta: buildHistoryMeta('part.updateProperty', payload, meta),
       _fromFacade: true
     }),
     'part.applyLayerDeltas': (payload, meta) => store.applyPartLayerDeltas(payload.part, payload.deltas, {
       deferCommit: meta.deferCommit === true,
+      historyMeta: buildHistoryMeta('part.applyLayerDeltas', payload, meta),
       _fromFacade: true
     }),
     'layer.batchApplyLayerDeltas': (payload, meta) => store.batchApplyPartLayerDeltas(payload.updates, {
       deferCommit: meta.deferCommit === true,
+      historyMeta: buildHistoryMeta('layer.batchApplyLayerDeltas', payload, meta),
       _fromFacade: true
     })
   }
@@ -40,18 +65,22 @@ function createBatchHandlers(store) {
   return {
     'batch.updateOpacity': (payload, meta) => store.batchUpdateOpacity(payload.value, payload.mode, {
       deferCommit: meta.deferCommit === true,
+      historyMeta: buildHistoryMeta('batch.updateOpacity', payload, meta),
       _fromFacade: true
     }),
     'batch.updateOffset': (payload, meta) => store.batchUpdateOffset(payload.x, payload.y, payload.mode, {
       deferCommit: meta.deferCommit === true,
+      historyMeta: buildHistoryMeta('batch.updateOffset', payload, meta),
       _fromFacade: true
     }),
     'batch.updatePriority': (payload, meta) => store.batchUpdatePriority(payload.value, payload.mode, {
       deferCommit: meta.deferCommit === true,
+      historyMeta: buildHistoryMeta('batch.updatePriority', payload, meta),
       _fromFacade: true
     }),
     'batch.updateColor': (payload, meta) => store.batchUpdateColor(payload.colorValue, {
       deferCommit: meta.deferCommit === true,
+      historyMeta: buildHistoryMeta('batch.updateColor', payload, meta),
       _fromFacade: true
     })
   }
@@ -89,49 +118,14 @@ function createSavesHandlers(store) {
     }),
     'saves.rename': (payload) => store.renameStudioSession(payload.id, payload.newName, {
       _fromFacade: true
-    }),
-    'saves.restoreLocal': () => store.restoreFromLocalStorage({
-      _fromFacade: true
     })
   }
 }
 
 function createStackHandlers(store) {
   return {
-    'stack.add': (payload) => store.addElement(payload.element, {
-      _fromFacade: true
-    }),
-    'stack.remove': (payload) => store.removeElement(payload.index, {
-      _fromFacade: true
-    }),
-    'stack.move': (payload) => store.moveElement(payload.fromIdx, payload.toIdx, {
-      _fromFacade: true
-    }),
     'stack.rename': (payload) => store.renameStack(payload.stackIndex, payload.newName, {
       _fromFacade: true
-    })
-  }
-}
-
-function createStorageHandlers(store) {
-  return {
-    'storage.loadStacksLocal': () => store.loadStacksFromLocalStorage({
-      _fromFacade: true
-    }),
-    'storage.loadPaletteLocal': () => store.loadPaletteFromLocalStorage({
-      _fromFacade: true
-    }),
-    'storage.importStacks': (payload, meta) => store.importStacksFromJsonFile(payload.file, {
-      _fromFacade: true,
-      atomicHistory: meta.atomicHistory !== false
-    }),
-    'storage.importPalette': (payload, meta) => store.importPaletteFromJsonFile(payload.file, {
-      _fromFacade: true,
-      atomicHistory: meta.atomicHistory !== false
-    }),
-    'storage.importSnapshot': (payload, meta) => store.importStudioSnapshotFromFile(payload.file, {
-      _fromFacade: true,
-      atomicHistory: meta.atomicHistory !== false
     })
   }
 }
@@ -146,8 +140,7 @@ export class StudioCommandBus {
       ...createAssetHandlers(store),
       ...createHistoryHandlers(store),
       ...createSavesHandlers(store),
-      ...createStackHandlers(store),
-      ...createStorageHandlers(store)
+      ...createStackHandlers(store)
     }
   }
 
