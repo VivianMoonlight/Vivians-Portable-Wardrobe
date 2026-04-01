@@ -11,6 +11,7 @@ import { classifyToGroup, getGroupMeta, isHiddenGroup } from '@/config/filterGro
 import { hostWindow } from '@/utils/host-window.js'
 import { HistoryRecord } from '@/utils/history_record.js'
 import { ExternalAdapter } from '@/utils/external_adapters.js'
+import { applyPlayerCraftingToBundle } from '@/studio/craft-resolver.js'
 
 function getGroupNameFromPart(part) {
   if (!part) return ''
@@ -863,7 +864,11 @@ export const useFileSystemStore = defineStore('fs', {
 
       this._ensureSlotControls(characterData, sourceData)
       const bundle = this._buildBundleWithModeOverride(characterData, sourceData, mode)
-      const ok = ExternalAdapter.applyOutfitToCharacter(target, bundle)
+      const hydratedBundle = applyPlayerCraftingToBundle(bundle, {
+        player: hostWindow?.Player,
+        assetGet: typeof hostWindow?.AssetGet === 'function' ? hostWindow.AssetGet.bind(hostWindow) : null
+      })
+      const ok = ExternalAdapter.applyOutfitToCharacter(target, hydratedBundle)
       if (ok) {
         this.characterItem = AssetApi.collectOutfitData(target)
         this.updatePreviewItem()

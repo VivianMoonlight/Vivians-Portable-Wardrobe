@@ -10,7 +10,7 @@ import { RenderApi } from '@/utils/RenderApi'
 import { AssetApi } from '@/utils/AssetApi'
 import { toRaw } from 'vue'
 
-import { setTimeoutHost, clearTimeoutHost } from '@/utils/host-window.js'
+import { hostWindow, setTimeoutHost, clearTimeoutHost } from '@/utils/host-window.js'
 
 // Clone utilities
 import { fastClone, shallowClone } from '@/utils/clone.js'
@@ -28,6 +28,7 @@ import * as PriorityActions from '@/studio/priority-actions.js'
 import * as AssetActions from '@/studio/asset-actions.js'
 import * as StorageActions from '@/studio/storage-actions.js'
 import * as SaveActions from '@/studio/save-actions.js'
+import { resolveCraftForAssetSlot } from '@/studio/craft-resolver.js'
 import { getStudioFacade } from '@/studio/StudioFacade'
 import { createStudioRenderPipeline } from '@/studio/StudioRenderPipeline'
 import {
@@ -3492,7 +3493,14 @@ export const useStudioStore = defineStore('studio', {
       const result = AssetActions.applyAssetToSelectedStack(this, asset, replaceTarget, {
         ensurePartUid: this.ensurePartUid.bind(this),
         _buildLayerEntriesWithCache: this._buildLayerEntriesWithCache.bind(this),
-        fastClone: fastClone
+        fastClone: fastClone,
+        resolveCraftForAssetSlot: ({ assetName, groupName }) => resolveCraftForAssetSlot({
+          assetName,
+          groupName,
+          player: hostWindow?.Player,
+          assetGet: typeof hostWindow?.AssetGet === 'function' ? hostWindow.AssetGet.bind(hostWindow) : null,
+          cloneFn: fastClone
+        })
       })
 
       if (result.stacks) {

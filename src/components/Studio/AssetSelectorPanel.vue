@@ -17,6 +17,15 @@
           :aria-label="t('assetSelector.searchAria')"
         />
 
+        <button
+          @click="toggleCraftOnly"
+          class="craft-toggle-btn"
+          :class="{ active: craftOnly }"
+          title="Show craft items only"
+        >
+          Craft
+        </button>
+
         <!-- new: 切换按钮 -->
         <button
           @click="toggleView"
@@ -56,6 +65,10 @@
             <strong>{{ t("assetSelector.candidatesLabel") }}</strong>
             {{ filteredAssets.length }}
           </div>
+          <div>
+            <strong>Craft</strong>
+            {{ craftCandidateCount }}
+          </div>
         </div>
 
         <div v-if="loading" class="placeholder">{{ t("assetSelector.loading") }}</div>
@@ -85,6 +98,7 @@
 
             <div class="middle">
               <div class="aname" :title="assetPrimary(a)">{{ assetPrimary(a) }}</div>
+              <span v-if="isCraftAsset(a)" class="craft-badge">Craft</span>
             </div>
 
             <div class="right">
@@ -124,6 +138,8 @@
                 {{ assetPrimary(a) }}
               </div>
 
+              <span v-if="isCraftAsset(a)" class="craft-badge">Craft</span>
+
               <button
                 class="apply-btn"
                 @click="applyAsset(a)"
@@ -152,6 +168,7 @@ import * as Palette from "@/services/PaletteService";
 import { hostWindow, doc, setTimeoutHost } from "@/utils/host-window.js";
 import * as DialogService from "@/services/DialogService.js";
 import { throttle, debounce } from "@/utils/performance.js";
+import { readPlayerCrafting, resolveCraftForAssetSlot, applyCraftVisualToPart } from "@/studio/craft-resolver.js";
 
 const { t } = useI18n();
 
@@ -175,6 +192,7 @@ const hasFocused = computed(() => isReplaceMode.value && !!part.value);
 // search state
 const searchTerm = ref("");
 const searchDebounceTimer = ref(null);
+const craftOnly = ref(false);
 
 // ✅ Performance optimization: throttle hover preview rendering (100ms min interval)
 // This prevents excessive render calls when user quickly hovers over multiple assets
@@ -200,11 +218,53 @@ const assets = computed(() => {
     : [];
 });
 
+const playerCrafting = computed(() => readPlayerCrafting(hostWindow?.Player));
+
+function extractAssetName(asset) {
+  if (!asset) return "";
+  return String(asset.Name || asset.name || "").trim();
+}
+
+function extractAssetGroupName(asset) {
+  if (!asset) return "";
+  if (typeof asset.Group === "string") return asset.Group;
+  return String(asset.Group?.Name || asset.Group?.name || "").trim();
+}
+
+function isCraftAsset(asset) {
+  const assetName = extractAssetName(asset);
+  const groupName = extractAssetGroupName(asset);
+  if (!assetName || !groupName) return false;
+
+  const matched = resolveCraftForAssetSlot({
+    assetName,
+    groupName,
+    player: hostWindow?.Player,
+    playerCrafting: playerCrafting.value,
+    assetGet: typeof hostWindow?.AssetGet === "function" ? hostWindow.AssetGet.bind(hostWindow) : null,
+    cloneFn: (v) => v,
+  });
+
+  return !!matched;
+}
+
+const craftCandidateCount = computed(() => {
+  let count = 0;
+  for (const a of assets.value || []) {
+    if (isCraftAsset(a)) count++;
+  }
+  return count;
+});
+
 // filtered assets according to searchTerm
 const filteredAssets = computed(() => {
   const term = (searchTerm.value || "").trim().toLowerCase();
-  if (!term) return assets.value || [];
-  return (assets.value || []).filter((a) => {
+  let list = assets.value || [];
+  if (craftOnly.value) {
+    list = list.filter((a) => isCraftAsset(a));
+  }
+  if (!term) return list;
+  return list.filter((a) => {
     try {
       const primary = assetPrimary(a).toLowerCase();
       if (primary.includes(term)) return true;
@@ -220,6 +280,10 @@ const filteredAssets = computed(() => {
     return false;
   });
 });
+
+function toggleCraftOnly() {
+  craftOnly.value = !craftOnly.value;
+}
 
 // helper for primary label
 function assetPrimary(a) {
@@ -666,16 +730,44 @@ async function applyAsset(asset) {
    ------------------------- */
 
 function createPreviewDataWithAsset(asset) {
+  const groupName =
+    (asset.Group &&
+      (typeof asset.Group === "string"
+        ? asset.Group
+        : asset.Group.Name || asset.Group.name)) ||
+    undefined;
+
   const newPart = {
     Name: asset.Name,
-    Group:
-      (asset.Group &&
-        (typeof asset.Group === "string"
-          ? asset.Group
-          : asset.Group.Name || asset.Group.name)) ||
-      undefined,
+    Group: groupName,
     Color: asset.DefaultColor ?? asset.DefaultColour ?? asset.Default ?? null,
   };
+
+  const resolvedCraft = resolveCraftForAssetSlot({
+    assetName: asset.Name,
+    groupName,
+    player: hostWindow?.Player,
+    playerCrafting: playerCrafting.value,
+    assetGet: typeof hostWindow?.AssetGet === "function" ? hostWindow.AssetGet.bind(hostWindow) : null,
+    cloneFn: (v) => {
+      try {
+        return JSON.parse(JSON.stringify(v));
+      } catch (e) {
+        return v;
+      }
+    },
+  });
+
+  if (resolvedCraft) {
+    newPart.Craft = resolvedCraft;
+    applyCraftVisualToPart(newPart, resolvedCraft, (v) => {
+      try {
+        return JSON.parse(JSON.stringify(v));
+      } catch (e) {
+        return v;
+      }
+    });
+  }
 
   // ensure entries for preview part
   let entries = [];
@@ -807,6 +899,21 @@ function onSearchInput() {
   color: var(--color-text-primary, #0f172a);
 }
 
+.craft-toggle-btn {
+  padding: 6px 10px;
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--color-border-light, #f1f5f9);
+  background: var(--color-bg-base, #fff);
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--color-text-primary, #0f172a);
+}
+
+.craft-toggle-btn.active {
+  border-color: var(--color-border-base, #cbd5e1);
+  background: var(--color-bg-surface, #f8fafc);
+}
+
 /* body */
 .body {
   flex: 1;
@@ -905,6 +1012,19 @@ function onSearchInput() {
   white-space: nowrap;
 }
 
+.craft-badge {
+  margin-top: 4px;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border-base, #e2e8f0);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-secondary, #475569);
+  background: var(--color-bg-surface, #f8fafc);
+}
+
 /* right: actions */
 .right {
   display: flex;
@@ -985,6 +1105,7 @@ function onSearchInput() {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 6px;
   color: var(--color-text-primary, #0f172a);
 }
 
