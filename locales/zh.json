@@ -313,7 +313,82 @@
     "currentTag": "当前",
     "scrollHint": "横向滚动可查看更多状态",
     "jumpLatest": "跳至最新",
-    "hasFutureState": "存在可重做状态"
+    "hasFutureState": "存在可重做状态",
+    "stateChange": "状态变更",
+    "initialState": "初始状态",
+    "operationTags": {
+      "interaction": "交互: {label}",
+      "source": "来源: {label}",
+      "partsCount": "{count} 个部件",
+      "deltasCount": "{count} 处改动",
+      "stepBack": "回退 {count} 步",
+      "stepForward": "前进 {count} 步"
+    },
+    "actionCategoryLabels": {
+      "part": "部件",
+      "layer": "图层",
+      "batch": "批量",
+      "palette": "调色板",
+      "stack": "堆栈",
+      "asset": "资源"
+    },
+    "interactionKindLabels": {
+      "palette": "调色板编辑",
+      "editor": "编辑器",
+      "previewMove": "预览拖动",
+      "layerEdit": "图层编辑",
+      "batchEdit": "批量编辑",
+      "priorityDrag": "优先级拖拽"
+    },
+    "sourceLabels": {
+      "batchEditPanel": "批量编辑面板",
+      "partInspectorPanel": "部件检查器",
+      "layerManagerWidget": "图层管理器",
+      "previewWidget": "预览窗口"
+    },
+    "actionTypeLabels": {
+      "part": {
+        "updateMetadata": "更新部件元数据",
+        "updateProperty": "更新部件属性",
+        "applyLayerDeltas": "应用部件图层改动"
+      },
+      "layer": {
+        "batchApplyLayerDeltas": "批量应用图层改动"
+      },
+      "batch": {
+        "updateOpacity": "批量更新不透明度",
+        "updateOffset": "批量更新偏移",
+        "updateColor": "批量更新颜色",
+        "updatePriority": "批量更新优先级"
+      },
+      "palette": {
+        "applyColor": "应用颜色",
+        "applyTag": "应用调色标签",
+        "applyTagOffset": "应用标签偏移",
+        "resetTagOffset": "重置标签偏移",
+        "updateTag": "更新调色标签",
+        "createTagAndReplace": "创建标签并替换",
+        "renameTagReferences": "重命名标签引用",
+        "deleteTag": "删除调色标签",
+        "clear": "清空调色板",
+        "savedColor": {
+          "add": "添加收藏颜色",
+          "update": "更新收藏颜色",
+          "delete": "删除收藏颜色",
+          "clear": "清空收藏颜色"
+        }
+      },
+      "stack": {
+        "add": "新增堆栈",
+        "remove": "删除堆栈",
+        "move": "移动堆栈",
+        "clear": "清空堆栈",
+        "rename": "重命名堆栈"
+      },
+      "asset": {
+        "apply": "应用资源"
+      }
+    }
   },
   "groupNames": {
     "Item": "道具",

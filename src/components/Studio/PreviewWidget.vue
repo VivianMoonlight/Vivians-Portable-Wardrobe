@@ -437,6 +437,30 @@ function onPointerMove(e) {
   }
 }
 
+function finalizePreviewMoveInteraction(commit = true) {
+  if (!store) return false
+
+  let finalized = false
+  try {
+    finalized = commit ? !!store.commitInteraction() : !!store.cancelInteraction()
+  } catch (err) {
+    finalized = false
+  }
+
+  if (!finalized && typeof store.forceEndRealtimeScope === 'function') {
+    try {
+      finalized = !!store.forceEndRealtimeScope('editor', {
+        commit,
+        interactionKind: 'preview-move'
+      })
+    } catch (err) {
+      finalized = false
+    }
+  }
+
+  return finalized
+}
+
 function onPointerUp(e) {
   if (pointerId.value !== null && e.pointerId !== pointerId.value) return
 
@@ -466,22 +490,26 @@ function onPointerUp(e) {
   pointerId.value = null
 
   // Commit the preview-move interaction if we were dragging
-  if (activeTool.value === 'move' && store && hadDrag) {
-    store.commitInteraction()
+  if (hadDrag) {
+    finalizePreviewMoveInteraction(true)
   }
 }
 
 function onPointerCancel(e) {
   if (pointerId.value !== null && e.pointerId !== pointerId.value) return
 
+  const hadDrag = isDraggingLayer.value || isDraggingMultipleLayers.value
+
   // Cleanup Move
   if (isDraggingLayer.value) {
     isDraggingLayer.value = false
+    updateLayerPosition.flush()
     updateLayerPosition.cancel()
   }
 
   if (isDraggingMultipleLayers.value) {
     isDraggingMultipleLayers.value = false
+    updateMultipleLayersOffset.flush()
     updateMultipleLayersOffset.cancel()
     multiLayerStartOffsets.value = []
   }
@@ -495,9 +523,11 @@ function onPointerCancel(e) {
   } catch (err) { /* ignore */ }
   pointerId.value = null
 
-  // Cancel the interaction without committing
-  if (store) {
-    store.cancelInteraction()
+  // If canvas deltas were already applied, prefer committing to keep history consistent.
+  if (hadDrag) {
+    finalizePreviewMoveInteraction(true)
+  } else {
+    finalizePreviewMoveInteraction(false)
   }
 }
 

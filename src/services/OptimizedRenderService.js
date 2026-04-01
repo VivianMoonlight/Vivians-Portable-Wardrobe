@@ -8,12 +8,36 @@ import { hostWindow, doc, setTimeoutHost } from '@/utils/host-window.js';
 import { createCanvas, get2DContext } from '@/utils/canvas.js';
 import { isEqual } from 'lodash-es';
 import { normalizeForFastPath } from '@/services/NormalizationPolicy';
-import { isFastPathNormalizationEnabled } from '@/config/featureFlags';
+import {
+    isFastPathNormalizationEnabled,
+    isRenderSafetyTelemetryEnabled
+} from '@/config/featureFlags';
 
 // Constants for character ID generation
 const RANDOM_ID_SUBSTRING_LENGTH = 7;
 const MEMBER_NUMBER_BASE = 1000000000;
 const MEMBER_NUMBER_RANGE = 1000000;
+
+function createPerfStats() {
+    return {
+        totalRenders: 0,
+        fastPathHits: 0,
+        incrementalHits: 0,
+        fullReloadHits: 0,
+        fullReloadReasons: {
+            forcedOption: 0,
+            duplicateOrInvalidGroup: 0,
+            unsafeHiddenRawChange: 0,
+            unknown: 0
+        },
+        unsafeGeneralParamRejects: 0,
+        unsafeHiddenRawSamples: 0,
+        itemsProcessed: 0,
+        itemsReused: 0,
+        normalizationRuns: 0,
+        normalizationFallbacks: 0
+    };
+}
 
 export class OptimizedRenderService {
     constructor({
@@ -43,17 +67,9 @@ export class OptimizedRenderService {
         // Map: groupName -> AppearanceItem
         this.previousAppearanceCache = new Map();
         // Performance monitoring
-        this.perfStats = {
-            totalRenders: 0,
-            fastPathHits: 0,
-            incrementalHits: 0,
-            fullReloadHits: 0,
-            itemsProcessed: 0,
-            itemsReused: 0,
-            normalizationRuns: 0,
-            normalizationFallbacks: 0
-        };
+        this.perfStats = createPerfStats();
         this._lastNormalizationEnabled = isFastPathNormalizationEnabled();
+        this._safetyTelemetryEnabled = isRenderSafetyTelemetryEnabled();
     }
 
     /**
@@ -216,6 +232,79 @@ export class OptimizedRenderService {
         }
     }
 
+    _recordFullReloadReason(reason = 'unknown') {
+        const keyByReason = {
+            'forced-option': 'forcedOption',
+            'duplicate-or-invalid-group': 'duplicateOrInvalidGroup',
+            'unsafe-hidden-raw-change': 'unsafeHiddenRawChange'
+        };
+        const key = keyByReason[reason] || 'unknown';
+
+        if (!this.perfStats.fullReloadReasons || typeof this.perfStats.fullReloadReasons !== 'object') {
+            this.perfStats.fullReloadReasons = {
+                forcedOption: 0,
+                duplicateOrInvalidGroup: 0,
+                unsafeHiddenRawChange: 0,
+                unknown: 0
+            };
+        }
+
+        this.perfStats.fullReloadReasons[key] = (this.perfStats.fullReloadReasons[key] || 0) + 1;
+    }
+
+    _collectUnsafeDiffKeys(previousRawItem, nextRawItem) {
+        const changedTopLevelKeys = [];
+        const previousKeys = previousRawItem && typeof previousRawItem === 'object'
+            ? Object.keys(previousRawItem)
+            : [];
+        const nextKeys = nextRawItem && typeof nextRawItem === 'object'
+            ? Object.keys(nextRawItem)
+            : [];
+        const keySet = new Set([...previousKeys, ...nextKeys]);
+
+        for (const key of keySet) {
+            if (!isEqual(previousRawItem?.[key], nextRawItem?.[key])) {
+                changedTopLevelKeys.push(key);
+            }
+        }
+
+        const previousProperty = previousRawItem?.Property && typeof previousRawItem.Property === 'object'
+            ? previousRawItem.Property
+            : {};
+        const nextProperty = nextRawItem?.Property && typeof nextRawItem.Property === 'object'
+            ? nextRawItem.Property
+            : {};
+        const propertyKeys = new Set([...Object.keys(previousProperty), ...Object.keys(nextProperty)]);
+        const changedPropertyKeys = [];
+
+        for (const key of propertyKeys) {
+            if (!isEqual(previousProperty[key], nextProperty[key])) {
+                changedPropertyKeys.push(key);
+            }
+        }
+
+        return {
+            changedTopLevelKeys,
+            changedPropertyKeys
+        };
+    }
+
+    _recordUnsafeGeneralParamReject(previousRawItem, nextRawItem, context = {}) {
+        this.perfStats.unsafeGeneralParamRejects++;
+
+        if (!this._safetyTelemetryEnabled) {
+            return;
+        }
+
+        const { changedTopLevelKeys, changedPropertyKeys } = this._collectUnsafeDiffKeys(previousRawItem, nextRawItem);
+        this.perfStats.unsafeHiddenRawSamples++;
+        console.warn('[OptimizedRenderService] Unsafe raw change sample:', {
+            context,
+            changedTopLevelKeys,
+            changedPropertyKeys
+        });
+    }
+
     _isSafeGeneralParamUpdate(previousBundleItem, nextBundleItem) {
         if (!previousBundleItem || !nextBundleItem) {
             return false;
@@ -334,6 +423,10 @@ export class OptimizedRenderService {
 
             if (!comparableChanged && rawChanged && !this._isSafeGeneralParamUpdate(previousRawItem, nextRawItem)) {
                 // Normalization can hide unrelated object updates; only allow raw-safe updates.
+                this._recordUnsafeGeneralParamReject(previousRawItem, nextRawItem, {
+                    stage: '_tryApplyGeneralParamUpdate',
+                    groupName
+                });
                 return false;
             }
 
@@ -415,6 +508,7 @@ export class OptimizedRenderService {
         );
 
         this.perfStats.fullReloadHits++;
+        this._recordFullReloadReason(reason);
         this._syncAppearanceCacheFromCharacter();
         console.log(`[Perf] Full reload (${reason})`);
     }
@@ -468,6 +562,10 @@ export class OptimizedRenderService {
                 if (!comparableChanged && rawChanged && !this._isSafeGeneralParamUpdate(previousRawItem, nextRawItem)) {
                     // Comparable says unchanged, but raw object changed with non-safe fields.
                     // Force caller to choose full reload to keep host state correct.
+                    this._recordUnsafeGeneralParamReject(previousRawItem, nextRawItem, {
+                        stage: '_collectIncrementalChangedGroups',
+                        groupName
+                    });
                     return null;
                 }
             }
@@ -790,23 +888,17 @@ export class OptimizedRenderService {
      * Get performance statistics
      */
     getPerfStats() {
-        return { ...this.perfStats };
+        return {
+            ...this.perfStats,
+            fullReloadReasons: { ...(this.perfStats.fullReloadReasons || {}) }
+        };
     }
 
     /**
      * Reset performance statistics
      */
     resetPerfStats() {
-        this.perfStats = {
-            totalRenders: 0,
-            fastPathHits: 0,
-            incrementalHits: 0,
-            fullReloadHits: 0,
-            itemsProcessed: 0,
-            itemsReused: 0,
-            normalizationRuns: 0,
-            normalizationFallbacks: 0
-        };
+        this.perfStats = createPerfStats();
     }
 
     /**

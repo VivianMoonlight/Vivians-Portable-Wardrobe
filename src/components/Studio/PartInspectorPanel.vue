@@ -206,7 +206,7 @@ import CollapsibleSection from '../ui/CollapsibleSection.vue'
 import { hostWindow, setTimeoutHost, doc } from '@/utils/host-window.js'
 import { AssetApi } from '@/utils/AssetApi'
 import * as Palette from '@/services/PaletteService'
-import * as LayerTranslator from '@/services/LayerTranslator'
+import { applyLayerDeltasToPart } from '@/services/PartPatchApplier'
 
 const { t } = useI18n()
 
@@ -872,45 +872,60 @@ function _isAnyLayerFocused(layerIndices, stackIndex, partIndex) {
   return false
 }
 
-function _applyLayerBlinkOpacity(entries, indicesSet, visible, opacityMap) {
-  for (const entry of entries || []) {
-    const targetIdx = Number(entry?.layerIndex)
-    if (Number.isFinite(targetIdx) && indicesSet.has(targetIdx)) {
-      if (!opacityMap.has(targetIdx)) {
-        opacityMap.set(targetIdx, entry?.opacity ?? 1)
-      }
-      entry.opacity = visible ? (opacityMap.get(targetIdx) ?? 1) : 0
+function _collectBlinkOpacityDeltas(context, visible) {
+  if (!context) return []
+
+  const indicesSet = new Set(context.layerIndices || [])
+  if (indicesSet.size === 0) return []
+
+  const sourceEntries = Array.isArray(context.sourceLayerEntries) ? context.sourceLayerEntries : []
+  const opacityMap = context.originalOpacityMap instanceof Map ? context.originalOpacityMap : new Map()
+  const deltasByLayer = new Map()
+
+  const upsert = (layerIndex, sourceOpacity) => {
+    const numericLayerIndex = Number(layerIndex)
+    if (!Number.isFinite(numericLayerIndex) || !indicesSet.has(numericLayerIndex)) return
+
+    if (!opacityMap.has(numericLayerIndex)) {
+      opacityMap.set(numericLayerIndex, sourceOpacity ?? 1)
     }
+
+    const targetOpacity = visible ? (opacityMap.get(numericLayerIndex) ?? 1) : 0
+    deltasByLayer.set(numericLayerIndex, {
+      layerIndex: numericLayerIndex,
+      opacity: targetOpacity
+    })
+  }
+
+  for (const entry of sourceEntries) {
+    upsert(entry?.layerIndex, entry?.opacity)
     if (Array.isArray(entry?.subLayers)) {
       for (const sub of entry.subLayers) {
-        const subIdx = Number(sub?.layerIndex)
-        if (Number.isFinite(subIdx) && indicesSet.has(subIdx)) {
-          if (!opacityMap.has(subIdx)) {
-            opacityMap.set(subIdx, sub?.opacity ?? 1)
-          }
-          sub.opacity = visible ? (opacityMap.get(subIdx) ?? 1) : 0
-        }
+        upsert(sub?.layerIndex, sub?.opacity)
       }
     }
   }
+
+  return Array.from(deltasByLayer.values())
 }
 
 function _buildLayerHoverBlinkAppearance(context, visible) {
   if (!context) return null
-  const { stackIndex, partIndex, layerIndices, sourceLayerEntries } = context
+  const { stackIndex, partIndex, layerIndices } = context
   if (!Number.isFinite(stackIndex) || !Number.isFinite(partIndex)) return null
   const indicesSet = new Set(layerIndices || [])
   if (indicesSet.size === 0) return null
+
+  const blinkDeltas = _collectBlinkOpacityDeltas(context, visible)
+  if (!blinkDeltas.length) return null
 
   const renderStacks = (store.stacks || []).map((el, si) => {
     const data = Array.isArray(el?.data) ? el.data : []
     const nextData = data.map((p, pi) => {
       if (si !== stackIndex || pi !== partIndex) return p
-      const baseEntries = _cloneLayerEntries(sourceLayerEntries)
-      _applyLayerBlinkOpacity(baseEntries, indicesSet, visible, context.originalOpacityMap)
       const asset = (typeof store.resolveAssetForPart === 'function') ? store.resolveAssetForPart(p) : null
-      const rebuilt = LayerTranslator.reconstructPartFromLayerEntries(baseEntries, p, { originalAsset: asset })
-      return rebuilt || p
+      const patched = applyLayerDeltasToPart(p, blinkDeltas, { asset })
+      return patched?.changed && patched?.part ? patched.part : p
     })
     return { data: nextData, filterList: Array.isArray(el?.filterList) ? el.filterList : [] }
   })

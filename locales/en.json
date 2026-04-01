@@ -313,7 +313,82 @@
     "currentTag": "Now",
     "scrollHint": "Scroll horizontally to browse more states",
     "jumpLatest": "Jump to latest",
-    "hasFutureState": "Future states available"
+    "hasFutureState": "Future states available",
+    "stateChange": "State Change",
+    "initialState": "Initial State",
+    "operationTags": {
+      "interaction": "Interaction: {label}",
+      "source": "Source: {label}",
+      "partsCount": "{count} parts",
+      "deltasCount": "{count} deltas",
+      "stepBack": "Undo {count} step(s)",
+      "stepForward": "Redo {count} step(s)"
+    },
+    "actionCategoryLabels": {
+      "part": "Part",
+      "layer": "Layer",
+      "batch": "Batch",
+      "palette": "Palette",
+      "stack": "Stack",
+      "asset": "Asset"
+    },
+    "interactionKindLabels": {
+      "palette": "Palette edit",
+      "editor": "Editor",
+      "previewMove": "Preview drag",
+      "layerEdit": "Layer edit",
+      "batchEdit": "Batch edit",
+      "priorityDrag": "Priority drag"
+    },
+    "sourceLabels": {
+      "batchEditPanel": "Batch Edit Panel",
+      "partInspectorPanel": "Part Inspector Panel",
+      "layerManagerWidget": "Layer Manager",
+      "previewWidget": "Preview Widget"
+    },
+    "actionTypeLabels": {
+      "part": {
+        "updateMetadata": "Update part metadata",
+        "updateProperty": "Update part properties",
+        "applyLayerDeltas": "Apply part layer changes"
+      },
+      "layer": {
+        "batchApplyLayerDeltas": "Apply layer batch changes"
+      },
+      "batch": {
+        "updateOpacity": "Batch update opacity",
+        "updateOffset": "Batch update offset",
+        "updateColor": "Batch update color",
+        "updatePriority": "Batch update priority"
+      },
+      "palette": {
+        "applyColor": "Apply color",
+        "applyTag": "Apply palette tag",
+        "applyTagOffset": "Apply tag offset",
+        "resetTagOffset": "Reset tag offset",
+        "updateTag": "Update palette tag",
+        "createTagAndReplace": "Create tag and replace",
+        "renameTagReferences": "Rename tag references",
+        "deleteTag": "Delete palette tag",
+        "clear": "Clear palette",
+        "savedColor": {
+          "add": "Add saved color",
+          "update": "Update saved color",
+          "delete": "Delete saved color",
+          "clear": "Clear saved colors"
+        }
+      },
+      "stack": {
+        "add": "Add stack",
+        "remove": "Remove stack",
+        "move": "Move stack",
+        "clear": "Clear stacks",
+        "rename": "Rename stack"
+      },
+      "asset": {
+        "apply": "Apply asset"
+      }
+    }
   },
   "groupNames": {
     "Item": "Item",

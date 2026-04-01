@@ -59,6 +59,7 @@ import {
 import * as Palette from '@/services/PaletteService'
 import * as AssetIndex from '@/services/AssetIndexService'
 import * as LayerTranslator from '@/services/LayerTranslator'
+import { applyLayerDeltasToPart } from '@/services/PartPatchApplier'
 
 // PriorityService (refactored)
 import PriorityService from '@/services/PriorityService'
@@ -2816,15 +2817,29 @@ export const useStudioStore = defineStore('studio', {
       if (!location?.partRef) return null
 
       const sourcePart = location.partRef
-      const sourceEntries = this.getLayerEntriesForPart(sourcePart, { forceRebuild: false, clone: true })
-      if (!Array.isArray(sourceEntries) || sourceEntries.length === 0) return null
-
-      const nextEntries = fastClone(sourceEntries)
-      const changed = this._applyLayerDeltasToEntries(nextEntries, deltas)
-      if (!changed) return null
-
       const asset = this.resolveAssetForPart(sourcePart)
-      const rebuilt = LayerTranslator.reconstructPartFromLayerEntries(nextEntries, sourcePart, { originalAsset: asset })
+      let rebuilt = null
+
+      try {
+        const patchResult = applyLayerDeltasToPart(sourcePart, deltas, { asset })
+        if (patchResult?.changed && patchResult?.part) {
+          rebuilt = patchResult.part
+        }
+      } catch (e) {
+        console.warn('[studioStore] Part patch applier failed, using legacy layer translator fallback', e)
+      }
+
+      if (!rebuilt) {
+        const sourceEntries = this.getLayerEntriesForPart(sourcePart, { forceRebuild: false, clone: true })
+        if (!Array.isArray(sourceEntries) || sourceEntries.length === 0) return null
+
+        const nextEntries = fastClone(sourceEntries)
+        const changed = this._applyLayerDeltasToEntries(nextEntries, deltas)
+        if (!changed) return null
+
+        rebuilt = LayerTranslator.reconstructPartFromLayerEntries(nextEntries, sourcePart, { originalAsset: asset })
+      }
+
       if (!rebuilt) return null
 
       const uid = sourcePart._uid || this.ensurePartUid(sourcePart)
@@ -3005,15 +3020,10 @@ export const useStudioStore = defineStore('studio', {
       }
 
       try {
-        const asset = this.resolveAssetForPart(fp)
-        const newPart = LayerTranslator.reconstructPartFromLayerEntries(entries, fp, { originalAsset: asset })
-        if (!newPart) return null
+        const newPartClone = this.UpdateSpecificPartFromLayerEntries(fp, entries)
+        if (!newPartClone) return null
 
         const uid = fp._uid || this.ensurePartUid(fp)
-        try { newPart._uid = uid } catch (e) { console.warn(e) }
-
-        const newPartClone = fastClone(newPart)
-        newPartClone.layerEntries = this._buildLayerEntriesWithCache(newPartClone, true)
 
         const origJson = JSON.stringify(fp)
 
@@ -3172,6 +3182,20 @@ export const useStudioStore = defineStore('studio', {
       }
       try {
         const asset = this.resolveAssetForPart(part)
+        const previousEntries = this.getLayerEntriesForPart(part, { forceRebuild: false, clone: true })
+        const deltas = this._deriveLayerDeltas(previousEntries, entries)
+
+        if (Array.isArray(deltas) && deltas.length > 0) {
+          const patchResult = applyLayerDeltasToPart(part, deltas, { asset })
+          if (patchResult?.changed && patchResult?.part) {
+            const patchedPart = patchResult.part
+            const uid = part._uid || this.ensurePartUid(part)
+            patchedPart.layerEntries = fastClone(entries)
+            try { patchedPart._uid = uid } catch (e) { console.warn(e) }
+            return patchedPart
+          }
+        }
+
         const newPart = LayerTranslator.reconstructPartFromLayerEntries(entries, part, { originalAsset: asset })
         if (!newPart) return null
         const uid = part._uid || this.ensurePartUid(part)

@@ -75,7 +75,17 @@
             </div>
             <div class="item-content">
               <div class="item-chip">{{ t("history.pastTag") }}</div>
-              <div class="item-description">{{ item.description }}</div>
+              <div class="item-description">{{ getLocalizedHistoryDescription(item) }}</div>
+              <div class="item-meta-tags">
+                <span
+                  v-for="tag in getOperationTags(item)"
+                  :key="`${tag.kind}-${tag.label}`"
+                  class="meta-chip"
+                  :class="`meta-chip-${tag.kind}`"
+                >
+                  {{ tag.label }}
+                </span>
+              </div>
               <div class="item-timestamp">{{ formatTimestamp(item.timestamp) }}</div>
             </div>
           </div>
@@ -87,6 +97,22 @@
             <div class="item-content">
               <div class="item-chip">{{ t("history.currentTag") }}</div>
               <div class="current-label">{{ t("history.currentState") }}</div>
+              <div v-if="currentState" class="item-description current-description">
+                {{ getLocalizedHistoryDescription(currentState) }}
+              </div>
+              <div v-if="currentState" class="item-meta-tags">
+                <span
+                  v-for="tag in getOperationTags(currentState, { includeStep: false })"
+                  :key="`${tag.kind}-${tag.label}`"
+                  class="meta-chip"
+                  :class="`meta-chip-${tag.kind}`"
+                >
+                  {{ tag.label }}
+                </span>
+              </div>
+              <div v-if="currentState?.timestamp" class="item-timestamp">
+                {{ formatTimestamp(currentState.timestamp) }}
+              </div>
             </div>
           </div>
 
@@ -107,7 +133,17 @@
             </div>
             <div class="item-content">
               <div class="item-chip">{{ t("history.futureTag") }}</div>
-              <div class="item-description">{{ item.description }}</div>
+              <div class="item-description">{{ getLocalizedHistoryDescription(item) }}</div>
+              <div class="item-meta-tags">
+                <span
+                  v-for="tag in getOperationTags(item)"
+                  :key="`${tag.kind}-${tag.label}`"
+                  class="meta-chip"
+                  :class="`meta-chip-${tag.kind}`"
+                >
+                  {{ tag.label }}
+                </span>
+              </div>
               <div class="item-timestamp">{{ formatTimestamp(item.timestamp) }}</div>
             </div>
           </div>
@@ -139,7 +175,7 @@ import { useI18n } from "vue-i18n";
 import { useStudioStore } from "@/stores/studioStore";
 import * as DialogService from "@/services/DialogService.js";
 
-const { t } = useI18n();
+const { t, te } = useI18n();
 const store = useStudioStore();
 
 const timelineRef = ref(null);
@@ -199,6 +235,22 @@ const canScrollPrev = ref(false);
 const canScrollNext = ref(false);
 const showScrollHint = ref(false);
 
+const INTERACTION_KIND_KEY_MAP = Object.freeze({
+  palette: "palette",
+  editor: "editor",
+  "preview-move": "previewMove",
+  "layer-edit": "layerEdit",
+  "batch-edit": "batchEdit",
+  "priority-drag": "priorityDrag",
+});
+
+const SOURCE_KEY_MAP = Object.freeze({
+  BatchEditPanel: "batchEditPanel",
+  PartInspectorPanel: "partInspectorPanel",
+  LayerManagerWidget: "layerManagerWidget",
+  PreviewWidget: "previewWidget",
+});
+
 function formatTimestamp(timestamp) {
   if (!timestamp) return "";
 
@@ -225,8 +277,135 @@ function formatTimestamp(timestamp) {
 
 function getItemTitle(item, type) {
   const typeLabel = type === "redo" ? t("history.redoItem") : t("history.undoItem");
+  const description = getLocalizedHistoryDescription(item);
+  const operationTags = getOperationTags(item, { includeStep: false })
+    .map((tag) => tag.label)
+    .join(" · ");
   const time = item.timestamp ? new Date(item.timestamp).toLocaleString() : "";
-  return `${typeLabel}: ${item.description}${time ? "\n" + time : ""}`;
+  return `${typeLabel}: ${description}${operationTags ? "\n" + operationTags : ""}${
+    time ? "\n" + time : ""
+  }`;
+}
+
+function resolveHistoryActionType(item) {
+  const fromMeta = String(item?.historyMeta?.actionType || "").trim();
+  if (fromMeta) return fromMeta;
+
+  const fromDescription = String(item?.description || "").trim();
+  if (/^[a-z]+(\.[a-zA-Z]+)+$/.test(fromDescription)) {
+    return fromDescription;
+  }
+
+  return "";
+}
+
+function getLocalizedHistoryDescription(item) {
+  const actionType = resolveHistoryActionType(item);
+  if (actionType) {
+    const key = `history.actionTypeLabels.${actionType}`;
+    if (te(key)) return t(key);
+  }
+
+  const description = String(item?.description || "").trim();
+  if (!description || description === "State Change") return t("history.stateChange");
+  if (description === "Initial State") return t("history.initialState");
+  return description;
+}
+
+function getActionCategoryLabel(actionType) {
+  const normalizedActionType = String(actionType || "").trim();
+  if (!normalizedActionType) return "";
+
+  const actionCategory = normalizedActionType.split(".")[0];
+  const key = `history.actionCategoryLabels.${actionCategory}`;
+  if (te(key)) return t(key);
+
+  return actionCategory;
+}
+
+function getInteractionKindLabel(interactionKind) {
+  const normalizedInteractionKind = String(interactionKind || "").trim();
+  if (!normalizedInteractionKind) return "";
+
+  const mappedKey =
+    INTERACTION_KIND_KEY_MAP[normalizedInteractionKind] || normalizedInteractionKind;
+  const key = `history.interactionKindLabels.${mappedKey}`;
+  if (te(key)) return t(key);
+
+  return normalizedInteractionKind;
+}
+
+function getSourceLabel(source) {
+  const normalizedSource = String(source || "").trim();
+  if (!normalizedSource) return "";
+
+  const mappedKey = SOURCE_KEY_MAP[normalizedSource] || normalizedSource;
+  const key = `history.sourceLabels.${mappedKey}`;
+  if (te(key)) return t(key);
+
+  return normalizedSource;
+}
+
+function addTag(target, seen, kind, label) {
+  const normalizedLabel = String(label || "").trim();
+  if (!normalizedLabel) return;
+
+  const dedupeKey = `${kind}:${normalizedLabel}`;
+  if (seen.has(dedupeKey)) return;
+
+  seen.add(dedupeKey);
+  target.push({ kind, label: normalizedLabel });
+}
+
+function getOperationTags(item, options = {}) {
+  const includeStep = options.includeStep !== false;
+  const tags = [];
+  const seen = new Set();
+
+  const actionType = resolveHistoryActionType(item);
+  if (actionType) {
+    addTag(tags, seen, "category", getActionCategoryLabel(actionType));
+  }
+
+  const interactionKind = getInteractionKindLabel(item?.historyMeta?.interactionKind);
+  if (interactionKind) {
+    addTag(
+      tags,
+      seen,
+      "interaction",
+      t("history.operationTags.interaction", { label: interactionKind })
+    );
+  }
+
+  const sourceLabel = getSourceLabel(item?.historyMeta?.source);
+  if (sourceLabel) {
+    addTag(tags, seen, "source", t("history.operationTags.source", { label: sourceLabel }));
+  }
+
+  const changedParts = Number(item?.historyMeta?.changedParts);
+  if (Number.isFinite(changedParts) && changedParts > 0) {
+    addTag(tags, seen, "impact", t("history.operationTags.partsCount", { count: changedParts }));
+  }
+
+  const deltaCount = Number(item?.historyMeta?.deltaCount);
+  if (Number.isFinite(deltaCount) && deltaCount > 0) {
+    addTag(tags, seen, "impact", t("history.operationTags.deltasCount", { count: deltaCount }));
+  }
+
+  const steps = Number(item?.steps);
+  if (includeStep && Number.isFinite(steps) && steps !== 0) {
+    const stepCount = Math.abs(steps);
+    addTag(
+      tags,
+      seen,
+      "step",
+      steps > 0
+        ? t("history.operationTags.stepForward", { count: stepCount })
+        : t("history.operationTags.stepBack", { count: stepCount })
+    );
+  }
+
+  return tags;
 }
 
 function jumpToRedoState(item) {
@@ -618,7 +797,7 @@ onBeforeUnmount(() => {
 .item-content {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   flex: 1;
   min-width: 0;
 }
@@ -667,12 +846,65 @@ onBeforeUnmount(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
-  line-clamp: 5;
-  -webkit-line-clamp: 5;
+  line-clamp: 3;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow-wrap: anywhere;
   word-break: break-word;
   line-height: 1.35;
+}
+
+.item-meta-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.meta-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 1px 6px;
+  border-radius: var(--radius-full, 9999px);
+  border: 1px solid var(--color-border-base, #e2e8f0);
+  background: var(--color-bg-base, #ffffff);
+  color: var(--color-text-tertiary, #64748b);
+  font-size: 10px;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.meta-chip-category {
+  border-color: rgba(59, 130, 246, 0.28);
+  background: rgba(59, 130, 246, 0.08);
+  color: var(--color-primary, #3b82f6);
+}
+
+.meta-chip-interaction {
+  border-color: rgba(16, 185, 129, 0.3);
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--color-success, #10b981);
+}
+
+.meta-chip-source {
+  border-color: rgba(14, 116, 144, 0.28);
+  background: rgba(14, 116, 144, 0.1);
+  color: #0e7490;
+}
+
+.meta-chip-impact {
+  border-color: rgba(217, 119, 6, 0.28);
+  background: rgba(217, 119, 6, 0.1);
+  color: #b45309;
+}
+
+.meta-chip-step {
+  border-color: rgba(148, 163, 184, 0.35);
+  background: rgba(148, 163, 184, 0.1);
+  color: var(--color-text-secondary, #475569);
 }
 
 .redo-item .item-description {
@@ -694,6 +926,10 @@ onBeforeUnmount(() => {
   font-size: var(--font-size-sm, 12px);
   font-weight: var(--font-weight-semibold, 600);
   color: var(--color-success, #10b981);
+}
+
+.current-description {
+  color: var(--color-success, #0f766e);
 }
 
 .scroll-hint {
