@@ -38,6 +38,25 @@ const applyMode = computed({
 });
 
 const slotPresenceMap = computed(() => fsStore.slotPresenceMap || {});
+const collapsedGroupIds = ref(new Set());
+
+function isGroupCollapsed(group) {
+  const id = group?.groupID;
+  if (!id) return false;
+  return collapsedGroupIds.value.has(id);
+}
+
+function toggleGroupCollapsed(group) {
+  const id = group?.groupID;
+  if (!id) return;
+  const next = new Set(collapsedGroupIds.value);
+  if (next.has(id)) {
+    next.delete(id);
+  } else {
+    next.add(id);
+  }
+  collapsedGroupIds.value = next;
+}
 
 function getSlotPresence(key) {
   return slotPresenceMap.value?.[key] || { inCharacter: false, inHover: false };
@@ -164,6 +183,12 @@ function isGroupFullyLocked(group) {
   return areKeysFullyLocked(getGroupSlotKeys(group));
 }
 
+function isGroupAllMode(group, mode) {
+  const keys = getGroupSlotKeys(group);
+  if (keys.length === 0) return false;
+  return keys.every((key) => getSlotMode(key) === mode);
+}
+
 async function applyCurrentPreview() {
   const ok = fsStore.applyCurrentPreviewToCharacter();
   if (!ok) {
@@ -177,11 +202,11 @@ function setSlotMode(key, mode) {
 }
 
 function setAllMode(mode) {
-  fsStore.setAllSlotModes(mode);
+  fsStore.setAllSlotModes(mode, { includeLocked: false });
 }
 
 function setGroupMode(groupID, mode) {
-  fsStore.setGroupSlotModes(groupID, mode);
+  fsStore.setGroupSlotModes(groupID, mode, { includeLocked: false });
 }
 
 function toggleSlotLock(key) {
@@ -272,29 +297,54 @@ function toggleGroupLocks(group) {
         v-for="group in displayGroups"
         :key="group.groupID"
         class="filter-group"
-        :class="{ 'hidden-group': group.isHiddenGroup }"
+        :class="{ 'hidden-group': group.isHiddenGroup, collapsed: isGroupCollapsed(group) }"
       >
         <div class="filter-group-title">
           <span class="group-name">
+            <button
+              class="group-collapse-btn"
+              :title="isGroupCollapsed(group) ? 'Expand' : 'Collapse'"
+              :aria-label="isGroupCollapsed(group) ? 'Expand group' : 'Collapse group'"
+              :aria-expanded="!isGroupCollapsed(group)"
+              @click="toggleGroupCollapsed(group)"
+            >
+              <span class="group-collapse-icon" aria-hidden="true">{{ isGroupCollapsed(group) ? '▸' : '▾' }}</span>
+            </button>
             {{ group.displayName || group.groupID }}
             <span v-if="group.isHiddenGroup" class="hidden-badge">{{
               t("filterManager.hiddenBadge")
             }}</span>
           </span>
           <div class="group-actions">
-            <button class="small" @click="setGroupMode(group.groupID, 'original')">
+            <button
+              class="small"
+              :class="{ active: isGroupAllMode(group, 'original') }"
+              @click="setGroupMode(group.groupID, 'original')"
+            >
               <span class="action-icon" aria-hidden="true">↺</span>
               {{ t("filterManager.groupModeOriginal") }}
             </button>
-            <button class="small" @click="setGroupMode(group.groupID, 'incoming')">
+            <button
+              class="small"
+              :class="{ active: isGroupAllMode(group, 'incoming') }"
+              @click="setGroupMode(group.groupID, 'incoming')"
+            >
               <span class="action-icon" aria-hidden="true">✚</span>
               {{ t("filterManager.groupModeIncoming") }}
             </button>
-            <button class="small" @click="setGroupMode(group.groupID, 'empty')">
+            <button
+              class="small"
+              :class="{ active: isGroupAllMode(group, 'empty') }"
+              @click="setGroupMode(group.groupID, 'empty')"
+            >
               <span class="action-icon" aria-hidden="true">⊘</span>
               {{ t("filterManager.groupModeEmpty") }}
             </button>
-            <button class="small" @click="toggleGroupLocks(group)">
+            <button
+              class="small"
+              :class="{ active: isGroupFullyLocked(group) }"
+              @click="toggleGroupLocks(group)"
+            >
               <span class="action-lock" aria-hidden="true">
                 <span
                   class="slot-lock-icon"
@@ -310,7 +360,7 @@ function toggleGroupLocks(group) {
           </div>
         </div>
 
-        <div class="filter-row">
+        <div v-if="!isGroupCollapsed(group)" class="filter-row">
           <div
             v-for="it in group.itemList"
             :key="it.key"
@@ -387,7 +437,7 @@ function toggleGroupLocks(group) {
           </div>
         </div>
 
-        <div v-if="group.itemList.length === 0" class="empty-hint">
+        <div v-if="!isGroupCollapsed(group) && group.itemList.length === 0" class="empty-hint">
           {{ t("filterManager.emptyItems") }}
         </div>
       </div>
@@ -562,6 +612,37 @@ function toggleGroupLocks(group) {
   flex: 1 1 auto;
 }
 
+.group-collapse-btn {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: var(--radius-sm, 6px);
+  border: 1px solid var(--color-border-light, #f1f5f9);
+  background: var(--color-bg-base, #fff);
+  color: var(--color-text-secondary, #64748b);
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: all var(--transition-fast, 0.15s) ease;
+}
+
+.group-collapse-btn:hover {
+  background: var(--color-bg-hover, #f1f5f9);
+  border-color: var(--color-border-strong, #cbd5e1);
+  color: var(--color-text-primary, #0f172a);
+}
+
+.group-collapse-icon {
+  line-height: 1;
+  font-size: 11px;
+}
+
+.filter-group.collapsed .filter-group-title {
+  margin-bottom: 0;
+}
+
 .hidden-badge {
   font-size: var(--font-size-xs, 10px);
   padding: 2px var(--space-sm, 6px);
@@ -629,6 +710,12 @@ function toggleGroupLocks(group) {
 .small:hover {
   background: var(--color-bg-hover, #f1f5f9);
   border-color: var(--color-border-strong, #cbd5e1);
+}
+
+.small.active {
+  background: var(--color-primary, #3b82f6);
+  border-color: var(--color-primary, #3b82f6);
+  color: var(--color-text-inverse, #fff);
 }
 
 .filter-row {

@@ -84,7 +84,7 @@
             v-for="(a, idx) in filteredAssets"
             :key="assetKey(a, idx)"
             class="asset-row"
-            :title="assetPrimary(a)"
+            :title="displayPrimaryLabel(a)"
             @mouseenter="onHoverAssetThrottled(a)"
             @mouseleave="onLeaveAssetImpl(a)"
           >
@@ -97,7 +97,8 @@
             </div>
 
             <div class="middle">
-              <div class="aname" :title="assetPrimary(a)">{{ assetPrimary(a) }}</div>
+              <div class="aname" :title="displayPrimaryLabel(a)">{{ displayPrimaryLabel(a) }}</div>
+              <div v-if="displaySecondaryLabel(a)" class="asub" :title="displaySecondaryLabel(a)">{{ displaySecondaryLabel(a) }}</div>
               <span v-if="isCraftAsset(a)" class="craft-badge">Craft</span>
             </div>
 
@@ -134,8 +135,13 @@
 
             <!-- 文本与按钮 -->
             <div class="card-info">
-              <div class="card-name" :title="assetPrimary(a)">
-                {{ assetPrimary(a) }}
+              <div class="card-text">
+                <div class="card-name" :title="displayPrimaryLabel(a)">
+                  {{ displayPrimaryLabel(a) }}
+                </div>
+                <div v-if="displaySecondaryLabel(a)" class="card-sub" :title="displaySecondaryLabel(a)">
+                  {{ displaySecondaryLabel(a) }}
+                </div>
               </div>
 
               <span v-if="isCraftAsset(a)" class="craft-badge">Craft</span>
@@ -231,12 +237,12 @@ function extractAssetGroupName(asset) {
   return String(asset.Group?.Name || asset.Group?.name || "").trim();
 }
 
-function isCraftAsset(asset) {
+function resolveCraftEntryForAsset(asset) {
   const assetName = extractAssetName(asset);
   const groupName = extractAssetGroupName(asset);
-  if (!assetName || !groupName) return false;
+  if (!assetName || !groupName) return null;
 
-  const matched = resolveCraftForAssetSlot({
+  return resolveCraftForAssetSlot({
     assetName,
     groupName,
     player: hostWindow?.Player,
@@ -244,8 +250,10 @@ function isCraftAsset(asset) {
     assetGet: typeof hostWindow?.AssetGet === "function" ? hostWindow.AssetGet.bind(hostWindow) : null,
     cloneFn: (v) => v,
   });
+}
 
-  return !!matched;
+function isCraftAsset(asset) {
+  return !!resolveCraftEntryForAsset(asset);
 }
 
 const craftCandidateCount = computed(() => {
@@ -290,6 +298,23 @@ function assetPrimary(a) {
   if (!a) return t("assetSelector.unknown");
   if (typeof a === "string") return a;
   return a.Description || a.Desc || a.description || a.name || t("assetSelector.unnamed");
+}
+
+function displayPrimaryLabel(asset) {
+  const fallbackPrimary = assetPrimary(asset);
+  const craftEntry = resolveCraftEntryForAsset(asset);
+  const craftName = (craftEntry?.Name || "").toString().trim();
+  if (!craftName) return fallbackPrimary;
+  return craftName;
+}
+
+function displaySecondaryLabel(asset) {
+  const fallbackPrimary = assetPrimary(asset);
+  const craftEntry = resolveCraftEntryForAsset(asset);
+  const craftName = (craftEntry?.Name || "").toString().trim();
+  if (!craftName) return "";
+  if (fallbackPrimary === craftName) return "";
+  return fallbackPrimary;
 }
 
 // generate stable key for v-for (use Name when available)
@@ -1012,6 +1037,16 @@ function onSearchInput() {
   white-space: nowrap;
 }
 
+.asub {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--color-text-tertiary, #64748b);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .craft-badge {
   margin-top: 4px;
   display: inline-flex;
@@ -1109,6 +1144,13 @@ function onSearchInput() {
   color: var(--color-text-primary, #0f172a);
 }
 
+.card-text {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
 .card-name {
   font-size: 13px;
   font-weight: 600;
@@ -1116,7 +1158,16 @@ function onSearchInput() {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  max-width: 70%;
+  max-width: 100%;
+}
+
+.card-sub {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--color-text-tertiary, #64748b);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .apply-btn {

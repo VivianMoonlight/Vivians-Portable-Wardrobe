@@ -54,6 +54,51 @@ function normalizeCraftColor(rawColor, cloneFn) {
   return cloner(rawColor)
 }
 
+function sanitizeTypeRecord(rawTypeRecord) {
+  if (!rawTypeRecord || typeof rawTypeRecord !== 'object' || Array.isArray(rawTypeRecord)) {
+    return null
+  }
+
+  const out = {}
+  for (const [key, value] of Object.entries(rawTypeRecord)) {
+    if (!key) continue
+
+    if (value === null || typeof value === 'string' || typeof value === 'boolean') {
+      out[key] = value
+      continue
+    }
+
+    if (typeof value === 'number') {
+      if (Number.isFinite(value)) {
+        out[key] = value
+      }
+      continue
+    }
+
+    if (Array.isArray(value)) {
+      const normalized = []
+      let valid = true
+      for (const entry of value) {
+        if (entry === null || typeof entry === 'string' || typeof entry === 'boolean') {
+          normalized.push(entry)
+          continue
+        }
+        if (typeof entry === 'number' && Number.isFinite(entry)) {
+          normalized.push(entry)
+          continue
+        }
+        valid = false
+        break
+      }
+      if (valid) {
+        out[key] = normalized
+      }
+    }
+  }
+
+  return Object.keys(out).length > 0 ? out : null
+}
+
 function extractCraftTypeRecord(craftEntry, cloneFn) {
   if (!craftEntry || typeof craftEntry !== 'object') return null
   const cloner = typeof cloneFn === 'function' ? cloneFn : deepClone
@@ -65,7 +110,9 @@ function extractCraftTypeRecord(craftEntry, cloneFn) {
 
   for (const candidate of candidates) {
     if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) continue
-    return cloner(candidate)
+    const cloned = cloner(candidate)
+    const sanitized = sanitizeTypeRecord(cloned)
+    if (sanitized) return sanitized
   }
 
   return null
@@ -153,11 +200,15 @@ export function applyCraftVisualToPart(part, craftEntry, cloneFn = deepClone) {
       ? cloner(prevProperty.TypeRecord)
       : {}
 
-    prevProperty.TypeRecord = {
+    const mergedTypeRecord = {
       ...prevTypeRecord,
       ...craftTypeRecord
     }
-    part.Property = prevProperty
+
+    if (Object.keys(mergedTypeRecord).length > 0) {
+      prevProperty.TypeRecord = mergedTypeRecord
+      part.Property = prevProperty
+    }
   }
 
   return part
@@ -200,8 +251,14 @@ export function applyPlayerCraftingToBundle(bundle, {
       cloneFn: cloner
     })
 
-    if (resolvedCraft) {
-      nextPart.Craft = resolvedCraft
+    const hasExistingCraft = !!(nextPart.Craft && typeof nextPart.Craft === 'object' && !Array.isArray(nextPart.Craft))
+    const hasExistingTypeRecord = !!(
+      nextPart.Property?.TypeRecord
+      && typeof nextPart.Property.TypeRecord === 'object'
+      && !Array.isArray(nextPart.Property.TypeRecord)
+    )
+
+    if (resolvedCraft && !hasExistingCraft && !hasExistingTypeRecord) {
       applyCraftVisualToPart(nextPart, resolvedCraft, cloner)
     }
 

@@ -384,6 +384,7 @@ export const useFileSystemStore = defineStore('fs', {
       const { ignoreLock = false } = options
       if (item === -1) {
         this.activeItem = { data: JSON.parse(JSON.stringify(this.characterItem)) } // deep copy
+        this._setUnlockedSlotsToMode(SLOT_MODE_ORIGINAL, this.characterItem, this.activeItem.data)
         this.updatePreviewItem()
         //this._scheduleHistoryAdd()
         return
@@ -542,17 +543,49 @@ export const useFileSystemStore = defineStore('fs', {
       if (resolvedMode === 'fill-empty') {
         if (inCharacter) return SLOT_MODE_ORIGINAL
         if (inIncoming) return SLOT_MODE_INCOMING
-        return SLOT_MODE_EMPTY
+        return SLOT_MODE_ORIGINAL
       }
 
       if (resolvedMode === 'full-replace') {
-        if (inIncoming) return SLOT_MODE_INCOMING
-        return SLOT_MODE_EMPTY
+        return SLOT_MODE_INCOMING
       }
 
       if (inIncoming) return SLOT_MODE_INCOMING
       if (inCharacter) return SLOT_MODE_ORIGINAL
-      return SLOT_MODE_EMPTY
+      return SLOT_MODE_ORIGINAL
+    },
+
+    _setUnlockedSlotsToMode(mode, characterData = null, sourceData = null) {
+      const nextMode = normalizeSlotMode(mode)
+      const keys = this._collectKnownSlotKeys(characterData, sourceData)
+      const current = this.slotControlMap || {}
+      const next = { ...current }
+      let changed = false
+
+      for (const key of keys) {
+        const prev = current[key]
+        const prevMode = normalizeSlotMode(prev?.mode)
+        const prevLocked = !!prev?.locked
+
+        if (prevLocked) {
+          if (!prev || prevMode !== prev.mode) {
+            next[key] = { mode: prevMode, locked: true }
+            changed = true
+          }
+          continue
+        }
+
+        if (!prev || prevMode !== nextMode || prevLocked !== false) {
+          next[key] = { mode: nextMode, locked: false }
+          changed = true
+        }
+      }
+
+      if (changed) {
+        this.slotControlMap = next
+      }
+      this._syncActiveFiltersFromSlotControls()
+      return changed
     },
 
     _applyDefaultModeToUnlockedSlots(characterData = null, sourceData = null, { mode = null } = {}) {
@@ -669,19 +702,21 @@ export const useFileSystemStore = defineStore('fs', {
       }
     },
 
-    setSlotMode(key, mode) {
+    setSlotMode(key, mode, options = {}) {
       if (!key) return false
       this._ensureSlotControls()
 
       const prev = this.getSlotControlState(key)
       if (prev.locked) return false
 
+      const autoLock = options?.autoLock === true
       const nextMode = normalizeSlotMode(mode)
-      if (prev.mode === nextMode) return true
+      const nextLocked = autoLock ? true : prev.locked
+      if (prev.mode === nextMode && prev.locked === nextLocked) return true
 
       this.slotControlMap = {
         ...(this.slotControlMap || {}),
-        [key]: { mode: nextMode, locked: false }
+        [key]: { mode: nextMode, locked: nextLocked }
       }
       this._syncActiveFiltersFromSlotControls()
       this.updatePreviewItem()
@@ -692,6 +727,7 @@ export const useFileSystemStore = defineStore('fs', {
       this._ensureSlotControls()
 
       const includeLocked = options?.includeLocked !== false
+      const autoLock = options?.autoLock === true
       const nextMode = normalizeSlotMode(mode)
       const current = this.slotControlMap || {}
       const next = { ...current }
@@ -700,8 +736,9 @@ export const useFileSystemStore = defineStore('fs', {
       for (const key of this._collectKnownSlotKeys()) {
         const prev = this.getSlotControlState(key)
         if (!includeLocked && prev.locked) continue
-        if (prev.mode === nextMode) continue
-        next[key] = { mode: nextMode, locked: prev.locked }
+        const nextLocked = autoLock ? true : prev.locked
+        if (prev.mode === nextMode && prev.locked === nextLocked) continue
+        next[key] = { mode: nextMode, locked: nextLocked }
         changed = true
       }
 
@@ -720,6 +757,7 @@ export const useFileSystemStore = defineStore('fs', {
       this._ensureSlotControls()
 
       const includeLocked = options?.includeLocked !== false
+      const autoLock = options?.autoLock === true
       const nextMode = normalizeSlotMode(mode)
       const current = this.slotControlMap || {}
       const next = { ...current }
@@ -728,8 +766,9 @@ export const useFileSystemStore = defineStore('fs', {
       for (const key of groupKeys) {
         const prev = this.getSlotControlState(key)
         if (!includeLocked && prev.locked) continue
-        if (prev.mode === nextMode) continue
-        next[key] = { mode: nextMode, locked: prev.locked }
+        const nextLocked = autoLock ? true : prev.locked
+        if (prev.mode === nextMode && prev.locked === nextLocked) continue
+        next[key] = { mode: nextMode, locked: nextLocked }
         changed = true
       }
 
