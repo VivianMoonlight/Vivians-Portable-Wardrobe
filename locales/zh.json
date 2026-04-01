@@ -49,11 +49,30 @@
     "allOff": "全关",
     "invert": "反选",
     "applyModeLabel": "应用模式",
+    "defaultReplaceModeLabel": "默认替换模式",
     "modeFillEmpty": "仅增添空槽",
     "modeMergeReplace": "增添并替换",
     "modeFullReplace": "完全置换",
-    "applyCurrent": "按模式应用",
+    "applyCurrent": "应用到角色",
     "removeSelected": "移除选中槽位",
+    "lockAll": "全部锁定",
+    "unlockAll": "全部解锁",
+    "invertLock": "反转锁定",
+    "lock": "锁定",
+    "unlock": "解锁",
+    "allModeOriginal": "全选原有",
+    "allModeIncoming": "全选新有",
+    "allModeEmpty": "全选空",
+    "groupModeOriginal": "组内原有",
+    "groupModeIncoming": "组内新有",
+    "groupModeEmpty": "组内全空",
+    "groupLockAll": "组内全锁",
+    "groupUnlockAll": "组内全解",
+    "groupInvertLock": "组内反转锁定",
+    "slotModeAriaLabel": "槽位模式",
+    "slotModeEmpty": "空",
+    "slotModeOriginal": "原",
+    "slotModeIncoming": "新",
     "slotLegendAria": "槽位状态图例",
     "inCharacter": "角色已有",
     "inHover": "悬浮套装有",
@@ -316,36 +335,6 @@
     "hasFutureState": "存在可重做状态",
     "stateChange": "状态变更",
     "initialState": "初始状态",
-    "operationTags": {
-      "interaction": "交互: {label}",
-      "source": "来源: {label}",
-      "partsCount": "{count} 个部件",
-      "deltasCount": "{count} 处改动",
-      "stepBack": "回退 {count} 步",
-      "stepForward": "前进 {count} 步"
-    },
-    "actionCategoryLabels": {
-      "part": "部件",
-      "layer": "图层",
-      "batch": "批量",
-      "palette": "调色板",
-      "stack": "堆栈",
-      "asset": "资源"
-    },
-    "interactionKindLabels": {
-      "palette": "调色板编辑",
-      "editor": "编辑器",
-      "previewMove": "预览拖动",
-      "layerEdit": "图层编辑",
-      "batchEdit": "批量编辑",
-      "priorityDrag": "优先级拖拽"
-    },
-    "sourceLabels": {
-      "batchEditPanel": "批量编辑面板",
-      "partInspectorPanel": "部件检查器",
-      "layerManagerWidget": "图层管理器",
-      "previewWidget": "预览窗口"
-    },
     "actionTypeLabels": {
       "part": {
         "updateMetadata": "更新部件元数据",
@@ -388,6 +377,24 @@
       "asset": {
         "apply": "应用资源"
       }
+    },
+    "actionScopeLabels": {
+      "part": "部件",
+      "layer": "图层",
+      "batch": "批量",
+      "palette": "调色",
+      "stack": "堆栈",
+      "asset": "资源"
+    },
+    "operationContentLabels": {
+      "color": "颜色",
+      "opacity": "透明度",
+      "shift": "位移",
+      "order": "顺序",
+      "layer": "图层",
+      "property": "属性",
+      "tag": "标签",
+      "general": "编辑"
     }
   },
   "groupNames": {
@@ -452,7 +459,7 @@
   },
   "sidePreview": {
     "ariaLabel": "预览面板",
-    "hint": "Hover 文件项查看预览"
+    "hint": "悬停可预览，单击可锁定/解锁当前预览"
   },
   "stackDetail": {
     "ariaLabel": "Stack 详细信息面板",

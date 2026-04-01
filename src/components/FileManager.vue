@@ -24,6 +24,7 @@ const props = defineProps({
 const emit = defineEmits(['close'])
 const fsStore = useFileSystemStore()
 const workbenchStore = useWorkbenchStore()
+const panelRootEl = ref(null)
 
 // local search state
 const searchQuery = ref('')
@@ -292,11 +293,24 @@ function onBreadcrumbDrop(e, idx) {
   const fromPath = Array.isArray(payload.fromPath) ? payload.fromPath : fsStore.currentPath
   fsStore.moveFile(payload.name, fromPath, targetPath)
 }
+
+function onPanelClick(e) {
+  const path = (e.composedPath && e.composedPath()) || []
+  if (!panelRootEl.value || !path.includes(panelRootEl.value)) return
+
+  const clickedFileItem = path.some(node => {
+    if (!node || !node.classList || typeof node.classList.contains !== 'function') return false
+    return node.classList.contains('file-item-card')
+  })
+  if (clickedFileItem) return
+
+  fsStore.clearSelection()
+}
 </script>
 
 <template>
   <!-- 使用更统一的视觉风格，参考 FilterManager 的配色与按钮样式 -->
-  <div class="file-manager-panel" :class="themeClass" :style="panelStyle">
+  <div ref="panelRootEl" class="file-manager-panel" :class="themeClass" :style="panelStyle" @click.capture="onPanelClick">
     <div class="panel-inner">
       <div class="panel-top">
         <div class="title">

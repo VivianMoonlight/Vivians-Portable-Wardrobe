@@ -76,14 +76,17 @@
             <div class="item-content">
               <div class="item-chip">{{ t("history.pastTag") }}</div>
               <div class="item-description">{{ getLocalizedHistoryDescription(item) }}</div>
-              <div class="item-meta-tags">
+              <div
+                v-if="getHistoryOperationChips(item).length > 0"
+                class="item-operation-tags"
+              >
                 <span
-                  v-for="tag in getOperationTags(item)"
-                  :key="`${tag.kind}-${tag.label}`"
-                  class="meta-chip"
-                  :class="`meta-chip-${tag.kind}`"
+                  v-for="chip in getHistoryOperationChips(item)"
+                  :key="chip.key"
+                  class="operation-chip"
+                  :class="[`is-${chip.kind}`, `tone-${chip.tone}`]"
                 >
-                  {{ tag.label }}
+                  {{ chip.label }}
                 </span>
               </div>
               <div class="item-timestamp">{{ formatTimestamp(item.timestamp) }}</div>
@@ -97,22 +100,6 @@
             <div class="item-content">
               <div class="item-chip">{{ t("history.currentTag") }}</div>
               <div class="current-label">{{ t("history.currentState") }}</div>
-              <div v-if="currentState" class="item-description current-description">
-                {{ getLocalizedHistoryDescription(currentState) }}
-              </div>
-              <div v-if="currentState" class="item-meta-tags">
-                <span
-                  v-for="tag in getOperationTags(currentState, { includeStep: false })"
-                  :key="`${tag.kind}-${tag.label}`"
-                  class="meta-chip"
-                  :class="`meta-chip-${tag.kind}`"
-                >
-                  {{ tag.label }}
-                </span>
-              </div>
-              <div v-if="currentState?.timestamp" class="item-timestamp">
-                {{ formatTimestamp(currentState.timestamp) }}
-              </div>
             </div>
           </div>
 
@@ -134,14 +121,17 @@
             <div class="item-content">
               <div class="item-chip">{{ t("history.futureTag") }}</div>
               <div class="item-description">{{ getLocalizedHistoryDescription(item) }}</div>
-              <div class="item-meta-tags">
+              <div
+                v-if="getHistoryOperationChips(item).length > 0"
+                class="item-operation-tags"
+              >
                 <span
-                  v-for="tag in getOperationTags(item)"
-                  :key="`${tag.kind}-${tag.label}`"
-                  class="meta-chip"
-                  :class="`meta-chip-${tag.kind}`"
+                  v-for="chip in getHistoryOperationChips(item)"
+                  :key="chip.key"
+                  class="operation-chip"
+                  :class="[`is-${chip.kind}`, `tone-${chip.tone}`]"
                 >
-                  {{ tag.label }}
+                  {{ chip.label }}
                 </span>
               </div>
               <div class="item-timestamp">{{ formatTimestamp(item.timestamp) }}</div>
@@ -235,21 +225,44 @@ const canScrollPrev = ref(false);
 const canScrollNext = ref(false);
 const showScrollHint = ref(false);
 
-const INTERACTION_KIND_KEY_MAP = Object.freeze({
-  palette: "palette",
-  editor: "editor",
-  "preview-move": "previewMove",
-  "layer-edit": "layerEdit",
-  "batch-edit": "batchEdit",
-  "priority-drag": "priorityDrag",
-});
-
-const SOURCE_KEY_MAP = Object.freeze({
-  BatchEditPanel: "batchEditPanel",
-  PartInspectorPanel: "partInspectorPanel",
-  LayerManagerWidget: "layerManagerWidget",
-  PreviewWidget: "previewWidget",
-});
+const HISTORY_OPERATION_CONTENT_RULES = Object.freeze([
+  {
+    key: "color",
+    tone: "color",
+    test: (actionType) => actionType.includes("color"),
+  },
+  {
+    key: "opacity",
+    tone: "opacity",
+    test: (actionType) => actionType.includes("opacity"),
+  },
+  {
+    key: "shift",
+    tone: "shift",
+    test: (actionType) => actionType.includes("offset"),
+  },
+  {
+    key: "order",
+    tone: "order",
+    test: (actionType) => actionType.includes("priority") || actionType.endsWith(".move"),
+  },
+  {
+    key: "layer",
+    tone: "layer",
+    test: (actionType) => actionType.includes("layer"),
+  },
+  {
+    key: "property",
+    tone: "property",
+    test: (actionType) =>
+      actionType.includes("property") || actionType.includes("metadata"),
+  },
+  {
+    key: "tag",
+    tone: "tag",
+    test: (actionType) => actionType.includes("tag"),
+  },
+]);
 
 function formatTimestamp(timestamp) {
   if (!timestamp) return "";
@@ -278,13 +291,12 @@ function formatTimestamp(timestamp) {
 function getItemTitle(item, type) {
   const typeLabel = type === "redo" ? t("history.redoItem") : t("history.undoItem");
   const description = getLocalizedHistoryDescription(item);
-  const operationTags = getOperationTags(item, { includeStep: false })
-    .map((tag) => tag.label)
-    .join(" · ");
+  const operationTags = getHistoryOperationChips(item)
+    .map((chip) => chip.label)
+    .join(" / ");
   const time = item.timestamp ? new Date(item.timestamp).toLocaleString() : "";
-  return `${typeLabel}: ${description}${operationTags ? "\n" + operationTags : ""}${
-    time ? "\n" + time : ""
-  }`;
+  const operationHint = operationTags ? ` [${operationTags}]` : "";
+  return `${typeLabel}: ${description}${operationHint}${time ? "\n" + time : ""}`;
 }
 
 function resolveHistoryActionType(item) {
@@ -312,100 +324,54 @@ function getLocalizedHistoryDescription(item) {
   return description;
 }
 
-function getActionCategoryLabel(actionType) {
-  const normalizedActionType = String(actionType || "").trim();
-  if (!normalizedActionType) return "";
-
-  const actionCategory = normalizedActionType.split(".")[0];
-  const key = `history.actionCategoryLabels.${actionCategory}`;
-  if (te(key)) return t(key);
-
-  return actionCategory;
-}
-
-function getInteractionKindLabel(interactionKind) {
-  const normalizedInteractionKind = String(interactionKind || "").trim();
-  if (!normalizedInteractionKind) return "";
-
-  const mappedKey =
-    INTERACTION_KIND_KEY_MAP[normalizedInteractionKind] || normalizedInteractionKind;
-  const key = `history.interactionKindLabels.${mappedKey}`;
-  if (te(key)) return t(key);
-
-  return normalizedInteractionKind;
-}
-
-function getSourceLabel(source) {
-  const normalizedSource = String(source || "").trim();
-  if (!normalizedSource) return "";
-
-  const mappedKey = SOURCE_KEY_MAP[normalizedSource] || normalizedSource;
-  const key = `history.sourceLabels.${mappedKey}`;
-  if (te(key)) return t(key);
-
-  return normalizedSource;
-}
-
-function addTag(target, seen, kind, label) {
-  const normalizedLabel = String(label || "").trim();
-  if (!normalizedLabel) return;
-
-  const dedupeKey = `${kind}:${normalizedLabel}`;
-  if (seen.has(dedupeKey)) return;
-
-  seen.add(dedupeKey);
-  target.push({ kind, label: normalizedLabel });
-}
-
-function getOperationTags(item, options = {}) {
-  const includeStep = options.includeStep !== false;
-  const tags = [];
-  const seen = new Set();
-
+function getHistoryOperationChips(item) {
   const actionType = resolveHistoryActionType(item);
-  if (actionType) {
-    addTag(tags, seen, "category", getActionCategoryLabel(actionType));
+  if (!actionType) return [];
+
+  const chips = [];
+  const normalizedActionType = actionType.toLowerCase();
+  const [scope] = actionType.split(".");
+
+  if (scope) {
+    const scopeKey = `history.actionScopeLabels.${scope}`;
+    if (te(scopeKey)) {
+      chips.push({
+        key: `scope:${scope}`,
+        label: t(scopeKey),
+        kind: "scope",
+        tone: "scope",
+      });
+    }
   }
 
-  const interactionKind = getInteractionKindLabel(item?.historyMeta?.interactionKind);
-  if (interactionKind) {
-    addTag(
-      tags,
-      seen,
-      "interaction",
-      t("history.operationTags.interaction", { label: interactionKind })
-    );
+  const seen = new Set();
+  for (const rule of HISTORY_OPERATION_CONTENT_RULES) {
+    if (seen.has(rule.key) || !rule.test(normalizedActionType, actionType)) continue;
+
+    const labelKey = `history.operationContentLabels.${rule.key}`;
+    if (!te(labelKey)) continue;
+
+    chips.push({
+      key: `content:${rule.key}`,
+      label: t(labelKey),
+      kind: "content",
+      tone: rule.tone,
+    });
+    seen.add(rule.key);
   }
 
-  const sourceLabel = getSourceLabel(item?.historyMeta?.source);
-  if (sourceLabel) {
-    addTag(tags, seen, "source", t("history.operationTags.source", { label: sourceLabel }));
-  }
+  if (chips.length > 0) return chips;
 
-  const changedParts = Number(item?.historyMeta?.changedParts);
-  if (Number.isFinite(changedParts) && changedParts > 0) {
-    addTag(tags, seen, "impact", t("history.operationTags.partsCount", { count: changedParts }));
-  }
-
-  const deltaCount = Number(item?.historyMeta?.deltaCount);
-  if (Number.isFinite(deltaCount) && deltaCount > 0) {
-    addTag(tags, seen, "impact", t("history.operationTags.deltasCount", { count: deltaCount }));
-  }
-
-  const steps = Number(item?.steps);
-  if (includeStep && Number.isFinite(steps) && steps !== 0) {
-    const stepCount = Math.abs(steps);
-    addTag(
-      tags,
-      seen,
-      "step",
-      steps > 0
-        ? t("history.operationTags.stepForward", { count: stepCount })
-        : t("history.operationTags.stepBack", { count: stepCount })
-    );
-  }
-
-  return tags;
+  const fallbackKey = "history.operationContentLabels.general";
+  if (!te(fallbackKey)) return [];
+  return [
+    {
+      key: "content:general",
+      label: t(fallbackKey),
+      kind: "content",
+      tone: "general",
+    },
+  ];
 }
 
 function jumpToRedoState(item) {
@@ -797,7 +763,7 @@ onBeforeUnmount(() => {
 .item-content {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   flex: 1;
   min-width: 0;
 }
@@ -854,57 +820,73 @@ onBeforeUnmount(() => {
   line-height: 1.35;
 }
 
-.item-meta-tags {
+.item-operation-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
   align-items: center;
+  gap: 4px;
+  min-height: 18px;
 }
 
-.meta-chip {
+.operation-chip {
   display: inline-flex;
   align-items: center;
-  max-width: 100%;
-  padding: 1px 6px;
+  padding: 1px 7px;
   border-radius: var(--radius-full, 9999px);
-  border: 1px solid var(--color-border-base, #e2e8f0);
-  background: var(--color-bg-base, #ffffff);
-  color: var(--color-text-tertiary, #64748b);
   font-size: 10px;
   line-height: 1.4;
+  border: 1px solid transparent;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
-.meta-chip-category {
-  border-color: rgba(59, 130, 246, 0.28);
-  background: rgba(59, 130, 246, 0.08);
-  color: var(--color-primary, #3b82f6);
-}
-
-.meta-chip-interaction {
-  border-color: rgba(16, 185, 129, 0.3);
-  background: rgba(16, 185, 129, 0.1);
-  color: var(--color-success, #10b981);
-}
-
-.meta-chip-source {
-  border-color: rgba(14, 116, 144, 0.28);
-  background: rgba(14, 116, 144, 0.1);
-  color: #0e7490;
-}
-
-.meta-chip-impact {
-  border-color: rgba(217, 119, 6, 0.28);
-  background: rgba(217, 119, 6, 0.1);
-  color: #b45309;
-}
-
-.meta-chip-step {
+.operation-chip.is-scope {
+  color: var(--color-text-secondary, #64748b);
   border-color: rgba(148, 163, 184, 0.35);
-  background: rgba(148, 163, 184, 0.1);
-  color: var(--color-text-secondary, #475569);
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.operation-chip.is-content {
+  color: var(--color-primary, #3b82f6);
+  border-color: rgba(59, 130, 246, 0.28);
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.operation-chip.tone-color {
+  color: #b45309;
+  border-color: rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.operation-chip.tone-opacity {
+  color: #0369a1;
+  border-color: rgba(14, 165, 233, 0.35);
+  background: rgba(14, 165, 233, 0.12);
+}
+
+.operation-chip.tone-shift {
+  color: #0f766e;
+  border-color: rgba(20, 184, 166, 0.35);
+  background: rgba(20, 184, 166, 0.12);
+}
+
+.operation-chip.tone-order {
+  color: #6d28d9;
+  border-color: rgba(139, 92, 246, 0.32);
+  background: rgba(139, 92, 246, 0.12);
+}
+
+.operation-chip.tone-layer {
+  color: #1d4ed8;
+  border-color: rgba(59, 130, 246, 0.35);
+  background: rgba(59, 130, 246, 0.12);
+}
+
+.operation-chip.tone-property,
+.operation-chip.tone-tag,
+.operation-chip.tone-general {
+  color: var(--color-text-secondary, #64748b);
+  border-color: rgba(148, 163, 184, 0.35);
+  background: rgba(148, 163, 184, 0.12);
 }
 
 .redo-item .item-description {
@@ -926,10 +908,6 @@ onBeforeUnmount(() => {
   font-size: var(--font-size-sm, 12px);
   font-weight: var(--font-weight-semibold, 600);
   color: var(--color-success, #10b981);
-}
-
-.current-description {
-  color: var(--color-success, #0f766e);
 }
 
 .scroll-hint {

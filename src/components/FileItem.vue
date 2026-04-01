@@ -221,10 +221,12 @@ onBeforeUnmount(() => {
 
 // hover 处理：进入时设置 ActiveItem，离开时清理
 function onMouseEnter() {
+  if (fsStore.lockedItem) return
   if (!canUseHover()) return
   fsStore.setActiveItem(props.item);
 }
 function onMouseLeave() {
+  if (fsStore.lockedItem) return
   if (!canUseHover()) return
   if (fsStore.activeItem && fsStore.activeItem.data && Array.isArray(fsStore.activeItem.data)) {
     fsStore.setActiveItem(-1);
@@ -242,24 +244,26 @@ function setActiveFromInteraction() {
 }
 
 function onFocusIn() {
+  if (fsStore.lockedItem) return
   setActiveFromInteraction()
 }
 
 function onFocusOut(e) {
+  if (fsStore.lockedItem) return
   if (rootEl.value && e?.relatedTarget && rootEl.value.contains(e.relatedTarget)) return
   if (fsStore.activeItem === props.item) {
     fsStore.setActiveItem(-1)
   }
 }
 
-// 左键点击行为：文件夹则触发展开，否则 no-op
+// 左键点击行为：文件夹触发展开；文件切换预览锁定
 function onClick() {
   if (!props.item) return
   if (props.item.type === 'folder') {
     emit('open-folder')
     return
   }
-  setActiveFromInteraction()
+  fsStore.togglePreviewLock(props.item)
 }
 
 // 双击：文件夹打开，文件则把 active 数据应用到角色（按需求，这里应用的是 store.activeItem）
@@ -318,10 +322,11 @@ function onDrop(e) {
 }
 
 const draggable = !!props.item
+const isPreviewLocked = computed(() => fsStore.isPreviewLockedOn(props.item))
 </script>
 
 <template>
-  <div ref="rootEl" class="file-item-card" :class="[themeClass, `view-${viewMode}`, { 'drop-target': isDragOver }]" @click="onClick"
+  <div ref="rootEl" class="file-item-card" :class="[themeClass, `view-${viewMode}`, { 'drop-target': isDragOver, 'is-preview-locked': isPreviewLocked }]" @click="onClick"
     @dblclick="onDoubleClick" @contextmenu.capture="onContextMenu" @mouseenter="onMouseEnter" @mouseleave="onMouseLeave"
     @focusin="onFocusIn" @focusout="onFocusOut" tabindex="0"
     :draggable="draggable" @dragstart="onDragStart" @dragend="onDragEnd" @dragover="onDragOver" @dragleave="onDragLeave"
@@ -391,6 +396,11 @@ const draggable = !!props.item
 .file-item-card:focus-visible {
   border-color: var(--color-primary, #3b82f6);
   box-shadow: 0 0 0 2px var(--color-primary-bg, rgba(59, 130, 246, 0.2));
+}
+
+.file-item-card.is-preview-locked {
+  border-color: var(--color-accent, #0ea5a4);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent, #0ea5a4) 24%, transparent);
 }
 
 @media (hover: hover) and (pointer: fine) {

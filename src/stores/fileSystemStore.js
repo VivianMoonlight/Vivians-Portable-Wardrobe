@@ -31,6 +31,33 @@ function buildSlotPresenceMap(characterData = [], hoverData = []) {
   return map
 }
 
+const SLOT_MODE_EMPTY = 'empty'
+const SLOT_MODE_ORIGINAL = 'original'
+const SLOT_MODE_INCOMING = 'incoming'
+
+const DEFAULT_REPLACE_MODE = 'merge-replace'
+const REPLACE_MODE_SET = new Set(['fill-empty', 'merge-replace', 'full-replace'])
+const SLOT_MODE_SET = new Set([SLOT_MODE_EMPTY, SLOT_MODE_ORIGINAL, SLOT_MODE_INCOMING])
+
+function normalizeReplaceMode(mode) {
+  return REPLACE_MODE_SET.has(mode) ? mode : DEFAULT_REPLACE_MODE
+}
+
+function normalizeSlotMode(mode) {
+  return SLOT_MODE_SET.has(mode) ? mode : SLOT_MODE_EMPTY
+}
+
+function groupPartsBySlot(parts = []) {
+  const grouped = new Map()
+  for (const part of Array.isArray(parts) ? parts : []) {
+    const slotKey = getGroupNameFromPart(part)
+    if (!slotKey) continue
+    if (!grouped.has(slotKey)) grouped.set(slotKey, [])
+    grouped.get(slotKey).push(part)
+  }
+  return grouped
+}
+
 export const useFileSystemStore = defineStore('fs', {
   state: () => ({
     fs: new FileSystem('Home'),
@@ -60,13 +87,22 @@ export const useFileSystemStore = defineStore('fs', {
 
     activeItem: { data: [] },
 
+    // 当前是否锁定到某个文件项（锁定时忽略 hover/focus 预览切换）
+    lockedItem: null,
+
     characterItem: [],
 
     // filters: store the activeFilters array (names) for other consumers
     activeFilters: [],
 
-    // outfit apply mode for selected filters
-    applyMode: 'merge-replace', // 'fill-empty' | 'merge-replace' | 'full-replace'
+    // default replacement mode used when selecting/focusing an item
+    defaultReplaceMode: DEFAULT_REPLACE_MODE, // 'fill-empty' | 'merge-replace' | 'full-replace'
+
+    // legacy alias kept for compatibility with existing callers
+    applyMode: DEFAULT_REPLACE_MODE,
+
+    // per-slot control state: { [slotKey]: { mode: 'empty' | 'original' | 'incoming', locked: boolean } }
+    slotControlMap: {},
 
 
     // FilterService instance (not serialized) and a reactive snapshot for UI
@@ -132,7 +168,9 @@ export const useFileSystemStore = defineStore('fs', {
       this.initFilterServiceDefault()
       this.characterItem = AssetApi.collectOutfitData(character)
       this.activeItem = { data: JSON.parse(JSON.stringify(this.characterItem)) } // deep copy
+      this.lockedItem = null
       this.previewItem = { data: [] }
+      this._applyDefaultModeToUnlockedSlots(this.characterItem, this.activeItem.data, { mode: this.defaultReplaceMode })
       this.updatePreviewItem()
     },
 
@@ -143,12 +181,11 @@ export const useFileSystemStore = defineStore('fs', {
     updatePreviewItem() {
       if (typeof this.renderer.renderPreviewWithItem === 'function') {
         this.previewItem = { data: [] } // 清理旧的
-        const filterSet = new Set(this.activeFilters || [])
         const characterData = Array.isArray(this.characterItem) ? this.characterItem.slice() : []
         const sourceData = Array.isArray(this.activeItem?.data) ? this.activeItem.data : []
-        const resolvedMode = this.applyMode || 'merge-replace'
 
-        this.previewItem.data = this._buildBundleByMode(characterData, sourceData, filterSet, resolvedMode)
+        this._ensureSlotControls(characterData, sourceData)
+        this.previewItem.data = this._buildBundleBySlotControls(characterData, sourceData)
         this.renderer.renderPreviewWithItem(this.previewItem)
       }
     },
@@ -241,7 +278,8 @@ export const useFileSystemStore = defineStore('fs', {
       this.renderer.startThumbFor(item0)
     },
 
-    setActiveItem(item) {
+    setActiveItem(item, options = {}) {
+      const { ignoreLock = false } = options
       if (item === -1) {
         this.activeItem = { data: JSON.parse(JSON.stringify(this.characterItem)) } // deep copy
         this.updatePreviewItem()
@@ -253,46 +291,463 @@ export const useFileSystemStore = defineStore('fs', {
         return
       }
 
+      if (!ignoreLock && this.lockedItem && item !== this.lockedItem) {
+        // 预览锁定时，忽略来自 hover/focus 的切换
+        return
+      }
+
       this.activeItem = { data: item ? item.data : null }
+      this._applyDefaultModeToUnlockedSlots(this.characterItem, this.activeItem.data, { mode: this.defaultReplaceMode })
       this.updatePreviewItem()
       //this._scheduleHistoryAdd()
     },
 
-    // 新：从 FilterPanel 更新 activeFilters（传入数组或 Set）
+    togglePreviewLock(item) {
+      if (!item || item.type === 'folder') return false
+
+      if (this.lockedItem === item) {
+        this.clearPreviewLock()
+        return false
+      }
+
+      this.lockedItem = item
+      this.setActiveItem(item, { ignoreLock: true })
+      return true
+    },
+
+    clearPreviewLock() {
+      this.clearSelection()
+    },
+
+    clearSelection() {
+      this.lockedItem = null
+      this.setActiveItem(-1, { ignoreLock: true })
+    },
+
+    isPreviewLockedOn(item) {
+      return !!item && this.lockedItem === item
+    },
+
+    // 兼容入口：外部仍可写 activeFilters，此时映射到未锁定 slot 的 empty/incoming 模式
     setActiveFilters(listOrSet) {
-      const arr = Array.isArray(listOrSet) ? listOrSet : Array.from(listOrSet || [])
-      this.activeFilters = arr
+      const selected = new Set(
+        (Array.isArray(listOrSet) ? listOrSet : Array.from(listOrSet || []))
+          .filter(v => typeof v === 'string' && v)
+      )
+      this._ensureSlotControls()
+
+      const next = { ...(this.slotControlMap || {}) }
+      let changed = false
+      for (const key of this._collectKnownSlotKeys()) {
+        const prev = this.getSlotControlState(key)
+        if (prev.locked) continue
+        const nextMode = selected.has(key) ? SLOT_MODE_INCOMING : SLOT_MODE_EMPTY
+        if (prev.mode !== nextMode) {
+          next[key] = { mode: nextMode, locked: false }
+          changed = true
+        }
+      }
+
+      if (changed) {
+        this.slotControlMap = next
+      }
+      this._syncActiveFiltersFromSlotControls()
+      if (changed) {
+        this.updatePreviewItem()
+      }
+    },
+
+    setDefaultReplaceMode(mode) {
+      const resolved = normalizeReplaceMode(mode)
+      this.defaultReplaceMode = resolved
+      this.applyMode = resolved
     },
 
     setApplyMode(mode) {
-      const allowed = new Set(['fill-empty', 'merge-replace', 'full-replace'])
-      this.applyMode = allowed.has(mode) ? mode : 'merge-replace'
-      this.updatePreviewItem()
+      this.setDefaultReplaceMode(mode)
     },
 
-    _buildBundleByMode(characterData, outfitData, filterSet, mode) {
-      const selectedGroups = new Set(Array.from(filterSet || []).filter(Boolean))
-      if (selectedGroups.size === 0) return Array.isArray(characterData) ? characterData.slice() : []
+    _collectKnownSlotKeys(characterData = null, sourceData = null) {
+      const keys = new Set(Object.keys(this.slotControlMap || {}))
 
-      const base = Array.isArray(characterData) ? characterData.slice() : []
-      const incoming = Array.isArray(outfitData)
-        ? outfitData.filter(part => selectedGroups.has(getGroupNameFromPart(part)))
-        : []
-
-      if (mode === 'fill-empty') {
-        const existing = new Set(base.map(getGroupNameFromPart).filter(Boolean))
-        const toAdd = incoming.filter(part => !existing.has(getGroupNameFromPart(part)))
-        return base.concat(toAdd)
+      const snapshotItems = Array.isArray(this.filterSnapshot?.items) ? this.filterSnapshot.items : []
+      for (const item of snapshotItems) {
+        if (item?.key) keys.add(item.key)
       }
 
-      if (mode === 'full-replace') {
-        const preserved = base.filter(part => !selectedGroups.has(getGroupNameFromPart(part)))
-        return preserved.concat(incoming)
+      const characterParts = Array.isArray(characterData)
+        ? characterData
+        : (Array.isArray(this.characterItem) ? this.characterItem : [])
+      for (const part of characterParts) {
+        const slotKey = getGroupNameFromPart(part)
+        if (slotKey) keys.add(slotKey)
       }
 
-      const incomingGroups = new Set(incoming.map(getGroupNameFromPart).filter(Boolean))
-      const preserved = base.filter(part => !incomingGroups.has(getGroupNameFromPart(part)))
-      return preserved.concat(incoming)
+      const incomingParts = Array.isArray(sourceData)
+        ? sourceData
+        : (Array.isArray(this.activeItem?.data) ? this.activeItem.data : [])
+      for (const part of incomingParts) {
+        const slotKey = getGroupNameFromPart(part)
+        if (slotKey) keys.add(slotKey)
+      }
+
+      return Array.from(keys)
+    },
+
+    _ensureSlotControls(characterData = null, sourceData = null) {
+      const keys = this._collectKnownSlotKeys(characterData, sourceData)
+      const current = this.slotControlMap || {}
+      const next = { ...current }
+      let changed = false
+
+      for (const key of keys) {
+        const prev = current[key]
+        if (!prev) {
+          next[key] = { mode: SLOT_MODE_EMPTY, locked: false }
+          changed = true
+          continue
+        }
+        const nextMode = normalizeSlotMode(prev.mode)
+        const nextLocked = !!prev.locked
+        if (nextMode !== prev.mode || nextLocked !== prev.locked) {
+          next[key] = { mode: nextMode, locked: nextLocked }
+          changed = true
+        }
+      }
+
+      if (changed) {
+        this.slotControlMap = next
+      }
+      this._syncActiveFiltersFromSlotControls()
+      return keys
+    },
+
+    _syncActiveFiltersFromSlotControls() {
+      const keys = this._collectKnownSlotKeys()
+      const next = []
+      for (const key of keys) {
+        const mode = normalizeSlotMode(this.slotControlMap?.[key]?.mode)
+        if (mode !== SLOT_MODE_EMPTY) {
+          next.push(key)
+        }
+      }
+      this.activeFilters = Array.from(new Set(next))
+    },
+
+    _resolveModeByDefaultReplace(defaultMode, inCharacter, inIncoming) {
+      const resolvedMode = normalizeReplaceMode(defaultMode)
+
+      if (resolvedMode === 'fill-empty') {
+        if (inCharacter) return SLOT_MODE_ORIGINAL
+        if (inIncoming) return SLOT_MODE_INCOMING
+        return SLOT_MODE_EMPTY
+      }
+
+      if (resolvedMode === 'full-replace') {
+        if (inIncoming) return SLOT_MODE_INCOMING
+        return SLOT_MODE_EMPTY
+      }
+
+      if (inIncoming) return SLOT_MODE_INCOMING
+      if (inCharacter) return SLOT_MODE_ORIGINAL
+      return SLOT_MODE_EMPTY
+    },
+
+    _applyDefaultModeToUnlockedSlots(characterData = null, sourceData = null, { mode = null } = {}) {
+      const resolvedMode = normalizeReplaceMode(mode || this.defaultReplaceMode)
+      const characterParts = Array.isArray(characterData) ? characterData : []
+      const incomingParts = Array.isArray(sourceData) ? sourceData : []
+      const slotKeys = this._collectKnownSlotKeys(characterParts, incomingParts)
+      const inCharacter = new Set(characterParts.map(getGroupNameFromPart).filter(Boolean))
+      const inIncoming = new Set(incomingParts.map(getGroupNameFromPart).filter(Boolean))
+
+      const current = this.slotControlMap || {}
+      const next = { ...current }
+      let changed = false
+
+      for (const key of slotKeys) {
+        const prev = current[key]
+        const prevMode = normalizeSlotMode(prev?.mode)
+        const prevLocked = !!prev?.locked
+        if (prevLocked) {
+          if (!prev || prevMode !== prev.mode) {
+            next[key] = { mode: prevMode, locked: true }
+            changed = true
+          }
+          continue
+        }
+
+        const nextMode = this._resolveModeByDefaultReplace(
+          resolvedMode,
+          inCharacter.has(key),
+          inIncoming.has(key)
+        )
+
+        if (!prev || prevMode !== nextMode || prevLocked !== false) {
+          next[key] = { mode: nextMode, locked: false }
+          changed = true
+        }
+      }
+
+      if (changed) {
+        this.slotControlMap = next
+      }
+      this._syncActiveFiltersFromSlotControls()
+      return changed
+    },
+
+    _buildBundleBySlotControls(characterData, sourceData, slotControlMapOverride = null) {
+      const characterParts = Array.isArray(characterData) ? characterData : []
+      const incomingParts = Array.isArray(sourceData) ? sourceData : []
+      const slotControlMap = slotControlMapOverride || this.slotControlMap || {}
+
+      const byCharacterSlot = groupPartsBySlot(characterParts)
+      const byIncomingSlot = groupPartsBySlot(incomingParts)
+
+      const slotOrder = []
+      const seen = new Set()
+      const pushSlot = (slotKey) => {
+        if (!slotKey || seen.has(slotKey)) return
+        seen.add(slotKey)
+        slotOrder.push(slotKey)
+      }
+
+      for (const part of characterParts) pushSlot(getGroupNameFromPart(part))
+      for (const part of incomingParts) pushSlot(getGroupNameFromPart(part))
+      for (const slotKey of this._collectKnownSlotKeys(characterParts, incomingParts)) pushSlot(slotKey)
+
+      const bundle = []
+      for (const slotKey of slotOrder) {
+        const mode = normalizeSlotMode(slotControlMap?.[slotKey]?.mode)
+        if (mode === SLOT_MODE_ORIGINAL) {
+          const parts = byCharacterSlot.get(slotKey) || []
+          bundle.push(...parts)
+          continue
+        }
+        if (mode === SLOT_MODE_INCOMING) {
+          const parts = byIncomingSlot.get(slotKey) || []
+          bundle.push(...parts)
+        }
+      }
+      return bundle
+    },
+
+    _buildBundleWithModeOverride(characterData, sourceData, overrideMode) {
+      if (!overrideMode) {
+        return this._buildBundleBySlotControls(characterData, sourceData)
+      }
+
+      const characterParts = Array.isArray(characterData) ? characterData : []
+      const incomingParts = Array.isArray(sourceData) ? sourceData : []
+      const slotKeys = this._collectKnownSlotKeys(characterParts, incomingParts)
+      const inCharacter = new Set(characterParts.map(getGroupNameFromPart).filter(Boolean))
+      const inIncoming = new Set(incomingParts.map(getGroupNameFromPart).filter(Boolean))
+
+      const tempSlotControlMap = { ...(this.slotControlMap || {}) }
+      for (const key of slotKeys) {
+        const prev = this.getSlotControlState(key)
+        if (prev.locked) {
+          tempSlotControlMap[key] = { mode: prev.mode, locked: true }
+          continue
+        }
+        tempSlotControlMap[key] = {
+          mode: this._resolveModeByDefaultReplace(overrideMode, inCharacter.has(key), inIncoming.has(key)),
+          locked: false
+        }
+      }
+
+      return this._buildBundleBySlotControls(characterData, sourceData, tempSlotControlMap)
+    },
+
+    getSlotControlState(key) {
+      const slotState = this.slotControlMap?.[key]
+      return {
+        mode: normalizeSlotMode(slotState?.mode),
+        locked: !!slotState?.locked
+      }
+    },
+
+    setSlotMode(key, mode) {
+      if (!key) return false
+      this._ensureSlotControls()
+
+      const prev = this.getSlotControlState(key)
+      if (prev.locked) return false
+
+      const nextMode = normalizeSlotMode(mode)
+      if (prev.mode === nextMode) return true
+
+      this.slotControlMap = {
+        ...(this.slotControlMap || {}),
+        [key]: { mode: nextMode, locked: false }
+      }
+      this._syncActiveFiltersFromSlotControls()
+      this.updatePreviewItem()
+      return true
+    },
+
+    setAllSlotModes(mode, options = {}) {
+      this._ensureSlotControls()
+
+      const includeLocked = options?.includeLocked !== false
+      const nextMode = normalizeSlotMode(mode)
+      const current = this.slotControlMap || {}
+      const next = { ...current }
+      let changed = false
+
+      for (const key of this._collectKnownSlotKeys()) {
+        const prev = this.getSlotControlState(key)
+        if (!includeLocked && prev.locked) continue
+        if (prev.mode === nextMode) continue
+        next[key] = { mode: nextMode, locked: prev.locked }
+        changed = true
+      }
+
+      if (changed) {
+        this.slotControlMap = next
+        this._syncActiveFiltersFromSlotControls()
+        this.updatePreviewItem()
+      }
+      return changed
+    },
+
+    setGroupSlotModes(groupID, mode, options = {}) {
+      const groupKeys = this._getGroupSlotKeys(groupID)
+      if (groupKeys.length === 0) return false
+
+      this._ensureSlotControls()
+
+      const includeLocked = options?.includeLocked !== false
+      const nextMode = normalizeSlotMode(mode)
+      const current = this.slotControlMap || {}
+      const next = { ...current }
+      let changed = false
+
+      for (const key of groupKeys) {
+        const prev = this.getSlotControlState(key)
+        if (!includeLocked && prev.locked) continue
+        if (prev.mode === nextMode) continue
+        next[key] = { mode: nextMode, locked: prev.locked }
+        changed = true
+      }
+
+      if (changed) {
+        this.slotControlMap = next
+        this._syncActiveFiltersFromSlotControls()
+        this.updatePreviewItem()
+      }
+      return changed
+    },
+
+    setSlotLocked(key, locked = true) {
+      if (!key) return false
+      this._ensureSlotControls()
+
+      const prev = this.getSlotControlState(key)
+      const nextLocked = !!locked
+      if (prev.locked === nextLocked) return true
+
+      this.slotControlMap = {
+        ...(this.slotControlMap || {}),
+        [key]: { mode: prev.mode, locked: nextLocked }
+      }
+      return true
+    },
+
+    toggleSlotLock(key) {
+      const prev = this.getSlotControlState(key)
+      return this.setSlotLocked(key, !prev.locked)
+    },
+
+    setAllSlotLocks(locked = true) {
+      this._ensureSlotControls()
+
+      const nextLocked = !!locked
+      const current = this.slotControlMap || {}
+      const next = { ...current }
+      let changed = false
+
+      for (const key of this._collectKnownSlotKeys()) {
+        const prev = this.getSlotControlState(key)
+        if (prev.locked === nextLocked) continue
+        next[key] = { mode: prev.mode, locked: nextLocked }
+        changed = true
+      }
+
+      if (changed) {
+        this.slotControlMap = next
+      }
+      return changed
+    },
+
+    invertSlotLocks() {
+      this._ensureSlotControls()
+
+      const current = this.slotControlMap || {}
+      const next = { ...current }
+      let changed = false
+
+      for (const key of this._collectKnownSlotKeys()) {
+        const prev = this.getSlotControlState(key)
+        next[key] = { mode: prev.mode, locked: !prev.locked }
+        changed = true
+      }
+
+      if (changed) {
+        this.slotControlMap = next
+      }
+      return changed
+    },
+
+    _getGroupSlotKeys(groupID) {
+      const groups = Array.isArray(this.filterSnapshot?.groups) ? this.filterSnapshot.groups : []
+      const group = groups.find(g => g?.groupID === groupID)
+      if (!group || !Array.isArray(group.itemList)) return []
+      return group.itemList.map(item => item?.key).filter(Boolean)
+    },
+
+    setGroupSlotLocks(groupID, locked = true) {
+      const groupKeys = this._getGroupSlotKeys(groupID)
+      if (groupKeys.length === 0) return false
+
+      this._ensureSlotControls()
+      const nextLocked = !!locked
+      const current = this.slotControlMap || {}
+      const next = { ...current }
+      let changed = false
+
+      for (const key of groupKeys) {
+        const prev = this.getSlotControlState(key)
+        if (prev.locked === nextLocked) continue
+        next[key] = { mode: prev.mode, locked: nextLocked }
+        changed = true
+      }
+
+      if (changed) {
+        this.slotControlMap = next
+      }
+      return changed
+    },
+
+    invertGroupSlotLocks(groupID) {
+      const groupKeys = this._getGroupSlotKeys(groupID)
+      if (groupKeys.length === 0) return false
+
+      this._ensureSlotControls()
+      const current = this.slotControlMap || {}
+      const next = { ...current }
+      let changed = false
+
+      for (const key of groupKeys) {
+        const prev = this.getSlotControlState(key)
+        next[key] = { mode: prev.mode, locked: !prev.locked }
+        changed = true
+      }
+
+      if (changed) {
+        this.slotControlMap = next
+      }
+      return changed
     },
 
     applyFilteredOutfitToCharacter({ outfitData = null, mode = null } = {}) {
@@ -304,16 +759,19 @@ export const useFileSystemStore = defineStore('fs', {
       const sourceData = Array.isArray(outfitData)
         ? outfitData
         : (Array.isArray(this.activeItem?.data) ? this.activeItem.data : [])
-      const filterSet = new Set(this.activeFilters || [])
-      const resolvedMode = mode || this.applyMode || 'merge-replace'
 
-      const bundle = this._buildBundleByMode(characterData, sourceData, filterSet, resolvedMode)
+      this._ensureSlotControls(characterData, sourceData)
+      const bundle = this._buildBundleWithModeOverride(characterData, sourceData, mode)
       const ok = ExternalAdapter.applyOutfitToCharacter(target, bundle)
       if (ok) {
         this.characterItem = AssetApi.collectOutfitData(target)
         this.updatePreviewItem()
       }
       return !!ok
+    },
+
+    applyCurrentPreviewToCharacter() {
+      return this.applyFilteredOutfitToCharacter()
     },
 
     removeSelectedSlotsFromCharacter() {
@@ -354,19 +812,23 @@ export const useFileSystemStore = defineStore('fs', {
       this.filterService = new FilterService(itemsArray || [])
       // subscribe
       this._onFilterChange = (snapshot) => {
-        // update reactive snapshot and activeFilters
+        // update reactive snapshot and slot controls
         this.filterSnapshot = snapshot
         try {
-          const active = Array.from(this.filterService.getActiveSet())
-          this.activeFilters = active
-          // 更新预览
+          const hasSlotControls = Object.keys(this.slotControlMap || {}).length > 0
+          const characterData = Array.isArray(this.characterItem) ? this.characterItem : []
+          const sourceData = Array.isArray(this.activeItem?.data) ? this.activeItem.data : []
+
+          this._ensureSlotControls(characterData, sourceData)
+          if (!hasSlotControls) {
+            this._applyDefaultModeToUnlockedSlots(characterData, sourceData, { mode: this.defaultReplaceMode })
+          }
+
           this.updatePreviewItem()
         } catch (e) {
           // ignore
         }
       }
-      const active = Array.from(this.filterService.getActiveSet())
-      this.activeFilters = active
       this.filterService.onChange(this._onFilterChange)
       try { this.filterService.emitChange() } catch (e) { }
     },
@@ -402,13 +864,13 @@ export const useFileSystemStore = defineStore('fs', {
       return isHiddenGroup(groupID)
     },
 
-    // Wrapper methods for UI -> service
-    filterToggle(key) { if (this.filterService) this.filterService.toggle(key) },
-    filterSetActive(key, v) { if (this.filterService) this.filterService.setActive(key, !!v) },
-    filterSetAll(v) { if (this.filterService) this.filterService.setAll(!!v) },
-    filterInvertAll() { if (this.filterService) this.filterService.invertAll() },
-    filterSetGroupAll(groupID, v) { if (this.filterService) this.filterService.setGroupAll(groupID, !!v) },
-    filterInvertGroup(groupID) { if (this.filterService) this.filterService.invertGroup(groupID) },
+    // Wrapper methods for UI compatibility -> slot lock APIs
+    filterToggle(key) { return this.toggleSlotLock(key) },
+    filterSetActive(key, v) { return this.setSlotLocked(key, !!v) },
+    filterSetAll(v) { return this.setAllSlotLocks(!!v) },
+    filterInvertAll() { return this.invertSlotLocks() },
+    filterSetGroupAll(groupID, v) { return this.setGroupSlotLocks(groupID, !!v) },
+    filterInvertGroup(groupID) { return this.invertGroupSlotLocks(groupID) },
 
     // ---------------------
     // Search wrapper

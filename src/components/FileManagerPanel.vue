@@ -1211,7 +1211,7 @@ function onWindowResize() {
     top: -20px;
     left: 50%;
     transform: translateX(-50%);
-    font-size: 11px;
+    font-size: var(--font-size-xs, 12px);
     color: var(--color-warning, #f59e0b);
     background: var(--color-warning-bg, rgba(245, 158, 11, 0.1));
     padding: 2px 6px;
@@ -1236,8 +1236,8 @@ function onWindowResize() {
 
 /* right aside */
 .main-right {
-    flex: 0 0 clamp(240px, 32vw, 320px);
-    min-width: 200px;
+    flex: 0 0 clamp(300px, 38vw, 430px);
+    min-width: 0;
     max-width: 100%;
     box-sizing: border-box;
     overflow-y: auto;
@@ -1353,8 +1353,8 @@ function onWindowResize() {
     }
 
     .main-right {
-        max-width: 32%;
-        flex: 0 0 clamp(240px, 28vw, 320px);
+        max-width: 42%;
+        flex: 0 0 clamp(320px, 36vw, 440px);
     }
 
     .fm-mobile-actions {

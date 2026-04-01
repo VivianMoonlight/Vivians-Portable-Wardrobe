@@ -315,7 +315,7 @@ async function onPreviewApplyToCurrent() {
 }
 
 .mobile-title {
-  font-size: 16px;
+  font-size: var(--font-size-xl, 17px);
   font-weight: 600;
   color: var(--color-text-primary, #1f2937);
 }
@@ -347,7 +347,7 @@ async function onPreviewApplyToCurrent() {
   border: 1px solid var(--color-border-base, #e2e8f0);
   background: var(--color-bg-base, #fff);
   color: var(--color-text-secondary, #64748b);
-  font-size: 13px;
+  font-size: var(--font-size-base, 14px);
   font-weight: 600;
 }
 
@@ -654,7 +654,7 @@ async function onPreviewApplyToCurrent() {
   border: 1px solid var(--color-border-base, #e2e8f0);
   background: var(--color-bg-base, #fff);
   color: var(--color-text-secondary, #64748b);
-  font-size: 13px;
+  font-size: var(--font-size-base, 14px);
   font-weight: 600;
 }
 
@@ -676,7 +676,7 @@ async function onPreviewApplyToCurrent() {
 }
 
 .settings-title {
-  font-size: 16px;
+  font-size: var(--font-size-lg, 16px);
   margin: 0 0 14px;
 }
 
@@ -708,13 +708,13 @@ async function onPreviewApplyToCurrent() {
 }
 
 .theme-label {
-  font-size: 14px;
+  font-size: var(--font-size-md, 15px);
   font-weight: 500;
 }
 
 .theme-warning {
   margin-left: auto;
-  font-size: 11px;
+  font-size: var(--font-size-xs, 12px);
   color: var(--color-warning, #f59e0b);
 }
 </style>

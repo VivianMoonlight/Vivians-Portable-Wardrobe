@@ -49,11 +49,30 @@
     "allOff": "All Off",
     "invert": "Invert selection",
     "applyModeLabel": "Apply mode",
+    "defaultReplaceModeLabel": "Default replacement mode",
     "modeFillEmpty": "Add to empty slots",
     "modeMergeReplace": "Add & replace",
     "modeFullReplace": "Full replace",
-    "applyCurrent": "Apply with mode",
+    "applyCurrent": "Apply to character",
     "removeSelected": "Remove selected slots",
+    "lockAll": "Lock All",
+    "unlockAll": "Unlock All",
+    "invertLock": "Invert Lock",
+    "lock": "Lock",
+    "unlock": "Unlock",
+    "allModeOriginal": "All Original",
+    "allModeIncoming": "All Incoming",
+    "allModeEmpty": "All Empty",
+    "groupModeOriginal": "Group Original",
+    "groupModeIncoming": "Group Incoming",
+    "groupModeEmpty": "Group Empty",
+    "groupLockAll": "Lock Group",
+    "groupUnlockAll": "Unlock Group",
+    "groupInvertLock": "Invert Group Lock",
+    "slotModeAriaLabel": "Slot mode",
+    "slotModeEmpty": "Empty",
+    "slotModeOriginal": "Original",
+    "slotModeIncoming": "Incoming",
     "slotLegendAria": "Slot state legend",
     "inCharacter": "On character",
     "inHover": "In hovered outfit",
@@ -316,36 +335,6 @@
     "hasFutureState": "Future states available",
     "stateChange": "State Change",
     "initialState": "Initial State",
-    "operationTags": {
-      "interaction": "Interaction: {label}",
-      "source": "Source: {label}",
-      "partsCount": "{count} parts",
-      "deltasCount": "{count} deltas",
-      "stepBack": "Undo {count} step(s)",
-      "stepForward": "Redo {count} step(s)"
-    },
-    "actionCategoryLabels": {
-      "part": "Part",
-      "layer": "Layer",
-      "batch": "Batch",
-      "palette": "Palette",
-      "stack": "Stack",
-      "asset": "Asset"
-    },
-    "interactionKindLabels": {
-      "palette": "Palette edit",
-      "editor": "Editor",
-      "previewMove": "Preview drag",
-      "layerEdit": "Layer edit",
-      "batchEdit": "Batch edit",
-      "priorityDrag": "Priority drag"
-    },
-    "sourceLabels": {
-      "batchEditPanel": "Batch Edit Panel",
-      "partInspectorPanel": "Part Inspector Panel",
-      "layerManagerWidget": "Layer Manager",
-      "previewWidget": "Preview Widget"
-    },
     "actionTypeLabels": {
       "part": {
         "updateMetadata": "Update part metadata",
@@ -388,6 +377,24 @@
       "asset": {
         "apply": "Apply asset"
       }
+    },
+    "actionScopeLabels": {
+      "part": "Part",
+      "layer": "Layer",
+      "batch": "Batch",
+      "palette": "Palette",
+      "stack": "Stack",
+      "asset": "Asset"
+    },
+    "operationContentLabels": {
+      "color": "Color",
+      "opacity": "Opacity",
+      "shift": "Shift",
+      "order": "Order",
+      "layer": "Layer",
+      "property": "Property",
+      "tag": "Tag",
+      "general": "Edit"
     }
   },
   "groupNames": {
@@ -452,7 +459,7 @@
   },
   "sidePreview": {
     "ariaLabel": "Preview panel",
-    "hint": "Hover over file items to see preview"
+    "hint": "Hover to preview, click to lock/unlock current preview"
   },
   "stackDetail": {
     "ariaLabel": "Stack Detail Panel",
