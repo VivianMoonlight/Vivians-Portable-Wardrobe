@@ -88,6 +88,7 @@
                         <div
                             id="workbench-tab-history"
                             ref="historyTabRef"
+                            v-if="tabMounted.history"
                             v-show="activeTab === 'history'"
                             class="tab-panel"
                             role="tabpanel"
@@ -97,6 +98,7 @@
                         <div
                             id="workbench-tab-studio"
                             ref="studioTabRef"
+                            v-if="tabMounted.studio"
                             v-show="activeTab === 'studio'"
                             class="tab-panel tab-panel-studio"
                             role="tabpanel"
@@ -106,6 +108,7 @@
                         <div
                             id="workbench-tab-settings"
                             ref="settingsTabRef"
+                            v-if="tabMounted.settings"
                             v-show="activeTab === 'settings'"
                             class="tab-panel settings-panel"
                             role="tabpanel"
@@ -170,7 +173,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick, toRaw } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, watch, nextTick, toRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
 import LZString from 'lz-string'
 import FileManager from '@/components/FileManager.vue'
@@ -250,6 +253,16 @@ const wardrobeTabRef = ref(null)
 const historyTabRef = ref(null)
 const studioTabRef = ref(null)
 const settingsTabRef = ref(null)
+const tabMounted = reactive({
+    wardrobe: true,
+    history: false,
+    studio: false,
+    settings: false
+})
+
+if (Object.prototype.hasOwnProperty.call(tabMounted, activeTab.value)) {
+    tabMounted[activeTab.value] = true
+}
 
 async function setActiveTab(tab) {
     if (isMobile.value && tab === 'studio') {
@@ -348,7 +361,11 @@ watch(
             ensurePanelDefaults()
             // 初始化文件系统（使用当前角色或 Player）
             const target = hostWindow.CurrentCharacter || hostWindow.Player || null
-            fs.initialize(target)
+            try {
+                await fs.initialize(target)
+            } catch (e) {
+                console.warn('fs.initialize failed', e)
+            }
 
             // 当打开时，自动提升 z-index 以确保可视
             panelZ.value = FOCUSED_Z
@@ -804,7 +821,10 @@ watch(isMobile, (v) => {
 
 watch(
     () => activeTab.value,
-    async () => {
+    async (tab) => {
+        if (tab && Object.prototype.hasOwnProperty.call(tabMounted, tab)) {
+            tabMounted[tab] = true
+        }
         await nextTick()
         focusActivePanel()
     }
@@ -818,6 +838,17 @@ onMounted(() => {
     updateIsMobile()
     // 当组件挂载时确保 panel 不超出（处理首次渲染时）
     ensurePanelDefaults()
+
+    const runPreInitialize = () => {
+        const target = hostWindow.CurrentCharacter || hostWindow.Player || null
+        fs.preInitialize(target).catch(() => { /* ignore */ })
+    }
+    if (typeof hostWindow.requestIdleCallback === 'function') {
+        hostWindow.requestIdleCallback(() => runPreInitialize(), { timeout: 1200 })
+    } else {
+        hostWindow.setTimeout(() => runPreInitialize(), 200)
+    }
+
     if (activeTab.value === 'studio') {
         studioStore.loadAssetData().catch(() => { /* ignore */ })
     }

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useFileSystemStore } from "@/stores/fileSystemStore";
 import { injectTheme } from "@/services/ThemeService";
@@ -196,11 +196,6 @@ function toggleGroupLocks(group) {
   if (!group?.groupID) return;
   fsStore.setGroupSlotLocks(group.groupID, !isGroupFullyLocked(group));
 }
-
-// 挂载时自动刷新 filter
-onMounted(() => {
-  fsStore.initFilterServiceDefault();
-});
 </script>
 
 <template>

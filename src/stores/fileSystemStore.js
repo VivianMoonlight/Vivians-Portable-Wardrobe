@@ -58,6 +58,19 @@ function groupPartsBySlot(parts = []) {
   return grouped
 }
 
+function getCharacterInitKey(character) {
+  if (!character || typeof character !== 'object') return 'none'
+
+  const memberNumber = Number(character.MemberNumber)
+  if (Number.isFinite(memberNumber)) {
+    return `member:${memberNumber}`
+  }
+
+  const name = typeof character.Name === 'string' ? character.Name : ''
+  const family = typeof character.AssetFamily === 'string' ? character.AssetFamily : ''
+  return `name:${name}|family:${family}`
+}
+
 export const useFileSystemStore = defineStore('fs', {
   state: () => ({
     fs: new FileSystem('Home'),
@@ -111,7 +124,15 @@ export const useFileSystemStore = defineStore('fs', {
 
     // History tracking
     _loadingFromHistory: false,
-    _historyDebounceTimer: null
+    _historyDebounceTimer: null,
+
+    // initialization lifecycle
+    _persistedLoaded: false,
+    _corePrewarmed: false,
+    _corePrewarmPromise: null,
+    _historyFilterInitPromise: null,
+    _filterInitPromise: null,
+    _lastInitializedCharacterKey: null
 
   }),
   getters: {
@@ -160,18 +181,98 @@ export const useFileSystemStore = defineStore('fs', {
       this.character = character
     },
 
-    initialize(character) {
-      this.setCharacter(character)
+    _loadPersistedDataOnce() {
+      if (this._persistedLoaded) return
       this.loadAll()
-      this.history.initFilter()
-      //this.loadHistory()
-      this.initFilterServiceDefault()
-      this.characterItem = AssetApi.collectOutfitData(character)
-      this.activeItem = { data: JSON.parse(JSON.stringify(this.characterItem)) } // deep copy
-      this.lockedItem = null
+      this._persistedLoaded = true
+    },
+
+    async _ensureHistoryFilterInitialized() {
+      if (Array.isArray(this.history?.filter) && this.history.filter.length > 0) {
+        return true
+      }
+
+      if (this._historyFilterInitPromise) {
+        await this._historyFilterInitPromise
+        return true
+      }
+
+      this._historyFilterInitPromise = (async () => {
+        try {
+          await this.history.initFilter()
+        } catch (e) {
+          console.warn('history.initFilter failed', e)
+        }
+      })()
+
+      try {
+        await this._historyFilterInitPromise
+      } finally {
+        this._historyFilterInitPromise = null
+      }
+
+      return true
+    },
+
+    async preInitialize(character = null) {
+      const target = character || hostWindow.CurrentCharacter || hostWindow.Player || null
+      this.setCharacter(target)
+
+      if (this._corePrewarmed) return true
+      if (this._corePrewarmPromise) {
+        await this._corePrewarmPromise
+        return true
+      }
+
+      this._corePrewarmPromise = (async () => {
+        this._loadPersistedDataOnce()
+        await Promise.allSettled([
+          this._ensureHistoryFilterInitialized(),
+          this.initFilterServiceDefault()
+        ])
+        this._corePrewarmed = true
+      })()
+
+      try {
+        await this._corePrewarmPromise
+      } finally {
+        this._corePrewarmPromise = null
+      }
+
+      return true
+    },
+
+    async initialize(character, options = {}) {
+      const target = character || hostWindow.CurrentCharacter || hostWindow.Player || null
+      this.setCharacter(target)
+
+      if (options.preInitialize !== false) {
+        await this.preInitialize(target)
+      } else {
+        this._loadPersistedDataOnce()
+      }
+
+      const characterKey = getCharacterInitKey(target)
+      const hasCharacterData = Array.isArray(this.characterItem) && this.characterItem.length > 0
+      const shouldRefreshCharacter = options.refreshCharacter !== false
+        || !hasCharacterData
+        || this._lastInitializedCharacterKey !== characterKey
+
+      if (shouldRefreshCharacter) {
+        this.characterItem = AssetApi.collectOutfitData(target)
+      }
+
+      if (options.keepSelection !== true) {
+        this.lockedItem = null
+        this.activeItem = { data: JSON.parse(JSON.stringify(this.characterItem || [])) }
+      } else if (!Array.isArray(this.activeItem?.data)) {
+        this.activeItem = { data: JSON.parse(JSON.stringify(this.characterItem || [])) }
+      }
+
       this.previewItem = { data: [] }
       this._applyDefaultModeToUnlockedSlots(this.characterItem, this.activeItem.data, { mode: this.defaultReplaceMode })
       this.updatePreviewItem()
+      this._lastInitializedCharacterKey = characterKey
     },
 
 
@@ -798,10 +899,29 @@ export const useFileSystemStore = defineStore('fs', {
 
     // Initialize/rebuild FilterService from an items array (array of { key, data })
     async initFilterServiceDefault() {
-      if (!this.filterService) {
-        const itemsArray = await fetchFilterData()
-        this.initFilterService(itemsArray)
+      if (this.filterService) return true
+
+      if (this._filterInitPromise) {
+        await this._filterInitPromise
+        return !!this.filterService
       }
+
+      this._filterInitPromise = (async () => {
+        try {
+          const itemsArray = await fetchFilterData()
+          this.initFilterService(itemsArray)
+        } catch (e) {
+          console.warn('initFilterServiceDefault failed', e)
+        }
+      })()
+
+      try {
+        await this._filterInitPromise
+      } finally {
+        this._filterInitPromise = null
+      }
+
+      return !!this.filterService
     },
 
     initFilterService(itemsArray) {
