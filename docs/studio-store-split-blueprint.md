@@ -196,7 +196,50 @@ flowchart LR
 实施进度（2026-04-03）:
 - 已完成第一部：`renderStore` 已接入，`useStudioDomainStores()` 已暴露 `render` 域。
 - 已完成第二部：`studioStore` state 中 preview stack 与 scheduler 相关镜像字段（`_previewStack`、`_activePreviewId`、`_refreshScheduler`、`_pendingMergedRefresh`、`_pendingLayerRefresh`）已删除，改为通过 `renderStore` 代理访问。
-- 待完成：继续下沉 render 领域核心状态与行为（`mergedAppearanceData`、`translatedLayerEntries`、renderer/pipeline 选择与刷新编排），并评估 `studioStore` 中 render 兼容入口删除窗口。
+- 已完成第三部：`mergedAppearanceData`、`translatedLayerEntries`、renderer/pipeline 相关状态已迁移到 `renderStore` 持有；`studioStore` 对应镜像字段已删除并改为 render 代理。
+- 已完成第四部：preview/refresh/layer refresh/renderer toggle/destroy 等 render 编排入口已收敛为 `studioStore -> renderStore` 薄委托，`renderStore` 内部统一调度刷新执行。
+- 验证：已执行 `npm run build`，构建通过。
+- 待完成：评估 `studioStore` 中 render 兼容入口删除窗口，并完成一轮渲染交互回归（预览覆盖、快速路径、全量刷新、切换 renderer）。
+
+#### studioStore 残留评估（2026-04-03）
+
+迁移清单（应继续下沉到分区 Store）:
+- 迁移到 `studioRenderStore`（并补 `renderBridge`）:
+  - UI 侧仍直接依赖 `studioStore` 的 render 兼容入口：`pushPreview/popPreview/isPreviewActive/refreshMergedAppearanceData`。
+  - UI 侧仍直接读取 render 代理字段：`mergedAppearanceData/renderer/previewRenderer/translatedLayerEntries`。
+  - 目标：组件改为 `render` 域或 `renderBridge` 调用后，删除 `studioStore` 对应 render 兼容入口。
+- 迁移到 `studioAssetStore`:
+  - `assetGroupsRaw/assetIndex` 状态与资产检索方法：`loadAssetData/findAssetsGroupForPart/findAssetGroupEntryForPart/getAssetCandidatesForPart/resolveAssetForPart/getGroupDescriptionForPart/matchesSearchForPart`。
+  - `applyAssetToSelectedStack` 资产应用编排（保留 command 入口，但执行体迁到 asset 域）。
+- 迁移到 `studioSelectionStore`:
+  - 统一焦点/选择状态机实现：`focusLayer/setPropertyFocus/clearFocus/focusClear/clearPropertyFocus`。
+  - 图层选择行为：`toggleSelectionMode/toggleLayerSelection/selectAllLayers/clearLayerSelection/selectLayerRange/getSelectedLayersData`。
+  - 选择派生工具：`getPrimaryMoveLayerIndex/getPaletteTargetsForCurrentSelection/getPaletteTargetForLayer/isPaletteTargetActive`。
+- 迁移到 `studioCoreStore`（Wave 7 主体）:
+  - Part 真值写入链路：`_resolvePartLocation/_applyPartLayerDeltasInternal/applyPartLayerDeltas/batchApplyPartLayerDeltas/updatePartFromLayerEntries/updatePartLayerEntries`。
+  - 兼容回退与重建：`UpdateSpecificPartFromLayerEntries/_schedulePartUpdate/UpdateAllStacksPartFromLayerEntries/_doUpdateAllStacksPartFromLayerEntries`。
+  - 基础身份与聚焦写入：`ensurePartUid/findPartByUid/_updateFocusedPartInPlace/_updateFocusedPartProperty`。
+  - stack 主写入入口：`add/remove/move/select/clear/rename`。
+- 迁移到 `studioPersistenceStore` + `studioHistoryStore` + `studioPanelStore`（收尾清理）:
+  - `toggleHistoryPanel` 可直接由 panel 域承接，`studioStore` 保留临时代理后删除。
+  - persistence/history 现有方法多数已是薄代理，可在组件全面桥接后清理 `studioStore` 同名兼容入口。
+
+保留清单（应保留为核心/桥接功能）:
+- 核心协调层（建议保留在 `studioStore`，直至 Wave 7 完成）:
+  - 命令与查询网关：`execute/query/getQueryNames`。
+  - 交互事务网关：`beginInteraction/applyDelta/commitInteraction/cancelInteraction/forceEndRealtimeScope`。
+  - 统一 mutation 编排：`_finalizeMutation/_finalizePaletteMutation/_finalizeEditorMutation`。
+  - 历史元数据与策略：`_normalizeHistoryMeta/_mergeHistoryMeta/_setDeferredHistoryMeta/_consumePendingHistoryMeta`。
+- 跨域桥接层（迁移期建议保留）:
+  - `useStudioStore` 内 `ensureSelectionProxyBindings/ensurePaletteProxyBindings/ensureRenderProxyBindings`。
+  - `_getPanelStore/_getSelectionStore/_getPaletteStore/_getRenderStore/_getHistoryStore/_getPersistenceStore`。
+  - `_syncPanelDomainState/_syncFocusedPartIndexToSelectionDomain/_syncLegacyFromFocusState` 等双写同步入口。
+- 临时核心能力（可在 core/render 契约稳定后再评估迁移）:
+  - `_reconstructStacksForRender`（当前作为 render pipeline 的核心回调契约，含 feature flag 分支）。
+  - `_sanitizeStacksForPersistence`（当前是 persistence 入口统一清洗代理）。
+
+删除窗口判定（render 兼容层）:
+- 当且仅当组件层不再直接调用 `studioStore` 的 render 兼容入口/字段（统一改为 `render` 域或 `renderBridge`）后，删除 `studioStore` render 兼容层。
 
 完成标准:
 - 预览渲染路径稳定。
@@ -206,6 +249,15 @@ flowchart LR
 - 新建 `src/stores/studio/coreStore.js` 与 `src/stores/studio/assetStore.js`。
 - core 保留纯数据写入与选择索引。
 - asset 仅保留加载与 apply 编排；删除 `asset-actions` 纯透传函数。
+
+实施进度（2026-04-03）:
+- 已完成第一部：新增 `coreStore` 与 `assetStore`，并在 `useStudioDomainStores()` 暴露 `core`、`asset` 域。
+- 已完成第二部：`studioStore` 已接入 `_getCoreStore/_getAssetStore`，并将核心 stack 入口（`add/remove/move/select/clear`）以及 `ensurePartUid/findPartByUid` 下沉为 core 委托。
+- 已完成第三部：`studioStore` 资产入口（`loadAssetData`、资产检索族、`applyAssetToSelectedStack`）下沉为 asset 委托。
+- 已完成第四部：Part 真值写入链路底层能力（`_resolvePartLocation`、`_applyPartLayerDeltasInternal`、`_updateFocusedPartInPlace`、`_updateFocusedPartProperty`）已迁入 `coreStore`，`studioStore` 对应入口改为薄代理。
+- 已完成第五部：Part 写入上层编排（`applyPartLayerDeltas`、`batchApplyPartLayerDeltas`、`updatePartFromLayerEntries`、`updatePartLayerEntries`）已迁入 `coreStore`，`studioStore` 对应入口仅保留 facade 分流与薄委托。
+- 验证：已执行 `npm run build`，构建通过。
+- 待完成：补 asset/render bridge 后收敛组件直调 `studioStore` 入口，并继续评估 `UpdateSpecificPartFromLayerEntries` 及批量回写链路的最终归属（core 或独立写入服务）。
 
 完成标准:
 - `studioStore` 退化为薄 facade（或删除）。

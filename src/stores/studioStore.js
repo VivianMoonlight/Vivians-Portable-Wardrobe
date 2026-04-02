@@ -4,19 +4,12 @@
  * per-part _uid bookkeeping so components can refer to parts by reference or uid.
  */
 import { defineStore } from 'pinia'
-import { RenderService } from '@/services/RenderService'
-import OptimizedRenderService from '@/services/OptimizedRenderService'
-import { RenderApi } from '@/utils/RenderApi'
-import { AssetApi } from '@/utils/AssetApi'
 import { toRaw } from 'vue'
-
-import { hostWindow } from '@/utils/host-window.js'
 
 // Clone utilities
 import { fastClone, shallowClone } from '@/utils/clone.js'
 
 // Action modules
-import * as StackActions from '@/studio/stack-actions.js'
 import * as PaletteActions from '@/studio/palette-actions.js'
 import * as FocusActions from '@/studio/focus-actions.js'
 import * as RenderingActions from '@/studio/rendering-actions.js'
@@ -24,10 +17,7 @@ import * as LayerActions from '@/studio/layer-actions.js'
 import * as SelectionActions from '@/studio/selection-actions.js'
 import * as PreviewActions from '@/studio/preview-actions.js'
 import * as PriorityActions from '@/studio/priority-actions.js'
-import * as AssetActions from '@/studio/asset-actions.js'
-import { resolveCraftForAssetSlot } from '@/studio/craft-resolver.js'
 import { getStudioFacade } from '@/studio/StudioFacade'
-import { createStudioRenderPipeline } from '@/studio/StudioRenderPipeline'
 import {
   PANEL_HOST,
   PANEL_VISIBILITY,
@@ -36,7 +26,6 @@ import {
 } from '@/studio/panel-system'
 import {
   isStudioFacadeEnabled,
-  isStudioRenderPipelineEnabled,
   isRenderReconstructFromLayerEntriesEnabled
 } from '@/config/featureFlags'
 
@@ -47,7 +36,6 @@ import {
   - Layer translator functions: '@/services/LayerTranslator'
 */
 import * as Palette from '@/services/PaletteService'
-import * as AssetIndex from '@/services/AssetIndexService'
 import * as LayerTranslator from '@/services/LayerTranslator'
 import { applyLayerDeltasToPart } from '@/services/PartPatchApplier'
 import { useStudioPanelStore } from '@/stores/studio/panelStore'
@@ -56,6 +44,8 @@ import { useStudioPersistenceStore } from '@/stores/studio/persistenceStore'
 import { useStudioSelectionStore } from '@/stores/studio/selectionStore'
 import { useStudioPaletteStore } from '@/stores/studio/paletteStore'
 import { useStudioRenderStore } from '@/stores/studio/renderStore'
+import { useStudioCoreStore } from '@/stores/studio/coreStore'
+import { useStudioAssetStore } from '@/stores/studio/assetStore'
 
 // PriorityService (refactored)
 import PriorityService from '@/services/PriorityService'
@@ -76,40 +66,6 @@ function hashPartForCache(part) {
     return JSON.stringify(relevant)
   } catch (e) {
     return ''
-  }
-}
-
-/**
- * Batch update scheduler using requestAnimationFrame
- */
-class RefreshScheduler {
-  constructor() {
-    this._pendingRefresh = false
-    this._pendingLayerRefresh = false
-    this._rafId = null
-    this._callbacks = []
-  }
-
-  scheduleRefresh(callback) {
-    this._callbacks.push(callback)
-    if (!this._rafId) {
-      this._rafId = requestAnimationFrame(() => {
-        this._rafId = null
-        const cbs = this._callbacks.slice()
-        this._callbacks = []
-        for (const cb of cbs) {
-          try { cb() } catch (e) { console.warn(e) }
-        }
-      })
-    }
-  }
-
-  cancel() {
-    if (this._rafId) {
-      cancelAnimationFrame(this._rafId)
-      this._rafId = null
-    }
-    this._callbacks = []
   }
 }
 
@@ -225,6 +181,13 @@ function ensureRenderProxyBindings(store) {
 
   const renderStore = useStudioRenderStore()
   const proxyKeys = [
+    'mergedAppearanceData',
+    'renderer',
+    'previewRenderer',
+    'useOptimizedRenderer',
+    'renderPipeline',
+    '_renderPipelineLastStats',
+    'translatedLayerEntries',
     '_refreshScheduler',
     '_pendingMergedRefresh',
     '_pendingLayerRefresh',
@@ -253,27 +216,7 @@ function ensureRenderProxyBindings(store) {
 const useStudioStoreBase = defineStore('studio', {
   state: () => ({
     stacks: [],
-    mergedAppearanceData: { data: [] }, // preview data (may contain tags)
     selectedIndex: -1,
-
-    // Legacy renderer for thumbnails (backward compatibility)
-    renderer: new RenderService({ drawCallbacks: RenderApi, thumbwidth: 500, thumbheight: 1000, previewwidth: 500, previewheight: 1000 }),
-
-    // Optimized renderer for main preview
-    previewRenderer: new OptimizedRenderService({
-      drawCallbacks: RenderApi,
-      previewwidth: 500,
-      previewheight: 1000
-    }),
-
-    // Config flag to toggle between renderers (for testing/fallback)
-    useOptimizedRenderer: true,
-
-    renderPipeline: createStudioRenderPipeline({
-      assetApi: AssetApi,
-      paletteService: Palette
-    }),
-    _renderPipelineLastStats: null,
 
     // NEW: Only use focusedPartIndex to locate the focused part
     focusedPartIndex: {
@@ -284,9 +227,6 @@ const useStudioStoreBase = defineStore('studio', {
 
     assetGroupsRaw: [],
     assetIndex: {},
-
-    // last translated layer entries
-    translatedLayerEntries: [],
 
     // internal per-part uid counter and mapping
     _partUidCounter: 1,
@@ -437,7 +377,6 @@ const useStudioStoreBase = defineStore('studio', {
 
   actions: {
     // Action modules imported from separate files
-    StackActions,
     PaletteActions,
     FocusActions,
     RenderingActions,
@@ -445,7 +384,6 @@ const useStudioStoreBase = defineStore('studio', {
     SelectionActions,
     PreviewActions,
     PriorityActions,
-    AssetActions,
 
     // -------------------------
     // Layer manager toggle
@@ -503,22 +441,8 @@ const useStudioStoreBase = defineStore('studio', {
      * @param {string} source - Description of preview source (for debugging)
      */
     pushPreview(id, priority, previewData, source = '') {
-      if (!id || typeof priority !== 'number') return
-
-      // Remove if already exists (to update)
-      this._previewStack = this._previewStack.filter(p => p.id !== id)
-
-      // Add new preview entry
-      this._previewStack.push({
-        id,
-        priority,
-        preview: previewData,
-        source,
-        timestamp: Date.now()
-      })
-
-      // Update active preview
-      this._updateActivePreview()
+      const renderStore = this._getRenderStore()
+      return renderStore.pushPreview(this, id, priority, previewData, source)
     },
 
     /**
@@ -526,62 +450,16 @@ const useStudioStoreBase = defineStore('studio', {
      * @param {string} id - ID of preview to remove
      */
     popPreview(id) {
-      if (!id) return
-
-      const nextStack = this._previewStack.filter(p => p.id !== id)
-      if (nextStack.length === this._previewStack.length) {
-        return
-      }
-
-      this._previewStack = nextStack
-
-      // Update active preview
-      this._updateActivePreview()
+      const renderStore = this._getRenderStore()
+      return renderStore.popPreview(this, id)
     },
 
     /**
      * Internal: Update active preview based on max priority
      */
     _updateActivePreview() {
-      if (this._previewStack.length === 0) {
-        // No previews active: restore original merged appearance
-        this._activePreviewId = null
-        this.refreshMergedAppearanceData()
-        return
-      }
-
-      // Find highest priority preview
-      let highestPriority = -1
-      let activePreview = null
-
-      for (const preview of this._previewStack) {
-        if (preview.priority > highestPriority) {
-          highestPriority = preview.priority
-          activePreview = preview
-        }
-      }
-
-      if (!activePreview) return
-
-      // Re-render when active preview id changes or the preview payload is updated.
-      const shouldRender =
-        this._activePreviewId !== activePreview.id ||
-        this.mergedAppearanceData !== activePreview.preview
-
-      if (shouldRender) {
-        this._activePreviewId = activePreview.id
-        this.mergedAppearanceData = activePreview.preview
-
-        // Render preview
-        try {
-          const activeRenderer = this.useOptimizedRenderer ? this.previewRenderer : this.renderer
-          if (activeRenderer && typeof activeRenderer.renderPreviewWithItem === 'function') {
-            activeRenderer.renderPreviewWithItem(activePreview.preview)
-          }
-        } catch (e) {
-          console.warn('[studioStore] Failed to render preview:', e)
-        }
-      }
+      const renderStore = this._getRenderStore()
+      return renderStore.updateActivePreview(this)
     },
 
     /**
@@ -590,31 +468,21 @@ const useStudioStoreBase = defineStore('studio', {
      * @returns {boolean}
      */
     isPreviewActive(id) {
-      return this._activePreviewId === id
+      const renderStore = this._getRenderStore()
+      return renderStore.isPreviewActive(id)
     },
 
     // -------------------------
     // Preview tool management
     // -------------------------
     ensurePartUid(part) {
-      if (!part || typeof part !== 'object') return null
-      if (part._uid) return part._uid
-      const uid = 'p' + (this._partUidCounter++)
-      try { part._uid = uid } catch (e) { /* non-writable?  ignore */ }
-      return uid
+      const coreStore = this._getCoreStore()
+      return coreStore.ensurePartUid(this, part)
     },
 
     findPartByUid(uid) {
-      if (!uid) return null
-      for (let si = 0; si < this.stacks.length; si++) {
-        const el = this.stacks[si]
-        if (!el || !Array.isArray(el.data)) continue
-        for (let pi = 0; pi < el.data.length; pi++) {
-          const part = el.data[pi]
-          if (part && part._uid === uid) return { partRef: part, stackIndex: si, partIndex: pi }
-        }
-      }
-      return null
+      const coreStore = this._getCoreStore()
+      return coreStore.findPartByUid(this, uid)
     },
 
     // -------------------------
@@ -661,6 +529,14 @@ const useStudioStoreBase = defineStore('studio', {
 
     _getRenderStore() {
       return useStudioRenderStore()
+    },
+
+    _getCoreStore() {
+      return useStudioCoreStore()
+    },
+
+    _getAssetStore() {
+      return useStudioAssetStore()
     },
 
     _syncFocusedPartIndexToSelectionDomain() {
@@ -803,55 +679,24 @@ const useStudioStoreBase = defineStore('studio', {
      * Schedule a merged appearance refresh (batched via rAF)
      */
     _scheduleRefresh() {
-      if (this._pendingMergedRefresh) return
-      this._pendingMergedRefresh = true
-
-      this._refreshScheduler.scheduleRefresh(() => {
-        this._pendingMergedRefresh = false
-        this._doRefreshMergedAppearanceData()
-      })
+      const renderStore = this._getRenderStore()
+      return renderStore.scheduleRefresh(this)
     },
 
     /**
      * Immediate refresh (for critical paths like initial load)
      */
     refreshMergedAppearanceData() {
-      // Cancel any pending scheduled refresh
-      this._pendingMergedRefresh = false
-      this._doRefreshMergedAppearanceData()
+      const renderStore = this._getRenderStore()
+      return renderStore.refreshMergedAppearanceData(this)
     },
 
     /**
      * Internal: actual refresh logic
      */
     _doRefreshMergedAppearanceData() {
-      // Choose renderer based on config
-      const activeRenderer = this.useOptimizedRenderer ? this.previewRenderer : this.renderer
-
-      if (isStudioRenderPipelineEnabled() && this.renderPipeline) {
-        const result = this.renderPipeline.render({
-          stacks: this.stacks,
-          paletteMap: this.paletteMap,
-          activeRenderer,
-          previousMergedAppearanceData: this.mergedAppearanceData,
-          reconstructStacks: (stacks) => this._reconstructStacksForRender(stacks)
-        })
-
-        this._renderPipelineLastStats = result?.stats || null
-        if (result?.mergedAppearanceData) {
-          this.mergedAppearanceData = result.mergedAppearanceData
-        }
-        return
-      }
-
-      this._renderPipelineLastStats = null
-      try { activeRenderer.removeCanvas(this.mergedAppearanceData) } catch (e) { console.warn(e) }
-      const unexpanded = {
-        data: AssetApi.stackOutfitData(this._reconstructStacksForRender(this.stacks)),
-        type: 'outfit'
-      }
-      this.mergedAppearanceData = Palette.expandedAppearanceForRendering(unexpanded, this.paletteMap)
-      activeRenderer.renderPreviewWithItem(this.mergedAppearanceData)
+      const renderStore = this._getRenderStore()
+      return renderStore.doRefreshMergedAppearanceData(this)
     },
 
     _reconstructStacksForRender(stacks = this.stacks) {
@@ -898,68 +743,18 @@ const useStudioStoreBase = defineStore('studio', {
     // stack manipulation
     // -------------------------
     async addElement(el) {
-      if (!this.assetIndex || Object.keys(this.assetIndex).length === 0 ||
-          !this.assetGroupsRaw || this.assetGroupsRaw.length === 0) {
-        await this.loadAssetData()
-      }
-
-      const result = StackActions.addElementToStacks(this, el, {
-        fastClone,
-        ensurePartUid: this.ensurePartUid.bind(this),
-        _buildLayerEntriesWithCache: this._buildLayerEntriesWithCache.bind(this),
-        _updateLayerEntriesColorCss: this._updateLayerEntriesColorCss.bind(this),
-        refreshMergedAppearanceData: this.refreshMergedAppearanceData.bind(this),
-        pushHistorySnapshot: this.pushHistorySnapshot.bind(this)
-      })
-
-      if (result.element !== null) {
-        // Element is already in the returned stacks, just assign
-        this.stacks = result.stacks
-        this.selectedIndex = result.selectedIndex
-        this.paletteMap = result.paletteMap
-        this._paletteNextCounter = result._paletteNextCounter
-        this._paletteVersion = result._paletteVersion
-        this.refreshMergedAppearanceData()
-        this.pushHistorySnapshot(this._normalizeHistoryMeta(null, 'stack.add'))
-      }
+      const coreStore = this._getCoreStore()
+      return coreStore.addElement(this, el)
     },
 
     removeElement(idx) {
-      if (idx < 0 || idx >= this.stacks.length) return
-
-      const result = StackActions.removeElementFromStacks(this, idx, {
-        renderer: this.renderer,
-        stacks: this.stacks,
-        selectedIndex: this.selectedIndex,
-        focusedPartIndex: this.focusedPartIndex,
-        pushHistorySnapshot: () => this.pushHistorySnapshot(this._normalizeHistoryMeta(null, 'stack.remove'))
-      })
-
-      this.stacks = result.stacks
-      this.selectedIndex = result.selectedIndex
-      this.focusedPartIndex = result.focusedPartIndex
-      this._syncFocusStateScopeFromFocusedPart()
-      this._scheduleRefresh()
+      const coreStore = this._getCoreStore()
+      return coreStore.removeElement(this, idx)
     },
 
     moveElement(fromIdx, toIdx) {
-      if (fromIdx === toIdx) return
-      if (fromIdx < 0 || fromIdx >= this.stacks.length) return
-      if (toIdx < 0 || toIdx >= this.stacks.length) return
-
-      const result = StackActions.moveElementInStacks(this, fromIdx, toIdx, {
-        stacks: this.stacks,
-        selectedIndex: this.selectedIndex,
-        focusedPartIndex: this.focusedPartIndex,
-        _scheduleRefresh: this._scheduleRefresh.bind(this)
-      })
-
-      this.stacks = result.stacks
-      this.selectedIndex = result.selectedIndex
-      this.focusedPartIndex = result.focusedPartIndex
-      this._syncFocusStateScopeFromFocusedPart()
-      this._scheduleRefresh()
-      this.pushHistorySnapshot(this._normalizeHistoryMeta(null, 'stack.move'))
+      const coreStore = this._getCoreStore()
+      return coreStore.moveElement(this, fromIdx, toIdx)
     },
 
     setSelectedStackFilterList(filterList = [], options = {}) {
@@ -1010,38 +805,13 @@ const useStudioStoreBase = defineStore('studio', {
     },
 
     select(idx) {
-      const result = StackActions.selectElementInStacks(this, idx, {
-        focusedPartIndex: this.focusedPartIndex
-      })
-
-      this.selectedIndex = result.selectedIndex
-      if (result.focusedPartIndex) {
-        this.focusedPartIndex = result.focusedPartIndex
-        this._syncFocusStateScopeFromFocusedPart()
-      }
-      if (result.clearPropertyFocus) {
-        this.clearPropertyFocus()
-      }
+      const coreStore = this._getCoreStore()
+      return coreStore.select(this, idx)
     },
 
     clear() {
-      if (!Array.isArray(this.stacks) || this.stacks.length === 0) return
-
-      this.pushHistorySnapshot(this._normalizeHistoryMeta(null, 'stack.clear'))
-
-      const result = StackActions.clearAllStacks(this, {
-        renderer: this.renderer,
-        focusedPartIndex: this.focusedPartIndex
-      })
-
-      this.stacks = result.stacks
-      this.selectedIndex = result.selectedIndex
-      this.mergedAppearanceData = result.mergedAppearanceData
-      this.focusedPartIndex = result.focusedPartIndex
-      this._syncFocusStateScopeFromFocusedPart()
-      if (result.clearPropertyFocus) {
-        this.clearPropertyFocus()
-      }
+      const coreStore = this._getCoreStore()
+      return coreStore.clear(this)
     },
 
     focusPart(part) {
@@ -1083,38 +853,43 @@ const useStudioStoreBase = defineStore('studio', {
     // Asset index helpers (pure)
     // -------------------------
     async loadAssetData() {
-      const res = await AssetIndex.loadAssetData()
-      this.assetGroupsRaw = res.assetGroupsRaw
-      this.assetIndex = res.assetIndex
-      return res.assetGroupsRaw
+      const assetStore = this._getAssetStore()
+      return assetStore.loadAssetData(this)
     },
 
     findAssetsGroupForPart(part) {
-      return AssetIndex.getAssetCandidatesForPart(this.assetIndex, this.assetGroupsRaw, part)
+      const assetStore = this._getAssetStore()
+      return assetStore.findAssetsGroupForPart(this, part)
     },
 
     findAssetGroupEntryForPart(part) {
-      return AssetIndex.findAssetGroupEntryForPart(this.assetGroupsRaw, this.assetIndex, part)
+      const assetStore = this._getAssetStore()
+      return assetStore.findAssetGroupEntryForPart(this, part)
     },
 
     _normalizeAssetsFromGroupData(groupData) {
-      return AssetIndex.normalizeAssetsFromGroupData(groupData)
+      const assetStore = this._getAssetStore()
+      return assetStore.normalizeAssetsFromGroupData(this, groupData)
     },
 
     getAssetCandidatesForPart(part) {
-      return AssetIndex.getAssetCandidatesForPart(this.assetIndex, this.assetGroupsRaw, part)
+      const assetStore = this._getAssetStore()
+      return assetStore.getAssetCandidatesForPart(this, part)
     },
 
     resolveAssetForPart(part) {
-      return AssetIndex.resolveAssetForPart(this.assetIndex, this.assetGroupsRaw, part)
+      const assetStore = this._getAssetStore()
+      return assetStore.resolveAssetForPart(this, part)
     },
 
     getGroupDescriptionForPart(part) {
-      return AssetIndex.getGroupDescriptionForPart(this.assetGroupsRaw, this.assetIndex, part)
+      const assetStore = this._getAssetStore()
+      return assetStore.getGroupDescriptionForPart(this, part)
     },
 
     matchesSearchForPart(part, term) {
-      return AssetIndex.matchesSearchForPart(this.assetIndex, this.assetGroupsRaw, part, term)
+      const assetStore = this._getAssetStore()
+      return assetStore.matchesSearchForPart(this, part, term)
     },
 
     // -------------------------
@@ -1558,15 +1333,9 @@ const useStudioStoreBase = defineStore('studio', {
         })
       }
 
-      if (!Array.isArray(this.stacks) || stackIndex < 0 || stackIndex >= this.stacks.length) return false
-
-      const normalizedName = String(newName || '').trim()
-      const currentName = String(this.stacks[stackIndex]?.name || '').trim()
-      if (!normalizedName || currentName === normalizedName) return false
-
-      const nextStacks = this.stacks.slice()
-      nextStacks[stackIndex] = { ...nextStacks[stackIndex], name: normalizedName }
-      this.stacks = nextStacks
+      const coreStore = this._getCoreStore()
+      const changed = coreStore.renameStack(this, stackIndex, newName)
+      if (!changed) return false
 
       const historyMeta = this._normalizeHistoryMeta(options?.historyMeta, 'stack.rename')
 
@@ -2262,92 +2031,13 @@ const useStudioStoreBase = defineStore('studio', {
     },
 
     _resolvePartLocation(part = null) {
-      if (!part) {
-        const stackIndex = Number(this.focusedPartIndex?.stackIndex)
-        const partIndex = Number(this.focusedPartIndex?.partIndex)
-        if (!Number.isFinite(stackIndex) || !Number.isFinite(partIndex)) return null
-
-        const stack = this.stacks[stackIndex]
-        const partRef = stack && Array.isArray(stack.data) ? stack.data[partIndex] : null
-        if (!partRef) return null
-
-        return { partRef, stackIndex, partIndex }
-      }
-
-      const uid = part._uid || this.ensurePartUid(part)
-      if (uid) {
-        const found = this.findPartByUid(uid)
-        if (found?.partRef) {
-          return {
-            partRef: found.partRef,
-            stackIndex: found.stackIndex,
-            partIndex: found.partIndex
-          }
-        }
-      }
-
-      for (let stackIndex = 0; stackIndex < this.stacks.length; stackIndex++) {
-        const stack = this.stacks[stackIndex]
-        if (!stack || !Array.isArray(stack.data)) continue
-        for (let partIndex = 0; partIndex < stack.data.length; partIndex++) {
-          if (stack.data[partIndex] === part) {
-            return { partRef: part, stackIndex, partIndex }
-          }
-        }
-      }
-
-      return null
+      const coreStore = this._getCoreStore()
+      return coreStore.resolvePartLocation(this, part)
     },
 
     _applyPartLayerDeltasInternal(part, deltas = []) {
-      if (!Array.isArray(deltas) || deltas.length === 0) return null
-
-      const location = this._resolvePartLocation(part)
-      if (!location?.partRef) return null
-
-      const sourcePart = location.partRef
-      const asset = this.resolveAssetForPart(sourcePart)
-      let rebuilt = null
-
-      try {
-        const patchResult = applyLayerDeltasToPart(sourcePart, deltas, { asset })
-        if (patchResult?.changed && patchResult?.part) {
-          rebuilt = patchResult.part
-        }
-      } catch (e) {
-        console.warn('[studioStore] Part patch applier failed, using legacy layer translator fallback', e)
-      }
-
-      if (!rebuilt) {
-        const sourceEntries = this.getLayerEntriesForPart(sourcePart, { forceRebuild: false, clone: true })
-        if (!Array.isArray(sourceEntries) || sourceEntries.length === 0) return null
-
-        const nextEntries = fastClone(sourceEntries)
-        const changed = this._applyLayerDeltasToEntries(nextEntries, deltas)
-        if (!changed) return null
-
-        rebuilt = LayerTranslator.reconstructPartFromLayerEntries(nextEntries, sourcePart, { originalAsset: asset })
-      }
-
-      if (!rebuilt) return null
-
-      const uid = sourcePart._uid || this.ensurePartUid(sourcePart)
-      try { rebuilt._uid = uid } catch (e) { console.warn(e) }
-
-      const rebuiltClone = fastClone(rebuilt)
-      rebuiltClone.layerEntries = this.getLayerEntriesForPart(rebuiltClone, { forceRebuild: true, clone: true })
-
-      const stack = this.stacks[location.stackIndex]
-      if (!stack || !Array.isArray(stack.data)) return null
-
-      const nextStack = { ...stack, data: stack.data.slice() }
-      nextStack.data[location.partIndex] = rebuiltClone
-
-      const nextStacks = this.stacks.slice()
-      nextStacks[location.stackIndex] = nextStack
-      this.stacks = nextStacks
-
-      return { location, updatedPart: rebuiltClone }
+      const coreStore = this._getCoreStore()
+      return coreStore.applyPartLayerDeltasInternal(this, part, deltas)
     },
 
     applyPartLayerDeltas(part, deltas = [], options = {}) {
@@ -2359,45 +2049,8 @@ const useStudioStoreBase = defineStore('studio', {
         })
       }
 
-      const result = this._applyPartLayerDeltasInternal(part, deltas)
-      if (!result) return false
-
-      const isFocusedTarget =
-        this.focusedPartIndex?.stackIndex === result.location.stackIndex &&
-        this.focusedPartIndex?.partIndex === result.location.partIndex
-
-      if (isFocusedTarget) {
-        this.triggerFocusedPartUpdate()
-      }
-
-      const normalizedHistoryMeta = this._normalizeHistoryMeta(
-        options?.historyMeta,
-        'part.applyLayerDeltas',
-        {
-          interactionKind: this._editorRealtimeInteractionKind,
-          changedParts: 1,
-          deltaCount: Array.isArray(deltas) ? deltas.length : 0
-        }
-      )
-
-      const historyMode = options?.deferCommit === true ? 'throttled' : 'immediate'
-
-      this._finalizeMutation({
-        changed: true,
-        deferCommit: options?.deferCommit === true,
-        scope: 'editor',
-        historyMode,
-        historyMeta: normalizedHistoryMeta,
-        schedulePart: false,
-        touchFocusedPart: false
-      })
-
-      if (isFocusedTarget) {
-        this.translateFocusedPartToLayers()
-        return this.focusedPart
-      }
-
-      return result.updatedPart
+      const coreStore = this._getCoreStore()
+      return coreStore.applyPartLayerDeltas(this, part, deltas, options)
     },
 
     batchApplyPartLayerDeltas(updates = [], options = {}) {
@@ -2409,63 +2062,8 @@ const useStudioStoreBase = defineStore('studio', {
         })
       }
 
-      if (!Array.isArray(updates) || updates.length === 0) {
-        return {
-          success: false,
-          updatedCount: 0,
-          changedParts: 0,
-          reason: 'No updates provided'
-        }
-      }
-
-      let changedCount = 0
-      let totalDeltaCount = 0
-      for (const update of updates) {
-        const result = this._applyPartLayerDeltasInternal(update?.part, update?.deltas)
-        if (result) {
-          const isFocusedTarget =
-            this.focusedPartIndex?.stackIndex === result.location.stackIndex &&
-            this.focusedPartIndex?.partIndex === result.location.partIndex
-          if (isFocusedTarget) {
-            this.triggerFocusedPartUpdate()
-          }
-          changedCount += 1
-          totalDeltaCount += Array.isArray(update?.deltas) ? update.deltas.length : 0
-        }
-      }
-
-      const normalizedHistoryMeta = this._normalizeHistoryMeta(
-        options?.historyMeta,
-        'layer.batchApplyLayerDeltas',
-        {
-          interactionKind: this._editorRealtimeInteractionKind,
-          changedParts: changedCount,
-          deltaCount: totalDeltaCount
-        }
-      )
-
-      const historyMode = options?.deferCommit === true ? 'throttled' : 'immediate'
-
-      this._finalizeMutation({
-        changed: changedCount > 0,
-        deferCommit: options?.deferCommit === true,
-        scope: 'editor',
-        historyMode,
-        historyMeta: normalizedHistoryMeta,
-        schedulePart: false,
-        touchFocusedPart: false
-      })
-
-      if (changedCount > 0) {
-        this.translateFocusedPartToLayers()
-      }
-
-      return {
-        success: changedCount > 0,
-        updatedCount: changedCount,
-        changedParts: changedCount,
-        reason: changedCount > 0 ? null : 'No part was updated'
-      }
+      const coreStore = this._getCoreStore()
+      return coreStore.batchApplyPartLayerDeltas(this, updates, options)
     },
 
     /**
@@ -2493,74 +2091,8 @@ const useStudioStoreBase = defineStore('studio', {
         })
       }
 
-      const fp = this.focusedPart
-      if (!entries || !fp) return null
-
-      const previousEntries = this.getLayerEntriesForPart(fp, { forceRebuild: false, clone: true })
-      const deltas = this._deriveLayerDeltas(previousEntries, entries)
-      if (Array.isArray(deltas)) {
-        if (deltas.length === 0) return this.focusedPart
-        const updated = this.applyPartLayerDeltas(fp, deltas, {
-          deferCommit: options?.deferCommit === true,
-          historyMeta: options?.historyMeta,
-          _fromFacade: true
-        })
-        if (updated) return this.focusedPart
-      }
-
-      try {
-        const newPartClone = this.UpdateSpecificPartFromLayerEntries(fp, entries)
-        if (!newPartClone) return null
-
-        const uid = fp._uid || this.ensurePartUid(fp)
-
-        const origJson = JSON.stringify(fp)
-
-        // Use more efficient update
-        const newStacks = this.stacks.map(el => {
-          const copy = fastClone(el)
-          if (Array.isArray(copy.data)) {
-            copy.data = copy.data.map(p => {
-              try {
-                if (p && p._uid && p._uid === uid) return fastClone(newPartClone)
-                if (JSON.stringify(p) === origJson) return fastClone(newPartClone)
-              } catch (e) { /* ignore */ }
-              return p
-            })
-          }
-          return copy
-        })
-
-        this.stacks = newStacks
-        this._updateFocusedPartInPlace(newPartClone)
-
-        const normalizedHistoryMeta = this._normalizeHistoryMeta(
-          options?.historyMeta,
-          'part.applyLayerDeltas',
-          {
-            interactionKind: this._editorRealtimeInteractionKind,
-            changedParts: 1,
-            deltaCount: Array.isArray(entries) ? entries.length : 0
-          }
-        )
-
-        const historyMode = options?.deferCommit === true ? 'throttled' : 'immediate'
-
-        this._finalizeMutation({
-          changed: true,
-          deferCommit: options?.deferCommit === true,
-          scope: 'editor',
-          historyMode,
-          historyMeta: normalizedHistoryMeta,
-          schedulePart: false,
-          touchFocusedPart: false
-        })
-        this.translateFocusedPartToLayers()
-        return this.focusedPart
-      } catch (e) {
-        console.error('[studioStore] updatePartFromLayerEntries failed', e)
-        return null
-      }
+      const coreStore = this._getCoreStore()
+      return coreStore.updatePartFromLayerEntries(this, entries, options)
     },
 
     /**
@@ -2588,78 +2120,8 @@ const useStudioStoreBase = defineStore('studio', {
         })
       }
 
-      if (!part || !entries) return
-
-      const previousEntries = this.getLayerEntriesForPart(part, { forceRebuild: false, clone: true })
-      const deltas = this._deriveLayerDeltas(previousEntries, entries)
-      if (Array.isArray(deltas)) {
-        if (deltas.length === 0) return false
-        return this.applyPartLayerDeltas(part, deltas, {
-          deferCommit: options?.deferRefresh === true,
-          historyMeta: options?.historyMeta,
-          _fromFacade: true
-        })
-      }
-
-      // 1. Calculate new part data
-      const newPart = this.UpdateSpecificPartFromLayerEntries(part, entries)
-      if (!newPart) return
-
-      // 2. Find and replace in the selected stack
-      const sidx = this.selectedIndex
-      if (sidx < 0 || sidx >= this.stacks.length) return
-
-      const stack = this.stacks[sidx]
-      if (!stack || !Array.isArray(stack.data)) return
-
-      const uid = part._uid || this.ensurePartUid(part)
-      let foundIndex = -1
-
-      const newStackData = stack.data.map((p, idx) => {
-        if (p === part || (uid && p._uid === uid)) {
-          foundIndex = idx
-          return newPart
-        }
-        return p
-      })
-
-      if (foundIndex === -1) {
-        // Not found?
-        return
-      }
-
-      // 3. Update Stack
-      const newStack = { ...stack, data: newStackData }
-      const newStacks = [...this.stacks]
-      newStacks[sidx] = newStack
-      this.stacks = newStacks
-
-      // 4. Update focused part if it matches
-      if (this.focusedPartIndex.stackIndex === sidx && this.focusedPartIndex.partIndex === foundIndex) {
-        this.triggerFocusedPartUpdate()
-      }
-
-      const normalizedHistoryMeta = this._normalizeHistoryMeta(
-        options?.historyMeta,
-        'part.applyLayerDeltas',
-        {
-          interactionKind: this._editorRealtimeInteractionKind,
-          changedParts: 1,
-          deltaCount: Array.isArray(entries) ? entries.length : 0
-        }
-      )
-
-      const historyMode = options?.deferRefresh === true ? 'throttled' : 'immediate'
-
-      return this._finalizeMutation({
-        changed: true,
-        deferCommit: options?.deferRefresh === true,
-        scope: 'editor',
-        historyMode,
-        historyMeta: normalizedHistoryMeta,
-        schedulePart: false,
-        touchFocusedPart: false
-      })
+      const coreStore = this._getCoreStore()
+      return coreStore.updatePartLayerEntries(this, part, entries, options)
     },
 
     UpdateSpecificPartFromLayerEntries(part, entries = []) {
@@ -2891,43 +2353,13 @@ const useStudioStoreBase = defineStore('studio', {
     // Helper: Update focused part in place via index
     // -------------------------
     _updateFocusedPartInPlace(newPartData) {
-      const idx = this.focusedPartIndex
-      if (idx.stackIndex === null || idx.partIndex === null) return false
-      if (idx.stackIndex < 0 || idx.stackIndex >= this.stacks.length) return false
-
-      const stack = this.stacks[idx.stackIndex]
-      if (!stack || !Array.isArray(stack.data)) return false
-      if (idx.partIndex < 0 || idx.partIndex >= stack.data.length) return false
-
-      try {
-        const copy = fastClone(newPartData)
-        stack.data[idx.partIndex] = copy
-        this.triggerFocusedPartUpdate()
-        return true
-      } catch (e) {
-        console.warn('[studioStore] _updateFocusedPartInPlace failed', e)
-        return false
-      }
+      const coreStore = this._getCoreStore()
+      return coreStore.updateFocusedPartInPlace(this, newPartData)
     },
 
     _updateFocusedPartProperty(propName, value) {
-      const idx = this.focusedPartIndex
-      if (idx.stackIndex === null || idx.partIndex === null) return false
-      if (idx.stackIndex < 0 || idx.partIndex < 0) return false
-      if (idx.stackIndex >= this.stacks.length) return false
-
-      const stack = this.stacks[idx.stackIndex]
-      if (!stack || !Array.isArray(stack.data)) return false
-      if (idx.partIndex < 0 || idx.partIndex >= stack.data.length) return false
-
-      try {
-        stack.data[idx.partIndex][propName] = value
-        this.triggerFocusedPartUpdate()
-        return true
-      } catch (e) {
-        console.warn('[studioStore] _updateFocusedPartProperty failed', e)
-        return false
-      }
+      const coreStore = this._getCoreStore()
+      return coreStore.updateFocusedPartProperty(this, propName, value)
     },
 
     // -------------------------
@@ -3016,47 +2448,21 @@ const useStudioStoreBase = defineStore('studio', {
      * Schedule layer refresh (batched)
      */
     _scheduleLayerRefresh() {
-      if (this._pendingLayerRefresh) return
-      this._pendingLayerRefresh = true
-
-      this._refreshScheduler.scheduleRefresh(() => {
-        this._pendingLayerRefresh = false
-        this._doRefreshAllLayerEntriesFromPalette()
-      })
+      const renderStore = this._getRenderStore()
+      return renderStore.scheduleLayerRefresh(this)
     },
 
     /**
      * Refresh color fields for all colorable layer entries (OPTIMIZED)
      */
     _refreshAllLayerEntriesFromPalette() {
-      this._pendingLayerRefresh = false
-      this._doRefreshAllLayerEntriesFromPalette()
+      const renderStore = this._getRenderStore()
+      return renderStore.refreshAllLayerEntriesFromPalette(this)
     },
 
     _doRefreshAllLayerEntriesFromPalette() {
-      try {
-        // Instead of deep cloning entire stacks, update in-place where possible
-        for (const stack of this.stacks) {
-          if (!stack || !Array.isArray(stack.data)) continue
-          for (const part of stack.data) {
-            if (!part) continue
-            if (!Array.isArray(part.layerEntries)) {
-              part.layerEntries = this._buildLayerEntriesWithCache(part) || []
-            } else {
-              // Just update colorCss in-place
-              this._updateLayerEntriesColorCss(part.layerEntries)
-            }
-          }
-        }
-
-        // Update focused part's layer entries
-        const fp = this.focusedPart
-        if (fp && Array.isArray(fp.layerEntries)) {
-          this._updateLayerEntriesColorCss(fp.layerEntries)
-        }
-      } catch (e) {
-        // swallow errors
-      }
+      const renderStore = this._getRenderStore()
+      return renderStore.doRefreshAllLayerEntriesFromPalette(this)
     },
 
     // -------------------------
@@ -3071,34 +2477,8 @@ const useStudioStoreBase = defineStore('studio', {
         })
       }
 
-      const result = AssetActions.applyAssetToSelectedStack(this, asset, replaceTarget, {
-        ensurePartUid: this.ensurePartUid.bind(this),
-        _buildLayerEntriesWithCache: this._buildLayerEntriesWithCache.bind(this),
-        fastClone: fastClone,
-        resolveCraftForAssetSlot: ({ assetName, groupName }) => resolveCraftForAssetSlot({
-          assetName,
-          groupName,
-          player: hostWindow?.Player,
-          assetGet: typeof hostWindow?.AssetGet === 'function' ? hostWindow.AssetGet.bind(hostWindow) : null,
-          cloneFn: fastClone
-        })
-      })
-
-      if (result.stacks) {
-        this.stacks = result.stacks
-        this.focusedPartIndex = result.focusedPartIndex
-        this._syncFocusStateScopeFromFocusedPart()
-        try { this.translateFocusedPartToLayers && this.translateFocusedPartToLayers() } catch (e) { }
-        this._finalizeMutation({
-          changed: true,
-          scope: 'asset',
-          historyMode: 'immediate',
-          historyMeta: this._normalizeHistoryMeta(options?.historyMeta, 'asset.apply')
-        })
-        this.onReplaceApplied()
-        return this.focusedPart || null
-      }
-      return null
+      const assetStore = this._getAssetStore()
+      return assetStore.applyAssetToSelectedStack(this, asset, replaceTarget, options)
     },
 
     // -------------------------
@@ -3902,33 +3282,16 @@ const useStudioStoreBase = defineStore('studio', {
      * Cleanup resources (call when store is destroyed)
      */
     destroy() {
-      try {
-        if (this.previewRenderer && typeof this.previewRenderer.destroy === 'function') {
-          this.previewRenderer.destroy();
-        }
-      } catch (e) {
-        console.warn('[studioStore] Preview renderer cleanup error:', e);
-      }
-
-      try {
-        if (this.renderer) {
-          this.stacks.forEach(it => {
-            this.renderer.removeCanvas({ data: it.data, type: 'outfit' })
-          });
-        }
-      } catch (e) {
-        console.warn('[studioStore] Renderer cleanup error:', e);
-      }
+      const renderStore = this._getRenderStore()
+      return renderStore.destroy(this)
     },
 
     /**
      * Toggle between optimized and legacy renderer
      */
     toggleRendererMode(useOptimized = true) {
-      const result = PreviewActions.toggleRendererMode(useOptimized)
-      this.useOptimizedRenderer = result.useOptimizedRenderer
-      // Force refresh with new renderer
-      this.refreshMergedAppearanceData()
+      const renderStore = this._getRenderStore()
+      return renderStore.toggleRendererMode(this, useOptimized)
     },
 
     // -------------------------
