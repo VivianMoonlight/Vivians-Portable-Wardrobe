@@ -217,11 +217,13 @@
 <script setup>
 import { ref, computed, watch, onBeforeUnmount } from "vue";
 import { useI18n } from "vue-i18n";
-import { useStudioStore } from "@/stores/studioStore.js";
+import { useStudioDomainStores } from "@/stores/studio";
+import { createStudioSelectionBridge } from "@/stores/studio/selectionBridge";
 import { throttle } from "@/utils/performance.js";
 
 const { t } = useI18n();
-const store = useStudioStore();
+const { studio: store, selection } = useStudioDomainStores();
+const selectionBridge = createStudioSelectionBridge(store, selection);
 
 // UI State
 const feedbackMessage = ref("");
@@ -249,10 +251,10 @@ const batchInteractionCommitTimerId = ref(null);
 
 // Computed
 const hasSelections = computed(
-  () => store.selectedLayers && store.selectedLayers.length > 0
+  () => selectionBridge.selectedLayersCount > 0
 );
 const selectedCount = computed(() =>
-  store.selectedLayers ? store.selectedLayers.length : 0
+  selectionBridge.selectedLayersCount
 );
 
 const colorableCount = computed(() => {
@@ -547,7 +549,7 @@ function toggleVisualMove() {
 
 // Watch for selection changes to reset values
 watch(
-  () => store.selectedLayers.length,
+  () => selectionBridge.selectedLayersCount,
   (newCount, oldCount) => {
     if (newCount === 0 && oldCount > 0) {
       clearBatchEditInteractionCommitTimer();
@@ -576,7 +578,7 @@ watch(
 
 // Sync visual move state with store preview tool
 watch(
-  () => store.previewTool,
+  () => selectionBridge.previewTool,
   (newTool) => {
     visualMoveEnabled.value = newTool === "move";
   }

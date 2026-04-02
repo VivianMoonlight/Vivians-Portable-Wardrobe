@@ -166,7 +166,8 @@
 <script setup>
 import { computed, ref, onMounted, onBeforeUnmount, watch, nextTick, toRaw } from "vue";
 import { useI18n } from "vue-i18n";
-import { useStudioStore } from "@/stores/studioStore";
+import { useStudioDomainStores } from "@/stores/studio";
+import { createStudioSelectionBridge } from "@/stores/studio/selectionBridge";
 import { useFileSystemStore } from "@/stores/fileSystemStore";
 import { classifyToGroup } from "@/config/filterGroupConfig.js";
 import { AssetApi } from "@/utils/AssetApi";
@@ -183,12 +184,13 @@ function toggleView() {
   isCardView.value = !isCardView.value;
 }
 
-const store = useStudioStore();
+const { studio: store, selection } = useStudioDomainStores();
+const selectionBridge = createStudioSelectionBridge(store, selection);
 const fsStore = useFileSystemStore();
 const loading = ref(false);
 
-// Replace mode target (from store.replaceTarget)
-const replaceTarget = computed(() => store.replaceTarget);
+// Replace mode target (from selectionBridge.replaceTarget)
+const replaceTarget = computed(() => selectionBridge.replaceTarget);
 const isReplaceMode = computed(
   () => !!(replaceTarget.value && replaceTarget.value.active)
 );

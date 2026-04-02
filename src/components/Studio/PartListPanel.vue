@@ -214,7 +214,8 @@
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount } from "vue";
 import { useI18n } from "vue-i18n";
-import { useStudioStore } from "@/stores/studioStore";
+import { useStudioDomainStores } from "@/stores/studio";
+import { createStudioSelectionBridge } from "@/stores/studio/selectionBridge";
 import {
   classifyToGroup,
   isHiddenGroup as checkIsHiddenGroup,
@@ -227,7 +228,8 @@ import { hostWindow, doc } from "@/utils/host-window.js";
 import { throttle } from "@/utils/performance.js";
 
 const { t } = useI18n();
-const store = useStudioStore();
+const { studio: store, selection } = useStudioDomainStores();
+const selectionBridge = createStudioSelectionBridge(store, selection);
 const emit = defineEmits(["part-focused"]);
 const selected = computed(() => store.selectedElement);
 const hasSelected = computed(
@@ -1261,12 +1263,12 @@ function confirmAllDelete() {
 
 /* -------------------------
    Replace mode (mutually exclusive with focus)
-   - uses studioStore.replaceTarget for cross-component visibility
+  - uses selectionBridge.replaceTarget for cross-component visibility
    ------------------------- */
 
 function toggleReplaceForPart(part, idx, gid) {
   const key = partUniqueKey(part, idx, gid);
-  const current = store.replaceTarget;
+  const current = selectionBridge.replaceTarget;
   if (current && current.active && current.key === key) {
     // currently in replace mode for this key -> clear
     store.clearReplaceTarget();
@@ -1285,7 +1287,7 @@ function returnToPolish() {
 
 function isPartReplaceArmed(part, idx, gid) {
   const key = partUniqueKey(part, idx, gid);
-  const current = store.replaceTarget;
+  const current = selectionBridge.replaceTarget;
   return !!(current && current.active && current.key === key);
 }
 
@@ -1308,8 +1310,8 @@ watch(
 
 watch(
   () =>
-    `${store.focusedPartIndex?.stackIndex ?? "n"}:${
-      store.focusedPartIndex?.partIndex ?? "n"
+    `${selectionBridge.focusedPartIndex?.stackIndex ?? "n"}:${
+      selectionBridge.focusedPartIndex?.partIndex ?? "n"
     }`,
   () => {
     clearPartHoverBlinkState();
@@ -1351,7 +1353,7 @@ watch(
 );
 
 watch(
-  () => store.replaceTarget,
+  () => selectionBridge.replaceTarget,
   (nextTarget) => {
     if (!nextTarget || !nextTarget.active) return;
     const item = nextTarget.item;

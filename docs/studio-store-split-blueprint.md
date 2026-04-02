@@ -158,6 +158,12 @@ flowchart LR
 - 新建 `src/stores/studio/selectionStore.js`。
 - 通过 core command 触发数据变更，不直接改 stacks。
 
+实施进度（2026-04-02）:
+- 已完成第一部：`selectionStore` 与 `selectionBridge` 已接入，`studioStore` 通过 `_syncSelectionDomainState` 进行兼容期双写同步。
+- 已完成第二部：`Studio.vue`、`PartInspectorPanel.vue`、`PreviewWidget.vue`、`PartListPanel.vue`、`AssetSelectorPanel.vue`、`BatchEditPanel.vue`、`LayerGroup.vue`、`ColorableLayer.vue` 的 selection/focus 读取已迁移至 bridge。
+- 收口已启动：`studioStore` state 中 selection/focus 镜像字段已删除，改为通过 `selectionStore` 代理访问。
+- 待完成：删除 legacy 同步残留（`_syncSelectionDomainState` 及 focus legacy 同步路径），保留 façade 兼容入口。
+
 完成标准:
 - 单选/多选/replace 三条路径行为不变。
 

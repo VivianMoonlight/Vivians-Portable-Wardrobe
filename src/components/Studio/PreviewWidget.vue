@@ -69,6 +69,7 @@ function toggleLayerManager() {
 const activeTool = computed(() => selectionBridge.previewTool)
 const selectedLayersCount = computed(() => selectionBridge.selectedLayersCount)
 const selectionMode = computed(() => selectionBridge.selectionMode)
+const focusedPartIndex = computed(() => selectionBridge.focusedPartIndex)
 
 // Interaction state for pan / zoom
 const latestSrc = ref(null) // keep latest source (image/canvas/video) to redraw during pan/zoom
@@ -369,8 +370,8 @@ function onPointerDown(e) {
         // Single layer dragging (existing behavior)
         const idx = store.getPrimaryMoveLayerIndex(part)
 
-        const stackIndex = store.focusedPartIndex?.stackIndex
-        const partIndex = store.focusedPartIndex?.partIndex
+        const stackIndex = focusedPartIndex.value?.stackIndex
+        const partIndex = focusedPartIndex.value?.partIndex
         if (typeof stackIndex === 'number' && typeof partIndex === 'number') {
           const layerInfo = { stackIndex, partIndex, layerIndex: idx }
           if (!store.isLayerFocused(layerInfo)) {

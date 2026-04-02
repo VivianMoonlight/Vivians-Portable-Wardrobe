@@ -164,7 +164,8 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useStudioStore } from '@/stores/studioStore'
+import { useStudioDomainStores } from '@/stores/studio'
+import { createStudioSelectionBridge } from '@/stores/studio/selectionBridge'
 import { throttle } from '@/utils/performance.js'
 //import { cursorTo } from 'readline'
 
@@ -179,7 +180,8 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['save-layer'])
-const store = useStudioStore()
+const { studio: store, selection } = useStudioDomainStores()
+const selectionBridge = createStudioSelectionBridge(store, selection)
 
 // UI state
 const collapsed = ref(true)
@@ -291,7 +293,7 @@ watch(() => layerLocal.value, (nv) => {
 
 // Visual move state
 const isThisLayerMoving = computed(() => {
-  if (store.previewTool !== 'move') return false
+  if (selectionBridge.previewTool !== 'move') return false
   // Use new unified API to check if this layer is focused
   return store.isLayerFocused({
     stackIndex: props.stackIndex,
@@ -379,8 +381,8 @@ function toggleSelection() {
 function handleRangeSelection() {
   // If we have a previous selection and we're in the same part, do range selection
   if (lastClickedLayerIndex.value !== null &&
-    store.focusedPartIndex.stackIndex === props.stackIndex &&
-    store.focusedPartIndex.partIndex === props.partIndex) {
+    selectionBridge.focusedPartIndex?.stackIndex === props.stackIndex &&
+    selectionBridge.focusedPartIndex?.partIndex === props.partIndex) {
 
     // Use store's selectLayerRange method
     store.selectLayerRange(lastClickedLayerIndex.value, layerLocal.value.layerIndex)

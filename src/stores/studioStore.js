@@ -1,4 +1,4 @@
-/**
+﻿/**
  * NOTE:
  * This file manages the studio state with unified focus system (focusState) and
  * per-part _uid bookkeeping so components can refer to parts by reference or uid.
@@ -144,7 +144,45 @@ const DATA_HISTORY_ACTION_ALLOWLIST = new Set([
   'asset.apply'
 ])
 
-export const useStudioStore = defineStore('studio', {
+function ensureSelectionProxyBindings(store) {
+  if (!store || store._selectionDomainProxyReady === true) return store
+
+  const selectionStore = useStudioSelectionStore()
+  const proxyKeys = [
+    'replaceTarget',
+    'selectedLayers',
+    'selectionMode',
+    'activeFocusContext',
+    'previewTool',
+    'focusState'
+  ]
+
+  for (const key of proxyKeys) {
+    const descriptor = Object.getOwnPropertyDescriptor(store, key)
+    if (descriptor && (descriptor.get || descriptor.set)) continue
+
+    Object.defineProperty(store, key, {
+      configurable: true,
+      enumerable: true,
+      get: () => selectionStore[key],
+      set: (value) => {
+        selectionStore[key] = value
+      }
+    })
+  }
+
+  if (store.focusedPartIndex && typeof store.focusedPartIndex === 'object') {
+    selectionStore.focusedPartIndex = {
+      stackIndex: (typeof store.focusedPartIndex.stackIndex === 'number') ? store.focusedPartIndex.stackIndex : null,
+      partIndex: (typeof store.focusedPartIndex.partIndex === 'number') ? store.focusedPartIndex.partIndex : null
+    }
+  }
+
+  store._selectionDomainProxyReady = true
+  return store
+}
+
+const useStudioStoreBase = defineStore('studio', {
   state: () => ({
     stacks: [],
     mergedAppearanceData: { data: [] }, // preview data (may contain tags)
@@ -190,9 +228,6 @@ export const useStudioStore = defineStore('studio', {
 
     // last translated layer entries
     translatedLayerEntries: [],
-
-    // replaceTarget: used to indicate "replace mode" (mutually exclusive with simple focus)
-    replaceTarget: { active: false, key: null, item: null, isEmpty: false },
 
     // internal per-part uid counter and mapping
     _partUidCounter: 1,
@@ -260,48 +295,12 @@ export const useStudioStore = defineStore('studio', {
     // Performance: palette map version for cache invalidation
     _paletteVersion: 0,
 
-    // Multi-selection state
-    selectedLayers: [],  // Array of selected layer info
-    // Structure: [{ stackIndex, partIndex, layerIndex, _key }, ...]
-    selectionMode: 'single', // 'single' | 'multiple'
     batchEditBuffer: {
       opacity: null,
       offsetX: null,
       offsetY: null,
       color: null,
       priority: null
-    },
-
-    // NEW: Active focus context (meta information for selected layers)
-    activeFocusContext: {
-      property: null,      // 'color' | 'opacity' | 'drawing' | 'priority' | null
-      subLayerIndex: null, // For sublayers
-      timestamp: 0         // Last focus timestamp
-    },
-
-    // Preview tool state
-    previewTool: 'view', // 'view' | 'move'
-
-    // Single source of truth for focus (Phase 0/1)
-    focusState: {
-      scope: {
-        stackIndex: null,
-        partIndex: null,
-        partUid: null
-      },
-      selection: {
-        mode: 'single',
-        layerKeys: [],
-        anchorLayerKey: null
-      },
-      editor: {
-        property: null,
-        subLayerIndex: null,
-        timestamp: 0
-      },
-      tool: {
-        preview: 'view'
-      }
     },
 
     // History panel visibility
@@ -366,7 +365,7 @@ export const useStudioStore = defineStore('studio', {
 
     activePaletteTargets(state) {
       if (!state.paletteModeActive) return []
-      const selected = SelectionActions.getSelectedLayersData(state)
+      const selected = this.getSelectedLayersData()
       return selected
         .filter(d => d.layer && d.layer.isColorable)
         .map(d => ({
@@ -380,8 +379,8 @@ export const useStudioStore = defineStore('studio', {
     },
 
     // NEW: Get all focused layers data (unified getter)
-    focusedLayersData(state) {
-      return SelectionActions.getSelectedLayersData(state)
+    focusedLayersData() {
+      return this.getSelectedLayersData()
     },
 
     // Check if move tool can be used (requires focused part)
@@ -629,24 +628,12 @@ export const useStudioStore = defineStore('studio', {
     },
 
     _syncSelectionDomainState() {
+      ensureSelectionProxyBindings(this)
       const selectionStore = this._getSelectionStore()
-      const nextFocusState = {
-        ...(this.focusState || {}),
-        tool: {
-          ...(this.focusState?.tool || {}),
-          preview: this.previewTool === 'move' ? 'move' : 'view'
-        }
+      selectionStore.focusedPartIndex = {
+        stackIndex: (typeof this.focusedPartIndex?.stackIndex === 'number') ? this.focusedPartIndex.stackIndex : null,
+        partIndex: (typeof this.focusedPartIndex?.partIndex === 'number') ? this.focusedPartIndex.partIndex : null
       }
-
-      selectionStore.syncFromLegacyState({
-        focusedPartIndex: this.focusedPartIndex,
-        replaceTarget: this.replaceTarget,
-        selectedLayers: this.selectedLayers,
-        selectionMode: this.selectionMode,
-        activeFocusContext: this.activeFocusContext,
-        previewTool: this.previewTool,
-        focusState: nextFocusState
-      })
     },
 
     _syncPanelDomainState() {
@@ -3504,10 +3491,10 @@ export const useStudioStore = defineStore('studio', {
 
       // Handle focus state transition
       if (wasSingleMode && isNowMultiMode) {
-        // Single → Multi: preserve current selection
+        // Single 鈫?Multi: preserve current selection
         // selectedLayers is already populated, no action needed
       } else if (!wasSingleMode && !isNowMultiMode) {
-        // Multi → Single: keep only the first selected layer
+        // Multi 鈫?Single: keep only the first selected layer
         if (this.selectedLayers.length > 1) {
           const firstLayer = this.selectedLayers[0]
           this.selectedLayers = [firstLayer]
@@ -4464,5 +4451,11 @@ export const useStudioStore = defineStore('studio', {
     }
   }
 })
+
+export function useStudioStore(...args) {
+  const store = useStudioStoreBase(...args)
+  ensureSelectionProxyBindings(store)
+  return store
+}
 
 export default useStudioStore

@@ -125,8 +125,8 @@
                   :groupName="item.groupName"
                   :layers="item.layers"
                   :part="part"
-                  :stackIndex="store.focusedPartIndex?.stackIndex ?? 0"
-                  :partIndex="store.focusedPartIndex?.partIndex ?? 0"
+                  :stackIndex="focusedPartIndex?.stackIndex ?? 0"
+                  :partIndex="focusedPartIndex?.partIndex ?? 0"
                   :selectionMode="selectionMode"
                   @save-layer="onSaveLayer" />
               </div>
@@ -137,8 +137,8 @@
                 <ColorableLayer
                   :layer="item.layer"
                   :part="part"
-                  :stackIndex="store.focusedPartIndex?.stackIndex ?? 0"
-                  :partIndex="store.focusedPartIndex?.partIndex ?? 0"
+                  :stackIndex="focusedPartIndex?.stackIndex ?? 0"
+                  :partIndex="focusedPartIndex?.partIndex ?? 0"
                   :selectionMode="selectionMode"
                   @save-layer="onSaveLayer" />
               </div>
@@ -219,6 +219,7 @@ const hasPart = computed(() => !!part.value)
 const selectionMode = computed(() => selectionBridge.selectionMode)
 const selectedLayers = computed(() => selectionBridge.selectedLayers)
 const selectedLayersCount = computed(() => selectionBridge.selectedLayersCount)
+const focusedPartIndex = computed(() => selectionBridge.focusedPartIndex)
 
 // Multi-selection state
 const isMultiMode = computed(() => selectionMode.value === 'multiple')
@@ -365,7 +366,7 @@ watch(part, () => {
   stopLayerHoverBlink()
 })
 
-watch(() => `${store.focusedPartIndex?.stackIndex ?? 'n'}:${store.focusedPartIndex?.partIndex ?? 'n'}`, () => {
+watch(() => `${focusedPartIndex.value?.stackIndex ?? 'n'}:${focusedPartIndex.value?.partIndex ?? 'n'}`, () => {
   stopLayerHoverBlink()
 })
 
@@ -957,8 +958,8 @@ function startLayerHoverBlink(layerIndices) {
     return
   }
   if (!hasPart.value || !Array.isArray(layerIndices) || layerIndices.length === 0) return
-  const stackIndex = Number(store.focusedPartIndex?.stackIndex)
-  const partIndex = Number(store.focusedPartIndex?.partIndex)
+  const stackIndex = Number(focusedPartIndex.value?.stackIndex)
+  const partIndex = Number(focusedPartIndex.value?.partIndex)
   if (!Number.isFinite(stackIndex) || !Number.isFinite(partIndex)) return
 
   const uniqueIndices = Array.from(new Set(layerIndices.filter(v => Number.isFinite(Number(v))).map(Number)))
@@ -1021,8 +1022,8 @@ function stopLayerHoverBlink() {
 function onSingleLayerMouseEnter(layer) {
   const idx = Number(layer?.layerIndex)
   if (!Number.isFinite(idx)) return
-  const stackIndex = Number(store.focusedPartIndex?.stackIndex)
-  const partIndex = Number(store.focusedPartIndex?.partIndex)
+  const stackIndex = Number(focusedPartIndex.value?.stackIndex)
+  const partIndex = Number(focusedPartIndex.value?.partIndex)
   if (Number.isFinite(stackIndex) && Number.isFinite(partIndex) &&
       store.isLayerFocused({ stackIndex, partIndex, layerIndex: idx })) {
     stopLayerHoverBlink()
@@ -1034,8 +1035,8 @@ function onSingleLayerMouseEnter(layer) {
 function onLayerGroupMouseEnter(layers) {
   const indices = _collectLayerIndices(layers)
   if (!indices.length) return
-  const stackIndex = Number(store.focusedPartIndex?.stackIndex)
-  const partIndex = Number(store.focusedPartIndex?.partIndex)
+  const stackIndex = Number(focusedPartIndex.value?.stackIndex)
+  const partIndex = Number(focusedPartIndex.value?.partIndex)
   if (Number.isFinite(stackIndex) && Number.isFinite(partIndex) && _isAnyLayerFocused(indices, stackIndex, partIndex)) {
     stopLayerHoverBlink()
     return

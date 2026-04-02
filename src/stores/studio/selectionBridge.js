@@ -2,6 +2,12 @@ export function createStudioSelectionBridge(studio, selection) {
   const hasDomain = !!studio && !!selection
 
   return {
+    get focusedPartIndex() {
+      return hasDomain
+        ? selection.focusedPartIndex
+        : { stackIndex: null, partIndex: null }
+    },
+
     get replaceTarget() {
       return hasDomain ? selection.replaceTarget : { active: false, key: null, item: null, isEmpty: false }
     },

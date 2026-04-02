@@ -55,11 +55,13 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useStudioStore } from '@/stores/studioStore'
+import { useStudioDomainStores } from '@/stores/studio'
+import { createStudioSelectionBridge } from '@/stores/studio/selectionBridge'
 import ColorableLayer from './ColorableLayer.vue'
 
 const { t } = useI18n()
-const store = useStudioStore()
+const { studio: store, selection } = useStudioDomainStores()
+const selectionBridge = createStudioSelectionBridge(store, selection)
 
 const props = defineProps({
   groupName: { type: String, required: true },
@@ -82,7 +84,7 @@ function toggleCollapse() {
 }
 
 const selectedLayerKeySet = computed(() => {
-  const selected = Array.isArray(store.selectedLayers) ? store.selectedLayers : []
+  const selected = Array.isArray(selectionBridge.selectedLayers) ? selectionBridge.selectedLayers : []
   return new Set(selected.map(s => s?._key).filter(Boolean))
 })
 
