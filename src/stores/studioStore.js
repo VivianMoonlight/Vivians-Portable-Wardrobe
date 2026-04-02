@@ -446,7 +446,6 @@ const useStudioStoreBase = defineStore('studio', {
       const result = PreviewActions.setPreviewTool(tool)
       this.previewTool = result.previewTool
       this.focusState.tool.preview = result.previewTool
-      this._syncSelectionDomainState()
     },
 
     /**
@@ -456,7 +455,6 @@ const useStudioStoreBase = defineStore('studio', {
       const result = PreviewActions.togglePreviewTool(this)
       this.previewTool = result.previewTool
       this.focusState.tool.preview = result.previewTool
-      this._syncSelectionDomainState()
     },
 
     // -------------------------
@@ -596,14 +594,12 @@ const useStudioStoreBase = defineStore('studio', {
       this.focusedPartIndex = { stackIndex: null, partIndex: null }
       this._syncFocusStateScopeFromFocusedPart()
       this.clearPropertyFocus()
-      this._syncSelectionDomainState()
       this.onReplaceEnter({ key, isEmpty })
     },
 
     clearReplaceTarget() {
       const result = FocusActions.clearReplaceTargetState()
       this.replaceTarget = result.replaceTarget
-      this._syncSelectionDomainState()
       this._syncPanelDomainState()
       // Deprecated flow: clearing replace target no longer mutates taskStage.
       if (this.activeContextPanel === 'asset' && this.pinnedPanel !== 'asset') {
@@ -627,7 +623,7 @@ const useStudioStoreBase = defineStore('studio', {
       return useStudioSelectionStore()
     },
 
-    _syncSelectionDomainState() {
+    _syncFocusedPartIndexToSelectionDomain() {
       ensureSelectionProxyBindings(this)
       const selectionStore = this._getSelectionStore()
       selectionStore.focusedPartIndex = {
@@ -3066,28 +3062,119 @@ const useStudioStoreBase = defineStore('studio', {
       }
     },
 
-    RebuildAllStacksLayerEntriesFromParts() {
-      try {
-        this.previewRenderer?.invalidateFastPathCaches?.({ clearAppearanceCache: true })
-      } catch (e) { console.warn(e) }
+    _buildLayerEntryReuseKey(part, stackIndex, partIndex) {
+      if (part && typeof part === 'object' && part._uid) {
+        return `uid:${part._uid}`
+      }
+      const safeName = String(part?.Name || '')
+      const safeGroup = String(part?.Group || '')
+      return `idx:${stackIndex}:${partIndex}:${safeName}:${safeGroup}`
+    },
+
+    _createLayerEntriesReuseMap(stacks = []) {
+      const map = new Map()
+      if (!Array.isArray(stacks)) return map
+
+      for (let stackIndex = 0; stackIndex < stacks.length; stackIndex++) {
+        const stack = stacks[stackIndex]
+        if (!stack || !Array.isArray(stack.data)) continue
+
+        for (let partIndex = 0; partIndex < stack.data.length; partIndex++) {
+          const part = stack.data[partIndex]
+          if (!part || !Array.isArray(part.layerEntries)) continue
+
+          const key = this._buildLayerEntryReuseKey(part, stackIndex, partIndex)
+          map.set(key, {
+            hash: hashPartForCache(part),
+            layerEntries: part.layerEntries
+          })
+        }
+      }
+
+      return map
+    },
+
+    _restorePartLayerEntries(part, stackIndex, partIndex, reuseMap = null) {
+      if (!part) return { reused: false, rebuilt: false }
+
+      if (reuseMap instanceof Map) {
+        const key = this._buildLayerEntryReuseKey(part, stackIndex, partIndex)
+        const previous = reuseMap.get(key)
+        const currentHash = hashPartForCache(part)
+
+        if (previous && previous.hash === currentHash && Array.isArray(previous.layerEntries)) {
+          const reusedEntries = fastClone(previous.layerEntries)
+          this._updateLayerEntriesColorCss(reusedEntries)
+          part.layerEntries = reusedEntries
+
+          layerEntriesCache.set(part, {
+            entries: reusedEntries,
+            hash: currentHash,
+            paletteVersion: this._paletteVersion
+          })
+
+          return { reused: true, rebuilt: false }
+        }
+      }
+
+      part.layerEntries = this._buildLayerEntriesWithCache(part, true) || []
+      return { reused: false, rebuilt: true }
+    },
+
+    RebuildAllStacksLayerEntriesFromParts(options = {}) {
+      const invalidateRendererCache = options?.invalidateRendererCache !== false
+      const cloneStacks = options?.cloneStacks !== false
+      const preferIncremental = options?.preferIncremental === true
+      const reuseMap = preferIncremental
+        ? this._createLayerEntriesReuseMap(options?.previousStacks)
+        : null
+
+      const stats = {
+        totalParts: 0,
+        reusedParts: 0,
+        rebuiltParts: 0,
+        incremental: preferIncremental
+      }
+
+      if (invalidateRendererCache) {
+        try {
+          this.previewRenderer?.invalidateFastPathCaches?.({ clearAppearanceCache: true })
+        } catch (e) { console.warn(e) }
+      }
 
       try {
-        const newStacks = this.stacks.map(el => {
-          const copy = fastClone(el)
-          if (Array.isArray(copy.data)) {
-            copy.data = copy.data.map(p => {
+        const targetStacks = cloneStacks
+          ? this.stacks.map(el => fastClone(el))
+          : this.stacks
+
+        for (let stackIndex = 0; stackIndex < targetStacks.length; stackIndex++) {
+          const stack = targetStacks[stackIndex]
+          if (!stack || !Array.isArray(stack.data)) continue
+
+          for (let partIndex = 0; partIndex < stack.data.length; partIndex++) {
+            const part = stack.data[partIndex]
+            if (!part) continue
+
+            stats.totalParts += 1
+            try {
+              const result = this._restorePartLayerEntries(part, stackIndex, partIndex, reuseMap)
+              if (result.reused) stats.reusedParts += 1
+              if (result.rebuilt) stats.rebuiltParts += 1
+            } catch (e) {
               try {
-                if (p) {
-                  p.layerEntries = this._buildLayerEntriesWithCache(p, true) || []
-                }
-              } catch (e) { /* ignore */ }
-              return p
-            })
+                part.layerEntries = this._buildLayerEntriesWithCache(part, true) || []
+                stats.rebuiltParts += 1
+              } catch (innerError) {
+                console.warn(innerError)
+              }
+            }
           }
-          return copy
-        })
+        }
 
-        this.stacks = newStacks
+        if (cloneStacks) {
+          this.stacks = targetStacks
+        }
+
         this._scheduleRefresh()
       }
       catch (e) {
@@ -3095,12 +3182,14 @@ const useStudioStoreBase = defineStore('studio', {
       }
 
       const fp = this.focusedPart
-      if (fp) {
+      if (fp && !Array.isArray(fp.layerEntries)) {
         try {
           const entries = this._buildLayerEntriesWithCache(fp, true) || []
           this._updateFocusedPartProperty('layerEntries', entries)
         } catch (e) { console.warn(e) }
       }
+
+      return stats
     },
 
     triggerFocusedPartUpdate() {
@@ -3408,7 +3497,7 @@ const useStudioStoreBase = defineStore('studio', {
         partIndex: (typeof partIndex === 'number') ? partIndex : null,
         partUid
       }
-      this._syncSelectionDomainState()
+      this._syncFocusedPartIndexToSelectionDomain()
     },
 
     _syncFocusStateSelectionFromLegacy() {
@@ -3420,7 +3509,6 @@ const useStudioStoreBase = defineStore('studio', {
           ? this._buildLayerKey(selected[selected.length - 1].stackIndex, selected[selected.length - 1].partIndex, selected[selected.length - 1].layerIndex)
           : null
       }
-      this._syncSelectionDomainState()
     },
 
     _syncFocusStateEditorFromLegacy() {
@@ -3429,42 +3517,16 @@ const useStudioStoreBase = defineStore('studio', {
         subLayerIndex: this.activeFocusContext?.subLayerIndex ?? null,
         timestamp: this.activeFocusContext?.timestamp || 0
       }
-      this._syncSelectionDomainState()
     },
 
     _syncLegacyFromFocusState() {
-      const scope = this.focusState?.scope || {}
-      const selection = this.focusState?.selection || {}
-      const editor = this.focusState?.editor || {}
-      const tool = this.focusState?.tool || {}
-
+      const selectionStore = this._getSelectionStore()
+      selectionStore.applyFocusState(this.focusState)
       this.focusedPartIndex = {
-        stackIndex: (typeof scope.stackIndex === 'number') ? scope.stackIndex : null,
-        partIndex: (typeof scope.partIndex === 'number') ? scope.partIndex : null
+        stackIndex: selectionStore.focusedPartIndex?.stackIndex ?? null,
+        partIndex: selectionStore.focusedPartIndex?.partIndex ?? null
       }
-
-      this.selectionMode = selection.mode === 'multiple' ? 'multiple' : 'single'
-      const layerKeys = Array.isArray(selection.layerKeys) ? selection.layerKeys : []
-      this.selectedLayers = layerKeys
-        .map((key) => {
-          const [stackRaw, partRaw, layerRaw] = String(key).split('-')
-          const stackIndex = Number(stackRaw)
-          const partIndex = Number(partRaw)
-          const layerIndex = Number(layerRaw)
-          if (!Number.isFinite(stackIndex) || !Number.isFinite(partIndex) || !Number.isFinite(layerIndex)) return null
-          return { stackIndex, partIndex, layerIndex, _key: key }
-        })
-        .filter(Boolean)
-
-      this.activeFocusContext = {
-        property: editor.property || null,
-        subLayerIndex: editor.subLayerIndex ?? null,
-        timestamp: editor.timestamp || 0
-      }
-
-      const preview = tool.preview === 'move' ? 'move' : 'view'
-      this.previewTool = preview
-      this._syncSelectionDomainState()
+      this._syncFocusedPartIndexToSelectionDomain()
     },
 
     setSelectionMode(mode = 'single') {

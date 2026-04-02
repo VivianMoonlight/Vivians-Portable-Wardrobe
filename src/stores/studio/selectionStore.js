@@ -48,6 +48,17 @@ function createDefaultFocusState() {
   }
 }
 
+function parseLayerKey(key) {
+  const [stackRaw, partRaw, layerRaw] = String(key).split('-')
+  const stackIndex = Number(stackRaw)
+  const partIndex = Number(partRaw)
+  const layerIndex = Number(layerRaw)
+  if (!Number.isFinite(stackIndex) || !Number.isFinite(partIndex) || !Number.isFinite(layerIndex)) {
+    return null
+  }
+  return { stackIndex, partIndex, layerIndex, _key: String(key) }
+}
+
 export const useStudioSelectionStore = defineStore('studioSelection', {
   state: () => ({
     focusedPartIndex: createDefaultFocusedPartIndex(),
@@ -68,6 +79,33 @@ export const useStudioSelectionStore = defineStore('studioSelection', {
       this.activeFocusContext = fastClone(payload.activeFocusContext || createDefaultActiveFocusContext())
       this.previewTool = payload.previewTool === 'move' ? 'move' : 'view'
       this.focusState = fastClone(payload.focusState || createDefaultFocusState())
+    },
+
+    applyFocusState(focusState) {
+      this.focusState = fastClone(focusState || createDefaultFocusState())
+
+      const scope = this.focusState?.scope || {}
+      this.focusedPartIndex = {
+        stackIndex: (typeof scope.stackIndex === 'number') ? scope.stackIndex : null,
+        partIndex: (typeof scope.partIndex === 'number') ? scope.partIndex : null
+      }
+
+      const selection = this.focusState?.selection || {}
+      this.selectionMode = selection.mode === 'multiple' ? 'multiple' : 'single'
+      const layerKeys = Array.isArray(selection.layerKeys) ? selection.layerKeys : []
+      this.selectedLayers = layerKeys
+        .map(parseLayerKey)
+        .filter(Boolean)
+
+      const editor = this.focusState?.editor || {}
+      this.activeFocusContext = {
+        property: editor.property || null,
+        subLayerIndex: editor.subLayerIndex ?? null,
+        timestamp: editor.timestamp || 0
+      }
+
+      const tool = this.focusState?.tool || {}
+      this.previewTool = tool.preview === 'move' ? 'move' : 'view'
     }
   }
 })

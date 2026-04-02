@@ -28,6 +28,8 @@ export const useStudioHistoryStore = defineStore('studioHistory', {
           }
         },
         restoreState: (snapshot) => {
+          const previousStacks = Array.isArray(studio.stacks) ? studio.stacks : []
+
           studio.stacks = studio._sanitizeStacksForPersistence(snapshot.stacks)
           studio.paletteMap = fastClone(snapshot.paletteMap)
           studio._paletteNextCounter = snapshot._paletteNextCounter || 1
@@ -56,8 +58,17 @@ export const useStudioHistoryStore = defineStore('studioHistory', {
           }
 
           studio._paletteVersion++
-          studio.RebuildAllStacksLayerEntriesFromParts()
-          studio._refreshAllLayerEntriesFromPalette()
+
+          // In SSOT flow, layerEntries are a derived UI projection.
+          // Prefer incremental restoration from previous in-memory layerEntries
+          // and avoid clearing renderer cache on every history replay.
+          studio.RebuildAllStacksLayerEntriesFromParts({
+            invalidateRendererCache: false,
+            cloneStacks: false,
+            preferIncremental: true,
+            previousStacks
+          })
+
           studio.refreshMergedAppearanceData()
 
           if (studio.focusedPartIndex.stackIndex !== null && studio.focusedPartIndex.partIndex !== null) {

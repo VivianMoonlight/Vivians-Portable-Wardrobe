@@ -33,18 +33,119 @@
 import { fastClone } from '@/utils/clone.js'
 
 const SNAPSHOT_META_KEYS = Object.freeze(['_timestamp', '_description', '_historyMeta'])
+const SNAPSHOT_META_KEY_SET = new Set([...SNAPSHOT_META_KEYS, '_fingerprint'])
 
-function stripSnapshotMeta(snapshot) {
-  if (!snapshot || typeof snapshot !== 'object') return snapshot
+const FNV_OFFSET_BASIS = 0x811c9dc5
+const FNV_PRIME = 0x01000193
+const MAX_HASH_DEPTH = 6
+const MAX_HASH_ARRAY_ITEMS = 24
+const MAX_HASH_OBJECT_KEYS = 48
 
-  const clone = fastClone(snapshot)
-  for (const key of SNAPSHOT_META_KEYS) {
-    if (Object.prototype.hasOwnProperty.call(clone, key)) {
-      delete clone[key]
+function fnvMix(hash, value) {
+  let mixed = hash >>> 0
+  mixed ^= value & 0xff
+  mixed = Math.imul(mixed, FNV_PRIME) >>> 0
+  return mixed
+}
+
+function fnvMixString(hash, text) {
+  const source = String(text)
+  let mixed = hash >>> 0
+  const limit = source.length > 128 ? 128 : source.length
+  for (let i = 0; i < limit; i++) {
+    mixed = fnvMix(mixed, source.charCodeAt(i))
+  }
+  // Include full length so long strings with same prefix do not collide trivially.
+  mixed = fnvMix(mixed, source.length)
+  return mixed
+}
+
+function fnvMixNumber(hash, value) {
+  if (!Number.isFinite(value)) {
+    return fnvMixString(hash, `num:${value}`)
+  }
+
+  // Preserve number variance while keeping operations cheap.
+  const integral = Math.trunc(value)
+  const fraction = Math.trunc((value - integral) * 1000000)
+  let mixed = hash >>> 0
+  mixed = fnvMixString(mixed, `n:${integral}`)
+  mixed = fnvMixString(mixed, `f:${fraction}`)
+  return mixed
+}
+
+function mixSnapshotValue(hash, value, depth, visited) {
+  if (depth > MAX_HASH_DEPTH) {
+    return fnvMixString(hash, '#depth')
+  }
+
+  if (value === null) return fnvMixString(hash, 'null')
+  if (value === undefined) return fnvMixString(hash, 'undefined')
+
+  const valueType = typeof value
+  if (valueType === 'string') return fnvMixString(hash, `s:${value}`)
+  if (valueType === 'number') return fnvMixNumber(hash, value)
+  if (valueType === 'boolean') return fnvMixString(hash, value ? 'b:1' : 'b:0')
+  if (valueType === 'bigint') return fnvMixString(hash, `bi:${value.toString()}`)
+
+  if (valueType !== 'object') {
+    return fnvMixString(hash, `t:${valueType}`)
+  }
+
+  if (visited.has(value)) {
+    return fnvMixString(hash, '#cycle')
+  }
+  visited.add(value)
+
+  let mixed = hash >>> 0
+
+  if (Array.isArray(value)) {
+    mixed = fnvMixString(mixed, `arr:${value.length}`)
+    const limit = Math.min(value.length, MAX_HASH_ARRAY_ITEMS)
+    for (let i = 0; i < limit; i++) {
+      mixed = fnvMixNumber(mixed, i)
+      mixed = mixSnapshotValue(mixed, value[i], depth + 1, visited)
+    }
+    if (value.length > limit) {
+      mixed = fnvMixString(mixed, `arr+${value.length - limit}`)
+      mixed = mixSnapshotValue(mixed, value[value.length - 1], depth + 1, visited)
+    }
+    visited.delete(value)
+    return mixed
+  }
+
+  const keys = Object.keys(value)
+  mixed = fnvMixString(mixed, `obj:${keys.length}`)
+  let mixedCount = 0
+  for (const key of keys) {
+    if (SNAPSHOT_META_KEY_SET.has(key)) continue
+    mixed = fnvMixString(mixed, key)
+    mixed = mixSnapshotValue(mixed, value[key], depth + 1, visited)
+    mixedCount++
+    if (mixedCount >= MAX_HASH_OBJECT_KEYS) {
+      mixed = fnvMixString(mixed, `obj+${keys.length - mixedCount}`)
+      break
     }
   }
 
-  return clone
+  visited.delete(value)
+  return mixed
+}
+
+function computeSnapshotFingerprint(snapshot) {
+  const visited = new WeakSet()
+  const hash = mixSnapshotValue(FNV_OFFSET_BASIS, snapshot, 0, visited)
+  return hash >>> 0
+}
+
+function getSnapshotFingerprint(snapshot) {
+  if (!snapshot || typeof snapshot !== 'object') return 0
+  if (typeof snapshot._fingerprint === 'number') {
+    return snapshot._fingerprint >>> 0
+  }
+  const fingerprint = computeSnapshotFingerprint(snapshot)
+  snapshot._fingerprint = fingerprint
+  return fingerprint
 }
 
 function normalizeHistoryMeta(historyMeta = null) {
@@ -94,11 +195,7 @@ function mergeHistoryMeta(previous = null, next = null) {
  * Compare two snapshots for equality
  */
 function snapshotsEqual(a, b) {
-  try {
-    return JSON.stringify(stripSnapshotMeta(a)) === JSON.stringify(stripSnapshotMeta(b))
-  } catch (e) {
-    return false
-  }
+  return getSnapshotFingerprint(a) === getSnapshotFingerprint(b)
 }
 
 export class UndoRedoManager {
@@ -303,6 +400,7 @@ export class UndoRedoManager {
     if (normalizedHistoryMeta) {
       snapshot._historyMeta = normalizedHistoryMeta
     }
+    snapshot._fingerprint = computeSnapshotFingerprint(snapshot)
 
     return snapshot
   }

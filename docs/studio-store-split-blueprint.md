@@ -162,7 +162,8 @@ flowchart LR
 - 已完成第一部：`selectionStore` 与 `selectionBridge` 已接入，`studioStore` 通过 `_syncSelectionDomainState` 进行兼容期双写同步。
 - 已完成第二部：`Studio.vue`、`PartInspectorPanel.vue`、`PreviewWidget.vue`、`PartListPanel.vue`、`AssetSelectorPanel.vue`、`BatchEditPanel.vue`、`LayerGroup.vue`、`ColorableLayer.vue` 的 selection/focus 读取已迁移至 bridge。
 - 收口已启动：`studioStore` state 中 selection/focus 镜像字段已删除，改为通过 `selectionStore` 代理访问。
-- 待完成：删除 legacy 同步残留（`_syncSelectionDomainState` 及 focus legacy 同步路径），保留 façade 兼容入口。
+- 收口第二批已完成：`_syncSelectionDomainState` 调用链已清理，`focusedPartIndex` 同步收敛为 `_syncFocusedPartIndexToSelectionDomain` 单一路径；`focusState -> selection mirrors` 的反解逻辑已下沉到 `selectionStore.applyFocusState(...)`。
+- 待完成：继续收敛 façade 兼容入口，评估 `studioStore` 中 focus 兼容方法的删除窗口。
 
 完成标准:
 - 单选/多选/replace 三条路径行为不变。

@@ -11,10 +11,6 @@ export function useStudioDomainStores() {
   const persistence = useStudioPersistenceStore()
   const selection = useStudioSelectionStore()
 
-  if (typeof studio._syncSelectionDomainState === 'function') {
-    studio._syncSelectionDomainState()
-  }
-
   return {
     studio,
     panel,
