@@ -54,6 +54,7 @@ import { useStudioPanelStore } from '@/stores/studio/panelStore'
 import { useStudioHistoryStore } from '@/stores/studio/historyStore'
 import { useStudioPersistenceStore } from '@/stores/studio/persistenceStore'
 import { useStudioSelectionStore } from '@/stores/studio/selectionStore'
+import { useStudioPaletteStore } from '@/stores/studio/paletteStore'
 
 // PriorityService (refactored)
 import PriorityService from '@/services/PriorityService'
@@ -182,6 +183,42 @@ function ensureSelectionProxyBindings(store) {
   return store
 }
 
+function ensurePaletteProxyBindings(store) {
+  if (!store || store._paletteDomainProxyReady === true) return store
+
+  const paletteStore = useStudioPaletteStore()
+  const proxyKeys = [
+    'paletteMap',
+    'savedColors',
+    '_paletteNextCounter',
+    '_paletteVersion',
+    'paletteModeActive',
+    'paletteWorkMode',
+    'paletteUpdateFlag',
+    '_paletteRealtimeMode',
+    '_paletteRealtimeDirty',
+    '_paletteRealtimeHistoryMeta',
+    '_paletteRealtimeInteractionKind'
+  ]
+
+  for (const key of proxyKeys) {
+    const descriptor = Object.getOwnPropertyDescriptor(store, key)
+    if (descriptor && (descriptor.get || descriptor.set)) continue
+
+    Object.defineProperty(store, key, {
+      configurable: true,
+      enumerable: true,
+      get: () => paletteStore[key],
+      set: (value) => {
+        paletteStore[key] = value
+      }
+    })
+  }
+
+  store._paletteDomainProxyReady = true
+  return store
+}
+
 const useStudioStoreBase = defineStore('studio', {
   state: () => ({
     stacks: [],
@@ -217,38 +254,17 @@ const useStudioStoreBase = defineStore('studio', {
     assetGroupsRaw: [],
     assetIndex: {},
 
-    // palette: tag -> color
-    paletteMap: {},
-
-    // saved colors: simple array of color values (strings or basic values)
-    savedColors: [],
-
-    // internal counter for generating human-readable tags
-    _paletteNextCounter: 1,
-
     // last translated layer entries
     translatedLayerEntries: [],
 
     // internal per-part uid counter and mapping
     _partUidCounter: 1,
 
-    // Palette editing mode
-    paletteModeActive: false,
-
     // NEW: central palette panel visibility (UI-level)
     palettePanelVisible: false,
 
     focusedPartUpdateFlag: 0,
 
-    paletteWorkMode: 'external',
-
-    paletteUpdateFlag: 0,
-
-    // Palette realtime update session (used for drag interactions)
-    _paletteRealtimeMode: false,
-    _paletteRealtimeDirty: false,
-    _paletteRealtimeHistoryMeta: null,
-    _paletteRealtimeInteractionKind: null,
 
     // Editor realtime update session (used for preview-move, layer-edit, batch-edit, priority-drag)
     _editorRealtimeMode: false,
@@ -290,10 +306,6 @@ const useStudioStoreBase = defineStore('studio', {
       lastWasDeferred: false,
       lastMutationAt: 0
     },
-
-
-    // Performance: palette map version for cache invalidation
-    _paletteVersion: 0,
 
     batchEditBuffer: {
       opacity: null,
@@ -621,6 +633,10 @@ const useStudioStoreBase = defineStore('studio', {
 
     _getSelectionStore() {
       return useStudioSelectionStore()
+    },
+
+    _getPaletteStore() {
+      return useStudioPaletteStore()
     },
 
     _syncFocusedPartIndexToSelectionDomain() {
@@ -4339,6 +4355,11 @@ const useStudioStoreBase = defineStore('studio', {
       return historyStore.getFullHistory(this)
     },
 
+    getHistoryView(options = {}) {
+      const historyStore = this._getHistoryStore()
+      return historyStore.getHistoryView(this, options)
+    },
+
     /**
      * Jump to a specific state in history
      * @param {number} steps - Number of steps to jump
@@ -4355,6 +4376,19 @@ const useStudioStoreBase = defineStore('studio', {
 
       const historyStore = this._getHistoryStore()
       return historyStore.jumpToHistoryState(this, steps)
+    },
+
+    jumpToHistoryTimestamp(timestamp, policy = 'latest', options = {}) {
+      if (!options?._fromFacade && isStudioFacadeEnabled()) {
+        return this.execute({
+          type: 'history.jump',
+          payload: { timestamp, policy },
+          meta: {}
+        })
+      }
+
+      const historyStore = this._getHistoryStore()
+      return historyStore.jumpToHistoryTimestamp(this, timestamp, policy)
     },
 
     /**
@@ -4517,6 +4551,7 @@ const useStudioStoreBase = defineStore('studio', {
 export function useStudioStore(...args) {
   const store = useStudioStoreBase(...args)
   ensureSelectionProxyBindings(store)
+  ensurePaletteProxyBindings(store)
   return store
 }
 

@@ -302,6 +302,7 @@ import { ref, computed, watch, nextTick, onMounted, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { useStudioDomainStores } from "@/stores/studio";
 import { createStudioHistoryBridge } from "@/stores/studio/historyBridge";
+import { createStudioPaletteBridge } from "@/stores/studio/paletteBridge";
 import { Chrome } from "@ckpack/vue-color";
 import { throttle } from "@/utils/performance.js";
 import { hostWindow, setTimeoutHost } from "@/utils/host-window.js";
@@ -311,8 +312,9 @@ import { getHlsOffsetBetweenColors } from "@/utils/color-hls.js";
 import ColorValuePreview from "@/components/ui/ColorValuePreview.vue";
 
 const { t } = useI18n();
-const { studio: store, panel, history } = useStudioDomainStores();
+const { studio: store, panel, history, palette: paletteStore } = useStudioDomainStores();
 const historyBridge = createStudioHistoryBridge(store, history);
+const paletteBridge = createStudioPaletteBridge(store, paletteStore);
 const rootEl = ref(null);
 
 /* ---------------- State ---------------- */
@@ -402,12 +404,12 @@ watch([collapsedAdvanced, () => panel.workspaceMode], ([collapsed, mode]) => {
 
 /* ---------------- Computeds ---------------- */
 
-const palette = computed(() => store.paletteSnapshot || {});
+const palette = computed(() => paletteBridge.paletteSnapshot || {});
 const tagKeys = computed(() => Object.keys(palette.value));
-const savedColors = computed(() => store.savedColors || []);
+const savedColors = computed(() => paletteBridge.savedColors || []);
 
 // Determine what the picker should show
-const activeTargets = computed(() => store.activePaletteTargets || []);
+const activeTargets = computed(() => paletteBridge.activePaletteTargets || []);
 const firstActiveTarget = computed(() =>
   activeTargets.value.length ? activeTargets.value[0] : null
 );
@@ -525,7 +527,7 @@ function usageCount(tag) {
 
 // Invalidate cache when palette changes
 watch(
-  [() => store.paletteMap, () => store.stacks],
+  [() => paletteBridge.paletteMap, () => store.stacks],
   () => {
     usageCountCache.value = {};
   },
@@ -623,7 +625,7 @@ watch(pickerColor, (nv) => {
 // C. The value of the edited tag changes externally.
 
 watch(
-  () => store.paletteUpdateFlag,
+  () => paletteBridge.paletteUpdateFlag,
   () => {
     if (!editingTagId.value) {
       syncPickerToActiveSelection();
@@ -635,7 +637,7 @@ watch(
 watch(
   activeTargets,
   () => {
-    if (!editingTagId.value && store.paletteModeActive) {
+    if (!editingTagId.value && paletteBridge.paletteModeActive) {
       syncPickerToActiveSelection();
       syncAdvancedFromSelection();
     }
@@ -660,7 +662,7 @@ watch(
 watch(
   firstActiveTarget,
   () => {
-    if (!store.paletteModeActive) return;
+    if (!paletteBridge.paletteModeActive) return;
     syncAdvancedFromSelection();
   },
   { deep: true }

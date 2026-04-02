@@ -79,7 +79,7 @@ export const useStudioHistoryStore = defineStore('studioHistory', {
           this.historyRevision += 1
         },
         maxHistory: 100,
-        throttleInterval: 150,
+        debounceInterval: 150,
         enableLogging: false
       })
     },
@@ -167,10 +167,33 @@ export const useStudioHistoryStore = defineStore('studioHistory', {
       return this._undoRedoManager.getFullHistory()
     },
 
+    getHistoryView(studio, options = {}) {
+      this._ensureUndoRedo(studio)
+      if (!this._undoRedoManager) {
+        return {
+          totalCount: 0,
+          canUndo: false,
+          canRedo: false,
+          undoCount: 0,
+          redoCount: 0,
+          current: null,
+          pastMeta: [],
+          futureMeta: []
+        }
+      }
+      return this._undoRedoManager.getHistoryView(options)
+    },
+
     jumpToHistoryState(studio, steps) {
       this._ensureUndoRedo(studio)
       if (!this._undoRedoManager) return false
       return this._undoRedoManager.jumpToState(steps)
+    },
+
+    jumpToHistoryTimestamp(studio, timestamp, policy = 'latest') {
+      this._ensureUndoRedo(studio)
+      if (!this._undoRedoManager) return false
+      return this._undoRedoManager.jumpToTimestamp(timestamp, policy)
     },
 
     canUndo(studio) {

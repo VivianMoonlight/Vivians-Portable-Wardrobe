@@ -95,20 +95,23 @@ function getInteractionState(store) {
 
 function getHistoryState(store) {
   try {
-    const history = typeof store?.getFullHistory === 'function' ? (store.getFullHistory() || {}) : {}
+    const history = typeof store?.getHistory === 'function' ? (store.getHistory() || {}) : {}
+    const view = typeof store?.getHistoryView === 'function'
+      ? (store.getHistoryView({ maxPast: 1, maxFuture: 1 }) || {})
+      : {}
     const undoCount = Number(history?.undoCount || 0)
     const redoCount = Number(history?.redoCount || 0)
-    const undoStack = Array.isArray(history?.undoStack) ? history.undoStack : []
-    const redoStack = Array.isArray(history?.redoStack) ? history.redoStack : []
+    const pastMeta = Array.isArray(view?.pastMeta) ? view.pastMeta : []
+    const futureMeta = Array.isArray(view?.futureMeta) ? view.futureMeta : []
     return {
       canUndo: undoCount > 0,
       canRedo: redoCount > 0,
       undoCount,
       redoCount,
-      undoStackSize: undoStack.length,
-      redoStackSize: redoStack.length,
-      latestUndo: cloneValue(undoStack[0] || null),
-      latestRedo: cloneValue(redoStack[0] || null)
+      undoStackSize: undoCount,
+      redoStackSize: redoCount,
+      latestUndo: pastMeta.length > 0 ? pastMeta[pastMeta.length - 1] : null,
+      latestRedo: futureMeta.length > 0 ? futureMeta[0] : null
     }
   } catch (e) {
     return {

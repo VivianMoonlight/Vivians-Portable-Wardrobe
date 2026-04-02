@@ -3,6 +3,7 @@ import { useStudioPanelStore } from '@/stores/studio/panelStore'
 import { useStudioHistoryStore } from '@/stores/studio/historyStore'
 import { useStudioPersistenceStore } from '@/stores/studio/persistenceStore'
 import { useStudioSelectionStore } from '@/stores/studio/selectionStore'
+import { useStudioPaletteStore } from '@/stores/studio/paletteStore'
 
 export function useStudioDomainStores() {
   const studio = useStudioStore()
@@ -10,12 +11,14 @@ export function useStudioDomainStores() {
   const history = useStudioHistoryStore()
   const persistence = useStudioPersistenceStore()
   const selection = useStudioSelectionStore()
+  const palette = useStudioPaletteStore()
 
   return {
     studio,
     panel,
     history,
     persistence,
-    selection
+    selection,
+    palette
   }
 }

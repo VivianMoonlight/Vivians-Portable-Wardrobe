@@ -6,7 +6,7 @@
  * - Transaction support for merging high-frequency operations
  * - Automatic deduplication to avoid redundant history entries
  * - Configurable capacity limits (default 100)
- * - Throttling support for continuous operations
+ * - Debounce support for continuous operations
  *
  * Usage:
  * ```js
@@ -148,6 +148,56 @@ function getSnapshotFingerprint(snapshot) {
   return fingerprint
 }
 
+function snapshotsStrictEqual(a, b) {
+  const visited = new WeakMap()
+
+  const compare = (left, right) => {
+    if (left === right) return true
+
+    const leftType = typeof left
+    const rightType = typeof right
+    if (leftType !== rightType) return false
+
+    if (left === null || right === null) return left === right
+    if (leftType !== 'object') return Object.is(left, right)
+
+    const leftIsArray = Array.isArray(left)
+    const rightIsArray = Array.isArray(right)
+    if (leftIsArray !== rightIsArray) return false
+
+    let rightSet = visited.get(left)
+    if (!rightSet) {
+      rightSet = new WeakSet()
+      visited.set(left, rightSet)
+    } else if (rightSet.has(right)) {
+      return true
+    }
+    rightSet.add(right)
+
+    if (leftIsArray) {
+      if (left.length !== right.length) return false
+      for (let i = 0; i < left.length; i++) {
+        if (!compare(left[i], right[i])) return false
+      }
+      return true
+    }
+
+    const leftKeys = Object.keys(left).filter(key => !SNAPSHOT_META_KEY_SET.has(key))
+    const rightKeys = Object.keys(right).filter(key => !SNAPSHOT_META_KEY_SET.has(key))
+
+    if (leftKeys.length !== rightKeys.length) return false
+
+    for (const key of leftKeys) {
+      if (!Object.prototype.hasOwnProperty.call(right, key)) return false
+      if (!compare(left[key], right[key])) return false
+    }
+
+    return true
+  }
+
+  return compare(a, b)
+}
+
 function normalizeHistoryMeta(historyMeta = null) {
   if (!historyMeta || typeof historyMeta !== 'object') return null
 
@@ -191,11 +241,31 @@ function mergeHistoryMeta(previous = null, next = null) {
   return merged
 }
 
+const DEFAULT_COALESCE_ACTION_TYPES = Object.freeze([
+  'batch.updateOffset',
+  'batch.updatePriority',
+  'batch.updateOpacity',
+  'batch.updateColor',
+  'part.applyLayerDeltas'
+])
+
+const DEFAULT_COALESCE_ACTION_PREFIXES = Object.freeze([
+  'palette.'
+])
+
 /**
  * Compare two snapshots for equality
  */
 function snapshotsEqual(a, b) {
-  return getSnapshotFingerprint(a) === getSnapshotFingerprint(b)
+  if (a === b) return true
+
+  const leftFingerprint = getSnapshotFingerprint(a)
+  const rightFingerprint = getSnapshotFingerprint(b)
+  if (leftFingerprint !== rightFingerprint) return false
+
+  // Fingerprint match is a fast pre-check; strict compare prevents collisions
+  // from accidentally dropping valid history entries.
+  return snapshotsStrictEqual(a, b)
 }
 
 export class UndoRedoManager {
@@ -205,20 +275,39 @@ export class UndoRedoManager {
    * @param {Function} options.captureState Function that returns current state snapshot
    * @param {Function} options.restoreState Function that restores state from snapshot
    * @param {number} [options.maxHistory=100] Maximum number of history entries
-   * @param {number} [options.throttleInterval=150] Throttle interval in ms for auto-push
+   * @param {number} [options.debounceInterval=150] Debounce interval in ms for auto-push
+   * @param {number} [options.throttleInterval=150] Legacy alias of debounceInterval
    * @param {boolean} [options.enableLogging=false] Enable debug logging
    */
   constructor(options = {}) {
     this.captureState = options.captureState
     this.restoreState = options.restoreState
     this.maxHistory = options.maxHistory || 100
-    this.throttleInterval = options.throttleInterval || 150
+    const resolvedDebounceInterval = Number(options.debounceInterval ?? options.throttleInterval)
+    this.debounceInterval = Number.isFinite(resolvedDebounceInterval)
+      ? Math.max(0, resolvedDebounceInterval)
+      : 150
+    this.throttleInterval = this.debounceInterval
     this.enableLogging = options.enableLogging || false
     this.onChange = typeof options.onChange === 'function' ? options.onChange : null
+    this.coalesceWindowMs = Number.isFinite(options.coalesceWindowMs)
+      ? Math.max(0, Number(options.coalesceWindowMs))
+      : 700
+    this.coalesceActionTypes = (options.coalesceActionTypes instanceof Set)
+      ? options.coalesceActionTypes
+      : new Set(DEFAULT_COALESCE_ACTION_TYPES)
+    this.coalesceActionPrefixes = Array.isArray(options.coalesceActionPrefixes)
+      ? options.coalesceActionPrefixes.map(prefix => String(prefix || '').trim()).filter(Boolean)
+      : [...DEFAULT_COALESCE_ACTION_PREFIXES]
 
-    // History stacks
-    this.undoStack = []
-    this.redoStack = []
+    // Timeline-based history state (source of truth)
+    this.timeline = []
+    this.cursorIndex = -1
+    this.nextEntryId = 1
+
+    // Lookup indexes for fast jumps
+    this.idToIndex = new Map()
+    this.timestampIndex = new Map()
 
     // Transaction state
     this.inTransaction = false
@@ -226,9 +315,10 @@ export class UndoRedoManager {
     this.transactionTag = null
     this.transactionMeta = null
 
-    // Throttle state
-    this.throttleTimer = null
+    // Debounce state
+    this.debounceTimer = null
     this.pendingSnapshotMeta = null
+    this.pendingSnapshotActionType = null
 
     // Restore lock (to prevent recording during undo/redo)
     this.isRestoring = false
@@ -240,9 +330,9 @@ export class UndoRedoManager {
   }
 
   _ensureInitialSnapshot() {
-    if (this.undoStack.length > 0) return
+    if (this.timeline.length > 0) return
     const initialSnapshot = this._captureSnapshot({ actionType: 'Initial State' })
-    this.undoStack.push(initialSnapshot)
+    this._appendEntry(initialSnapshot)
     this._notifyChange()
   }
 
@@ -250,13 +340,156 @@ export class UndoRedoManager {
     if (!this.onChange) return
     try {
       this.onChange({
-        undoCount: Math.max(0, this.undoStack.length - 1),
-        redoCount: this.redoStack.length,
+        undoCount: this.getUndoCount(),
+        redoCount: this.getRedoCount(),
         inTransaction: this.inTransaction
       })
     } catch (e) {
       this._log('onChange callback failed:', e)
     }
+  }
+
+  _createEntry(snapshot) {
+    return {
+      id: this.nextEntryId++,
+      snapshot,
+      timestamp: snapshot?._timestamp || Date.now(),
+      description: snapshot?._description || 'State Change',
+      historyMeta: snapshot?._historyMeta || null
+    }
+  }
+
+  _indexTimestamp(entry) {
+    const ts = Number(entry?.timestamp)
+    if (!Number.isFinite(ts)) return
+
+    let ids = this.timestampIndex.get(ts)
+    if (!ids) {
+      ids = []
+      this.timestampIndex.set(ts, ids)
+    }
+    ids.push(entry.id)
+  }
+
+  _removeTimestampIndex(entry) {
+    const ts = Number(entry?.timestamp)
+    if (!Number.isFinite(ts)) return
+
+    const ids = this.timestampIndex.get(ts)
+    if (!Array.isArray(ids) || ids.length === 0) return
+
+    if (ids[ids.length - 1] === entry.id) {
+      ids.pop()
+    } else if (ids[0] === entry.id) {
+      ids.shift()
+    } else {
+      const idx = ids.indexOf(entry.id)
+      if (idx >= 0) ids.splice(idx, 1)
+    }
+
+    if (ids.length === 0) {
+      this.timestampIndex.delete(ts)
+    }
+  }
+
+  _reindexTimeline(from = 0) {
+    const start = Math.max(0, Number(from) || 0)
+    for (let i = start; i < this.timeline.length; i++) {
+      this.idToIndex.set(this.timeline[i].id, i)
+    }
+  }
+
+  _appendEntry(snapshot) {
+    const entry = this._createEntry(snapshot)
+    const index = this.timeline.length
+    this.timeline.push(entry)
+    this.cursorIndex = index
+    this.idToIndex.set(entry.id, index)
+    this._indexTimestamp(entry)
+    return entry
+  }
+
+  _dropFutureEntries() {
+    if (this.cursorIndex >= this.timeline.length - 1) return
+
+    while (this.timeline.length > this.cursorIndex + 1) {
+      const removed = this.timeline.pop()
+      if (!removed) break
+      this.idToIndex.delete(removed.id)
+      this._removeTimestampIndex(removed)
+    }
+  }
+
+  _trimHistoryToCapacity() {
+    while (this.timeline.length > this.maxHistory) {
+      const removed = this.timeline.shift()
+      if (!removed) break
+      this.idToIndex.delete(removed.id)
+      this._removeTimestampIndex(removed)
+      this.cursorIndex = Math.max(0, this.cursorIndex - 1)
+      this._reindexTimeline(0)
+    }
+  }
+
+  _getCurrentEntry() {
+    if (this.cursorIndex < 0 || this.cursorIndex >= this.timeline.length) return null
+    return this.timeline[this.cursorIndex] || null
+  }
+
+  _buildHistoryItem(entry, index) {
+    if (!entry) return null
+    return {
+      index,
+      timestamp: entry.timestamp || null,
+      description: entry.description || 'State Change',
+      historyMeta: entry.historyMeta || null,
+      data: entry.snapshot
+    }
+  }
+
+  _resolveSnapshotActionType(snapshot) {
+    const actionType = String(snapshot?._historyMeta?.actionType || '').trim()
+    if (actionType) return actionType
+    return String(snapshot?._description || '').trim()
+  }
+
+  _isActionCoalescible(actionType) {
+    if (!actionType) return false
+    if (this.coalesceActionTypes.has(actionType)) return true
+    for (const prefix of this.coalesceActionPrefixes) {
+      if (actionType.startsWith(prefix)) return true
+    }
+    return false
+  }
+
+  _canCoalesceSnapshots(currentSnapshot, incomingSnapshot) {
+    if (!currentSnapshot || !incomingSnapshot) return false
+    if (this.coalesceWindowMs <= 0) return false
+    if (this.cursorIndex !== this.timeline.length - 1) return false
+
+    const currentActionType = this._resolveSnapshotActionType(currentSnapshot)
+    const incomingActionType = this._resolveSnapshotActionType(incomingSnapshot)
+    if (!currentActionType || currentActionType !== incomingActionType) return false
+    if (!this._isActionCoalescible(currentActionType)) return false
+
+    const currentTimestamp = Number(currentSnapshot._timestamp || 0)
+    const incomingTimestamp = Number(incomingSnapshot._timestamp || 0)
+    if (!Number.isFinite(currentTimestamp) || !Number.isFinite(incomingTimestamp)) return false
+
+    return (incomingTimestamp - currentTimestamp) <= this.coalesceWindowMs
+  }
+
+  _replaceCurrentEntrySnapshot(snapshot) {
+    const entry = this._getCurrentEntry()
+    if (!entry) return false
+
+    this._removeTimestampIndex(entry)
+    entry.snapshot = snapshot
+    entry.timestamp = snapshot?._timestamp || Date.now()
+    entry.description = snapshot?._description || 'State Change'
+    entry.historyMeta = snapshot?._historyMeta || null
+    this._indexTimestamp(entry)
+    return true
   }
 
   /**
@@ -347,11 +580,37 @@ export class UndoRedoManager {
     this._pushToHistory(snapshot)
   }
 
+  _resolvePendingActionType(historyMeta = null) {
+    const actionType = String(historyMeta?.actionType || '').trim()
+    return actionType || '__unknown__'
+  }
+
+  _commitPendingDebouncedSnapshot() {
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer)
+      this.debounceTimer = null
+    }
+
+    const pendingMeta = this.pendingSnapshotMeta
+    this.pendingSnapshotMeta = null
+    this.pendingSnapshotActionType = null
+    this.pushSnapshot(pendingMeta)
+  }
+
+  _cancelPendingDebouncedSnapshot() {
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer)
+      this.debounceTimer = null
+    }
+    this.pendingSnapshotMeta = null
+    this.pendingSnapshotActionType = null
+  }
+
   /**
-   * Push a snapshot with throttling (useful for keyboard input, etc.)
-   * @param {number} [delay] Optional custom delay (uses throttleInterval if not provided)
+   * Push a snapshot with debounce (useful for rapid updates of the same action type)
+   * @param {number} [delay] Optional custom delay (uses debounceInterval if not provided)
    */
-  pushSnapshotThrottled(delay = null, historyMeta = null) {
+  pushSnapshotDebounced(delay = null, historyMeta = null) {
     if (this.isRestoring || this.inTransaction) {
       return
     }
@@ -364,22 +623,38 @@ export class UndoRedoManager {
     }
 
     const normalizedMeta = normalizeHistoryMeta(resolvedMeta)
+    const incomingActionType = this._resolvePendingActionType(normalizedMeta)
+
+    // Different action types should not keep resetting each other's debounce window.
+    if (
+      this.debounceTimer &&
+      this.pendingSnapshotActionType &&
+      this.pendingSnapshotActionType !== incomingActionType
+    ) {
+      this._commitPendingDebouncedSnapshot()
+    }
+
+    if (!this.pendingSnapshotActionType) {
+      this.pendingSnapshotActionType = incomingActionType
+    }
+
     this.pendingSnapshotMeta = mergeHistoryMeta(this.pendingSnapshotMeta, normalizedMeta)
 
-    const actualDelay = resolvedDelay !== null ? resolvedDelay : this.throttleInterval
+    const actualDelay = resolvedDelay !== null ? resolvedDelay : this.debounceInterval
 
     // Clear existing timer
-    if (this.throttleTimer) {
-      clearTimeout(this.throttleTimer)
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer)
     }
 
     // Schedule snapshot
-    this.throttleTimer = setTimeout(() => {
-      const pendingMeta = this.pendingSnapshotMeta
-      this.pendingSnapshotMeta = null
-      this.pushSnapshot(pendingMeta)
-      this.throttleTimer = null
+    this.debounceTimer = setTimeout(() => {
+      this._commitPendingDebouncedSnapshot()
     }, actualDelay)
+  }
+
+  pushSnapshotThrottled(delay = null, historyMeta = null) {
+    this.pushSnapshotDebounced(delay, historyMeta)
   }
 
   /**
@@ -409,30 +684,27 @@ export class UndoRedoManager {
    * Internal: Push snapshot to history with deduplication and capacity control
    */
   _pushToHistory(snapshot) {
-    // Deduplicate: skip if identical to last entry
-    if (this.undoStack.length > 0) {
-      const lastSnapshot = this.undoStack[this.undoStack.length - 1]
-      if (snapshotsEqual(lastSnapshot, snapshot)) {
+    // Deduplicate against current cursor snapshot.
+    const currentEntry = this._getCurrentEntry()
+    if (currentEntry?.snapshot && snapshotsEqual(currentEntry.snapshot, snapshot)) {
         this._log('Skipping duplicate snapshot')
+        return
+    }
+
+    if (currentEntry?.snapshot && this._canCoalesceSnapshots(currentEntry.snapshot, snapshot)) {
+      if (this._replaceCurrentEntrySnapshot(snapshot)) {
+        this._log('Coalesced snapshot into current history entry')
+        this._notifyChange()
         return
       }
     }
 
-    // Add to undo stack
-    this.undoStack.push(snapshot)
-    this._log('Snapshot pushed, undo stack size:', this.undoStack.length)
+    // Branching write: drop future timeline then append.
+    this._dropFutureEntries()
+    this._appendEntry(snapshot)
+    this._trimHistoryToCapacity()
 
-    // Clear redo stack (new action invalidates redo history)
-    if (this.redoStack.length > 0) {
-      this.redoStack = []
-      this._log('Redo stack cleared')
-    }
-
-    // Enforce capacity limit (ring buffer behavior)
-    if (this.undoStack.length > this.maxHistory) {
-      this.undoStack.shift()
-      this._log('History limit reached, removed oldest entry')
-    }
+    this._log('Snapshot pushed, timeline size:', this.timeline.length)
 
     this._notifyChange()
   }
@@ -442,43 +714,15 @@ export class UndoRedoManager {
    * @returns {boolean} True if undo was performed, false if nothing to undo
    */
   undo(steps = 1) {
-    if (this.undoStack.length <= 1) {
+    if (!this.canUndo()) {
       this._log('Nothing to undo')
       return false
     }
 
-    const maxUndoSteps = this.undoStack.length - 1
+    const maxUndoSteps = this.getUndoCount()
     const actualSteps = Math.min(Math.max(steps, 1), maxUndoSteps)
-    let performedSteps = 0
-    let snapshot = null
-
-    for (let i = 0; i < actualSteps; i++) {
-      if (this.undoStack.length <= 1) break
-
-      // Move current snapshot to redo stack, then restore previous snapshot.
-      const poppedSnapshot = this.undoStack.pop()
-      this.redoStack.push(poppedSnapshot)
-
-      // Enforce redo stack capacity
-      if (this.redoStack.length > this.maxHistory) {
-        this.redoStack.shift()
-        this._log('Redo history limit reached, removed oldest entry')
-      }
-
-      snapshot = this.undoStack[this.undoStack.length - 1]
-      
-      performedSteps++
-    }
-    if (snapshot) {
-      this._restoreSnapshot(snapshot)
-    }
-
-    if (performedSteps > 0) {
-      this._notifyChange()
-    }
-
-    this._log(`Undo performed ${performedSteps} step(s), undo stack size: ${this.undoStack.length}`)
-    return performedSteps > 0
+    const targetIndex = this.cursorIndex - actualSteps
+    return this.jumpToIndex(targetIndex)
   }
 
   /**
@@ -487,41 +731,65 @@ export class UndoRedoManager {
    * @returns {boolean} True if redo was performed, false if nothing to redo
    */
   redo(steps = 1) {
-    if (this.redoStack.length === 0) {
+    if (!this.canRedo()) {
       this._log('Nothing to redo')
       return false
     }
 
-    const actualSteps = Math.min(Math.max(steps, 1), this.redoStack.length)
-    let performedSteps = 0
-    let snapshot = null
+    const actualSteps = Math.min(Math.max(steps, 1), this.getRedoCount())
+    const targetIndex = this.cursorIndex + actualSteps
+    return this.jumpToIndex(targetIndex)
+  }
 
-    for (let i = 0; i < actualSteps; i++) {
-      if (this.redoStack.length === 0) break
+  jumpToIndex(targetIndex) {
+    if (!Number.isFinite(targetIndex)) return false
+    if (this.timeline.length === 0) return false
 
-      // Pop from redo stack and restore
-      snapshot = this.redoStack.pop()
-      this.undoStack.push(snapshot)
+    const normalized = Math.trunc(targetIndex)
+    const clamped = Math.min(Math.max(normalized, 0), this.timeline.length - 1)
+    if (clamped === this.cursorIndex) return false
 
-      // Enforce undo stack capacity
-      if (this.undoStack.length > this.maxHistory) {
-        this.undoStack.shift()
-        this._log('Undo history limit reached, removed oldest entry')
+    const entry = this.timeline[clamped]
+    if (!entry?.snapshot) return false
+
+    this.cursorIndex = clamped
+    this._restoreSnapshot(entry.snapshot)
+    this._notifyChange()
+    this._log('History jumped to index:', clamped)
+    return true
+  }
+
+  jumpToTimestamp(timestamp, policy = 'latest') {
+    const ts = Number(timestamp)
+    if (!Number.isFinite(ts)) return false
+
+    const ids = this.timestampIndex.get(ts)
+    if (!Array.isArray(ids) || ids.length === 0) return false
+
+    let selectedId = null
+    const normalizedPolicy = String(policy || 'latest').toLowerCase()
+
+    if (normalizedPolicy === 'earliest') {
+      selectedId = ids[0]
+    } else if (normalizedPolicy === 'nearest') {
+      let bestDistance = Number.POSITIVE_INFINITY
+      for (const id of ids) {
+        const idx = this.idToIndex.get(id)
+        if (!Number.isInteger(idx)) continue
+        const distance = Math.abs(idx - this.cursorIndex)
+        if (distance < bestDistance) {
+          bestDistance = distance
+          selectedId = id
+        }
       }
-      
-      performedSteps++
+    } else {
+      selectedId = ids[ids.length - 1]
     }
 
-    if (snapshot) {
-      this._restoreSnapshot(snapshot)
-    }
-
-    if (performedSteps > 0) {
-      this._notifyChange()
-    }
-
-    this._log(`Redo performed ${performedSteps} step(s), redo stack size: ${this.redoStack.length}`)
-    return performedSteps > 0
+    if (!Number.isInteger(selectedId)) return false
+    const targetIndex = this.idToIndex.get(selectedId)
+    if (!Number.isInteger(targetIndex)) return false
+    return this.jumpToIndex(targetIndex)
   }
 
   /**
@@ -544,9 +812,11 @@ export class UndoRedoManager {
    * Clear all history
    */
   clearHistory() {
-    this.undoStack = []
-    this.redoStack = []
-    this.pendingSnapshotMeta = null
+    this.timeline = []
+    this.cursorIndex = -1
+    this.idToIndex = new Map()
+    this.timestampIndex = new Map()
+    this._cancelPendingDebouncedSnapshot()
     this._ensureInitialSnapshot()
     this._log('History cleared')
   }
@@ -556,13 +826,14 @@ export class UndoRedoManager {
    * @returns {Object} History info with canUndo, canRedo, undoCount, redoCount
    */
   getHistory() {
-    const undoCount = Math.max(0, this.undoStack.length - 1)
+    const undoCount = this.getUndoCount()
+    const redoCount = this.getRedoCount()
 
     return {
       canUndo: undoCount > 0,
-      canRedo: this.redoStack.length > 0,
+      canRedo: redoCount > 0,
       undoCount,
-      redoCount: this.redoStack.length,
+      redoCount,
       inTransaction: this.inTransaction
     }
   }
@@ -572,37 +843,69 @@ export class UndoRedoManager {
    * @returns {Object} Full history info with undo and redo stacks
    */
   getFullHistory() {
-    const undoCount = Math.max(0, this.undoStack.length - 1)
+    const undoCount = this.getUndoCount()
+    const redoCount = this.getRedoCount()
+
+    const undoEntries = this.timeline
+      .slice(0, this.cursorIndex + 1)
+      .map((entry, index) => this._buildHistoryItem(entry, index))
+
+    const redoEntries = this.timeline
+      .slice(this.cursorIndex + 1)
+      .reverse()
+      .map((entry, index) => this._buildHistoryItem(entry, index))
+
+    const currentEntry = this._getCurrentEntry()
 
     return {
-      undoStack: this.undoStack.map((snapshot, index) => ({
-        index,
-        timestamp: snapshot._timestamp || null,
-        description: snapshot._description || 'State Change',
-        historyMeta: snapshot._historyMeta || null,
-        data: snapshot
-      })),
-      redoStack: this.redoStack.map((snapshot, index) => ({
-        index,
-        timestamp: snapshot._timestamp || null,
-        description: snapshot._description || 'State Change',
-        historyMeta: snapshot._historyMeta || null,
-        data: snapshot
-      })),
-      current: this.undoStack.length > 0
-        ? {
-            index: this.undoStack.length - 1,
-            timestamp: this.undoStack[this.undoStack.length - 1]._timestamp || null,
-            description: this.undoStack[this.undoStack.length - 1]._description || 'State Change',
-            historyMeta: this.undoStack[this.undoStack.length - 1]._historyMeta || null,
-            data: this.undoStack[this.undoStack.length - 1]
-          }
-        : null,
+      undoStack: undoEntries,
+      redoStack: redoEntries,
+      current: currentEntry ? this._buildHistoryItem(currentEntry, this.cursorIndex) : null,
       canUndo: undoCount > 0,
-      canRedo: this.redoStack.length > 0,
+      canRedo: redoCount > 0,
       undoCount,
-      redoCount: this.redoStack.length,
+      redoCount,
       inTransaction: this.inTransaction
+    }
+  }
+
+  getHistoryView(options = {}) {
+    const maxPast = Number.isFinite(options?.maxPast) ? Math.max(0, Math.trunc(options.maxPast)) : null
+    const maxFuture = Number.isFinite(options?.maxFuture) ? Math.max(0, Math.trunc(options.maxFuture)) : null
+
+    const total = this.timeline.length
+    const current = this._getCurrentEntry()
+    const currentIndex = this.cursorIndex
+
+    const pastAll = (currentIndex > 0) ? this.timeline.slice(0, currentIndex) : []
+    const futureAll = (currentIndex >= 0) ? this.timeline.slice(currentIndex + 1) : []
+
+    const pastSlice = (maxPast === null) ? pastAll : pastAll.slice(Math.max(0, pastAll.length - maxPast))
+    const futureSlice = (maxFuture === null) ? futureAll : futureAll.slice(0, maxFuture)
+
+    const toMeta = (entry, absoluteIndex) => ({
+      id: entry.id,
+      index: absoluteIndex,
+      timestamp: entry.timestamp || null,
+      description: entry.description || 'State Change',
+      historyMeta: entry.historyMeta || null
+    })
+
+    return {
+      totalCount: total,
+      canUndo: this.canUndo(),
+      canRedo: this.canRedo(),
+      undoCount: this.getUndoCount(),
+      redoCount: this.getRedoCount(),
+      current: current ? toMeta(current, currentIndex) : null,
+      pastMeta: pastSlice.map((entry) => {
+        const idx = this.idToIndex.get(entry.id)
+        return toMeta(entry, Number.isInteger(idx) ? idx : -1)
+      }),
+      futureMeta: futureSlice.map((entry) => {
+        const idx = this.idToIndex.get(entry.id)
+        return toMeta(entry, Number.isInteger(idx) ? idx : -1)
+      })
     }
   }
 
@@ -611,7 +914,7 @@ export class UndoRedoManager {
    * @returns {boolean}
    */
   canUndo() {
-    return this.undoStack.length > 1
+    return this.getUndoCount() > 0
   }
 
   /**
@@ -619,7 +922,7 @@ export class UndoRedoManager {
    * @returns {boolean}
    */
   canRedo() {
-    return this.redoStack.length > 0
+    return this.getRedoCount() > 0
   }
 
   /**
@@ -627,7 +930,8 @@ export class UndoRedoManager {
    * @returns {number}
    */
   getUndoCount() {
-    return Math.max(0, this.undoStack.length - 1)
+    if (this.timeline.length === 0 || this.cursorIndex < 0) return 0
+    return Math.max(0, this.cursorIndex)
   }
 
   /**
@@ -635,7 +939,8 @@ export class UndoRedoManager {
    * @returns {number}
    */
   getRedoCount() {
-    return this.redoStack.length
+    if (this.timeline.length === 0 || this.cursorIndex < 0) return 0
+    return Math.max(0, this.timeline.length - 1 - this.cursorIndex)
   }
 
   /**
@@ -644,19 +949,12 @@ export class UndoRedoManager {
    * @returns {boolean} True if jump was performed
    */
   jumpToState(steps) {
-    if (steps === 0) return false
+    const numericSteps = Number(steps)
+    if (!Number.isFinite(numericSteps) || numericSteps === 0) return false
+    if (this.timeline.length === 0) return false
 
-    if (steps < 0) {
-      // Undo multiple steps
-      const actualSteps = Math.min(Math.abs(steps), Math.max(0, this.undoStack.length - 1))
-      this.undo(actualSteps)
-      return actualSteps > 0
-    } else {
-      // Redo multiple steps
-      const actualSteps = Math.min(steps, this.redoStack.length)
-      this.redo(actualSteps)
-      return actualSteps > 0
-    }
+    const targetIndex = this.cursorIndex + Math.trunc(numericSteps)
+    return this.jumpToIndex(targetIndex)
   }
 
   /**

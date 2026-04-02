@@ -173,6 +173,12 @@ flowchart LR
 - 新建 `src/stores/studio/paletteStore.js`。
 - palette 写路径统一改为 semantic delta 到 core。
 
+实施进度（2026-04-03）:
+- 已完成第一部：`paletteStore` 与 `paletteBridge` 已接入，`useStudioDomainStores()` 已暴露 `palette` 域。
+- 已完成第二部：`studioStore` state 中 palette 领域镜像字段（`paletteMap`、`savedColors`、`_paletteNextCounter`、`_paletteVersion`、`paletteModeActive`、`paletteWorkMode`、`paletteUpdateFlag`、palette realtime flags）已删除，改为通过 `paletteStore` 代理访问。
+- 已完成第三部：`PalettePanel.vue` 的 palette 读取路径已迁移到 `paletteBridge`（`paletteSnapshot`、`savedColors`、`activePaletteTargets`、`paletteModeActive`、`paletteUpdateFlag`、`paletteMap` 监听）。
+- 待完成：继续收敛 palette 写入口（tag/savedColors/palette-mode/realtime）到 `paletteStore`，并评估 `studioStore` 中 palette 兼容方法的删除窗口。
+
 完成标准:
 - 调色、tag 偏移、批量应用与回退全部可用。
 

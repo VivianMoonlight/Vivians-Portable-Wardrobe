@@ -102,9 +102,18 @@ function createAssetHandlers(store) {
 
 function createHistoryHandlers(store) {
   return {
-    'history.jump': (payload) => store.jumpToHistoryState(payload.steps, {
-      _fromFacade: true
-    }),
+    'history.jump': (payload) => {
+      const timestamp = Number(payload?.timestamp)
+      if (Number.isFinite(timestamp)) {
+        return store.jumpToHistoryTimestamp(timestamp, payload?.policy || 'latest', {
+          _fromFacade: true
+        })
+      }
+
+      return store.jumpToHistoryState(payload?.steps, {
+        _fromFacade: true
+      })
+    },
     'history.clear': () => store.clearHistory({
       _fromFacade: true
     })

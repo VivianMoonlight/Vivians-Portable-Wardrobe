@@ -169,6 +169,8 @@ import * as DialogService from "@/services/DialogService.js";
 const { t, te } = useI18n();
 const { studio: store, history } = useStudioDomainStores();
 const historyBridge = createStudioHistoryBridge(store, history);
+const HISTORY_WINDOW_PAST = 240;
+const HISTORY_WINDOW_FUTURE = 240;
 
 const timelineRef = ref(null);
 
@@ -178,44 +180,49 @@ const historyData = computed(() => {
   void revision;
 
   try {
-    return historyBridge.getFullHistory();
+    return historyBridge.getHistoryView({
+      maxPast: HISTORY_WINDOW_PAST,
+      maxFuture: HISTORY_WINDOW_FUTURE,
+    });
   } catch (e) {
     console.warn("[HistoryPanel] Failed to get history:", e);
     return {
-      undoStack: [],
-      redoStack: [],
+      totalCount: 0,
       undoCount: 0,
       redoCount: 0,
       canUndo: false,
       canRedo: false,
+      current: null,
+      pastMeta: [],
+      futureMeta: [],
     };
   }
 });
 
-const undoStack = computed(() => historyData.value.undoStack || []);
-const redoStack = computed(() => historyData.value.redoStack || []);
-const currentState = computed(
-  () => historyData.value.current || undoStack.value[undoStack.value.length - 1] || null
-);
+const currentState = computed(() => historyData.value.current || null);
 const pastStack = computed(() => {
-  if (undoStack.value.length <= 1) return [];
-  const pastItems = undoStack.value.slice(0, -1);
-  const pastCount = pastItems.length;
+  const pastItems = Array.isArray(historyData.value.pastMeta) ? historyData.value.pastMeta : [];
+  const currentIndex = Number(currentState.value?.index);
+  if (!Number.isFinite(currentIndex) || pastItems.length === 0) return [];
 
   // Keep timeline order as oldest -> latest -> current.
-  // Steps are negative distance from current snapshot.
-  return pastItems.map((item, index) => ({
+  return pastItems.map((item) => ({
     ...item,
-    steps: -(pastCount - index),
+    steps: Number(item.index) - currentIndex,
   }));
 });
-const futureStack = computed(() =>
-  [...redoStack.value]
-    .reverse()
-    .map((item, index) => ({ ...item, steps: index + 1 }))
-);
+const futureStack = computed(() => {
+  const futureItems = Array.isArray(historyData.value.futureMeta) ? historyData.value.futureMeta : [];
+  const currentIndex = Number(currentState.value?.index);
+  if (!Number.isFinite(currentIndex) || futureItems.length === 0) return [];
+
+  return futureItems.map((item) => ({
+    ...item,
+    steps: Number(item.index) - currentIndex,
+  }));
+});
 const totalStates = computed(
-  () => pastStack.value.length + futureStack.value.length + (currentState.value ? 1 : 0)
+  () => Number(historyData.value.totalCount || 0)
 );
 
 const hasHistory = computed(() => {

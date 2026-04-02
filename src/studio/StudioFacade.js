@@ -123,6 +123,9 @@ class StudioFacade {
           _fromFacade: true
         })
       case 'history.jump':
+        if (Number.isFinite(Number(payload?.timestamp))) {
+          return this.store.jumpToHistoryTimestamp(payload.timestamp, payload?.policy || 'latest', { _fromFacade: true })
+        }
         return this.store.jumpToHistoryState(payload.steps, { _fromFacade: true })
       case 'history.clear':
         return this.store.clearHistory({ _fromFacade: true })
