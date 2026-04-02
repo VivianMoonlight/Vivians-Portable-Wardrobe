@@ -42,14 +42,14 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount, watch, nextTick, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useStudioStore } from '@/stores/studioStore'
+import { useStudioDomainStores } from '@/stores/studio'
 import { RenderApi } from '@/utils/RenderApi'
 import { hostWindow, doc } from '@/utils/host-window.js'
 import { throttle } from '@/utils/performance.js'
 
 const { t } = useI18n()
 
-const store = useStudioStore()
+const { studio: store, panel } = useStudioDomainStores()
 const canvas = ref(null)
 const wrap = ref(null)
 let resizeObserver = null
@@ -58,7 +58,7 @@ const hasItem = computed(() => !!store.selectedElement && !!store.focusedPart)
 const selectedName = computed(() => store.selectedElement?.name ?? '')
 
 // Layer Manager State
-const layerManagerActive = computed(() => store.layerManagerActive)
+const layerManagerActive = computed(() => panel.layerManagerActive)
 function toggleLayerManager() {
   store.toggleLayerManager()
 }

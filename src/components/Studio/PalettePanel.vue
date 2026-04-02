@@ -300,7 +300,7 @@
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
-import { useStudioStore } from "@/stores/studioStore";
+import { useStudioDomainStores } from "@/stores/studio";
 import { Chrome } from "@ckpack/vue-color";
 import { throttle } from "@/utils/performance.js";
 import { hostWindow, setTimeoutHost } from "@/utils/host-window.js";
@@ -310,7 +310,7 @@ import { getHlsOffsetBetweenColors } from "@/utils/color-hls.js";
 import ColorValuePreview from "@/components/ui/ColorValuePreview.vue";
 
 const { t } = useI18n();
-const store = useStudioStore();
+const { studio: store, panel } = useStudioDomainStores();
 const rootEl = ref(null);
 
 /* ---------------- State ---------------- */
@@ -361,7 +361,7 @@ updateScreenSize();
 
 onMounted(() => {
   const key = "studio.ui.palette.advancedExpanded";
-  if (store.workspaceMode === "pro") {
+  if (panel.workspaceMode === "pro") {
     const persisted = localStorage.getItem(key);
     if (persisted === "1") collapsedAdvanced.value = false;
     else if (persisted === "0") collapsedAdvanced.value = true;
@@ -393,7 +393,7 @@ onUnmounted(() => {
   }
 });
 
-watch([collapsedAdvanced, () => store.workspaceMode], ([collapsed, mode]) => {
+watch([collapsedAdvanced, () => panel.workspaceMode], ([collapsed, mode]) => {
   if (mode !== "pro") return;
   localStorage.setItem("studio.ui.palette.advancedExpanded", collapsed ? "0" : "1");
 });
@@ -944,7 +944,7 @@ function createTagFromCurrent() {
 }
 
 function toggleAdvanced() {
-  if (store.workspaceMode === "easy" && collapsedAdvanced.value) {
+  if (panel.workspaceMode === "easy" && collapsedAdvanced.value) {
     collapsedAdvanced.value = false;
     return;
   }

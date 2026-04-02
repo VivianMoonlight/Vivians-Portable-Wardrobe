@@ -485,7 +485,7 @@ import HistoryPanel from './HistoryPanel.vue'
 import SavesManager from './SavesManager.vue'
 import BaseButton from '../ui/BaseButton.vue'
 import StatusChip from '../ui/StatusChip.vue'
-import { useStudioStore } from '@/stores/studioStore'
+import { useStudioDomainStores } from '@/stores/studio'
 import { useFileSystemStore } from '@/stores/fileSystemStore'
 import { ExternalAdapter } from '@/utils/external_adapters'
 import { hostWindow, doc } from '@/utils/host-window.js'
@@ -496,7 +496,7 @@ import { useAutoSave } from '@/services/AutoSaveService'
 import * as DialogService from '@/services/DialogService.js'
 
 const { t } = useI18n()
-const store = useStudioStore()
+const { studio: store, panel } = useStudioDomainStores()
 const fsStore = useFileSystemStore()
 
 // Setup undo/redo keyboard shortcuts
@@ -550,29 +550,29 @@ const startRect = ref({ x: 0, y: 0, w: 0, h: 0 })
 
 const isMobile = ref(false)
 const mobileTab = computed({
-  get: () => store.mobileTab,
+  get: () => panel.mobileTab,
   set: (value) => {
-    store.mobileTab = value
-    store.persistUiLayout()
+    panel.mobileTab = value
+    panel.persistUiLayout()
   }
 })
 
-const showLayerManager = computed(() => store.workspaceMode === 'pro' && store.panelRuntime?.layer?.state !== 'hidden')
-const showPalettePanel = computed(() => store.panelRuntime?.palette?.state !== 'hidden')
-const isLayerManagerEnabled = computed(() => store.workspaceMode === 'pro' && store.panelRuntime?.layer?.state !== 'hidden')
-const isHistoryPanelEnabled = computed(() => store.panelRuntime?.history?.state !== 'hidden')
-const activeContextPanelId = computed(() => store.hostActivePanels?.context || null)
+const showLayerManager = computed(() => panel.workspaceMode === 'pro' && panel.panelRuntime?.layer?.state !== 'hidden')
+const showPalettePanel = computed(() => panel.panelRuntime?.palette?.state !== 'hidden')
+const isLayerManagerEnabled = computed(() => panel.workspaceMode === 'pro' && panel.panelRuntime?.layer?.state !== 'hidden')
+const isHistoryPanelEnabled = computed(() => panel.panelRuntime?.history?.state !== 'hidden')
+const activeContextPanelId = computed(() => panel.hostActivePanels?.context || null)
 const showContextHost = computed(() => {
   if (isMobile.value && mobileTab.value !== 'property') return false
   const panelId = activeContextPanelId.value
   if (panelId !== 'inspector' && panelId !== 'asset') return false
-  return store.panelRuntime?.[panelId]?.state !== 'hidden'
+  return panel.panelRuntime?.[panelId]?.state !== 'hidden'
 })
 const showToolDock = computed(() => !isMobile.value && (showLayerManager.value || showPalettePanel.value))
 const showHistoryTray = computed(() => !isMobile.value)
-const showStorageModal = computed(() => !isMobile.value && store.panelRuntime?.saves?.state !== 'hidden')
+const showStorageModal = computed(() => !isMobile.value && panel.panelRuntime?.saves?.state !== 'hidden')
 const activeToolDockPanel = computed(() => {
-  const activePanel = store.hostActivePanels?.toolDock || null
+  const activePanel = panel.hostActivePanels?.toolDock || null
   if (activePanel === 'layer' || activePanel === 'palette') return activePanel
   if (showLayerManager.value) return 'layer'
   if (showPalettePanel.value) return 'palette'
