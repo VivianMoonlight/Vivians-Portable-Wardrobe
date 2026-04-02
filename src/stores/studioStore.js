@@ -1250,72 +1250,28 @@ const useStudioStoreBase = defineStore('studio', {
      * Set palette mode state and register active palette targets. 
      */
     setPaletteMode(active = false, targets = []) {
-      this.paletteModeActive = !!active
-      if (!this.paletteModeActive) {
-        this.paletteUpdateFlag++
-        return
-      }
-
-      if (Array.isArray(targets) && targets.length > 0) {
-        this._applyPaletteTargetsToSelection(targets)
-      }
-
-      if (this.selectedLayers.length > 0) {
-        this.setPropertyFocus('color')
-      }
-
-      this.paletteUpdateFlag++
+      const paletteStore = this._getPaletteStore()
+      return paletteStore.setPaletteMode(this, active, targets)
     },
 
     clearPaletteMode() {
-      this.paletteModeActive = false
-      this.paletteUpdateFlag++
+      const paletteStore = this._getPaletteStore()
+      return paletteStore.clearPaletteMode(this)
     },
 
     openPalettePanel(targets = []) {
-      try {
-        this._syncPanelDomainState()
-        this.setPaletteMode(true, targets)
-        this.paletteWorkMode = 'external'
-        const nextState = (this.panelRuntime?.palette?.state === PANEL_VISIBILITY.PINNED)
-          ? PANEL_VISIBILITY.PINNED
-          : PANEL_VISIBILITY.PEEK
-        this.openPanel('palette', {
-          host: PANEL_HOST.TOOL_DOCK,
-          state: nextState,
-          reason: 'open-palette-panel'
-        })
-      } catch (e) {
-        this.palettePanelVisible = true
-      }
-      this.persistUiLayout()
+      const paletteStore = this._getPaletteStore()
+      return paletteStore.openPalettePanel(this, targets)
     },
 
     setPaletteWorkMode(mode = 'external') {
-      this.paletteWorkMode = mode
+      const paletteStore = this._getPaletteStore()
+      return paletteStore.setPaletteWorkMode(this, mode)
     },
 
     closePalettePanel(options = {}) {
-      const forceClose = options?.forceClose === true
-      const reason = String(options?.reason || 'close-palette-panel')
-      try {
-        this._syncPanelDomainState()
-        if (forceClose || this.panelRuntime?.palette?.state !== PANEL_VISIBILITY.PINNED) {
-          this.closePanel('palette', { reason })
-        }
-      } finally {
-        try {
-          const committed = this.commitInteraction()
-          if (!committed) {
-            this.forceEndRealtimeScope('palette', {
-              commit: true,
-              interactionKind: 'palette'
-            })
-          }
-        } catch (e) { console.warn(e) }
-        try { this.clearPaletteMode() } catch (e) { console.warn(e) }
-      }
-      this.persistUiLayout()
+      const paletteStore = this._getPaletteStore()
+      return paletteStore.closePalettePanel(this, options)
     },
 
     _isDataHistoryActionAllowed(actionType) {
@@ -2288,37 +2244,23 @@ const useStudioStoreBase = defineStore('studio', {
     // Saved colors management
     // -------------------------
     addSavedColor(value) {
-      const result = PaletteActions.addSavedColor(this, value)
-      this.savedColors = result.savedColors
-      this._paletteVersion = result._paletteVersion
-      this.pushHistorySnapshot(this._normalizeHistoryMeta(null, 'palette.savedColor.add'))
-      return true
+      const paletteStore = this._getPaletteStore()
+      return paletteStore.addSavedColor(this, value)
     },
 
     updateSavedColor(idx, newValue) {
-      if (typeof idx !== 'number' || idx < 0 || idx >= (this.savedColors || []).length) return false
-      const result = PaletteActions.updateSavedColor(this, idx, newValue)
-      this.savedColors = result.savedColors
-      this._paletteVersion = result._paletteVersion
-      this.pushHistorySnapshot(this._normalizeHistoryMeta(null, 'palette.savedColor.update'))
-      return true
+      const paletteStore = this._getPaletteStore()
+      return paletteStore.updateSavedColor(this, idx, newValue)
     },
 
     deleteSavedColor(idx) {
-      if (typeof idx !== 'number' || idx < 0 || idx >= (this.savedColors || []).length) return false
-      const result = PaletteActions.deleteSavedColor(this, idx)
-      this.savedColors = result.savedColors
-      this._paletteVersion = result._paletteVersion
-      this.pushHistorySnapshot(this._normalizeHistoryMeta(null, 'palette.savedColor.delete'))
-      return true
+      const paletteStore = this._getPaletteStore()
+      return paletteStore.deleteSavedColor(this, idx)
     },
 
     clearSavedColors() {
-      if (!this.savedColors || this.savedColors.length === 0) return false
-      this.savedColors = []
-      this._paletteVersion++
-      this.pushHistorySnapshot(this._normalizeHistoryMeta(null, 'palette.savedColor.clear'))
-      return true
+      const paletteStore = this._getPaletteStore()
+      return paletteStore.clearSavedColors(this)
     },
 
     // -------------------------

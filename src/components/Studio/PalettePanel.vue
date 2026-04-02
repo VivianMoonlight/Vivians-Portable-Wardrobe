@@ -390,7 +390,7 @@ onUnmounted(() => {
   }
   const committed = commitPaletteInteraction();
   if (!committed) {
-    store.forceEndRealtimeScope?.("palette", {
+    paletteBridge.forceEndRealtimeScope({
       commit: true,
       interactionKind: "palette",
     });
@@ -548,7 +548,7 @@ watch(tagKeys, (keys) => {
 
 function beginPaletteInteraction() {
   if (paletteInteractionActive) return;
-  store.beginInteraction?.("palette", { source: "PalettePanel" });
+  paletteBridge.beginInteraction("PalettePanel");
   paletteInteractionActive = true;
 }
 
@@ -558,14 +558,14 @@ function commitPaletteInteraction() {
 
   let committed = false;
   try {
-    committed = !!store.commitInteraction?.();
+    committed = !!paletteBridge.commitInteraction();
   } catch (e) {
     committed = false;
   }
 
   if (!committed) {
     try {
-      committed = !!store.forceEndRealtimeScope?.("palette", {
+      committed = !!paletteBridge.forceEndRealtimeScope({
         commit: true,
         interactionKind: "palette",
       });
@@ -594,17 +594,17 @@ const updateStoreFromPicker = throttle((val) => {
   if (editingTagId.value) {
     // Mode A: Editing a Tag Definition
     beginPaletteInteraction();
-    store.updatePaletteTag(editingTagId.value, hex, { deferCommit: true });
+    paletteBridge.updatePaletteTag(editingTagId.value, hex, { deferCommit: true });
     schedulePaletteInteractionCommit();
   } else {
     // Mode B: Editing active selection through transaction API.
     beginPaletteInteraction();
-    const changed = store.applyDelta?.({
+    const changed = paletteBridge.applyDelta({
       type: "palette.applyColor",
       payload: { newColor: hex },
     });
     if (changed === false) {
-      store.applyColorToActivePaletteTargets(hex, { deferCommit: true });
+      paletteBridge.applyColorToActivePaletteTargets(hex, { deferCommit: true });
     }
     schedulePaletteInteractionCommit();
   }
@@ -778,12 +778,12 @@ const applyAdvancedRealtime = throttle(() => {
       s: offsetS.value,
     },
   };
-  const changed = store.applyDelta?.({
+  const changed = paletteBridge.applyDelta({
     type: "palette.applyTagOffset",
     payload,
   });
   if (changed === false) {
-    store.applyTagOffsetToActivePaletteTargets(payload, { deferCommit: true });
+    paletteBridge.applyTagOffsetToActivePaletteTargets(payload, { deferCommit: true });
   }
   schedulePaletteInteractionCommit();
 }, 120);
@@ -834,7 +834,7 @@ function applyTag(tag) {
   // Let's assume clicking a swatch means "I want to use this on my layer"
   if (editingTagId.value) exitTagEditMode();
 
-  store.applyTagToActivePaletteTargets(tag);
+  paletteBridge.applyTagToActivePaletteTargets(tag);
   syncAdvancedFromSelection();
   // Force picker sync visually to show the resolved color
   const v = palette.value[tag];
@@ -862,7 +862,7 @@ async function onTagRename(oldTag, newNameRaw) {
 
 function performRename(oldTag, newTag) {
   try {
-    const ok = store.renamePaletteTagAndReferences(oldTag, newTag);
+    const ok = paletteBridge.renamePaletteTagAndReferences(oldTag, newTag);
     if (!ok) return;
 
     if (editingTagId.value === oldTag) {
@@ -876,7 +876,7 @@ function performRename(oldTag, newTag) {
 // Delete Tag (with Undo Toast)
 function handleDeleteTag(tag) {
   // Immediately delete the tag
-  store.deletePaletteTag(tag);
+  paletteBridge.deletePaletteTag(tag);
 
   // Clear editing mode if this was the tag being edited
   if (editingTagId.value === tag) exitTagEditMode();
@@ -896,18 +896,18 @@ function handleDeleteTag(tag) {
 
 function applySavedColor(idx) {
   const color = savedColors.value[idx];
-  store.applyColorToActivePaletteTargets(color);
+  paletteBridge.applyColorToActivePaletteTargets(color);
   syncPickerToColorValue(color);
 }
 
 function addCurrentToSaved() {
   // Add whatever is in the picker
   const hex = normalizePickerOutput(pickerColor.value);
-  if (hex) store.addSavedColor(hex);
+  if (hex) paletteBridge.addSavedColor(hex);
 }
 
 function deleteSavedColor(idx) {
-  store.deleteSavedColor(idx);
+  paletteBridge.deleteSavedColor(idx);
 
   // Show undo toast with 5 second window
   DialogService.showUndoToast({
@@ -922,12 +922,12 @@ function deleteSavedColor(idx) {
 
 function handleClearAllSaved() {
   // Immediately clear all saved colors
-  if (store.clearSavedColors) {
-    store.clearSavedColors();
+  if (paletteBridge.clearSavedColors) {
+    paletteBridge.clearSavedColors();
   } else {
     // Fallback if store method is not available
     for (let i = savedColors.value.length - 1; i >= 0; i--) {
-      store.deleteSavedColor(i);
+      paletteBridge.deleteSavedColor(i);
     }
   }
 
@@ -944,7 +944,7 @@ function handleClearAllSaved() {
 
 function createTagFromCurrent() {
   const hex = normalizePickerOutput(pickerColor.value);
-  if (hex) store.createTagAndReplaceInStacks(hex);
+  if (hex) paletteBridge.createTagAndReplaceInStacks(hex);
 }
 
 function toggleAdvanced() {
@@ -960,7 +960,7 @@ function resetAdvancedOffset() {
   offsetH.value = 0;
   offsetL.value = 0;
   offsetS.value = 0;
-  store.resetTagOffsetToTag(advancedBaseTag.value);
+  paletteBridge.resetTagOffsetToTag(advancedBaseTag.value);
 }
 
 function detachAdvancedToRaw() {
@@ -970,7 +970,7 @@ function detachAdvancedToRaw() {
   const parsedCurrent = PaletteService.parseTagOffsetRef(currentText);
 
   if (parsedCurrent.isTagOffsetRef) {
-    store.detachTagOffsetToRaw({ ref: currentText });
+    paletteBridge.detachTagOffsetToRaw({ ref: currentText });
     return;
   }
 
@@ -980,7 +980,7 @@ function detachAdvancedToRaw() {
       l: offsetL.value,
       s: offsetS.value,
     });
-    store.detachTagOffsetToRaw({ ref });
+    paletteBridge.detachTagOffsetToRaw({ ref });
   }
 }
 
@@ -1000,7 +1000,7 @@ function convertAdvancedToHls() {
   }
 
   if (!advancedBaseTag.value) return;
-  store.applyTagOffsetToActivePaletteTargets({
+  paletteBridge.applyTagOffsetToActivePaletteTargets({
     tag: advancedBaseTag.value,
     offset: {
       h: offsetH.value,

@@ -79,7 +79,7 @@ export const useStudioHistoryStore = defineStore('studioHistory', {
           this.historyRevision += 1
         },
         maxHistory: 100,
-        debounceInterval: 150,
+        debounceInterval: 3000,
         enableLogging: false
       })
     },

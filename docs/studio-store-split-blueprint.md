@@ -177,7 +177,9 @@ flowchart LR
 - 已完成第一部：`paletteStore` 与 `paletteBridge` 已接入，`useStudioDomainStores()` 已暴露 `palette` 域。
 - 已完成第二部：`studioStore` state 中 palette 领域镜像字段（`paletteMap`、`savedColors`、`_paletteNextCounter`、`_paletteVersion`、`paletteModeActive`、`paletteWorkMode`、`paletteUpdateFlag`、palette realtime flags）已删除，改为通过 `paletteStore` 代理访问。
 - 已完成第三部：`PalettePanel.vue` 的 palette 读取路径已迁移到 `paletteBridge`（`paletteSnapshot`、`savedColors`、`activePaletteTargets`、`paletteModeActive`、`paletteUpdateFlag`、`paletteMap` 监听）。
-- 待完成：继续收敛 palette 写入口（tag/savedColors/palette-mode/realtime）到 `paletteStore`，并评估 `studioStore` 中 palette 兼容方法的删除窗口。
+- 已完成第四部：`PalettePanel.vue` 的 palette 写路径已统一经 `paletteBridge -> paletteStore actions` 入口（交互事务、调色、tag 操作、savedColors 操作、advanced 偏移流程）。
+- 已完成第五部：`paletteStore` 已承接 `savedColors` 与 `paletteMode/workMode/open/close` 的真实实现；`studioStore` 对应方法已收敛为薄代理。
+- 待完成：继续下沉 tag 相关兼容方法（create/rename/delete/update/apply）并评估 `studioStore` palette 兼容层删除窗口。
 
 完成标准:
 - 调色、tag 偏移、批量应用与回退全部可用。
