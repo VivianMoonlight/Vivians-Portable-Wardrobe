@@ -35,10 +35,11 @@ function buildSlotPresenceMap(characterData = [], hoverData = []) {
 const SLOT_MODE_EMPTY = 'empty'
 const SLOT_MODE_ORIGINAL = 'original'
 const SLOT_MODE_INCOMING = 'incoming'
+const SLOT_MODE_AUTO = 'auto'
 
 const DEFAULT_REPLACE_MODE = 'merge-replace'
 const REPLACE_MODE_SET = new Set(['fill-empty', 'merge-replace', 'full-replace'])
-const SLOT_MODE_SET = new Set([SLOT_MODE_EMPTY, SLOT_MODE_ORIGINAL, SLOT_MODE_INCOMING])
+const SLOT_MODE_SET = new Set([SLOT_MODE_EMPTY, SLOT_MODE_ORIGINAL, SLOT_MODE_INCOMING, SLOT_MODE_AUTO])
 
 function normalizeReplaceMode(mode) {
   return REPLACE_MODE_SET.has(mode) ? mode : DEFAULT_REPLACE_MODE
@@ -115,7 +116,7 @@ export const useFileSystemStore = defineStore('fs', {
     // legacy alias kept for compatibility with existing callers
     applyMode: DEFAULT_REPLACE_MODE,
 
-    // per-slot control state: { [slotKey]: { mode: 'empty' | 'original' | 'incoming', locked: boolean } }
+    // per-slot control state: { [slotKey]: { mode: 'empty' | 'original' | 'incoming' | 'auto', locked?: boolean } }
     slotControlMap: {},
 
 
@@ -384,7 +385,7 @@ export const useFileSystemStore = defineStore('fs', {
       const { ignoreLock = false } = options
       if (item === -1) {
         this.activeItem = { data: JSON.parse(JSON.stringify(this.characterItem)) } // deep copy
-        this._setUnlockedSlotsToMode(SLOT_MODE_ORIGINAL, this.characterItem, this.activeItem.data)
+        this._ensureSlotControls(this.characterItem, this.activeItem.data)
         this.updatePreviewItem()
         //this._scheduleHistoryAdd()
         return
@@ -400,7 +401,7 @@ export const useFileSystemStore = defineStore('fs', {
       }
 
       this.activeItem = { data: item ? item.data : null }
-      this._applyDefaultModeToUnlockedSlots(this.characterItem, this.activeItem.data, { mode: this.defaultReplaceMode })
+      this._ensureSlotControls(this.characterItem, this.activeItem.data)
       this.updatePreviewItem()
       //this._scheduleHistoryAdd()
     },
@@ -464,6 +465,8 @@ export const useFileSystemStore = defineStore('fs', {
       const resolved = normalizeReplaceMode(mode)
       this.defaultReplaceMode = resolved
       this.applyMode = resolved
+      this._syncActiveFiltersFromSlotControls()
+      this.updatePreviewItem()
     },
 
     setApplyMode(mode) {
@@ -506,14 +509,13 @@ export const useFileSystemStore = defineStore('fs', {
       for (const key of keys) {
         const prev = current[key]
         if (!prev) {
-          next[key] = { mode: SLOT_MODE_EMPTY, locked: false }
+          next[key] = { mode: SLOT_MODE_AUTO, locked: false }
           changed = true
           continue
         }
         const nextMode = normalizeSlotMode(prev.mode)
-        const nextLocked = !!prev.locked
-        if (nextMode !== prev.mode || nextLocked !== prev.locked) {
-          next[key] = { mode: nextMode, locked: nextLocked }
+        if (nextMode !== prev.mode || !!prev.locked) {
+          next[key] = { mode: nextMode, locked: false }
           changed = true
         }
       }
@@ -527,14 +529,35 @@ export const useFileSystemStore = defineStore('fs', {
 
     _syncActiveFiltersFromSlotControls() {
       const keys = this._collectKnownSlotKeys()
+      const characterData = Array.isArray(this.characterItem) ? this.characterItem : []
+      const incomingData = Array.isArray(this.activeItem?.data) ? this.activeItem.data : []
+      const inCharacter = new Set(characterData.map(getGroupNameFromPart).filter(Boolean))
+      const inIncoming = new Set(incomingData.map(getGroupNameFromPart).filter(Boolean))
+
       const next = []
       for (const key of keys) {
         const mode = normalizeSlotMode(this.slotControlMap?.[key]?.mode)
-        if (mode !== SLOT_MODE_EMPTY) {
+        const effectiveMode = this._resolveEffectiveSlotMode(mode, {
+          inCharacter: inCharacter.has(key),
+          inIncoming: inIncoming.has(key)
+        })
+        if (effectiveMode !== SLOT_MODE_EMPTY) {
           next.push(key)
         }
       }
       this.activeFilters = Array.from(new Set(next))
+    },
+
+    _resolveEffectiveSlotMode(slotMode, { inCharacter = false, inIncoming = false, replaceMode = null } = {}) {
+      const mode = normalizeSlotMode(slotMode)
+      if (mode === SLOT_MODE_AUTO) {
+        return this._resolveModeByDefaultReplace(
+          replaceMode || this.defaultReplaceMode,
+          inCharacter,
+          inIncoming
+        )
+      }
+      return mode
     },
 
     _resolveModeByDefaultReplace(defaultMode, inCharacter, inIncoming) {
@@ -565,17 +588,7 @@ export const useFileSystemStore = defineStore('fs', {
       for (const key of keys) {
         const prev = current[key]
         const prevMode = normalizeSlotMode(prev?.mode)
-        const prevLocked = !!prev?.locked
-
-        if (prevLocked) {
-          if (!prev || prevMode !== prev.mode) {
-            next[key] = { mode: prevMode, locked: true }
-            changed = true
-          }
-          continue
-        }
-
-        if (!prev || prevMode !== nextMode || prevLocked !== false) {
+        if (!prev || prevMode !== nextMode || !!prev?.locked) {
           next[key] = { mode: nextMode, locked: false }
           changed = true
         }
@@ -589,52 +602,16 @@ export const useFileSystemStore = defineStore('fs', {
     },
 
     _applyDefaultModeToUnlockedSlots(characterData = null, sourceData = null, { mode = null } = {}) {
-      const resolvedMode = normalizeReplaceMode(mode || this.defaultReplaceMode)
-      const characterParts = Array.isArray(characterData) ? characterData : []
-      const incomingParts = Array.isArray(sourceData) ? sourceData : []
-      const slotKeys = this._collectKnownSlotKeys(characterParts, incomingParts)
-      const inCharacter = new Set(characterParts.map(getGroupNameFromPart).filter(Boolean))
-      const inIncoming = new Set(incomingParts.map(getGroupNameFromPart).filter(Boolean))
-
-      const current = this.slotControlMap || {}
-      const next = { ...current }
-      let changed = false
-
-      for (const key of slotKeys) {
-        const prev = current[key]
-        const prevMode = normalizeSlotMode(prev?.mode)
-        const prevLocked = !!prev?.locked
-        if (prevLocked) {
-          if (!prev || prevMode !== prev.mode) {
-            next[key] = { mode: prevMode, locked: true }
-            changed = true
-          }
-          continue
-        }
-
-        const nextMode = this._resolveModeByDefaultReplace(
-          resolvedMode,
-          inCharacter.has(key),
-          inIncoming.has(key)
-        )
-
-        if (!prev || prevMode !== nextMode || prevLocked !== false) {
-          next[key] = { mode: nextMode, locked: false }
-          changed = true
-        }
-      }
-
-      if (changed) {
-        this.slotControlMap = next
-      }
+      this._ensureSlotControls(characterData, sourceData)
       this._syncActiveFiltersFromSlotControls()
-      return changed
+      return false
     },
 
-    _buildBundleBySlotControls(characterData, sourceData, slotControlMapOverride = null) {
+    _buildBundleBySlotControls(characterData, sourceData, slotControlMapOverride = null, replaceModeOverride = null) {
       const characterParts = Array.isArray(characterData) ? characterData : []
       const incomingParts = Array.isArray(sourceData) ? sourceData : []
       const slotControlMap = slotControlMapOverride || this.slotControlMap || {}
+      const replaceMode = normalizeReplaceMode(replaceModeOverride || this.defaultReplaceMode)
 
       const byCharacterSlot = groupPartsBySlot(characterParts)
       const byIncomingSlot = groupPartsBySlot(incomingParts)
@@ -653,7 +630,11 @@ export const useFileSystemStore = defineStore('fs', {
 
       const bundle = []
       for (const slotKey of slotOrder) {
-        const mode = normalizeSlotMode(slotControlMap?.[slotKey]?.mode)
+        const mode = this._resolveEffectiveSlotMode(slotControlMap?.[slotKey]?.mode, {
+          inCharacter: byCharacterSlot.has(slotKey),
+          inIncoming: byIncomingSlot.has(slotKey),
+          replaceMode
+        })
         if (mode === SLOT_MODE_ORIGINAL) {
           const parts = byCharacterSlot.get(slotKey) || []
           bundle.push(...parts)
@@ -671,63 +652,37 @@ export const useFileSystemStore = defineStore('fs', {
       if (!overrideMode) {
         return this._buildBundleBySlotControls(characterData, sourceData)
       }
-
-      const characterParts = Array.isArray(characterData) ? characterData : []
-      const incomingParts = Array.isArray(sourceData) ? sourceData : []
-      const slotKeys = this._collectKnownSlotKeys(characterParts, incomingParts)
-      const inCharacter = new Set(characterParts.map(getGroupNameFromPart).filter(Boolean))
-      const inIncoming = new Set(incomingParts.map(getGroupNameFromPart).filter(Boolean))
-
-      const tempSlotControlMap = { ...(this.slotControlMap || {}) }
-      for (const key of slotKeys) {
-        const prev = this.getSlotControlState(key)
-        if (prev.locked) {
-          tempSlotControlMap[key] = { mode: prev.mode, locked: true }
-          continue
-        }
-        tempSlotControlMap[key] = {
-          mode: this._resolveModeByDefaultReplace(overrideMode, inCharacter.has(key), inIncoming.has(key)),
-          locked: false
-        }
-      }
-
-      return this._buildBundleBySlotControls(characterData, sourceData, tempSlotControlMap)
+      return this._buildBundleBySlotControls(characterData, sourceData, null, overrideMode)
     },
 
     getSlotControlState(key) {
       const slotState = this.slotControlMap?.[key]
       return {
         mode: normalizeSlotMode(slotState?.mode),
-        locked: !!slotState?.locked
+        locked: false
       }
     },
 
-    setSlotMode(key, mode, options = {}) {
+    setSlotMode(key, mode) {
       if (!key) return false
       this._ensureSlotControls()
 
       const prev = this.getSlotControlState(key)
-      if (prev.locked) return false
-
-      const autoLock = options?.autoLock === true
       const nextMode = normalizeSlotMode(mode)
-      const nextLocked = autoLock ? true : prev.locked
-      if (prev.mode === nextMode && prev.locked === nextLocked) return true
+      if (prev.mode === nextMode) return true
 
       this.slotControlMap = {
         ...(this.slotControlMap || {}),
-        [key]: { mode: nextMode, locked: nextLocked }
+        [key]: { mode: nextMode, locked: false }
       }
       this._syncActiveFiltersFromSlotControls()
       this.updatePreviewItem()
       return true
     },
 
-    setAllSlotModes(mode, options = {}) {
+    setAllSlotModes(mode) {
       this._ensureSlotControls()
 
-      const includeLocked = options?.includeLocked !== false
-      const autoLock = options?.autoLock === true
       const nextMode = normalizeSlotMode(mode)
       const current = this.slotControlMap || {}
       const next = { ...current }
@@ -735,10 +690,8 @@ export const useFileSystemStore = defineStore('fs', {
 
       for (const key of this._collectKnownSlotKeys()) {
         const prev = this.getSlotControlState(key)
-        if (!includeLocked && prev.locked) continue
-        const nextLocked = autoLock ? true : prev.locked
-        if (prev.mode === nextMode && prev.locked === nextLocked) continue
-        next[key] = { mode: nextMode, locked: nextLocked }
+        if (prev.mode === nextMode) continue
+        next[key] = { mode: nextMode, locked: false }
         changed = true
       }
 
@@ -750,14 +703,12 @@ export const useFileSystemStore = defineStore('fs', {
       return changed
     },
 
-    setGroupSlotModes(groupID, mode, options = {}) {
+    setGroupSlotModes(groupID, mode) {
       const groupKeys = this._getGroupSlotKeys(groupID)
       if (groupKeys.length === 0) return false
 
       this._ensureSlotControls()
 
-      const includeLocked = options?.includeLocked !== false
-      const autoLock = options?.autoLock === true
       const nextMode = normalizeSlotMode(mode)
       const current = this.slotControlMap || {}
       const next = { ...current }
@@ -765,10 +716,8 @@ export const useFileSystemStore = defineStore('fs', {
 
       for (const key of groupKeys) {
         const prev = this.getSlotControlState(key)
-        if (!includeLocked && prev.locked) continue
-        const nextLocked = autoLock ? true : prev.locked
-        if (prev.mode === nextMode && prev.locked === nextLocked) continue
-        next[key] = { mode: nextMode, locked: nextLocked }
+        if (prev.mode === nextMode) continue
+        next[key] = { mode: nextMode, locked: false }
         changed = true
       }
 
@@ -781,63 +730,19 @@ export const useFileSystemStore = defineStore('fs', {
     },
 
     setSlotLocked(key, locked = true) {
-      if (!key) return false
-      this._ensureSlotControls()
-
-      const prev = this.getSlotControlState(key)
-      const nextLocked = !!locked
-      if (prev.locked === nextLocked) return true
-
-      this.slotControlMap = {
-        ...(this.slotControlMap || {}),
-        [key]: { mode: prev.mode, locked: nextLocked }
-      }
-      return true
+      return false
     },
 
     toggleSlotLock(key) {
-      const prev = this.getSlotControlState(key)
-      return this.setSlotLocked(key, !prev.locked)
+      return false
     },
 
     setAllSlotLocks(locked = true) {
-      this._ensureSlotControls()
-
-      const nextLocked = !!locked
-      const current = this.slotControlMap || {}
-      const next = { ...current }
-      let changed = false
-
-      for (const key of this._collectKnownSlotKeys()) {
-        const prev = this.getSlotControlState(key)
-        if (prev.locked === nextLocked) continue
-        next[key] = { mode: prev.mode, locked: nextLocked }
-        changed = true
-      }
-
-      if (changed) {
-        this.slotControlMap = next
-      }
-      return changed
+      return false
     },
 
     invertSlotLocks() {
-      this._ensureSlotControls()
-
-      const current = this.slotControlMap || {}
-      const next = { ...current }
-      let changed = false
-
-      for (const key of this._collectKnownSlotKeys()) {
-        const prev = this.getSlotControlState(key)
-        next[key] = { mode: prev.mode, locked: !prev.locked }
-        changed = true
-      }
-
-      if (changed) {
-        this.slotControlMap = next
-      }
-      return changed
+      return false
     },
 
     _getGroupSlotKeys(groupID) {
@@ -848,47 +753,11 @@ export const useFileSystemStore = defineStore('fs', {
     },
 
     setGroupSlotLocks(groupID, locked = true) {
-      const groupKeys = this._getGroupSlotKeys(groupID)
-      if (groupKeys.length === 0) return false
-
-      this._ensureSlotControls()
-      const nextLocked = !!locked
-      const current = this.slotControlMap || {}
-      const next = { ...current }
-      let changed = false
-
-      for (const key of groupKeys) {
-        const prev = this.getSlotControlState(key)
-        if (prev.locked === nextLocked) continue
-        next[key] = { mode: prev.mode, locked: nextLocked }
-        changed = true
-      }
-
-      if (changed) {
-        this.slotControlMap = next
-      }
-      return changed
+      return false
     },
 
     invertGroupSlotLocks(groupID) {
-      const groupKeys = this._getGroupSlotKeys(groupID)
-      if (groupKeys.length === 0) return false
-
-      this._ensureSlotControls()
-      const current = this.slotControlMap || {}
-      const next = { ...current }
-      let changed = false
-
-      for (const key of groupKeys) {
-        const prev = this.getSlotControlState(key)
-        next[key] = { mode: prev.mode, locked: !prev.locked }
-        changed = true
-      }
-
-      if (changed) {
-        this.slotControlMap = next
-      }
-      return changed
+      return false
     },
 
     applyFilteredOutfitToCharacter({ outfitData = null, mode = null } = {}) {
@@ -1028,13 +897,54 @@ export const useFileSystemStore = defineStore('fs', {
       return isHiddenGroup(groupID)
     },
 
-    // Wrapper methods for UI compatibility -> slot lock APIs
-    filterToggle(key) { return this.toggleSlotLock(key) },
-    filterSetActive(key, v) { return this.setSlotLocked(key, !!v) },
-    filterSetAll(v) { return this.setAllSlotLocks(!!v) },
-    filterInvertAll() { return this.invertSlotLocks() },
-    filterSetGroupAll(groupID, v) { return this.setGroupSlotLocks(groupID, !!v) },
-    filterInvertGroup(groupID) { return this.invertGroupSlotLocks(groupID) },
+    // Wrapper methods for UI compatibility -> mode APIs (deprecated semantic bridge)
+    filterToggle(key) {
+      const currentMode = this.getSlotControlState(key).mode
+      return this.setSlotMode(key, currentMode === SLOT_MODE_EMPTY ? SLOT_MODE_AUTO : SLOT_MODE_EMPTY)
+    },
+    filterSetActive(key, v) { return this.setSlotMode(key, v ? SLOT_MODE_AUTO : SLOT_MODE_EMPTY) },
+    filterSetAll(v) { return this.setAllSlotModes(v ? SLOT_MODE_AUTO : SLOT_MODE_EMPTY) },
+    filterInvertAll() {
+      this._ensureSlotControls()
+      const next = { ...(this.slotControlMap || {}) }
+      let changed = false
+      for (const key of this._collectKnownSlotKeys()) {
+        const mode = this.getSlotControlState(key).mode
+        const nextMode = mode === SLOT_MODE_EMPTY ? SLOT_MODE_AUTO : SLOT_MODE_EMPTY
+        if (mode !== nextMode) {
+          next[key] = { mode: nextMode, locked: false }
+          changed = true
+        }
+      }
+      if (changed) {
+        this.slotControlMap = next
+        this._syncActiveFiltersFromSlotControls()
+        this.updatePreviewItem()
+      }
+      return changed
+    },
+    filterSetGroupAll(groupID, v) { return this.setGroupSlotModes(groupID, v ? SLOT_MODE_AUTO : SLOT_MODE_EMPTY) },
+    filterInvertGroup(groupID) {
+      const groupKeys = this._getGroupSlotKeys(groupID)
+      if (groupKeys.length === 0) return false
+      this._ensureSlotControls()
+      const next = { ...(this.slotControlMap || {}) }
+      let changed = false
+      for (const key of groupKeys) {
+        const mode = this.getSlotControlState(key).mode
+        const nextMode = mode === SLOT_MODE_EMPTY ? SLOT_MODE_AUTO : SLOT_MODE_EMPTY
+        if (mode !== nextMode) {
+          next[key] = { mode: nextMode, locked: false }
+          changed = true
+        }
+      }
+      if (changed) {
+        this.slotControlMap = next
+        this._syncActiveFiltersFromSlotControls()
+        this.updatePreviewItem()
+      }
+      return changed
+    },
 
     // ---------------------
     // Search wrapper

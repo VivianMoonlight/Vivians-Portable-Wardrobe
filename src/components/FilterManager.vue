@@ -143,16 +143,16 @@ function getIncomingModeLabel(key) {
   return label || t("filterManager.slotModeEmpty");
 }
 
+function getAutoModeLabel() {
+  return t("filterManager.slotModeAuto");
+}
+
 function getSlotControl(key) {
   return fsStore.getSlotControlState(key);
 }
 
 function getSlotMode(key) {
   return getSlotControl(key).mode;
-}
-
-function isSlotLocked(key) {
-  return !!getSlotControl(key).locked;
 }
 
 function getAllSlotKeys() {
@@ -170,17 +170,6 @@ function getAllSlotKeys() {
 function getGroupSlotKeys(group) {
   const list = Array.isArray(group?.itemList) ? group.itemList : [];
   return list.map((item) => item?.key).filter(Boolean);
-}
-
-function areKeysFullyLocked(keys = []) {
-  if (!Array.isArray(keys) || keys.length === 0) return false;
-  return keys.every((key) => isSlotLocked(key));
-}
-
-const allSlotsLocked = computed(() => areKeysFullyLocked(getAllSlotKeys()));
-
-function isGroupFullyLocked(group) {
-  return areKeysFullyLocked(getGroupSlotKeys(group));
 }
 
 function isGroupAllMode(group, mode) {
@@ -202,24 +191,11 @@ function setSlotMode(key, mode) {
 }
 
 function setAllMode(mode) {
-  fsStore.setAllSlotModes(mode, { includeLocked: false });
+  fsStore.setAllSlotModes(mode);
 }
 
 function setGroupMode(groupID, mode) {
-  fsStore.setGroupSlotModes(groupID, mode, { includeLocked: false });
-}
-
-function toggleSlotLock(key) {
-  fsStore.toggleSlotLock(key);
-}
-
-function toggleAllLocks() {
-  fsStore.setAllSlotLocks(!allSlotsLocked.value);
-}
-
-function toggleGroupLocks(group) {
-  if (!group?.groupID) return;
-  fsStore.setGroupSlotLocks(group.groupID, !isGroupFullyLocked(group));
+  fsStore.setGroupSlotModes(groupID, mode);
 }
 </script>
 
@@ -243,11 +219,9 @@ function toggleGroupLocks(group) {
         <span class="action-icon" aria-hidden="true">⊘</span>
         {{ t("filterManager.allModeEmpty") }}
       </button>
-      <button class="batch" @click="toggleAllLocks()">
-        <span class="action-lock" aria-hidden="true">
-          <span class="slot-lock-icon" :class="{ 'is-unlocked': !allSlotsLocked }"></span>
-        </span>
-        {{ allSlotsLocked ? t("filterManager.unlockAll") : t("filterManager.lockAll") }}
+      <button class="batch" @click="setAllMode('auto')">
+        <span class="action-icon" aria-hidden="true">⚙</span>
+        {{ t("filterManager.allModeAuto") }}
       </button>
       <label class="toggle-hidden">
         <input type="checkbox" v-model="showHiddenGroups" />
@@ -342,20 +316,11 @@ function toggleGroupLocks(group) {
             </button>
             <button
               class="small"
-              :class="{ active: isGroupFullyLocked(group) }"
-              @click="toggleGroupLocks(group)"
+              :class="{ active: isGroupAllMode(group, 'auto') }"
+              @click="setGroupMode(group.groupID, 'auto')"
             >
-              <span class="action-lock" aria-hidden="true">
-                <span
-                  class="slot-lock-icon"
-                  :class="{ 'is-unlocked': !isGroupFullyLocked(group) }"
-                ></span>
-              </span>
-              {{
-                isGroupFullyLocked(group)
-                  ? t("filterManager.groupUnlockAll")
-                  : t("filterManager.groupLockAll")
-              }}
+              <span class="action-icon" aria-hidden="true">⚙</span>
+              {{ t("filterManager.groupModeAuto") }}
             </button>
           </div>
         </div>
@@ -367,7 +332,6 @@ function toggleGroupLocks(group) {
             :class="[
               'slot-row',
               {
-                locked: isSlotLocked(it.key),
                 'has-character': getSlotPresence(it.key).inCharacter,
                 'has-hover': getSlotPresence(it.key).inHover,
                 'has-both':
@@ -390,7 +354,6 @@ function toggleGroupLocks(group) {
               <button
                 class="slot-mode-btn"
                 :class="{ active: getSlotMode(it.key) === 'original' }"
-                :disabled="isSlotLocked(it.key)"
                 :title="getOriginalModeLabel(it.key)"
                 @click="setSlotMode(it.key, 'original')"
               >
@@ -399,41 +362,30 @@ function toggleGroupLocks(group) {
               <button
                 class="slot-mode-btn"
                 :class="{ active: getSlotMode(it.key) === 'incoming' }"
-                :disabled="isSlotLocked(it.key)"
                 :title="getIncomingModeLabel(it.key)"
                 @click="setSlotMode(it.key, 'incoming')"
               >
                 {{ getIncomingModeLabel(it.key) }}
               </button>
               <button
-                class="slot-mode-btn slot-mode-btn-empty"
+                class="slot-mode-btn slot-mode-btn-compact"
                 :class="{ active: getSlotMode(it.key) === 'empty' }"
-                :disabled="isSlotLocked(it.key)"
                 :title="t('filterManager.slotModeEmpty')"
                 :aria-label="t('filterManager.slotModeEmpty')"
                 @click="setSlotMode(it.key, 'empty')"
               >
                 ⊘
               </button>
+              <button
+                class="slot-mode-btn slot-mode-btn-compact"
+                :class="{ active: getSlotMode(it.key) === 'auto' }"
+                :title="getAutoModeLabel()"
+                :aria-label="getAutoModeLabel()"
+                @click="setSlotMode(it.key, 'auto')"
+              >
+                A
+              </button>
             </div>
-
-            <button
-              class="slot-lock-btn"
-              :class="{ locked: isSlotLocked(it.key) }"
-              :title="
-                isSlotLocked(it.key) ? t('filterManager.unlock') : t('filterManager.lock')
-              "
-              :aria-label="
-                isSlotLocked(it.key) ? t('filterManager.unlock') : t('filterManager.lock')
-              "
-              @click="toggleSlotLock(it.key)"
-            >
-              <span
-                class="slot-lock-icon"
-                :class="{ 'is-unlocked': !isSlotLocked(it.key) }"
-                aria-hidden="true"
-              ></span>
-            </button>
           </div>
         </div>
 
@@ -683,30 +635,6 @@ function toggleGroupLocks(group) {
   opacity: 0.85;
 }
 
-.action-lock {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 12px;
-  height: 12px;
-}
-
-.action-lock .slot-lock-icon {
-  width: 10px;
-  height: 7px;
-}
-
-.action-lock .slot-lock-icon::before {
-  top: -6px;
-  width: 7px;
-  height: 6px;
-}
-
-.action-lock .slot-lock-icon::after {
-  top: 1px;
-  height: 3px;
-}
-
 .small:hover {
   background: var(--color-bg-hover, #f1f5f9);
   border-color: var(--color-border-strong, #cbd5e1);
@@ -727,7 +655,7 @@ function toggleGroupLocks(group) {
 
 .slot-row {
   display: grid;
-  grid-template-columns: minmax(0, 0.66fr) minmax(0, 1.74fr) 34px;
+  grid-template-columns: minmax(0, 0.66fr) minmax(0, 1.74fr);
   align-items: center;
   gap: var(--space-sm, 8px);
   padding: clamp(6px, 1.2vw, 8px) 8px;
@@ -748,11 +676,6 @@ function toggleGroupLocks(group) {
 
 .slot-row.has-hover {
   border-right-color: var(--color-success, #10b981);
-}
-
-.slot-row.locked {
-  border-color: var(--color-border-strong, #cbd5e1);
-  background: var(--color-bg-base, #fff);
 }
 
 .slot-main {
@@ -777,7 +700,7 @@ function toggleGroupLocks(group) {
 
 .slot-mode-buttons {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 34px;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.2fr) 34px 34px;
   gap: var(--space-xs, 6px);
   min-width: 0;
   width: 100%;
@@ -803,93 +726,12 @@ function toggleGroupLocks(group) {
   box-sizing: border-box;
 }
 
-.slot-mode-btn.active {
-  background: var(--color-primary, #3b82f6);
-  border-color: var(--color-primary, #3b82f6);
-  color: var(--color-text-inverse, #fff);
-}
-
-.slot-mode-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.slot-lock-btn {
-  width: 34px;
-  height: 34px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border-radius: var(--radius-md, 8px);
-  border: 1px solid var(--color-border-base, #e2e8f0);
-  background: var(--color-bg-base, #fff);
-  color: var(--color-text-primary, #0f172a);
-  cursor: pointer;
-  box-sizing: border-box;
-  transition: border-color var(--transition-fast, 0.15s) ease,
-    background var(--transition-fast, 0.15s) ease,
-    color var(--transition-fast, 0.15s) ease;
-}
-
-.slot-lock-icon {
-  --lock-stroke: 1.6px;
-  position: relative;
-  width: 12px;
-  height: 9px;
-  border: var(--lock-stroke) solid currentColor;
-  border-radius: 2.4px;
-  box-sizing: border-box;
-  transition: border-color var(--transition-fast, 0.15s) ease;
-}
-
-.slot-lock-icon::before {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: -7.2px;
-  width: 8px;
-  height: 7px;
-  border: var(--lock-stroke) solid currentColor;
-  border-bottom: 0;
-  border-radius: 8px 8px 0 0;
-  transform: translateX(-50%);
-  transform-origin: 50% 100%;
-  box-sizing: border-box;
-  transition: transform var(--transition-fast, 0.15s) ease;
-}
-
-.slot-lock-icon::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 2px;
-  width: 2px;
-  height: 4px;
-  border-radius: 999px;
-  background: currentColor;
-  transform: translateX(-50%);
-  opacity: 0.92;
-  transition: transform var(--transition-fast, 0.15s) ease,
-    opacity var(--transition-fast, 0.15s) ease;
-}
-
-.slot-lock-icon.is-unlocked::before {
-  transform: translateX(-50%);
-  border-right-color: transparent;
-}
-
-.slot-lock-icon.is-unlocked::after {
-  opacity: 0.5;
-  transform: translateX(-50%);
-}
-
-.slot-mode-btn-empty {
+.slot-mode-btn-compact {
   width: 34px;
   min-width: 34px;
   max-width: 34px;
-  min-height: 34px;
   height: 34px;
+  min-height: 34px;
   padding: 0;
   display: inline-flex;
   align-items: center;
@@ -897,10 +739,10 @@ function toggleGroupLocks(group) {
   font-size: var(--font-size-base, 14px);
 }
 
-.slot-lock-btn.locked {
+.slot-mode-btn.active {
+  background: var(--color-primary, #3b82f6);
   border-color: var(--color-primary, #3b82f6);
-  background: color-mix(in srgb, var(--color-primary, #3b82f6) 10%, #fff);
-  color: var(--color-primary, #3b82f6);
+  color: var(--color-text-inverse, #fff);
 }
 
 @media (max-width: 880px) {
@@ -908,15 +750,14 @@ function toggleGroupLocks(group) {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .slot-mode-buttons,
-  .slot-lock-btn {
+  .slot-mode-buttons {
     justify-self: start;
   }
 
   .slot-mode-buttons {
     min-width: 0;
     width: 100%;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 34px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 34px 34px;
   }
 }
 
