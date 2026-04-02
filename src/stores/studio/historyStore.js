@@ -78,7 +78,7 @@ export const useStudioHistoryStore = defineStore('studioHistory', {
         onChange: () => {
           this.historyRevision += 1
         },
-        maxHistory: 100,
+        maxHistory: 1000,
         debounceInterval: 3000,
         enableLogging: false
       })

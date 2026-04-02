@@ -179,7 +179,11 @@ flowchart LR
 - 已完成第三部：`PalettePanel.vue` 的 palette 读取路径已迁移到 `paletteBridge`（`paletteSnapshot`、`savedColors`、`activePaletteTargets`、`paletteModeActive`、`paletteUpdateFlag`、`paletteMap` 监听）。
 - 已完成第四部：`PalettePanel.vue` 的 palette 写路径已统一经 `paletteBridge -> paletteStore actions` 入口（交互事务、调色、tag 操作、savedColors 操作、advanced 偏移流程）。
 - 已完成第五部：`paletteStore` 已承接 `savedColors` 与 `paletteMode/workMode/open/close` 的真实实现；`studioStore` 对应方法已收敛为薄代理。
-- 待完成：继续下沉 tag 相关兼容方法（create/rename/delete/update/apply）并评估 `studioStore` palette 兼容层删除窗口。
+- 已完成第六部：`paletteStore` 已承接 tag 相关核心实现（create/rename/delete/update/apply），`studioStore` 对应入口已收敛为薄代理。
+- 删除窗口评估：当以下条件全部满足后可删除 `studioStore` 的 palette 兼容层。
+  - `StudioCommandBus` 与 `StudioFacade` 的 palette 命令处理不再调用 `studioStore` 的 palette 兼容方法。（已完成）
+  - 全仓检索无组件/业务代码直接调用 `studioStore` 的 palette 兼容方法（仅允许领域桥接/兼容代码存在）。（已完成）
+  - 完成至少一轮 palette 回归（调色、tag offset、批量应用、undo/redo）并通过构建。（已完成自动化项：构建 + 类型检查；交互回归待手工执行）
 
 完成标准:
 - 调色、tag 偏移、批量应用与回退全部可用。
@@ -188,6 +192,11 @@ flowchart LR
 - 新建 `src/stores/studio/renderStore.js`。
 - 先搬 preview stack 与 scheduler，再搬 renderer 选择与 pipeline。
 - 逐步消除 `useOptimizedRenderer` 双路径依赖，最终单主路径。
+
+实施进度（2026-04-03）:
+- 已完成第一部：`renderStore` 已接入，`useStudioDomainStores()` 已暴露 `render` 域。
+- 已完成第二部：`studioStore` state 中 preview stack 与 scheduler 相关镜像字段（`_previewStack`、`_activePreviewId`、`_refreshScheduler`、`_pendingMergedRefresh`、`_pendingLayerRefresh`）已删除，改为通过 `renderStore` 代理访问。
+- 待完成：继续下沉 render 领域核心状态与行为（`mergedAppearanceData`、`translatedLayerEntries`、renderer/pipeline 选择与刷新编排），并评估 `studioStore` 中 render 兼容入口删除窗口。
 
 完成标准:
 - 预览渲染路径稳定。

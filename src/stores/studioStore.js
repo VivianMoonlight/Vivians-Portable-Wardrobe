@@ -55,6 +55,7 @@ import { useStudioHistoryStore } from '@/stores/studio/historyStore'
 import { useStudioPersistenceStore } from '@/stores/studio/persistenceStore'
 import { useStudioSelectionStore } from '@/stores/studio/selectionStore'
 import { useStudioPaletteStore } from '@/stores/studio/paletteStore'
+import { useStudioRenderStore } from '@/stores/studio/renderStore'
 
 // PriorityService (refactored)
 import PriorityService from '@/services/PriorityService'
@@ -219,6 +220,36 @@ function ensurePaletteProxyBindings(store) {
   return store
 }
 
+function ensureRenderProxyBindings(store) {
+  if (!store || store._renderDomainProxyReady === true) return store
+
+  const renderStore = useStudioRenderStore()
+  const proxyKeys = [
+    '_refreshScheduler',
+    '_pendingMergedRefresh',
+    '_pendingLayerRefresh',
+    '_previewStack',
+    '_activePreviewId'
+  ]
+
+  for (const key of proxyKeys) {
+    const descriptor = Object.getOwnPropertyDescriptor(store, key)
+    if (descriptor && (descriptor.get || descriptor.set)) continue
+
+    Object.defineProperty(store, key, {
+      configurable: true,
+      enumerable: true,
+      get: () => renderStore[key],
+      set: (value) => {
+        renderStore[key] = value
+      }
+    })
+  }
+
+  store._renderDomainProxyReady = true
+  return store
+}
+
 const useStudioStoreBase = defineStore('studio', {
   state: () => ({
     stacks: [],
@@ -271,13 +302,6 @@ const useStudioStoreBase = defineStore('studio', {
     _editorRealtimeDirty: false,
     _editorRealtimeHistoryMeta: null,
     _editorRealtimeInteractionKind: null,
-
-    // Performance: refresh scheduler instance
-    _refreshScheduler: new RefreshScheduler(),
-
-    // Performance: track if refresh is pending
-    _pendingMergedRefresh: false,
-    _pendingLayerRefresh: false,
 
     // Phase F observability: centralized mutation telemetry counters.
     _mutationStats: {
@@ -339,11 +363,7 @@ const useStudioStoreBase = defineStore('studio', {
     mobileTab: 'structure', // 'structure' | 'replace' | 'property' | 'history'
     firstRunGuideDone: false,
 
-    // Preview stack management: coordinates hover previews between components
-    // Structure: [{ id, priority, preview, source, timestamp }, ...]
-    // Higher priority previews take precedence over lower ones
-    _previewStack: [],
-    _activePreviewId: null // ID of currently active preview
+    // Preview stack and refresh scheduler state moved to renderStore (Wave 6).
   }),
 
   getters: {
@@ -637,6 +657,10 @@ const useStudioStoreBase = defineStore('studio', {
 
     _getPaletteStore() {
       return useStudioPaletteStore()
+    },
+
+    _getRenderStore() {
+      return useStudioRenderStore()
     },
 
     _syncFocusedPartIndexToSelectionDomain() {
@@ -1097,153 +1121,13 @@ const useStudioStoreBase = defineStore('studio', {
     // Palette helpers (pure)
     // -------------------------
     createTagAndReplaceInStacks(value) {
-      try {
-        const createRes = Palette.createTagForValue(this.paletteMap, this._paletteNextCounter, value)
-        this.paletteMap = createRes.paletteMap
-        this._paletteNextCounter = createRes.paletteCounter
-        this._paletteVersion++
-        let tag = createRes.tag
-
-        if (!tag) {
-          try {
-            const want = (value === undefined) ? null : JSON.stringify(value)
-            for (const k of Object.keys(this.paletteMap || {})) {
-              try {
-                const v = this.paletteMap[k]
-                if (JSON.stringify(v) === want) { tag = k; break }
-              } catch (e) { continue }
-            }
-          } catch (e) { /* ignore fallback failure */ }
-        }
-
-        if (!tag) return null
-
-        this.stacks = Palette.replaceValueInStacks(this.stacks, value, tag)
-
-        const fp = this.focusedPart
-        if (fp) {
-          const replaced = Palette.replaceValueInPart(fp, value, tag)
-          this._updateFocusedPartInPlace(replaced)
-        }
-
-        this._scheduleLayerRefresh()
-        this._scheduleRefresh()
-        this._finalizeMutation({
-          changed: true,
-          scope: 'palette',
-          historyMode: 'immediate',
-          historyMeta: this._normalizeHistoryMeta(null, 'palette.createTagAndReplace'),
-          scheduleLayer: false,
-          scheduleRefresh: false,
-          schedulePart: false,
-          touchFocusedPart: false
-        })
-        return tag
-      } catch (e) {
-        console.warn('[studioStore] createTagAndReplaceInStacks failed', e)
-        return null
-      }
+      const paletteStore = this._getPaletteStore()
+      return paletteStore.createTagAndReplaceInStacks(this, value)
     },
 
     renamePaletteTagAndReferences(oldTag, newTag) {
-      const fromTag = String(oldTag || '').trim()
-      const toTag = String(newTag || '').trim()
-      if (!fromTag || !toTag || fromTag === toTag) return false
-      if (this.paletteMap && Object.prototype.hasOwnProperty.call(this.paletteMap, toTag)) return false
-
-      try {
-        const renameTagRefText = (text) => {
-          if (typeof text !== 'string') return text
-          if (text === fromTag) return toTag
-
-          const parsed = Palette.parseTagOffsetRef(text)
-          if (parsed.isTagOffsetRef && parsed.tag === fromTag) {
-            return Palette.formatTagOffsetRef(toTag, parsed.offset)
-          }
-          return text
-        }
-
-        const replaceTagRefsDeep = (node) => {
-          if (!node || typeof node !== 'object') return
-
-          if (Array.isArray(node)) {
-            for (let i = 0; i < node.length; i++) {
-              if (typeof node[i] === 'string') {
-                node[i] = renameTagRefText(node[i])
-              } else {
-                replaceTagRefsDeep(node[i])
-              }
-            }
-            return
-          }
-
-          if (typeof node.Color === 'string') {
-            node.Color = renameTagRefText(node.Color)
-          } else if (Array.isArray(node.Color)) {
-            for (let i = 0; i < node.Color.length; i++) {
-              if (typeof node.Color[i] === 'string') {
-                node.Color[i] = renameTagRefText(node.Color[i])
-              }
-            }
-          }
-
-          if (typeof node.colorText === 'string') {
-            node.colorText = renameTagRefText(node.colorText)
-          }
-          if (typeof node.currentColorText === 'string') {
-            node.currentColorText = renameTagRefText(node.currentColorText)
-          }
-
-          for (const key of Object.keys(node)) {
-            if (key === 'Color' || key === 'colorText' || key === 'currentColorText') continue
-            const value = node[key]
-            if (value && typeof value === 'object') {
-              replaceTagRefsDeep(value)
-            }
-          }
-        }
-
-        const newStacks = fastClone(this.stacks || [])
-        for (const el of newStacks) {
-          if (!el || !Array.isArray(el.data)) continue
-          for (const part of el.data) {
-            replaceTagRefsDeep(part)
-          }
-        }
-
-        const newFocused = fastClone(this.focusedPart)
-        if (newFocused) replaceTagRefsDeep(newFocused)
-
-        const newTargets = fastClone(this.activePaletteTargets || [])
-        replaceTagRefsDeep(newTargets)
-
-        const pm = fastClone(this.paletteMap || {})
-        pm[toTag] = pm[fromTag]
-        delete pm[fromTag]
-
-        this.stacks = newStacks
-        if (newFocused) this._updateFocusedPartInPlace(newFocused)
-        this.activePaletteTargets = newTargets
-        this.paletteMap = pm
-        this._paletteVersion++
-
-        this._refreshAllLayerEntriesFromPalette()
-        this.refreshMergedAppearanceData()
-        this._finalizeMutation({
-          changed: true,
-          scope: 'palette',
-          historyMode: 'immediate',
-          historyMeta: this._normalizeHistoryMeta(null, 'palette.renameTagReferences'),
-          scheduleLayer: false,
-          scheduleRefresh: false,
-          schedulePart: false,
-          touchFocusedPart: false
-        })
-        return true
-      } catch (e) {
-        console.warn('[studioStore] renamePaletteTagAndReferences failed', e)
-        return false
-      }
+      const paletteStore = this._getPaletteStore()
+      return paletteStore.renamePaletteTagAndReferences(this, oldTag, newTag)
     },
 
     /**
@@ -2019,150 +1903,33 @@ const useStudioStoreBase = defineStore('studio', {
     },
 
     applyColorToActivePaletteTargets(newColor, options = {}) {
-      if (!options?._fromFacade && isStudioFacadeEnabled()) {
-        return this.execute({
-          type: 'palette.applyColor',
-          payload: { newColor },
-          meta: { deferCommit: options?.deferCommit === true }
-        })
-      }
-
-      const deferCommit = options?.deferCommit === true || this._paletteRealtimeMode === true
-      const normalizedColorText = newColor === undefined || newColor === null ? '' : String(newColor)
-
-      let changed = this._applyPaletteColorViaLayerDeltas(normalizedColorText).changed
-
-      if (!changed) {
-        changed = PaletteActions.applyColorToTargets(this, normalizedColorText, {
-          paletteModeActive: this.paletteModeActive,
-          activePaletteTargets: this.activePaletteTargets,
-          stacks: this.stacks,
-          findPartByUid: this.findPartByUid.bind(this),
-          _buildLayerEntriesWithCache: this._buildLayerEntriesWithCache.bind(this),
-          _scheduleLayerRefresh: this._scheduleLayerRefresh.bind(this),
-          _schedulePartUpdate: (() => {}),
-          triggerFocusedPartUpdate: this.triggerFocusedPartUpdate.bind(this),
-          pushHistorySnapshotThrottled: (() => {}),
-          _resolveColorCssFromText: this._resolveColorCssFromText.bind(this)
-        })
-      }
-
-      const historyMeta = this._normalizeHistoryMeta(
-        options?.historyMeta,
-        'palette.applyColor',
-        { interactionKind: this._paletteRealtimeInteractionKind }
-      )
-
-      return this._finalizePaletteMutation(changed, {
-        deferCommit,
-        throttleHistory: deferCommit,
-        historyMeta
-      })
+      const paletteStore = this._getPaletteStore()
+      return paletteStore.applyColorToActivePaletteTargets(this, newColor, options)
     },
 
     applyTagToActivePaletteTargets(tag, options = {}) {
-      if (!options?._fromFacade && isStudioFacadeEnabled()) {
-        return this.execute({
-          type: 'palette.applyTag',
-          payload: { tag }
-        })
-      }
-
-      return this.applyColorToActivePaletteTargets(tag, {
-        deferCommit: options?.deferCommit === true,
-        historyMeta: this._normalizeHistoryMeta(
-          options?.historyMeta,
-          'palette.applyTag',
-          { interactionKind: this._paletteRealtimeInteractionKind }
-        ),
-        _fromFacade: true
-      })
+      const paletteStore = this._getPaletteStore()
+      return paletteStore.applyTagToActivePaletteTargets(this, tag, options)
     },
 
     applyTagOffsetToActivePaletteTargets(payload = {}, options = {}) {
-      if (!options?._fromFacade && isStudioFacadeEnabled()) {
-        return this.execute({
-          type: 'palette.applyTagOffset',
-          payload,
-          meta: { deferCommit: options?.deferCommit === true }
-        })
-      }
-
-      const tag = String(payload?.tag || '').trim()
-      if (!tag) return false
-
-      const ref = Palette.formatTagOffsetRef(tag, payload?.offset || {})
-      if (!ref) return false
-
-      return this.applyColorToActivePaletteTargets(ref, {
-        deferCommit: options?.deferCommit === true,
-        historyMeta: this._normalizeHistoryMeta(
-          options?.historyMeta,
-          'palette.applyTagOffset',
-          { interactionKind: this._paletteRealtimeInteractionKind }
-        ),
-        _fromFacade: true
-      })
+      const paletteStore = this._getPaletteStore()
+      return paletteStore.applyTagOffsetToActivePaletteTargets(this, payload, options)
     },
 
     resetTagOffsetToTag(tag, options = {}) {
-      if (!options?._fromFacade && isStudioFacadeEnabled()) {
-        return this.execute({
-          type: 'palette.resetTagOffset',
-          payload: { tag },
-          meta: { deferCommit: options?.deferCommit === true }
-        })
-      }
-
-      const normalizedTag = String(tag || '').trim()
-      if (!normalizedTag) return false
-
-      return this.applyColorToActivePaletteTargets(normalizedTag, {
-        deferCommit: options?.deferCommit === true,
-        historyMeta: this._normalizeHistoryMeta(
-          options?.historyMeta,
-          'palette.resetTagOffset',
-          { interactionKind: this._paletteRealtimeInteractionKind }
-        ),
-        _fromFacade: true
-      })
+      const paletteStore = this._getPaletteStore()
+      return paletteStore.resetTagOffsetToTag(this, tag, options)
     },
 
     detachTagOffsetToRaw(payload = {}) {
-      const ref = String(payload?.ref || '').trim()
-      if (!ref) return false
-
-      const resolved = Palette.resolveTagOffsetColor(ref, this.paletteMap)
-      if (!resolved?.ok || !resolved.color) return false
-      return this.applyColorToActivePaletteTargets(resolved.color, {
-        historyMeta: this._normalizeHistoryMeta(null, 'palette.applyColor')
-      })
+      const paletteStore = this._getPaletteStore()
+      return paletteStore.detachTagOffsetToRaw(this, payload)
     },
 
     deletePaletteTag(tag) {
-      const result = PaletteActions.deleteTagFromPalette(this, tag, {
-        paletteMap: this.paletteMap,
-        focusedPart: this.focusedPart,
-        stacks: this.stacks,
-        findPartByUid: this.findPartByUid.bind(this),
-        _updateFocusedPartInPlace: this._updateFocusedPartInPlace.bind(this),
-        _scheduleLayerRefresh: this._scheduleLayerRefresh.bind(this),
-        RebuildAllStacksLayerEntriesFromParts: this.RebuildAllStacksLayerEntriesFromParts.bind(this),
-        _scheduleRefresh: this._scheduleRefresh.bind(this),
-        pushHistorySnapshot: this.pushHistorySnapshot.bind(this)
-      })
-
-      if (result.stacks) this.stacks = result.stacks
-      if (result.paletteMap) this.paletteMap = result.paletteMap
-      this._paletteVersion++
-
-      if (result._scheduleLayerRefresh) {
-        this._scheduleLayerRefresh()
-        this.RebuildAllStacksLayerEntriesFromParts()
-        this._scheduleRefresh()
-        this.pushHistorySnapshot(this._normalizeHistoryMeta(null, 'palette.deleteTag'))
-      }
-      return result._scheduleLayerRefresh
+      const paletteStore = this._getPaletteStore()
+      return paletteStore.deletePaletteTag(this, tag)
     },
 
     clearPalette() {
@@ -2202,42 +1969,8 @@ const useStudioStoreBase = defineStore('studio', {
     },
 
     updatePaletteTag(tag, newValue, options = {}) {
-      if (!options?._fromFacade && isStudioFacadeEnabled()) {
-        return this.execute({
-          type: 'palette.updateTag',
-          payload: { tag, newValue }
-        })
-      }
-
-      const deferCommit = options?.deferCommit === true || this._paletteRealtimeMode === true
-
-      const result = PaletteActions.updatePaletteTag(this, tag, newValue, {
-        paletteMap: this.paletteMap,
-        stacks: this.stacks,
-        focusedPart: this.focusedPart,
-        findPartByUid: this.findPartByUid.bind(this),
-        _buildLayerEntriesWithCache: this._buildLayerEntriesWithCache.bind(this),
-        _scheduleLayerRefresh: this._scheduleLayerRefresh.bind(this),
-        _schedulePartUpdate: (() => {}),
-        triggerFocusedPartUpdate: this.triggerFocusedPartUpdate.bind(this),
-        pushHistorySnapshotThrottled: (() => {})
-      })
-
-      this.paletteMap = result.paletteMap
-      if (result._scheduleLayerRefresh) {
-        this._scheduleLayerRefresh()
-        const historyMeta = this._normalizeHistoryMeta(
-          options?.historyMeta,
-          'palette.updateTag',
-          { interactionKind: this._paletteRealtimeInteractionKind }
-        )
-        this._finalizePaletteMutation(true, {
-          deferCommit,
-          throttleHistory: deferCommit,
-          historyMeta
-        })
-      }
-      return true
+      const paletteStore = this._getPaletteStore()
+      return paletteStore.updatePaletteTag(this, tag, newValue, options)
     },
 
     // -------------------------
@@ -4492,6 +4225,7 @@ const useStudioStoreBase = defineStore('studio', {
 
 export function useStudioStore(...args) {
   const store = useStudioStoreBase(...args)
+  ensureRenderProxyBindings(store)
   ensureSelectionProxyBindings(store)
   ensurePaletteProxyBindings(store)
   return store

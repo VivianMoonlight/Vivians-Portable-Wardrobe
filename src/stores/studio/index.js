@@ -4,6 +4,7 @@ import { useStudioHistoryStore } from '@/stores/studio/historyStore'
 import { useStudioPersistenceStore } from '@/stores/studio/persistenceStore'
 import { useStudioSelectionStore } from '@/stores/studio/selectionStore'
 import { useStudioPaletteStore } from '@/stores/studio/paletteStore'
+import { useStudioRenderStore } from '@/stores/studio/renderStore'
 
 export function useStudioDomainStores() {
   const studio = useStudioStore()
@@ -12,6 +13,7 @@ export function useStudioDomainStores() {
   const persistence = useStudioPersistenceStore()
   const selection = useStudioSelectionStore()
   const palette = useStudioPaletteStore()
+  const render = useStudioRenderStore()
 
   return {
     studio,
@@ -19,6 +21,7 @@ export function useStudioDomainStores() {
     history,
     persistence,
     selection,
-    palette
+    palette,
+    render
   }
 }

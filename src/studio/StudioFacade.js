@@ -3,13 +3,16 @@ import { createStudioCommandBus } from '@/studio/StudioCommandBus'
 import { queryStudio, getStudioQueryNames } from '@/studio/StudioQueryService'
 import { createTransactionCoordinator } from '@/studio/TransactionCoordinator'
 import { useStudioPersistenceStore } from '@/stores/studio/persistenceStore'
+import { useStudioPaletteStore } from '@/stores/studio/paletteStore'
 
 class StudioFacade {
   constructor(store) {
     this.store = store
     this.persistenceStore = useStudioPersistenceStore()
+    this.paletteStore = useStudioPaletteStore()
     this.commandBus = createStudioCommandBus(store, {
-      persistenceStore: this.persistenceStore
+      persistenceStore: this.persistenceStore,
+      paletteStore: this.paletteStore
     })
     this.transactionCoordinator = createTransactionCoordinator({
       store,
@@ -63,24 +66,24 @@ class StudioFacade {
   _executeLegacy(type, payload, meta, options) {
     switch (type) {
       case 'palette.applyColor':
-        return this.store.applyColorToActivePaletteTargets(payload.newColor, {
+        return this.paletteStore.applyColorToActivePaletteTargets(this.store, payload.newColor, {
           deferCommit: meta.deferCommit === true,
           _fromFacade: true
         })
       case 'palette.applyTag':
-        return this.store.applyTagToActivePaletteTargets(payload.tag, { _fromFacade: true })
+        return this.paletteStore.applyTagToActivePaletteTargets(this.store, payload.tag, { _fromFacade: true })
       case 'palette.applyTagOffset':
-        return this.store.applyTagOffsetToActivePaletteTargets(payload, {
+        return this.paletteStore.applyTagOffsetToActivePaletteTargets(this.store, payload, {
           deferCommit: meta.deferCommit === true,
           _fromFacade: true
         })
       case 'palette.resetTagOffset':
-        return this.store.resetTagOffsetToTag(payload.tag, {
+        return this.paletteStore.resetTagOffsetToTag(this.store, payload.tag, {
           deferCommit: meta.deferCommit === true,
           _fromFacade: true
         })
       case 'palette.updateTag':
-        return this.store.updatePaletteTag(payload.tag, payload.newValue, { _fromFacade: true })
+        return this.paletteStore.updatePaletteTag(this.store, payload.tag, payload.newValue, { _fromFacade: true })
       case 'part.updateProperty':
         return this.store.applyFocusedPartProperty(payload.property, {
           rebuildLayers: payload.rebuildLayers !== false,

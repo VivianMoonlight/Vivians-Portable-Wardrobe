@@ -3,6 +3,7 @@ import { fastClone } from '@/utils/clone.js'
 import * as Palette from '@/services/PaletteService'
 import * as PaletteActions from '@/studio/palette-actions.js'
 import { PANEL_HOST, PANEL_VISIBILITY } from '@/studio/panel-system'
+import { isStudioFacadeEnabled } from '@/config/featureFlags'
 
 function createDefaultPaletteState() {
   return {
@@ -81,39 +82,343 @@ export const useStudioPaletteStore = defineStore('studioPalette', {
     },
 
     applyColorToActivePaletteTargets(studio, newColor, options = {}) {
-      return studio?.applyColorToActivePaletteTargets?.(newColor, options)
+      if (!options?._fromFacade && isStudioFacadeEnabled()) {
+        return studio.execute({
+          type: 'palette.applyColor',
+          payload: { newColor },
+          meta: { deferCommit: options?.deferCommit === true }
+        })
+      }
+
+      const deferCommit = options?.deferCommit === true || this._paletteRealtimeMode === true
+      const normalizedColorText = newColor === undefined || newColor === null ? '' : String(newColor)
+
+      let changed = studio._applyPaletteColorViaLayerDeltas(normalizedColorText).changed
+
+      if (!changed) {
+        changed = PaletteActions.applyColorToTargets(this, normalizedColorText, {
+          paletteModeActive: this.paletteModeActive,
+          activePaletteTargets: studio.activePaletteTargets,
+          stacks: studio.stacks,
+          findPartByUid: studio.findPartByUid.bind(studio),
+          _buildLayerEntriesWithCache: studio._buildLayerEntriesWithCache.bind(studio),
+          _scheduleLayerRefresh: studio._scheduleLayerRefresh.bind(studio),
+          _schedulePartUpdate: (() => {}),
+          triggerFocusedPartUpdate: studio.triggerFocusedPartUpdate.bind(studio),
+          pushHistorySnapshotThrottled: (() => {}),
+          _resolveColorCssFromText: studio._resolveColorCssFromText.bind(studio)
+        })
+      }
+
+      const historyMeta = studio._normalizeHistoryMeta(
+        options?.historyMeta,
+        'palette.applyColor',
+        { interactionKind: this._paletteRealtimeInteractionKind }
+      )
+
+      return studio._finalizePaletteMutation(changed, {
+        deferCommit,
+        throttleHistory: deferCommit,
+        historyMeta
+      })
     },
 
     applyTagToActivePaletteTargets(studio, tag, options = {}) {
-      return studio?.applyTagToActivePaletteTargets?.(tag, options)
+      if (!options?._fromFacade && isStudioFacadeEnabled()) {
+        return studio.execute({
+          type: 'palette.applyTag',
+          payload: { tag }
+        })
+      }
+
+      return this.applyColorToActivePaletteTargets(studio, tag, {
+        deferCommit: options?.deferCommit === true,
+        historyMeta: studio._normalizeHistoryMeta(
+          options?.historyMeta,
+          'palette.applyTag',
+          { interactionKind: this._paletteRealtimeInteractionKind }
+        ),
+        _fromFacade: true
+      })
     },
 
     applyTagOffsetToActivePaletteTargets(studio, payload = {}, options = {}) {
-      return studio?.applyTagOffsetToActivePaletteTargets?.(payload, options)
+      if (!options?._fromFacade && isStudioFacadeEnabled()) {
+        return studio.execute({
+          type: 'palette.applyTagOffset',
+          payload,
+          meta: { deferCommit: options?.deferCommit === true }
+        })
+      }
+
+      const tag = String(payload?.tag || '').trim()
+      if (!tag) return false
+
+      const ref = Palette.formatTagOffsetRef(tag, payload?.offset || {})
+      if (!ref) return false
+
+      return this.applyColorToActivePaletteTargets(studio, ref, {
+        deferCommit: options?.deferCommit === true,
+        historyMeta: studio._normalizeHistoryMeta(
+          options?.historyMeta,
+          'palette.applyTagOffset',
+          { interactionKind: this._paletteRealtimeInteractionKind }
+        ),
+        _fromFacade: true
+      })
     },
 
     resetTagOffsetToTag(studio, tag, options = {}) {
-      return studio?.resetTagOffsetToTag?.(tag, options)
+      if (!options?._fromFacade && isStudioFacadeEnabled()) {
+        return studio.execute({
+          type: 'palette.resetTagOffset',
+          payload: { tag },
+          meta: { deferCommit: options?.deferCommit === true }
+        })
+      }
+
+      const normalizedTag = String(tag || '').trim()
+      if (!normalizedTag) return false
+
+      return this.applyColorToActivePaletteTargets(studio, normalizedTag, {
+        deferCommit: options?.deferCommit === true,
+        historyMeta: studio._normalizeHistoryMeta(
+          options?.historyMeta,
+          'palette.resetTagOffset',
+          { interactionKind: this._paletteRealtimeInteractionKind }
+        ),
+        _fromFacade: true
+      })
     },
 
     detachTagOffsetToRaw(studio, payload = {}) {
-      return studio?.detachTagOffsetToRaw?.(payload)
+      const ref = String(payload?.ref || '').trim()
+      if (!ref) return false
+
+      const resolved = Palette.resolveTagOffsetColor(ref, this.paletteMap)
+      if (!resolved?.ok || !resolved.color) return false
+      return this.applyColorToActivePaletteTargets(studio, resolved.color, {
+        historyMeta: studio._normalizeHistoryMeta(null, 'palette.applyColor')
+      })
     },
 
     updatePaletteTag(studio, tag, newValue, options = {}) {
-      return studio?.updatePaletteTag?.(tag, newValue, options)
+      if (!options?._fromFacade && isStudioFacadeEnabled()) {
+        return studio.execute({
+          type: 'palette.updateTag',
+          payload: { tag, newValue }
+        })
+      }
+
+      const deferCommit = options?.deferCommit === true || this._paletteRealtimeMode === true
+
+      const result = PaletteActions.updatePaletteTag(this, tag, newValue, {
+        paletteMap: this.paletteMap,
+        stacks: studio.stacks,
+        focusedPart: studio.focusedPart,
+        findPartByUid: studio.findPartByUid.bind(studio),
+        _buildLayerEntriesWithCache: studio._buildLayerEntriesWithCache.bind(studio),
+        _scheduleLayerRefresh: studio._scheduleLayerRefresh.bind(studio),
+        _schedulePartUpdate: (() => {}),
+        triggerFocusedPartUpdate: studio.triggerFocusedPartUpdate.bind(studio),
+        pushHistorySnapshotThrottled: (() => {})
+      })
+
+      this.paletteMap = result.paletteMap
+      if (result._scheduleLayerRefresh) {
+        studio._scheduleLayerRefresh()
+        const historyMeta = studio._normalizeHistoryMeta(
+          options?.historyMeta,
+          'palette.updateTag',
+          { interactionKind: this._paletteRealtimeInteractionKind }
+        )
+        studio._finalizePaletteMutation(true, {
+          deferCommit,
+          throttleHistory: deferCommit,
+          historyMeta
+        })
+      }
+      return true
     },
 
     renamePaletteTagAndReferences(studio, oldTag, newTag) {
-      return studio?.renamePaletteTagAndReferences?.(oldTag, newTag)
+      const fromTag = String(oldTag || '').trim()
+      const toTag = String(newTag || '').trim()
+      if (!fromTag || !toTag || fromTag === toTag) return false
+      if (this.paletteMap && Object.prototype.hasOwnProperty.call(this.paletteMap, toTag)) return false
+
+      try {
+        const renameTagRefText = (text) => {
+          if (typeof text !== 'string') return text
+          if (text === fromTag) return toTag
+
+          const parsed = Palette.parseTagOffsetRef(text)
+          if (parsed.isTagOffsetRef && parsed.tag === fromTag) {
+            return Palette.formatTagOffsetRef(toTag, parsed.offset)
+          }
+          return text
+        }
+
+        const replaceTagRefsDeep = (node) => {
+          if (!node || typeof node !== 'object') return
+
+          if (Array.isArray(node)) {
+            for (let i = 0; i < node.length; i++) {
+              if (typeof node[i] === 'string') {
+                node[i] = renameTagRefText(node[i])
+              } else {
+                replaceTagRefsDeep(node[i])
+              }
+            }
+            return
+          }
+
+          if (typeof node.Color === 'string') {
+            node.Color = renameTagRefText(node.Color)
+          } else if (Array.isArray(node.Color)) {
+            for (let i = 0; i < node.Color.length; i++) {
+              if (typeof node.Color[i] === 'string') {
+                node.Color[i] = renameTagRefText(node.Color[i])
+              }
+            }
+          }
+
+          if (typeof node.colorText === 'string') {
+            node.colorText = renameTagRefText(node.colorText)
+          }
+          if (typeof node.currentColorText === 'string') {
+            node.currentColorText = renameTagRefText(node.currentColorText)
+          }
+
+          for (const key of Object.keys(node)) {
+            if (key === 'Color' || key === 'colorText' || key === 'currentColorText') continue
+            const value = node[key]
+            if (value && typeof value === 'object') {
+              replaceTagRefsDeep(value)
+            }
+          }
+        }
+
+        const newStacks = fastClone(studio.stacks || [])
+        for (const el of newStacks) {
+          if (!el || !Array.isArray(el.data)) continue
+          for (const part of el.data) {
+            replaceTagRefsDeep(part)
+          }
+        }
+
+        const newFocused = fastClone(studio.focusedPart)
+        if (newFocused) replaceTagRefsDeep(newFocused)
+
+        const newTargets = fastClone(studio.activePaletteTargets || [])
+        replaceTagRefsDeep(newTargets)
+
+        const pm = fastClone(this.paletteMap || {})
+        pm[toTag] = pm[fromTag]
+        delete pm[fromTag]
+
+        studio.stacks = newStacks
+        if (newFocused) studio._updateFocusedPartInPlace(newFocused)
+        this.paletteMap = pm
+        this._paletteVersion += 1
+
+        // Keep selection targets consistent after rename.
+        if (Array.isArray(newTargets) && newTargets.length > 0) {
+          studio._applyPaletteTargetsToSelection(newTargets)
+        }
+
+        studio._refreshAllLayerEntriesFromPalette()
+        studio.refreshMergedAppearanceData()
+        studio._finalizeMutation({
+          changed: true,
+          scope: 'palette',
+          historyMode: 'immediate',
+          historyMeta: studio._normalizeHistoryMeta(null, 'palette.renameTagReferences'),
+          scheduleLayer: false,
+          scheduleRefresh: false,
+          schedulePart: false,
+          touchFocusedPart: false
+        })
+        return true
+      } catch (e) {
+        console.warn('[paletteStore] renamePaletteTagAndReferences failed', e)
+        return false
+      }
     },
 
     deletePaletteTag(studio, tag) {
-      return studio?.deletePaletteTag?.(tag)
+      const result = PaletteActions.deleteTagFromPalette(this, tag, {
+        paletteMap: this.paletteMap,
+        focusedPart: studio.focusedPart,
+        stacks: studio.stacks,
+        findPartByUid: studio.findPartByUid.bind(studio),
+        _updateFocusedPartInPlace: studio._updateFocusedPartInPlace.bind(studio),
+        _scheduleLayerRefresh: studio._scheduleLayerRefresh.bind(studio),
+        RebuildAllStacksLayerEntriesFromParts: studio.RebuildAllStacksLayerEntriesFromParts.bind(studio),
+        _scheduleRefresh: studio._scheduleRefresh.bind(studio),
+        pushHistorySnapshot: studio.pushHistorySnapshot.bind(studio)
+      })
+
+      if (result.stacks) studio.stacks = result.stacks
+      if (result.paletteMap) this.paletteMap = result.paletteMap
+      this._paletteVersion += 1
+
+      if (result._scheduleLayerRefresh) {
+        studio._scheduleLayerRefresh()
+        studio.RebuildAllStacksLayerEntriesFromParts()
+        studio._scheduleRefresh()
+        studio.pushHistorySnapshot(studio._normalizeHistoryMeta(null, 'palette.deleteTag'))
+      }
+      return result._scheduleLayerRefresh
     },
 
     createTagAndReplaceInStacks(studio, value) {
-      return studio?.createTagAndReplaceInStacks?.(value)
+      try {
+        const createRes = Palette.createTagForValue(this.paletteMap, this._paletteNextCounter, value)
+        this.paletteMap = createRes.paletteMap
+        this._paletteNextCounter = createRes.paletteCounter
+        this._paletteVersion += 1
+        let tag = createRes.tag
+
+        if (!tag) {
+          try {
+            const want = (value === undefined) ? null : JSON.stringify(value)
+            for (const k of Object.keys(this.paletteMap || {})) {
+              try {
+                const v = this.paletteMap[k]
+                if (JSON.stringify(v) === want) { tag = k; break }
+              } catch (e) { continue }
+            }
+          } catch (e) { /* ignore fallback failure */ }
+        }
+
+        if (!tag) return null
+
+        studio.stacks = Palette.replaceValueInStacks(studio.stacks, value, tag)
+
+        const fp = studio.focusedPart
+        if (fp) {
+          const replaced = Palette.replaceValueInPart(fp, value, tag)
+          studio._updateFocusedPartInPlace(replaced)
+        }
+
+        studio._scheduleLayerRefresh()
+        studio._scheduleRefresh()
+        studio._finalizeMutation({
+          changed: true,
+          scope: 'palette',
+          historyMode: 'immediate',
+          historyMeta: studio._normalizeHistoryMeta(null, 'palette.createTagAndReplace'),
+          scheduleLayer: false,
+          scheduleRefresh: false,
+          schedulePart: false,
+          touchFocusedPart: false
+        })
+        return tag
+      } catch (e) {
+        console.warn('[paletteStore] createTagAndReplaceInStacks failed', e)
+        return null
+      }
     },
 
     _normalizeHistoryMeta(studio, actionType) {

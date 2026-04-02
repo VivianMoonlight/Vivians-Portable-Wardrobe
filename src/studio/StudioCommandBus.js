@@ -1,4 +1,5 @@
 import { useStudioPersistenceStore } from '@/stores/studio/persistenceStore'
+import { useStudioPaletteStore } from '@/stores/studio/paletteStore'
 
 function buildHistoryMeta(type, payload, meta = {}) {
   const actionType = String(meta?.historyActionType || type || '').trim()
@@ -19,28 +20,28 @@ function buildHistoryMeta(type, payload, meta = {}) {
   return historyMeta
 }
 
-function createPaletteHandlers(store) {
+function createPaletteHandlers(store, paletteStore) {
   return {
-    'palette.applyColor': (payload, meta) => store.applyColorToActivePaletteTargets(payload.newColor, {
+    'palette.applyColor': (payload, meta) => paletteStore.applyColorToActivePaletteTargets(store, payload.newColor, {
       deferCommit: meta.deferCommit === true,
       historyMeta: buildHistoryMeta('palette.applyColor', payload, meta),
       _fromFacade: true
     }),
-    'palette.applyTag': (payload, meta) => store.applyTagToActivePaletteTargets(payload.tag, {
+    'palette.applyTag': (payload, meta) => paletteStore.applyTagToActivePaletteTargets(store, payload.tag, {
       historyMeta: buildHistoryMeta('palette.applyTag', payload, meta),
       _fromFacade: true
     }),
-    'palette.applyTagOffset': (payload, meta) => store.applyTagOffsetToActivePaletteTargets(payload, {
+    'palette.applyTagOffset': (payload, meta) => paletteStore.applyTagOffsetToActivePaletteTargets(store, payload, {
       deferCommit: meta.deferCommit === true,
       historyMeta: buildHistoryMeta('palette.applyTagOffset', payload, meta),
       _fromFacade: true
     }),
-    'palette.resetTagOffset': (payload, meta) => store.resetTagOffsetToTag(payload.tag, {
+    'palette.resetTagOffset': (payload, meta) => paletteStore.resetTagOffsetToTag(store, payload.tag, {
       deferCommit: meta.deferCommit === true,
       historyMeta: buildHistoryMeta('palette.resetTagOffset', payload, meta),
       _fromFacade: true
     }),
-    'palette.updateTag': (payload) => store.updatePaletteTag(payload.tag, payload.newValue, { _fromFacade: true })
+    'palette.updateTag': (payload) => paletteStore.updatePaletteTag(store, payload.tag, payload.newValue, { _fromFacade: true })
   }
 }
 
@@ -142,8 +143,9 @@ export class StudioCommandBus {
   constructor(store, options = {}) {
     this.store = store
     this.persistenceStore = options.persistenceStore || useStudioPersistenceStore()
+    this.paletteStore = options.paletteStore || useStudioPaletteStore()
     this.handlers = {
-      ...createPaletteHandlers(store),
+      ...createPaletteHandlers(store, this.paletteStore),
       ...createEditorHandlers(store),
       ...createBatchHandlers(store),
       ...createAssetHandlers(store),
