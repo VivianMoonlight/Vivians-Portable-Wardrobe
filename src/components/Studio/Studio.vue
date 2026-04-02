@@ -273,7 +273,7 @@
               </div>
 
               <!-- Save Status Indicator -->
-              <div :class="saveStatusClass" v-if="store.saveStatus !== 'idle'" :title="lastSaveTimeText">
+              <div :class="saveStatusClass" v-if="persistenceBridge.saveStatus !== 'idle'" :title="lastSaveTimeText">
                 <span class="save-status-text">{{ saveStatusText }}</span>
               </div>
 
@@ -486,6 +486,8 @@ import SavesManager from './SavesManager.vue'
 import BaseButton from '../ui/BaseButton.vue'
 import StatusChip from '../ui/StatusChip.vue'
 import { useStudioDomainStores } from '@/stores/studio'
+import { createStudioHistoryBridge } from '@/stores/studio/historyBridge'
+import { createStudioPersistenceBridge } from '@/stores/studio/persistenceBridge'
 import { useFileSystemStore } from '@/stores/fileSystemStore'
 import { ExternalAdapter } from '@/utils/external_adapters'
 import { hostWindow, doc } from '@/utils/host-window.js'
@@ -496,11 +498,14 @@ import { useAutoSave } from '@/services/AutoSaveService'
 import * as DialogService from '@/services/DialogService.js'
 
 const { t } = useI18n()
-const { studio: store, panel } = useStudioDomainStores()
+const { studio: store, panel, history, persistence } = useStudioDomainStores()
 const fsStore = useFileSystemStore()
 
+const historyBridge = createStudioHistoryBridge(store, history)
+const persistenceBridge = createStudioPersistenceBridge(store, persistence)
+
 // Setup undo/redo keyboard shortcuts
-useUndoRedo(store, {
+useUndoRedo(historyBridge, {
   enableLogging: false, // Set to true for debugging
   onUndo: () => {
     // Optional: Show a notification or feedback when undo is performed
@@ -511,7 +516,7 @@ useUndoRedo(store, {
 })
 
 // Setup auto-save
-const autoSaveControls = useAutoSave(store, {
+const autoSaveControls = useAutoSave(persistenceBridge, {
   debounceMs: 2000,
   watchKeys: ['stacks', 'paletteMap'],
   onSave: () => {
@@ -578,8 +583,8 @@ const activeToolDockPanel = computed(() => {
   if (showPalettePanel.value) return 'palette'
   return 'layer'
 })
-const canUndo = computed(() => !!store.canUndo && store.canUndo())
-const canRedo = computed(() => !!store.canRedo && store.canRedo())
+const canUndo = computed(() => historyBridge.canUndo())
+const canRedo = computed(() => historyBridge.canRedo())
 const activeLeftSheet = ref('part')
 const selectedStackName = computed(() => {
   const stack = store.selectedElement
@@ -783,10 +788,10 @@ onMounted(async () => {
   }
 
   // Enable auto-save
-  store.enableAutoSave()
+  persistenceBridge.enableAutoSave()
 
   // Try to restore auto-saved data using new method
-  const result = await store.autoRestoreSession()
+  const result = await persistenceBridge.autoRestoreSession()
   if (result.restored) {
     restoreInfo.value = result
     showRestoreBanner.value = true
@@ -805,7 +810,7 @@ onBeforeUnmount(() => {
   hostWindow.removeEventListener('resize', onWindowResize)
 
   // Disable auto-save
-  store.disableAutoSave()
+  persistenceBridge.disableAutoSave()
 })
 
 /* ---------- Apply to target integration ---------- */
@@ -970,11 +975,11 @@ function onStorageOverlayClick(e) {
 }
 
 function doUndo() {
-  store.undo && store.undo()
+  historyBridge.undo()
 }
 
 function doRedo() {
-  store.redo && store.redo()
+  historyBridge.redo()
 }
 
 function jumpToLatest() {
@@ -991,8 +996,8 @@ const paletteFileInput = ref(null)
 
 function onSaveStacks() {
   /** @deprecated Hidden from Studio toolbar; retained for backward compatibility. */
-  store.persistStacksToLocalStorage()
-  store.exportStacksToJsonFile('stacks.json')
+  persistenceBridge.persistStacksToLocalStorage()
+  persistenceBridge.exportStacksToJsonFile('stacks.json')
 }
 
 function onLoadStacksClick() {
@@ -1005,15 +1010,15 @@ async function onStacksFileSelected(e) {
   /** @deprecated Hidden from Studio toolbar; retained for backward compatibility. */
   const files = e.target.files
   if (!files || !files.length) return
-  const ok = await store.importStacksFromJsonFile(files[0])
+  const ok = await persistenceBridge.importStacksFromJsonFile(files[0])
   if (ok) await DialogService.alert(t('studio.stacksImportSuccess'))
   else await DialogService.alert(t('studio.stacksImportFailed'))
 }
 
 function onSavePalette() {
   /** @deprecated Hidden from Studio toolbar; retained for backward compatibility. */
-  store.persistPaletteToLocalStorage()
-  store.exportPaletteToJsonFile('palette.json')
+  persistenceBridge.persistPaletteToLocalStorage()
+  persistenceBridge.exportPaletteToJsonFile('palette.json')
 }
 
 function onLoadPaletteClick() {
@@ -1026,7 +1031,7 @@ async function onPaletteFileSelected(e) {
   /** @deprecated Hidden from Studio toolbar; retained for backward compatibility. */
   const files = e.target.files
   if (!files || !files.length) return
-  const ok = await store.importPaletteFromJsonFile(files[0])
+  const ok = await persistenceBridge.importPaletteFromJsonFile(files[0])
   if (ok) await DialogService.alert(t('studio.paletteImportSuccess'))
   else await DialogService.alert(t('studio.paletteImportFailed'))
 }
@@ -1038,7 +1043,7 @@ async function exportMergedToFileStore() {
   }
   try {
     store.refreshMergedAppearanceData()
-    const payload = store.getMergedAppearanceForExport()
+    const payload = persistenceBridge.getMergedAppearanceForExport()
     const fileNode = {
       name: 'mergedAppearance_' + new Date().toISOString().replace(/[:.]/g, '-') + '.json',
       type: 'outfit',
@@ -1058,7 +1063,7 @@ async function exportMergedToFileStore() {
 
 // Computed properties for save status display
 const saveStatusText = computed(() => {
-  switch (store.saveStatus) {
+  switch (persistenceBridge.saveStatus) {
     case 'saving':
       return 'Saving...'
     case 'saved':
@@ -1073,17 +1078,17 @@ const saveStatusText = computed(() => {
 const saveStatusClass = computed(() => {
   return {
     'save-status': true,
-    'save-status-saving': store.saveStatus === 'saving',
-    'save-status-saved': store.saveStatus === 'saved',
-    'save-status-error': store.saveStatus === 'error',
-    'save-status-visible': store.saveStatus !== 'idle'
+    'save-status-saving': persistenceBridge.saveStatus === 'saving',
+    'save-status-saved': persistenceBridge.saveStatus === 'saved',
+    'save-status-error': persistenceBridge.saveStatus === 'error',
+    'save-status-visible': persistenceBridge.saveStatus !== 'idle'
   }
 })
 
 const lastSaveTimeText = computed(() => {
-  if (!store.lastSaveTime) return ''
+  if (!persistenceBridge.lastSaveTime) return ''
   const now = Date.now()
-  const diff = now - store.lastSaveTime
+  const diff = now - persistenceBridge.lastSaveTime
   const seconds = Math.floor(diff / 1000)
   const minutes = Math.floor(seconds / 60)
   const hours = Math.floor(minutes / 60)
@@ -1091,7 +1096,7 @@ const lastSaveTimeText = computed(() => {
   if (seconds < 60) return `${seconds}s ago`
   if (minutes < 60) return `${minutes}m ago`
   if (hours < 24) return `${hours}h ago`
-  return new Date(store.lastSaveTime).toLocaleDateString()
+  return new Date(persistenceBridge.lastSaveTime).toLocaleDateString()
 })
 
 function dismissRestoreBanner() {

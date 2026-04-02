@@ -301,6 +301,7 @@
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { useStudioDomainStores } from "@/stores/studio";
+import { createStudioHistoryBridge } from "@/stores/studio/historyBridge";
 import { Chrome } from "@ckpack/vue-color";
 import { throttle } from "@/utils/performance.js";
 import { hostWindow, setTimeoutHost } from "@/utils/host-window.js";
@@ -310,7 +311,8 @@ import { getHlsOffsetBetweenColors } from "@/utils/color-hls.js";
 import ColorValuePreview from "@/components/ui/ColorValuePreview.vue";
 
 const { t } = useI18n();
-const { studio: store, panel } = useStudioDomainStores();
+const { studio: store, panel, history } = useStudioDomainStores();
+const historyBridge = createStudioHistoryBridge(store, history);
 const rootEl = ref(null);
 
 /* ---------------- State ---------------- */
@@ -883,7 +885,7 @@ function handleDeleteTag(tag) {
     undoLabel: t("common.undo"),
     duration: 5000,
     onUndo: () => {
-      store.undo();
+      historyBridge.undo();
     },
   });
 }
@@ -911,7 +913,7 @@ function deleteSavedColor(idx) {
     undoLabel: t("common.undo"),
     duration: 5000,
     onUndo: () => {
-      store.undo();
+      historyBridge.undo();
     },
   });
 }
@@ -933,7 +935,7 @@ function handleClearAllSaved() {
     undoLabel: t("common.undo"),
     duration: 5000,
     onUndo: () => {
-      store.undo();
+      historyBridge.undo();
     },
   });
 }

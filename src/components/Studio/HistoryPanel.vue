@@ -162,22 +162,23 @@
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from "vue";
 import { useI18n } from "vue-i18n";
-import { useStudioStore } from "@/stores/studioStore";
+import { useStudioDomainStores } from "@/stores/studio";
+import { createStudioHistoryBridge } from "@/stores/studio/historyBridge";
 import * as DialogService from "@/services/DialogService.js";
 
 const { t, te } = useI18n();
-const store = useStudioStore();
+const { studio: store, history } = useStudioDomainStores();
+const historyBridge = createStudioHistoryBridge(store, history);
 
 const timelineRef = ref(null);
 
 const historyData = computed(() => {
-  // Track store-level history revision so this computed invalidates when
-  // UndoRedoManager mutates internal stacks.
-  const revision = store.historyRevision;
+  // Track history-store revision so this computed invalidates when stacks mutate.
+  const revision = historyBridge.getRevision();
   void revision;
 
   try {
-    return store.getFullHistory();
+    return historyBridge.getFullHistory();
   } catch (e) {
     console.warn("[HistoryPanel] Failed to get history:", e);
     return {
@@ -459,7 +460,7 @@ function onTimelineWheel(e) {
 }
 
 watch(
-  () => store.historyRevision,
+  () => historyBridge.getRevision(),
   async () => {
     await nextTick();
     scrollToCurrentState();

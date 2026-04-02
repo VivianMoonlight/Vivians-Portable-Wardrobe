@@ -10,7 +10,7 @@ import { RenderApi } from '@/utils/RenderApi'
 import { AssetApi } from '@/utils/AssetApi'
 import { toRaw } from 'vue'
 
-import { hostWindow, setTimeoutHost, clearTimeoutHost } from '@/utils/host-window.js'
+import { hostWindow } from '@/utils/host-window.js'
 
 // Clone utilities
 import { fastClone, shallowClone } from '@/utils/clone.js'
@@ -20,14 +20,11 @@ import * as StackActions from '@/studio/stack-actions.js'
 import * as PaletteActions from '@/studio/palette-actions.js'
 import * as FocusActions from '@/studio/focus-actions.js'
 import * as RenderingActions from '@/studio/rendering-actions.js'
-import * as UndoActions from '@/studio/undo-redo-actions.js'
 import * as LayerActions from '@/studio/layer-actions.js'
 import * as SelectionActions from '@/studio/selection-actions.js'
 import * as PreviewActions from '@/studio/preview-actions.js'
 import * as PriorityActions from '@/studio/priority-actions.js'
 import * as AssetActions from '@/studio/asset-actions.js'
-import * as StorageActions from '@/studio/storage-actions.js'
-import * as SaveActions from '@/studio/save-actions.js'
 import { resolveCraftForAssetSlot } from '@/studio/craft-resolver.js'
 import { getStudioFacade } from '@/studio/StudioFacade'
 import { createStudioRenderPipeline } from '@/studio/StudioRenderPipeline'
@@ -54,15 +51,11 @@ import * as AssetIndex from '@/services/AssetIndexService'
 import * as LayerTranslator from '@/services/LayerTranslator'
 import { applyLayerDeltasToPart } from '@/services/PartPatchApplier'
 import { useStudioPanelStore } from '@/stores/studio/panelStore'
+import { useStudioHistoryStore } from '@/stores/studio/historyStore'
+import { useStudioPersistenceStore } from '@/stores/studio/persistenceStore'
 
 // PriorityService (refactored)
 import PriorityService from '@/services/PriorityService'
-
-// Undo/Redo Manager
-import UndoRedoManager from '@/utils/undo_redo'
-
-// Studio Storage Service
-import { StudioStorageService } from '@/services/StudioStorageService'
 
 /**
  * Simple hash for part content (used for caching layer entries)
@@ -310,10 +303,6 @@ export const useStudioStore = defineStore('studio', {
       }
     },
 
-    // Undo/Redo Manager
-    _undoRedoManager: null,
-    historyRevision: 0,
-
     // History panel visibility
     historyPanelVisible: false,
     // Studio V2 UI state
@@ -426,14 +415,11 @@ export const useStudioStore = defineStore('studio', {
     PaletteActions,
     FocusActions,
     RenderingActions,
-    UndoActions,
     LayerActions,
     SelectionActions,
     PreviewActions,
     PriorityActions,
     AssetActions,
-    StorageActions,
-    SaveActions,
 
     // -------------------------
     // Layer manager toggle
@@ -630,6 +616,14 @@ export const useStudioStore = defineStore('studio', {
       return useStudioPanelStore()
     },
 
+    _getHistoryStore() {
+      return useStudioHistoryStore()
+    },
+
+    _getPersistenceStore() {
+      return useStudioPersistenceStore()
+    },
+
     _syncPanelDomainState() {
       const panelStore = this._getPanelStore()
       this.workspaceMode = panelStore.workspaceMode
@@ -646,6 +640,15 @@ export const useStudioStore = defineStore('studio', {
       this.palettePanelVisible = panelStore.palettePanelVisible
       this.layerManagerActive = panelStore.layerManagerActive
       this.historyPanelVisible = panelStore.historyPanelVisible
+    },
+
+    _syncPersistenceDomainState() {
+      const persistenceStore = this._getPersistenceStore()
+      this.autoSaveEnabled = persistenceStore.autoSaveEnabled
+      this.lastSaveTime = persistenceStore.lastSaveTime
+      this.saveStatus = persistenceStore.saveStatus
+      this._saveStatusTimeout = persistenceStore._saveStatusTimeout
+      this.currentSaveId = persistenceStore.currentSaveId
     },
 
     setWorkspaceMode() {
@@ -848,29 +851,8 @@ export const useStudioStore = defineStore('studio', {
     },
 
     _sanitizeStacksForPersistence(stacks = this.stacks) {
-      const sourceStacks = Array.isArray(stacks) ? stacks : []
-      const sanitizedStacks = fastClone(sourceStacks)
-
-      const stripDerivedLayerEntries = (parts) => {
-        if (!Array.isArray(parts)) return
-        for (const part of parts) {
-          if (!part || typeof part !== 'object') continue
-          if (Object.prototype.hasOwnProperty.call(part, 'layerEntries')) {
-            delete part.layerEntries
-          }
-          if (Array.isArray(part.drawData)) {
-            stripDerivedLayerEntries(part.drawData)
-          }
-        }
-      }
-
-      for (const stack of sanitizedStacks) {
-        if (stack && typeof stack === 'object' && Array.isArray(stack.data)) {
-          stripDerivedLayerEntries(stack.data)
-        }
-      }
-
-      return sanitizedStacks
+      const persistenceStore = this._getPersistenceStore()
+      return persistenceStore.sanitizeStacksForPersistence(stacks, this)
     },
 
     // -------------------------
@@ -3338,121 +3320,58 @@ export const useStudioStore = defineStore('studio', {
     _localStorageKeyForPalette() { return 'studio_palette_v1' },
 
     persistStacksToLocalStorage() {
-      return StorageActions.persistStacksToLocalStorage(this)
+      const persistenceStore = this._getPersistenceStore()
+      return persistenceStore.persistStacksToLocalStorage(this)
     },
 
     loadStacksFromLocalStorage() {
-      const result = StorageActions.loadStacksFromLocalStorage()
-      if (result) {
-        this.stacks = this._sanitizeStacksForPersistence(result.stacks)
-        if (result._partUidCounter) {
-          this._partUidCounter = result._partUidCounter
-        }
-        this.RebuildAllStacksLayerEntriesFromParts()
-        this._refreshAllLayerEntriesFromPalette()
-        this.refreshMergedAppearanceData()
-        return true
-      }
-      return false
+      const persistenceStore = this._getPersistenceStore()
+      return persistenceStore.loadStacksFromLocalStorage(this)
     },
 
     persistPaletteToLocalStorage() {
-      return StorageActions.persistPaletteToLocalStorage(this)
+      const persistenceStore = this._getPersistenceStore()
+      return persistenceStore.persistPaletteToLocalStorage(this)
     },
 
     loadPaletteFromLocalStorage() {
-      const result = StorageActions.loadPaletteFromLocalStorage()
-      if (result) {
-        this.paletteMap = result.paletteMap || {}
-        this._paletteVersion++
-        if (result._paletteNextCounter) {
-          this._paletteNextCounter = result._paletteNextCounter
-        }
-        this._refreshAllLayerEntriesFromPalette()
-        this.refreshMergedAppearanceData()
-        return true
-      }
-      return false
+      const persistenceStore = this._getPersistenceStore()
+      return persistenceStore.loadPaletteFromLocalStorage(this)
     },
 
     exportStacksToJsonFile(filename = 'stacks.json') {
-      return StorageActions.exportStacksToJsonFile(this, filename)
+      const persistenceStore = this._getPersistenceStore()
+      return persistenceStore.exportStacksToJsonFile(this, filename)
     },
 
-    importStacksFromJsonFile(file) {
-      return new Promise(async (resolve) => {
-        const result = await StorageActions.importStacksFromJsonFile(file)
-        if (!result.success) {
-          resolve(false)
-          return
-        }
-        this.stacks = this._sanitizeStacksForPersistence(result.stacks)
-        if (result._partUidCounter) {
-          this._partUidCounter = result._partUidCounter
-        }
-        this.RebuildAllStacksLayerEntriesFromParts()
-        this._refreshAllLayerEntriesFromPalette()
-        this.refreshMergedAppearanceData()
-        resolve(true)
-      })
+    async importStacksFromJsonFile(file) {
+      const persistenceStore = this._getPersistenceStore()
+      return persistenceStore.importStacksFromJsonFile(this, file)
     },
 
     exportPaletteToJsonFile(filename = 'palette.json') {
-      return StorageActions.exportPaletteToJsonFile(this, filename)
+      const persistenceStore = this._getPersistenceStore()
+      return persistenceStore.exportPaletteToJsonFile(this, filename)
     },
 
-    importPaletteFromJsonFile(file) {
-      return new Promise(async (resolve) => {
-        const result = await StorageActions.importPaletteFromJsonFile(file)
-        if (!result.success) {
-          resolve(false)
-          return
-        }
-        this.paletteMap = result.paletteMap
-        this._paletteVersion++
-        if (result._paletteNextCounter) {
-          this._paletteNextCounter = result._paletteNextCounter
-        }
-        this._refreshAllLayerEntriesFromPalette()
-        this.refreshMergedAppearanceData()
-        resolve(true)
-      })
+    async importPaletteFromJsonFile(file) {
+      const persistenceStore = this._getPersistenceStore()
+      return persistenceStore.importPaletteFromJsonFile(this, file)
     },
 
     exportStudioSnapshot(filename = 'studio_snapshot.json') {
-      return StorageActions.exportStudioSnapshot(this, filename)
+      const persistenceStore = this._getPersistenceStore()
+      return persistenceStore.exportStudioSnapshot(this, filename)
     },
 
-    importStudioSnapshotFromFile(file) {
-      return new Promise(async (resolve) => {
-        const result = await StorageActions.importStudioSnapshotFromFile(file)
-        if (!result.success) {
-          resolve(false)
-          return
-        }
-        const { data } = result
-        if (data.stacks) {
-          this.stacks = this._sanitizeStacksForPersistence(data.stacks)
-        }
-        if (data.paletteMap) {
-          this.paletteMap = data.paletteMap
-          this._paletteVersion++
-        }
-        if (data._paletteNextCounter) {
-          this._paletteNextCounter = data._paletteNextCounter
-        }
-        if (data._partUidCounter) {
-          this._partUidCounter = data._partUidCounter
-        }
-        this.RebuildAllStacksLayerEntriesFromParts()
-        this._refreshAllLayerEntriesFromPalette()
-        this.refreshMergedAppearanceData()
-        resolve(true)
-      })
+    async importStudioSnapshotFromFile(file) {
+      const persistenceStore = this._getPersistenceStore()
+      return persistenceStore.importStudioSnapshotFromFile(this, file)
     },
 
     getMergedAppearanceForExport() {
-      return SaveActions.getMergedAppearanceForExport(this)
+      const persistenceStore = this._getPersistenceStore()
+      return persistenceStore.getMergedAppearanceForExport(this)
     },
 
     // -------------------------
@@ -4240,115 +4159,36 @@ export const useStudioStore = defineStore('studio', {
     // -------------------------
 
     /**
-     * Initialize the undo/redo manager (called during store initialization)
-     */
-    _initUndoRedo() {
-      if (this._undoRedoManager) {
-        return // Already initialized
-      }
-
-      this._undoRedoManager = new UndoRedoManager({
-        captureState: () => {
-          // Capture minimal necessary state for undo/redo
-          // mergedAppearanceData is derived and will be regenerated on restore
-          return {
-            stacks: this._sanitizeStacksForPersistence(this.stacks),
-            paletteMap: fastClone(this.paletteMap),
-            _paletteNextCounter: this._paletteNextCounter,
-            focusedPartIndex: fastClone(this.focusedPartIndex),
-            selectedLayers: fastClone(this.selectedLayers),
-            selectionMode: this.selectionMode,
-            activeFocusContext: fastClone(this.activeFocusContext),
-            previewTool: this.previewTool,
-            focusState: fastClone(this.focusState)
-          }
-        },
-        restoreState: (snapshot) => {
-          // Restore state from snapshot
-          this.stacks = this._sanitizeStacksForPersistence(snapshot.stacks)
-          this.paletteMap = fastClone(snapshot.paletteMap)
-          this._paletteNextCounter = snapshot._paletteNextCounter || 1
-          this.focusedPartIndex = fastClone(snapshot.focusedPartIndex)
-
-          if (snapshot.focusState) {
-            this.focusState = fastClone(snapshot.focusState)
-            this._syncLegacyFromFocusState()
-          } else {
-            if (Array.isArray(snapshot.selectedLayers)) {
-              this.selectedLayers = fastClone(snapshot.selectedLayers)
-            }
-            if (snapshot.selectionMode === 'single' || snapshot.selectionMode === 'multiple') {
-              this.selectionMode = snapshot.selectionMode
-            }
-            if (snapshot.activeFocusContext) {
-              this.activeFocusContext = fastClone(snapshot.activeFocusContext)
-            }
-            if (snapshot.previewTool === 'view' || snapshot.previewTool === 'move') {
-              this.previewTool = snapshot.previewTool
-            }
-            this._syncFocusStateScopeFromFocusedPart()
-            this._syncFocusStateSelectionFromLegacy()
-            this._syncFocusStateEditorFromLegacy()
-            this.focusState.tool.preview = this.previewTool
-          }
-
-          // Increment palette version to invalidate caches
-          this._paletteVersion++
-
-          // Rebuild layer entries and refresh
-          this.RebuildAllStacksLayerEntriesFromParts()
-          this._refreshAllLayerEntriesFromPalette()
-          this.refreshMergedAppearanceData()
-
-          // Update focused part
-          if (this.focusedPartIndex.stackIndex !== null && this.focusedPartIndex.partIndex !== null) {
-            this.triggerFocusedPartUpdate()
-          }
-        },
-        onChange: () => {
-          this.historyRevision += 1
-        },
-        maxHistory: 100,
-        throttleInterval: 150,
-        enableLogging: false // Set to true for debugging
-      })
-    },
-
-    /**
      * Start a history transaction (for high-frequency operations)
      * @param {string} [tag] Optional tag to identify the transaction
      */
     startHistoryTransaction(tag = null) {
-      if (!this._undoRedoManager) {
-        this._initUndoRedo()
-      }
-      this._undoRedoManager.startTransaction(tag)
+      const historyStore = this._getHistoryStore()
+      historyStore.startHistoryTransaction(this, tag)
     },
 
     /**
      * End the current history transaction
      */
     endHistoryTransaction() {
-      if (!this._undoRedoManager) return
-      this._undoRedoManager.endTransaction()
+      const historyStore = this._getHistoryStore()
+      historyStore.endHistoryTransaction(this)
     },
 
     /**
      * Cancel the current history transaction without recording
      */
     cancelHistoryTransaction() {
-      if (!this._undoRedoManager) return
-      this._undoRedoManager.cancelTransaction()
+      const historyStore = this._getHistoryStore()
+      historyStore.cancelHistoryTransaction(this)
     },
 
     /**
      * Push current state to history (for discrete operations)
      */
     pushHistorySnapshot(historyMeta = null) {
-      if (!this._undoRedoManager) {
-        this._initUndoRedo()
-      }
-      this._undoRedoManager.pushSnapshot(historyMeta)
+      const historyStore = this._getHistoryStore()
+      historyStore.pushHistorySnapshot(this, historyMeta)
     },
 
     /**
@@ -4356,18 +4196,8 @@ export const useStudioStore = defineStore('studio', {
      * @param {number} [delay] Optional custom delay in ms
      */
     pushHistorySnapshotThrottled(delay = null, historyMeta = null) {
-      if (!this._undoRedoManager) {
-        this._initUndoRedo()
-      }
-
-      let resolvedDelay = delay
-      let resolvedMeta = historyMeta
-      if (resolvedDelay && typeof resolvedDelay === 'object' && resolvedMeta === null) {
-        resolvedMeta = resolvedDelay
-        resolvedDelay = null
-      }
-
-      this._undoRedoManager.pushSnapshotThrottled(resolvedDelay, resolvedMeta)
+      const historyStore = this._getHistoryStore()
+      historyStore.pushHistorySnapshotThrottled(this, delay, historyMeta)
     },
 
     /**
@@ -4375,10 +4205,8 @@ export const useStudioStore = defineStore('studio', {
      * @returns {boolean} True if undo was performed
      */
     undo() {
-      if (!this._undoRedoManager) {
-        this._initUndoRedo()
-      }
-      return this._undoRedoManager.undo()
+      const historyStore = this._getHistoryStore()
+      return historyStore.undo(this)
 
     },
 
@@ -4387,10 +4215,8 @@ export const useStudioStore = defineStore('studio', {
      * @returns {boolean} True if redo was performed
      */
     redo() {
-      if (!this._undoRedoManager) {
-        this._initUndoRedo()
-      }
-      return this._undoRedoManager.redo()
+      const historyStore = this._getHistoryStore()
+      return historyStore.redo(this)
     },
 
     /**
@@ -4405,9 +4231,8 @@ export const useStudioStore = defineStore('studio', {
         })
       }
 
-      if (!this._undoRedoManager) return false
-      this._undoRedoManager.clearHistory()
-      return true
+      const historyStore = this._getHistoryStore()
+      return historyStore.clearHistory(this)
     },
 
     /**
@@ -4415,10 +4240,8 @@ export const useStudioStore = defineStore('studio', {
      * @returns {Object} History info
      */
     getHistory() {
-      if (!this._undoRedoManager) {
-        this._initUndoRedo()
-      }
-      return this._undoRedoManager.getHistory()
+      const historyStore = this._getHistoryStore()
+      return historyStore.getHistory(this)
     },
 
     /**
@@ -4426,10 +4249,8 @@ export const useStudioStore = defineStore('studio', {
      * @returns {Object} Full history info with undo and redo stacks
      */
     getFullHistory() {
-      if (!this._undoRedoManager) {
-        this._initUndoRedo()
-      }
-      return this._undoRedoManager.getFullHistory()
+      const historyStore = this._getHistoryStore()
+      return historyStore.getFullHistory(this)
     },
 
     /**
@@ -4446,10 +4267,8 @@ export const useStudioStore = defineStore('studio', {
         })
       }
 
-      if (!this._undoRedoManager) {
-        this._initUndoRedo()
-      }
-      return this._undoRedoManager.jumpToState(steps)
+      const historyStore = this._getHistoryStore()
+      return historyStore.jumpToHistoryState(this, steps)
     },
 
     /**
@@ -4465,16 +4284,16 @@ export const useStudioStore = defineStore('studio', {
      * Check if undo is available
      */
     canUndo() {
-      if (!this._undoRedoManager) return false
-      return this._undoRedoManager.canUndo()
+      const historyStore = this._getHistoryStore()
+      return historyStore.canUndo(this)
     },
 
     /**
      * Check if redo is available
      */
     canRedo() {
-      if (!this._undoRedoManager) return false
-      return this._undoRedoManager.canRedo()
+      const historyStore = this._getHistoryStore()
+      return historyStore.canRedo(this)
     },
 
     // -------------------------
@@ -4485,126 +4304,49 @@ export const useStudioStore = defineStore('studio', {
      * Enable auto-save with debounce
      */
     enableAutoSave() {
-      const result = SaveActions.enableAutoSave()
-      this.autoSaveEnabled = result.autoSaveEnabled
+      const persistenceStore = this._getPersistenceStore()
+      const result = persistenceStore.enableAutoSave(this)
+      this._syncPersistenceDomainState()
+      return result
     },
 
     /**
      * Disable auto-save
      */
     disableAutoSave() {
-      const result = SaveActions.disableAutoSave()
-      this.autoSaveEnabled = result.autoSaveEnabled
+      const persistenceStore = this._getPersistenceStore()
+      const result = persistenceStore.disableAutoSave(this)
+      this._syncPersistenceDomainState()
+      return result
     },
 
     /**
      * Save state to localStorage with compression
      */
     async saveToLocalStorage() {
-      this.saveStatus = 'saving'
-      const result = await SaveActions.saveToLocalStorage(this)
-
-      if (result.success) {
-        this.lastSaveTime = result.lastSaveTime
-        this.saveStatus = result.saveStatus
-      } else {
-        this.saveStatus = result.saveStatus || 'error'
-      }
-
-      // Clear any existing timeout and set new one
-      if (this._saveStatusTimeout) {
-        clearTimeoutHost(this._saveStatusTimeout)
-      }
-      this._saveStatusTimeout = setTimeoutHost(() => {
-        if (this.saveStatus === 'saved' || this.saveStatus === 'error') {
-          this.saveStatus = 'idle'
-        }
-        this._saveStatusTimeout = null
-      }, 2000)
-
-      return result.success
+      const persistenceStore = this._getPersistenceStore()
+      const result = await persistenceStore.saveToLocalStorage(this)
+      this._syncPersistenceDomainState()
+      return result
     },
 
     /**
      * Restore state from localStorage
      */
     async restoreFromLocalStorage() {
-      const result = await SaveActions.restoreFromLocalStorage()
-
-      if (!result.restored) {
-        return result
-      }
-
-      // Restore data from result
-      const data = result.data
-      if (data.stacks) {
-        this.stacks = this._sanitizeStacksForPersistence(data.stacks)
-      }
-      if (data.paletteMap) {
-        this.paletteMap = data.paletteMap
-      }
-      if (typeof data._paletteNextCounter === 'number') {
-        this._paletteNextCounter = data._paletteNextCounter
-      }
-      if (typeof data._partUidCounter === 'number') {
-        this._partUidCounter = data._partUidCounter
-      }
-      if (typeof data.selectedIndex === 'number') {
-        this.selectedIndex = data.selectedIndex
-      }
-      if (typeof data.focusedPartIndex === 'object' && data.focusedPartIndex !== null) {
-        this.focusedPartIndex = fastClone(data.focusedPartIndex)
-      }
-
-      if (data.focusState && typeof data.focusState === 'object') {
-        this.focusState = fastClone(data.focusState)
-        this._syncLegacyFromFocusState()
-      } else {
-        if (Array.isArray(data.selectedLayers)) {
-          this.selectedLayers = fastClone(data.selectedLayers)
-        }
-        if (data.selectionMode === 'single' || data.selectionMode === 'multiple') {
-          this.selectionMode = data.selectionMode
-        }
-        if (data.activeFocusContext && typeof data.activeFocusContext === 'object') {
-          this.activeFocusContext = fastClone(data.activeFocusContext)
-        }
-        if (data.previewTool === 'view' || data.previewTool === 'move') {
-          this.previewTool = data.previewTool
-        }
-        this._syncFocusStateScopeFromFocusedPart()
-        this._syncFocusStateSelectionFromLegacy()
-        this._syncFocusStateEditorFromLegacy()
-        this.focusState.tool.preview = this.previewTool
-      }
-
-      this._paletteVersion++
-      // Rebuild layer entries and refresh
-      this.RebuildAllStacksLayerEntriesFromParts()
-      this._refreshAllLayerEntriesFromPalette()
-      this.refreshMergedAppearanceData()
-
-      this.lastSaveTime = result.timestamp
-      if (this.focusedPartIndex.stackIndex !== null && this.focusedPartIndex.partIndex !== null) {
-        this.triggerFocusedPartUpdate()
-      }
-
-      return {
-        restored: true,
-        timestamp: result.timestamp,
-        age: result.age
-      }
+      const persistenceStore = this._getPersistenceStore()
+      const result = await persistenceStore.restoreFromLocalStorage(this)
+      this._syncPersistenceDomainState()
+      return result
     },
 
     /**
      * Clear auto-saved data from localStorage
      */
     clearLocalStorage() {
-      const result = SaveActions.clearLocalStorage()
-      if (result) {
-        this.lastSaveTime = null
-        this.saveStatus = 'idle'
-      }
+      const persistenceStore = this._getPersistenceStore()
+      const result = persistenceStore.clearLocalStorage(this)
+      this._syncPersistenceDomainState()
       return result
     },
 
@@ -4612,7 +4354,8 @@ export const useStudioStore = defineStore('studio', {
      * Get information about auto-saved data
      */
     async getAutoSaveInfo() {
-      return SaveActions.getAutoSaveInfo()
+      const persistenceStore = this._getPersistenceStore()
+      return persistenceStore.getAutoSaveInfo()
     },
 
     // -------------------------
@@ -4623,28 +4366,10 @@ export const useStudioStore = defineStore('studio', {
      * Auto-save to quick save slot using StudioStorageService
      */
     async autoSave() {
-      if (!this.autoSaveEnabled) return
-
-      this.saveStatus = 'saving'
-      const result = SaveActions.autoSave(this)
-
-      if (result.success) {
-        this.lastSaveTime = result.lastSaveTime
-        this.saveStatus = result.saveStatus
-      } else {
-        this.saveStatus = result.saveStatus || 'error'
-      }
-
-      // Auto-hide status after delay
-      if (this._saveStatusTimeout) {
-        clearTimeoutHost(this._saveStatusTimeout)
-      }
-      this._saveStatusTimeout = setTimeoutHost(() => {
-        if (this.saveStatus === 'saved' || this.saveStatus === 'error') {
-          this.saveStatus = 'idle'
-        }
-        this._saveStatusTimeout = null
-      }, result.success ? 2000 : 3000)
+      const persistenceStore = this._getPersistenceStore()
+      const result = await persistenceStore.autoSave(this)
+      this._syncPersistenceDomainState()
+      return result
     },
 
     /**
@@ -4659,29 +4384,10 @@ export const useStudioStore = defineStore('studio', {
         })
       }
 
-      this.saveStatus = 'saving'
-      const result = SaveActions.saveStudioSession(this, name)
-
-      if (result.success) {
-        this.currentSaveId = result.id
-        this.lastSaveTime = result.lastSaveTime
-        this.saveStatus = result.saveStatus
-      } else {
-        this.saveStatus = result.saveStatus || 'error'
-      }
-
-      // Auto-hide status after delay
-      if (this._saveStatusTimeout) {
-        clearTimeoutHost(this._saveStatusTimeout)
-      }
-      this._saveStatusTimeout = setTimeoutHost(() => {
-        if (this.saveStatus === 'saved' || this.saveStatus === 'error') {
-          this.saveStatus = 'idle'
-        }
-        this._saveStatusTimeout = null
-      }, result.success ? 2000 : 3000)
-
-      return { success: result.success, error: result.error }
+      const persistenceStore = this._getPersistenceStore()
+      const result = await persistenceStore.saveStudioSession(this, name)
+      this._syncPersistenceDomainState()
+      return result
     },
 
     /**
@@ -4696,29 +4402,10 @@ export const useStudioStore = defineStore('studio', {
         })
       }
 
-      const result = SaveActions.loadStudioSession(id)
-
-      if (!result.success) {
-        return { success: false, error: result.error }
-      }
-
-      const { data } = result
-      this.stacks = this._sanitizeStacksForPersistence(data.stacks || [])
-      this.paletteMap = data.paletteMap || {}
-      this._paletteNextCounter = data._paletteNextCounter || 0
-      this._partUidCounter = data._partUidCounter || 0
-      this.selectedIndex = data.selectedIndex ?? -1
-      this.currentSaveId = id
-
-      // Increment palette version to invalidate caches
-      this._paletteVersion++
-
-      // Rebuild layer entries and refresh
-      this.RebuildAllStacksLayerEntriesFromParts()
-      this._refreshAllLayerEntriesFromPalette()
-      this.refreshMergedAppearanceData()
-
-      return { success: true }
+      const persistenceStore = this._getPersistenceStore()
+      const result = await persistenceStore.loadStudioSession(this, id)
+      this._syncPersistenceDomainState()
+      return result
     },
 
     renameStudioSession(id, newName, options = {}) {
@@ -4730,12 +4417,10 @@ export const useStudioStore = defineStore('studio', {
         })
       }
 
-      const normalizedName = String(newName || '').trim()
-      if (!normalizedName) {
-        return { success: false, error: 'Invalid save name' }
-      }
-
-      return StudioStorageService.renameSave(id, normalizedName)
+      const persistenceStore = this._getPersistenceStore()
+      const result = persistenceStore.renameStudioSession(this, id, newName)
+      this._syncPersistenceDomainState()
+      return result
     },
 
     deleteStudioSession(id, options = {}) {
@@ -4747,10 +4432,9 @@ export const useStudioStore = defineStore('studio', {
         })
       }
 
-      const result = StudioStorageService.deleteSave(id)
-      if (result?.success && this.currentSaveId === id) {
-        this.currentSaveId = null
-      }
+      const persistenceStore = this._getPersistenceStore()
+      const result = persistenceStore.deleteStudioSession(this, id)
+      this._syncPersistenceDomainState()
       return result
     },
 
@@ -4758,18 +4442,10 @@ export const useStudioStore = defineStore('studio', {
      * Auto-restore from quick save on studio open
      */
     async autoRestoreSession() {
-      const result = SaveActions.autoRestoreSession()
-      if (!result.restored) {
-        return result
-      }
-
-      // Load the auto-save
-      return this.loadStudioSession(result.save.id).then(loadResult => {
-        if (loadResult.success) {
-          return { restored: true, save: result.save }
-        }
-        return { restored: false }
-      })
+      const persistenceStore = this._getPersistenceStore()
+      const result = await persistenceStore.autoRestoreSession(this)
+      this._syncPersistenceDomainState()
+      return result
     }
   }
 })

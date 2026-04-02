@@ -20,7 +20,7 @@
       </div>
 
       <div v-for="save in sortedSaves" :key="save.id" class="save-item"
-        :class="{ 'auto-save': save.isAutoSave, 'current': save.id === store.currentSaveId }">
+        :class="{ 'auto-save': save.isAutoSave, 'current': save.id === persistence.currentSaveId }">
         
         <div class="save-icon">
           {{ save.isAutoSave ? '⚡' : '💾' }}
@@ -29,7 +29,7 @@
         <div class="save-info">
           <div class="save-name" v-if="renamingId !== save.id">
             {{ save.name }}
-            <span v-if="save.id === store.currentSaveId" class="current-badge">
+            <span v-if="save.id === persistence.currentSaveId" class="current-badge">
               {{ t('savesManager.current') || 'Current' }}
             </span>
           </div>
@@ -71,12 +71,12 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useStudioStore } from '@/stores/studioStore'
+import { useStudioDomainStores } from '@/stores/studio'
 import { StudioStorageService } from '@/services/StudioStorageService'
 import * as DialogService from '@/services/DialogService'
 
 const { t } = useI18n()
-const store = useStudioStore()
+const { studio: store, persistence } = useStudioDomainStores()
 const emit = defineEmits(['close'])
 
 const saves = ref([])
