@@ -33,7 +33,7 @@
 
       <!-- Optional overlay hints -->
       <div v-if="activeTool === 'move' && store.canUseMoveTool" class="mode-hint">
-        {{ isDraggingMultipleLayers ? t('previewWidget.moveHintMultiple', { count: store.selectedLayers.length }) : t('previewWidget.moveHint') }}
+        {{ isDraggingMultipleLayers ? t('previewWidget.moveHintMultiple', { count: selectedLayersCount }) : t('previewWidget.moveHint') }}
       </div>
     </div>
   </div>
@@ -43,13 +43,15 @@
 import { ref, onMounted, onBeforeUnmount, watch, nextTick, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useStudioDomainStores } from '@/stores/studio'
+import { createStudioSelectionBridge } from '@/stores/studio/selectionBridge'
 import { RenderApi } from '@/utils/RenderApi'
 import { hostWindow, doc } from '@/utils/host-window.js'
 import { throttle } from '@/utils/performance.js'
 
 const { t } = useI18n()
 
-const { studio: store, panel } = useStudioDomainStores()
+const { studio: store, panel, selection } = useStudioDomainStores()
+const selectionBridge = createStudioSelectionBridge(store, selection)
 const canvas = ref(null)
 const wrap = ref(null)
 let resizeObserver = null
@@ -64,7 +66,9 @@ function toggleLayerManager() {
 }
 
 // Tools state - now from store
-const activeTool = computed(() => store.previewTool)
+const activeTool = computed(() => selectionBridge.previewTool)
+const selectedLayersCount = computed(() => selectionBridge.selectedLayersCount)
+const selectionMode = computed(() => selectionBridge.selectionMode)
 
 // Interaction state for pan / zoom
 const latestSrc = ref(null) // keep latest source (image/canvas/video) to redraw during pan/zoom
@@ -343,8 +347,8 @@ function onPointerDown(e) {
 
     if (part && Array.isArray(entries) && entries.length > 0) {
       // Check if we're in multi-selection mode with multiple layers
-      const isMultiMode = store.selectionMode === 'multiple'
-      const selectedCount = store.selectedLayers.length
+      const isMultiMode = selectionMode.value === 'multiple'
+      const selectedCount = selectedLayersCount.value
 
       if (isMultiMode && selectedCount > 0) {
         // Multi-layer dragging

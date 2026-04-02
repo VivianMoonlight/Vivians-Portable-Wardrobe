@@ -53,6 +53,7 @@ import { applyLayerDeltasToPart } from '@/services/PartPatchApplier'
 import { useStudioPanelStore } from '@/stores/studio/panelStore'
 import { useStudioHistoryStore } from '@/stores/studio/historyStore'
 import { useStudioPersistenceStore } from '@/stores/studio/persistenceStore'
+import { useStudioSelectionStore } from '@/stores/studio/selectionStore'
 
 // PriorityService (refactored)
 import PriorityService from '@/services/PriorityService'
@@ -326,12 +327,6 @@ export const useStudioStore = defineStore('studio', {
     pinnedPanel: null,
     mobileTab: 'structure', // 'structure' | 'replace' | 'property' | 'history'
     firstRunGuideDone: false,
-    // Auto-save state
-    autoSaveEnabled: true,
-    lastSaveTime: null,
-    saveStatus: 'idle', // 'idle' | 'saving' | 'saved' | 'error'
-    _saveStatusTimeout: null, // Track timeout for status indicator
-    currentSaveId: null, // ID of currently loaded save
 
     // Preview stack management: coordinates hover previews between components
     // Structure: [{ id, priority, preview, source, timestamp }, ...]
@@ -452,6 +447,7 @@ export const useStudioStore = defineStore('studio', {
       const result = PreviewActions.setPreviewTool(tool)
       this.previewTool = result.previewTool
       this.focusState.tool.preview = result.previewTool
+      this._syncSelectionDomainState()
     },
 
     /**
@@ -461,6 +457,7 @@ export const useStudioStore = defineStore('studio', {
       const result = PreviewActions.togglePreviewTool(this)
       this.previewTool = result.previewTool
       this.focusState.tool.preview = result.previewTool
+      this._syncSelectionDomainState()
     },
 
     // -------------------------
@@ -598,13 +595,16 @@ export const useStudioStore = defineStore('studio', {
       const result = FocusActions.setReplaceTargetState(this, item, key, isEmpty)
       this.replaceTarget = result.replaceTarget
       this.focusedPartIndex = { stackIndex: null, partIndex: null }
+      this._syncFocusStateScopeFromFocusedPart()
       this.clearPropertyFocus()
+      this._syncSelectionDomainState()
       this.onReplaceEnter({ key, isEmpty })
     },
 
     clearReplaceTarget() {
       const result = FocusActions.clearReplaceTargetState()
       this.replaceTarget = result.replaceTarget
+      this._syncSelectionDomainState()
       this._syncPanelDomainState()
       // Deprecated flow: clearing replace target no longer mutates taskStage.
       if (this.activeContextPanel === 'asset' && this.pinnedPanel !== 'asset') {
@@ -624,6 +624,31 @@ export const useStudioStore = defineStore('studio', {
       return useStudioPersistenceStore()
     },
 
+    _getSelectionStore() {
+      return useStudioSelectionStore()
+    },
+
+    _syncSelectionDomainState() {
+      const selectionStore = this._getSelectionStore()
+      const nextFocusState = {
+        ...(this.focusState || {}),
+        tool: {
+          ...(this.focusState?.tool || {}),
+          preview: this.previewTool === 'move' ? 'move' : 'view'
+        }
+      }
+
+      selectionStore.syncFromLegacyState({
+        focusedPartIndex: this.focusedPartIndex,
+        replaceTarget: this.replaceTarget,
+        selectedLayers: this.selectedLayers,
+        selectionMode: this.selectionMode,
+        activeFocusContext: this.activeFocusContext,
+        previewTool: this.previewTool,
+        focusState: nextFocusState
+      })
+    },
+
     _syncPanelDomainState() {
       const panelStore = this._getPanelStore()
       this.workspaceMode = panelStore.workspaceMode
@@ -640,15 +665,6 @@ export const useStudioStore = defineStore('studio', {
       this.palettePanelVisible = panelStore.palettePanelVisible
       this.layerManagerActive = panelStore.layerManagerActive
       this.historyPanelVisible = panelStore.historyPanelVisible
-    },
-
-    _syncPersistenceDomainState() {
-      const persistenceStore = this._getPersistenceStore()
-      this.autoSaveEnabled = persistenceStore.autoSaveEnabled
-      this.lastSaveTime = persistenceStore.lastSaveTime
-      this.saveStatus = persistenceStore.saveStatus
-      this._saveStatusTimeout = persistenceStore._saveStatusTimeout
-      this.currentSaveId = persistenceStore.currentSaveId
     },
 
     setWorkspaceMode() {
@@ -899,6 +915,7 @@ export const useStudioStore = defineStore('studio', {
       this.stacks = result.stacks
       this.selectedIndex = result.selectedIndex
       this.focusedPartIndex = result.focusedPartIndex
+      this._syncFocusStateScopeFromFocusedPart()
       this._scheduleRefresh()
     },
 
@@ -917,6 +934,7 @@ export const useStudioStore = defineStore('studio', {
       this.stacks = result.stacks
       this.selectedIndex = result.selectedIndex
       this.focusedPartIndex = result.focusedPartIndex
+      this._syncFocusStateScopeFromFocusedPart()
       this._scheduleRefresh()
       this.pushHistorySnapshot(this._normalizeHistoryMeta(null, 'stack.move'))
     },
@@ -976,6 +994,7 @@ export const useStudioStore = defineStore('studio', {
       this.selectedIndex = result.selectedIndex
       if (result.focusedPartIndex) {
         this.focusedPartIndex = result.focusedPartIndex
+        this._syncFocusStateScopeFromFocusedPart()
       }
       if (result.clearPropertyFocus) {
         this.clearPropertyFocus()
@@ -996,6 +1015,7 @@ export const useStudioStore = defineStore('studio', {
       this.selectedIndex = result.selectedIndex
       this.mergedAppearanceData = result.mergedAppearanceData
       this.focusedPartIndex = result.focusedPartIndex
+      this._syncFocusStateScopeFromFocusedPart()
       if (result.clearPropertyFocus) {
         this.clearPropertyFocus()
       }
@@ -3300,6 +3320,7 @@ export const useStudioStore = defineStore('studio', {
       if (result.stacks) {
         this.stacks = result.stacks
         this.focusedPartIndex = result.focusedPartIndex
+        this._syncFocusStateScopeFromFocusedPart()
         try { this.translateFocusedPartToLayers && this.translateFocusedPartToLayers() } catch (e) { }
         this._finalizeMutation({
           changed: true,
@@ -3400,6 +3421,7 @@ export const useStudioStore = defineStore('studio', {
         partIndex: (typeof partIndex === 'number') ? partIndex : null,
         partUid
       }
+      this._syncSelectionDomainState()
     },
 
     _syncFocusStateSelectionFromLegacy() {
@@ -3411,6 +3433,7 @@ export const useStudioStore = defineStore('studio', {
           ? this._buildLayerKey(selected[selected.length - 1].stackIndex, selected[selected.length - 1].partIndex, selected[selected.length - 1].layerIndex)
           : null
       }
+      this._syncSelectionDomainState()
     },
 
     _syncFocusStateEditorFromLegacy() {
@@ -3419,6 +3442,7 @@ export const useStudioStore = defineStore('studio', {
         subLayerIndex: this.activeFocusContext?.subLayerIndex ?? null,
         timestamp: this.activeFocusContext?.timestamp || 0
       }
+      this._syncSelectionDomainState()
     },
 
     _syncLegacyFromFocusState() {
@@ -3453,6 +3477,19 @@ export const useStudioStore = defineStore('studio', {
 
       const preview = tool.preview === 'move' ? 'move' : 'view'
       this.previewTool = preview
+      this._syncSelectionDomainState()
+    },
+
+    setSelectionMode(mode = 'single') {
+      const normalizedMode = mode === 'multiple' ? 'multiple' : 'single'
+      this.selectionMode = normalizedMode
+
+      if (normalizedMode === 'single' && this.selectedLayers.length > 1) {
+        const firstLayer = this.selectedLayers[0]
+        this.selectedLayers = firstLayer ? [firstLayer] : []
+      }
+
+      this._syncFocusStateSelectionFromLegacy()
     },
 
     /**
@@ -4305,9 +4342,7 @@ export const useStudioStore = defineStore('studio', {
      */
     enableAutoSave() {
       const persistenceStore = this._getPersistenceStore()
-      const result = persistenceStore.enableAutoSave(this)
-      this._syncPersistenceDomainState()
-      return result
+      return persistenceStore.enableAutoSave(this)
     },
 
     /**
@@ -4315,9 +4350,7 @@ export const useStudioStore = defineStore('studio', {
      */
     disableAutoSave() {
       const persistenceStore = this._getPersistenceStore()
-      const result = persistenceStore.disableAutoSave(this)
-      this._syncPersistenceDomainState()
-      return result
+      return persistenceStore.disableAutoSave(this)
     },
 
     /**
@@ -4325,9 +4358,7 @@ export const useStudioStore = defineStore('studio', {
      */
     async saveToLocalStorage() {
       const persistenceStore = this._getPersistenceStore()
-      const result = await persistenceStore.saveToLocalStorage(this)
-      this._syncPersistenceDomainState()
-      return result
+      return persistenceStore.saveToLocalStorage(this)
     },
 
     /**
@@ -4335,9 +4366,7 @@ export const useStudioStore = defineStore('studio', {
      */
     async restoreFromLocalStorage() {
       const persistenceStore = this._getPersistenceStore()
-      const result = await persistenceStore.restoreFromLocalStorage(this)
-      this._syncPersistenceDomainState()
-      return result
+      return persistenceStore.restoreFromLocalStorage(this)
     },
 
     /**
@@ -4345,9 +4374,7 @@ export const useStudioStore = defineStore('studio', {
      */
     clearLocalStorage() {
       const persistenceStore = this._getPersistenceStore()
-      const result = persistenceStore.clearLocalStorage(this)
-      this._syncPersistenceDomainState()
-      return result
+      return persistenceStore.clearLocalStorage(this)
     },
 
     /**
@@ -4367,9 +4394,7 @@ export const useStudioStore = defineStore('studio', {
      */
     async autoSave() {
       const persistenceStore = this._getPersistenceStore()
-      const result = await persistenceStore.autoSave(this)
-      this._syncPersistenceDomainState()
-      return result
+      return persistenceStore.autoSave(this)
     },
 
     /**
@@ -4385,9 +4410,7 @@ export const useStudioStore = defineStore('studio', {
       }
 
       const persistenceStore = this._getPersistenceStore()
-      const result = await persistenceStore.saveStudioSession(this, name)
-      this._syncPersistenceDomainState()
-      return result
+      return persistenceStore.saveStudioSession(this, name)
     },
 
     /**
@@ -4403,9 +4426,7 @@ export const useStudioStore = defineStore('studio', {
       }
 
       const persistenceStore = this._getPersistenceStore()
-      const result = await persistenceStore.loadStudioSession(this, id)
-      this._syncPersistenceDomainState()
-      return result
+      return persistenceStore.loadStudioSession(this, id)
     },
 
     renameStudioSession(id, newName, options = {}) {
@@ -4418,9 +4439,7 @@ export const useStudioStore = defineStore('studio', {
       }
 
       const persistenceStore = this._getPersistenceStore()
-      const result = persistenceStore.renameStudioSession(this, id, newName)
-      this._syncPersistenceDomainState()
-      return result
+      return persistenceStore.renameStudioSession(this, id, newName)
     },
 
     deleteStudioSession(id, options = {}) {
@@ -4433,9 +4452,7 @@ export const useStudioStore = defineStore('studio', {
       }
 
       const persistenceStore = this._getPersistenceStore()
-      const result = persistenceStore.deleteStudioSession(this, id)
-      this._syncPersistenceDomainState()
-      return result
+      return persistenceStore.deleteStudioSession(this, id)
     },
 
     /**
@@ -4443,9 +4460,7 @@ export const useStudioStore = defineStore('studio', {
      */
     async autoRestoreSession() {
       const persistenceStore = this._getPersistenceStore()
-      const result = await persistenceStore.autoRestoreSession(this)
-      this._syncPersistenceDomainState()
-      return result
+      return persistenceStore.autoRestoreSession(this)
     }
   }
 })

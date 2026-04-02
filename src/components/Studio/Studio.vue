@@ -488,6 +488,7 @@ import StatusChip from '../ui/StatusChip.vue'
 import { useStudioDomainStores } from '@/stores/studio'
 import { createStudioHistoryBridge } from '@/stores/studio/historyBridge'
 import { createStudioPersistenceBridge } from '@/stores/studio/persistenceBridge'
+import { createStudioSelectionBridge } from '@/stores/studio/selectionBridge'
 import { useFileSystemStore } from '@/stores/fileSystemStore'
 import { ExternalAdapter } from '@/utils/external_adapters'
 import { hostWindow, doc } from '@/utils/host-window.js'
@@ -498,11 +499,12 @@ import { useAutoSave } from '@/services/AutoSaveService'
 import * as DialogService from '@/services/DialogService.js'
 
 const { t } = useI18n()
-const { studio: store, panel, history, persistence } = useStudioDomainStores()
+const { studio: store, panel, history, persistence, selection } = useStudioDomainStores()
 const fsStore = useFileSystemStore()
 
 const historyBridge = createStudioHistoryBridge(store, history)
 const persistenceBridge = createStudioPersistenceBridge(store, persistence)
+const selectionBridge = createStudioSelectionBridge(store, selection)
 
 // Setup undo/redo keyboard shortcuts
 useUndoRedo(historyBridge, {
@@ -875,23 +877,23 @@ async function importCharacterAsStack() {
   }
 }
 
-const isReplaceMode = computed(() => !!(store.replaceTarget && store.replaceTarget.active))
-const isMultiSelectMode = computed(() => store.selectionMode === 'multiple' && store.selectedLayers.length > 0)
-const isVisualMoveMode = computed(() => store.previewTool === 'move')
+const isReplaceMode = computed(() => !!(selectionBridge.replaceTarget && selectionBridge.replaceTarget.active))
+const isMultiSelectMode = computed(() => selectionBridge.selectionMode === 'multiple' && selectionBridge.selectedLayersCount > 0)
+const isVisualMoveMode = computed(() => selectionBridge.previewTool === 'move')
 const hasActiveMode = computed(() => isReplaceMode.value || isMultiSelectMode.value || isVisualMoveMode.value)
-const selectedLayersCount = computed(() => store.selectedLayers.length)
+const selectedLayersCount = computed(() => selectionBridge.selectedLayersCount)
 
 function exitReplaceMode() {
-  store.clearReplaceTarget()
+  selectionBridge.clearReplaceTarget()
 }
 
 function exitMultiSelectMode() {
-  store.clearLayerSelection()
-  store.selectionMode = 'single'
+  selectionBridge.clearLayerSelection()
+  selectionBridge.setSelectionMode('single')
 }
 
 function exitVisualMoveMode() {
-  store.previewTool = 'view'
+  selectionBridge.setPreviewTool('view')
 }
 
 function openToolDockPanel(panel) {

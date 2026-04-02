@@ -1,3 +1,5 @@
+import { useStudioPersistenceStore } from '@/stores/studio/persistenceStore'
+
 function buildHistoryMeta(type, payload, meta = {}) {
   const actionType = String(meta?.historyActionType || type || '').trim()
   if (!actionType) return null
@@ -109,20 +111,12 @@ function createHistoryHandlers(store) {
   }
 }
 
-function createSavesHandlers(store) {
+function createSavesHandlers(store, persistenceStore) {
   return {
-    'saves.save': (payload) => store.saveStudioSession(payload.name, {
-      _fromFacade: true
-    }),
-    'saves.load': (payload) => store.loadStudioSession(payload.id, {
-      _fromFacade: true
-    }),
-    'saves.delete': (payload) => store.deleteStudioSession(payload.id, {
-      _fromFacade: true
-    }),
-    'saves.rename': (payload) => store.renameStudioSession(payload.id, payload.newName, {
-      _fromFacade: true
-    })
+    'saves.save': (payload) => persistenceStore.saveStudioSession(store, payload.name),
+    'saves.load': (payload) => persistenceStore.loadStudioSession(store, payload.id),
+    'saves.delete': (payload) => persistenceStore.deleteStudioSession(store, payload.id),
+    'saves.rename': (payload) => persistenceStore.renameStudioSession(store, payload.id, payload.newName)
   }
 }
 
@@ -136,15 +130,16 @@ function createStackHandlers(store) {
 }
 
 export class StudioCommandBus {
-  constructor(store) {
+  constructor(store, options = {}) {
     this.store = store
+    this.persistenceStore = options.persistenceStore || useStudioPersistenceStore()
     this.handlers = {
       ...createPaletteHandlers(store),
       ...createEditorHandlers(store),
       ...createBatchHandlers(store),
       ...createAssetHandlers(store),
       ...createHistoryHandlers(store),
-      ...createSavesHandlers(store),
+      ...createSavesHandlers(store, this.persistenceStore),
       ...createStackHandlers(store)
     }
   }
@@ -164,6 +159,6 @@ export class StudioCommandBus {
   }
 }
 
-export function createStudioCommandBus(store) {
-  return new StudioCommandBus(store)
+export function createStudioCommandBus(store, options = {}) {
+  return new StudioCommandBus(store, options)
 }

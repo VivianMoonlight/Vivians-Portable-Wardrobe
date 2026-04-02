@@ -15,16 +15,7 @@ export const useStudioPersistenceStore = defineStore('studioPersistence', {
   }),
 
   actions: {
-    _syncLegacyPersistenceState(studio) {
-      if (!studio) return
-      studio.autoSaveEnabled = this.autoSaveEnabled
-      studio.lastSaveTime = this.lastSaveTime
-      studio.saveStatus = this.saveStatus
-      studio._saveStatusTimeout = this._saveStatusTimeout
-      studio.currentSaveId = this.currentSaveId
-    },
-
-    _scheduleStatusReset(delayMs, studio) {
+    _scheduleStatusReset(delayMs) {
       if (this._saveStatusTimeout) {
         clearTimeoutHost(this._saveStatusTimeout)
       }
@@ -34,10 +25,7 @@ export const useStudioPersistenceStore = defineStore('studioPersistence', {
           this.saveStatus = 'idle'
         }
         this._saveStatusTimeout = null
-        this._syncLegacyPersistenceState(studio)
       }, delayMs)
-
-      this._syncLegacyPersistenceState(studio)
     },
 
     _refreshStudioAfterDataLoad(studio) {
@@ -192,13 +180,11 @@ export const useStudioPersistenceStore = defineStore('studioPersistence', {
 
     enableAutoSave(studio) {
       this.autoSaveEnabled = true
-      this._syncLegacyPersistenceState(studio)
       return { autoSaveEnabled: this.autoSaveEnabled }
     },
 
     disableAutoSave(studio) {
       this.autoSaveEnabled = false
-      this._syncLegacyPersistenceState(studio)
       return { autoSaveEnabled: this.autoSaveEnabled }
     },
 
@@ -206,7 +192,6 @@ export const useStudioPersistenceStore = defineStore('studioPersistence', {
       if (!studio) return false
 
       this.saveStatus = 'saving'
-      this._syncLegacyPersistenceState(studio)
 
       const result = await SaveActions.saveToLocalStorage(studio)
       if (result.success) {
@@ -216,7 +201,7 @@ export const useStudioPersistenceStore = defineStore('studioPersistence', {
         this.saveStatus = result.saveStatus || 'error'
       }
 
-      this._scheduleStatusReset(2000, studio)
+      this._scheduleStatusReset(2000)
       return result.success
     },
 
@@ -274,7 +259,6 @@ export const useStudioPersistenceStore = defineStore('studioPersistence', {
       this._refreshStudioAfterDataLoad(studio)
 
       this.lastSaveTime = result.timestamp
-      this._syncLegacyPersistenceState(studio)
 
       if (studio.focusedPartIndex.stackIndex !== null && studio.focusedPartIndex.partIndex !== null) {
         studio.triggerFocusedPartUpdate()
@@ -297,7 +281,6 @@ export const useStudioPersistenceStore = defineStore('studioPersistence', {
       this.lastSaveTime = null
       this.saveStatus = 'idle'
       this._saveStatusTimeout = null
-      this._syncLegacyPersistenceState(studio)
       return true
     },
 
@@ -309,7 +292,6 @@ export const useStudioPersistenceStore = defineStore('studioPersistence', {
       if (!studio || !this.autoSaveEnabled) return
 
       this.saveStatus = 'saving'
-      this._syncLegacyPersistenceState(studio)
 
       const result = SaveActions.autoSave(studio)
       if (result.success) {
@@ -319,7 +301,7 @@ export const useStudioPersistenceStore = defineStore('studioPersistence', {
         this.saveStatus = result.saveStatus || 'error'
       }
 
-      this._scheduleStatusReset(result.success ? 2000 : 3000, studio)
+      this._scheduleStatusReset(result.success ? 2000 : 3000)
     },
 
     async saveStudioSession(studio, name) {
@@ -328,7 +310,6 @@ export const useStudioPersistenceStore = defineStore('studioPersistence', {
       }
 
       this.saveStatus = 'saving'
-      this._syncLegacyPersistenceState(studio)
 
       const result = SaveActions.saveStudioSession(studio, name)
       if (result.success) {
@@ -339,7 +320,7 @@ export const useStudioPersistenceStore = defineStore('studioPersistence', {
         this.saveStatus = result.saveStatus || 'error'
       }
 
-      this._scheduleStatusReset(result.success ? 2000 : 3000, studio)
+      this._scheduleStatusReset(result.success ? 2000 : 3000)
       return { success: result.success, error: result.error }
     },
 
@@ -363,7 +344,6 @@ export const useStudioPersistenceStore = defineStore('studioPersistence', {
 
       studio._paletteVersion++
       this._refreshStudioAfterDataLoad(studio)
-      this._syncLegacyPersistenceState(studio)
 
       return { success: true }
     },
@@ -374,9 +354,7 @@ export const useStudioPersistenceStore = defineStore('studioPersistence', {
         return { success: false, error: 'Invalid save name' }
       }
 
-      const result = StudioStorageService.renameSave(id, normalizedName)
-      this._syncLegacyPersistenceState(studio)
-      return result
+      return StudioStorageService.renameSave(id, normalizedName)
     },
 
     deleteStudioSession(studio, id) {
@@ -384,7 +362,6 @@ export const useStudioPersistenceStore = defineStore('studioPersistence', {
       if (result?.success && this.currentSaveId === id) {
         this.currentSaveId = null
       }
-      this._syncLegacyPersistenceState(studio)
       return result
     },
 

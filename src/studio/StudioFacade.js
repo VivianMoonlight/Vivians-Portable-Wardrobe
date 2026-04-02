@@ -2,11 +2,15 @@ import { isStudioFacadeEnabled } from '@/config/featureFlags'
 import { createStudioCommandBus } from '@/studio/StudioCommandBus'
 import { queryStudio, getStudioQueryNames } from '@/studio/StudioQueryService'
 import { createTransactionCoordinator } from '@/studio/TransactionCoordinator'
+import { useStudioPersistenceStore } from '@/stores/studio/persistenceStore'
 
 class StudioFacade {
   constructor(store) {
     this.store = store
-    this.commandBus = createStudioCommandBus(store)
+    this.persistenceStore = useStudioPersistenceStore()
+    this.commandBus = createStudioCommandBus(store, {
+      persistenceStore: this.persistenceStore
+    })
     this.transactionCoordinator = createTransactionCoordinator({
       store,
       executeCommand: this.execute.bind(this)
@@ -31,7 +35,9 @@ class StudioFacade {
   }
 
   query(name, params = {}) {
-    return queryStudio(this.store, name, params)
+    return queryStudio(this.store, name, params, {
+      persistenceStore: this.persistenceStore
+    })
   }
 
   getQueryNames() {
@@ -121,13 +127,13 @@ class StudioFacade {
       case 'history.clear':
         return this.store.clearHistory({ _fromFacade: true })
       case 'saves.save':
-        return this.store.saveStudioSession(payload.name, { _fromFacade: true })
+        return this.persistenceStore.saveStudioSession(this.store, payload.name)
       case 'saves.load':
-        return this.store.loadStudioSession(payload.id, { _fromFacade: true })
+        return this.persistenceStore.loadStudioSession(this.store, payload.id)
       case 'saves.delete':
-        return this.store.deleteStudioSession(payload.id, { _fromFacade: true })
+        return this.persistenceStore.deleteStudioSession(this.store, payload.id)
       case 'saves.rename':
-        return this.store.renameStudioSession(payload.id, payload.newName, { _fromFacade: true })
+        return this.persistenceStore.renameStudioSession(this.store, payload.id, payload.newName)
       case 'stack.rename':
         return this.store.renameStack(payload.stackIndex, payload.newName, { _fromFacade: true })
       default:

@@ -158,6 +158,25 @@ function getSelectionSummary(store) {
   }
 }
 
+function getPersistenceState(store, params = {}, context = {}) {
+  const persistenceStore = context?.persistenceStore
+  if (!persistenceStore) {
+    return {
+      autoSaveEnabled: false,
+      saveStatus: 'idle',
+      lastSaveTime: null,
+      currentSaveId: null
+    }
+  }
+
+  return {
+    autoSaveEnabled: !!persistenceStore.autoSaveEnabled,
+    saveStatus: persistenceStore.saveStatus || 'idle',
+    lastSaveTime: persistenceStore.lastSaveTime || null,
+    currentSaveId: persistenceStore.currentSaveId || null
+  }
+}
+
 const QUERY_HANDLERS = Object.freeze({
   activePaletteTargets: getActivePaletteTargets,
   focusedLayer: getFocusedLayer,
@@ -166,17 +185,18 @@ const QUERY_HANDLERS = Object.freeze({
   mutationStats: getMutationStats,
   interactionState: getInteractionState,
   historyState: getHistoryState,
-  dirtyScopes: getDirtyScopes
+  dirtyScopes: getDirtyScopes,
+  persistenceState: getPersistenceState
 })
 
-export function queryStudio(store, name, params = {}) {
+export function queryStudio(store, name, params = {}, context = {}) {
   const queryName = String(name || '').trim()
   if (!queryName) return null
 
   const handler = QUERY_HANDLERS[queryName]
   if (!handler) return null
 
-  return handler(store, params)
+  return handler(store, params, context)
 }
 
 export function getStudioQueryNames() {

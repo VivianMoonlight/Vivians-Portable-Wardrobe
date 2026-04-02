@@ -127,7 +127,7 @@
                   :part="part"
                   :stackIndex="store.focusedPartIndex?.stackIndex ?? 0"
                   :partIndex="store.focusedPartIndex?.partIndex ?? 0"
-                  :selectionMode="store.selectionMode"
+                  :selectionMode="selectionMode"
                   @save-layer="onSaveLayer" />
               </div>
               
@@ -139,7 +139,7 @@
                   :part="part"
                   :stackIndex="store.focusedPartIndex?.stackIndex ?? 0"
                   :partIndex="store.focusedPartIndex?.partIndex ?? 0"
-                  :selectionMode="store.selectionMode"
+                  :selectionMode="selectionMode"
                   @save-layer="onSaveLayer" />
               </div>
             </template>
@@ -198,7 +198,8 @@
 <script setup>
 import { computed, ref, watch, nextTick, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useStudioStore } from '@/stores/studioStore'
+import { useStudioDomainStores } from '@/stores/studio'
+import { createStudioSelectionBridge } from '@/stores/studio/selectionBridge'
 import ColorableLayer from './ColorableLayer.vue'
 import LayerGroup from './LayerGroup.vue'
 import BatchEditPanel from './BatchEditPanel.vue'
@@ -210,28 +211,32 @@ import { applyLayerDeltasToPart } from '@/services/PartPatchApplier'
 
 const { t } = useI18n()
 
-const store = useStudioStore()
+const { studio: store, selection } = useStudioDomainStores()
+const selectionBridge = createStudioSelectionBridge(store, selection)
 const part = computed(() => store.focusedPart)
 const updateFlag = computed(() => store.focusedPartUpdateFlag)
 const hasPart = computed(() => !!part.value)
+const selectionMode = computed(() => selectionBridge.selectionMode)
+const selectedLayers = computed(() => selectionBridge.selectedLayers)
+const selectedLayersCount = computed(() => selectionBridge.selectedLayersCount)
 
 // Multi-selection state
-const isMultiMode = computed(() => store.selectionMode === 'multiple')
-const hasSelections = computed(() => store.selectedLayers && store.selectedLayers.length > 0)
+const isMultiMode = computed(() => selectionMode.value === 'multiple')
+const hasSelections = computed(() => selectedLayersCount.value > 0)
 // taskStage is deprecated. Keep inspector fields visible for debugging regardless of legacy stages.
 const showStructureFields = computed(() => true)
 const showAdvancedSection = computed(() => true)
 const scopeLabel = computed(() => {
   if (!hasPart.value) return ''
   if (isMultiMode.value) {
-    const count = store.selectedLayers?.length || 0
+    const count = selectedLayersCount.value
     return `${t('partInspector.applyTo') || 'Apply to'} ${count} ${t('partInspector.layers') || 'layers'}`
   }
   return t('partInspector.applyToCurrentLayer') || 'Apply to current layer'
 })
 
 // Preview tool state
-const isMoveTool = computed(() => store.previewTool === 'move')
+const isMoveTool = computed(() => selectionBridge.previewTool === 'move')
 const canUseMoveTool = computed(() => store.canUseMoveTool)
 
 function togglePreviewTool() {
@@ -364,7 +369,7 @@ watch(() => `${store.focusedPartIndex?.stackIndex ?? 'n'}:${store.focusedPartInd
   stopLayerHoverBlink()
 })
 
-watch(() => (store.selectedLayers || []).map(s => `${s.stackIndex}:${s.partIndex}:${s.layerIndex}`).join('|'), () => {
+watch(() => (selectedLayers.value || []).map(s => `${s.stackIndex}:${s.partIndex}:${s.layerIndex}`).join('|'), () => {
   stopLayerHoverBlink()
 })
 
