@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vivians Portable Wardrobe
 // @namespace    http://tampermonkey.net/
-// @version      0.10.1-beta.2
+// @version      0.10.1-beta.3
 // @description  Loader for Portable Wardrobe and Vue floating panel
 // @downloadURL  https://vivianmoonlight.github.io/Vivians-Portable-Wardrobe/ViviansPortableWardrobeLoader.user.js
 // @updateURL    https://vivianmoonlight.github.io/Vivians-Portable-Wardrobe/ViviansPortableWardrobeLoader.user.js
@@ -17899,7 +17899,21 @@
       const parent = this.getNode(parentPath);
       if (!parent || !parent.children)
         return false;
-      const idx = parent.children.findIndex((c) => c === file);
+      let idx = parent.children.findIndex((c) => c === file);
+      if (idx === -1 && file && typeof file === "object") {
+        idx = parent.children.findIndex((c) => {
+          if (!c || typeof c !== "object")
+            return false;
+          if (c.name !== file.name)
+            return false;
+          if ((c.type || "file") !== (file.type || "file"))
+            return false;
+          if (c.updatedAt && file.updatedAt) {
+            return c.updatedAt === file.updatedAt;
+          }
+          return true;
+        });
+      }
       if (idx === -1)
         return false;
       parent.children.splice(idx, 1);
@@ -20765,8 +20779,12 @@
               }
             }
           }
-          if (localData || onlineData)
-            this.fs.fromMultipleJSON([onlineData, localData]);
+          if (localData) {
+            this.fs.fromJSON(localData);
+          } else if (onlineData) {
+            this.fs.fromJSON(onlineData);
+            this.storage.saveLocal(localKey, onlineData);
+          }
           this.refreshCloudQuotaStats();
         } catch (e) {
           console.warn("loadAll failed", e);
