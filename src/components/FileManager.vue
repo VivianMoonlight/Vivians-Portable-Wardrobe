@@ -64,11 +64,6 @@ const cloudBarStateClass = computed(() => {
   if (cloudQuota.value?.isWarning) return 'is-warn'
   return 'is-ok'
 })
-const cloudStatusText = computed(() => {
-  if (cloudQuota.value?.isOverLimit) return t('fileManager.cloudUsageOver')
-  if (cloudQuota.value?.isWarning) return t('fileManager.cloudUsageWarn')
-  return t('fileManager.cloudUsageOk')
-})
 
 function formatBytes(bytes) {
   const value = Number(bytes || 0)
@@ -381,19 +376,6 @@ function onPanelClick(e) {
         </template>
       </nav>
 
-      <div class="cloud-usage-card" role="status" :aria-label="t('fileManager.cloudUsageAria')">
-        <div class="cloud-usage-head">
-          <span class="cloud-usage-title">{{ t('fileManager.cloudUsageTitle') }}</span>
-          <span class="cloud-usage-size">{{ cloudUsageLabel }}</span>
-        </div>
-        <div class="cloud-usage-bar">
-          <div class="cloud-usage-fill" :class="cloudBarStateClass" :style="{ width: cloudUsagePercent + '%' }"></div>
-        </div>
-        <div class="cloud-usage-foot">
-          <span class="cloud-usage-state" :class="cloudBarStateClass">{{ cloudStatusText }}</span>
-        </div>
-      </div>
-
       <div class="toolbar">
         <div class="search-row">
           <div class="search-box">
@@ -491,6 +473,13 @@ function onPanelClick(e) {
             <button class="chip-btn" @click="onAddFolder">{{ t('fileManager.newFolderTitle') }}</button>
           </div>
         </div>
+      </div>
+
+      <div class="cloud-usage-strip" role="status" :aria-label="t('fileManager.cloudUsageAria')">
+        <div class="cloud-usage-strip-track">
+          <div class="cloud-usage-fill" :class="cloudBarStateClass" :style="{ width: cloudUsagePercent + '%' }"></div>
+        </div>
+        <span class="cloud-usage-strip-size" :class="cloudBarStateClass">{{ cloudUsageLabel }}</span>
       </div>
 
       <!-- 嵌入模式下隐藏 resize handle -->
@@ -660,38 +649,18 @@ function onPanelClick(e) {
 }
 .divider { margin:0 2px; color: var(--color-text-muted, #94a3b8); font-size:17px; }
 
-.cloud-usage-card {
-  border: 1px solid var(--color-border-base, #d6dbe2);
-  background: var(--color-bg-base, #fff);
-  border-radius: var(--radius-md, 8px);
-  padding: 8px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.cloud-usage-head {
+.cloud-usage-strip {
+  margin-top: 2px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
+  min-height: 20px;
 }
 
-.cloud-usage-title {
-  color: var(--color-text-secondary, #475569);
-  font-size: var(--font-size-sm, 12px);
-  font-weight: var(--font-weight-semibold, 600);
-}
-
-.cloud-usage-size {
-  color: var(--color-text-primary, #0f172a);
-  font-size: var(--font-size-sm, 12px);
-  font-weight: var(--font-weight-semibold, 600);
-}
-
-.cloud-usage-bar {
-  width: 100%;
-  height: 8px;
+.cloud-usage-strip-track {
+  flex: 1;
+  min-width: 0;
+  height: 5px;
   border-radius: var(--radius-full, 9999px);
   background: var(--color-bg-panel, #e2e8f0);
   overflow: hidden;
@@ -715,25 +684,22 @@ function onPanelClick(e) {
   background: var(--color-danger, #dc2626);
 }
 
-.cloud-usage-foot {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.cloud-usage-state {
+.cloud-usage-strip-size {
+  white-space: nowrap;
   font-size: var(--font-size-xs, 11px);
   font-weight: var(--font-weight-medium, 500);
+  color: var(--color-text-secondary, #64748b);
 }
 
-.cloud-usage-state.is-ok {
+.cloud-usage-strip-size.is-ok {
   color: var(--color-success, #10b981);
 }
 
-.cloud-usage-state.is-warn {
+.cloud-usage-strip-size.is-warn {
   color: var(--color-warning, #b45309);
 }
 
-.cloud-usage-state.is-over {
+.cloud-usage-strip-size.is-over {
   color: var(--color-danger, #dc2626);
 }
 
