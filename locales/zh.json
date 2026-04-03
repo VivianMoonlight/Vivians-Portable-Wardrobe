@@ -10,7 +10,11 @@
     "confirmDelete": "确认删除该项目吗？",
     "elementDefaultName": "元素",
     "sendError": "发送到 Studio 失败",
-    "exportBCX": "导出为 BCX"
+    "exportBCX": "导出为 BCX",
+    "cloudOn": "云同步开",
+    "cloudOff": "云同步关",
+    "cloudToggleFileTitle": "切换此文件是否云同步",
+    "cloudToggleFolderTitle": "切换此文件夹及其子项是否云同步"
   },
   "fileManager": {
     "title": "衣橱",
@@ -38,6 +42,11 @@
     "sortRecent": "最近修改",
     "sortName": "名称",
     "sortType": "类型",
+    "cloudUsageTitle": "云端占用",
+    "cloudUsageAria": "云端容量占用",
+    "cloudUsageOk": "容量正常",
+    "cloudUsageWarn": "容量接近上限",
+    "cloudUsageOver": "超出 180KB 上限",
     "filterAll": "全部",
     "filterFolder": "文件夹",
     "filterOutfit": "套装",

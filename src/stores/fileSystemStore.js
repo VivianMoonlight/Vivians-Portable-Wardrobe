@@ -73,6 +73,27 @@ function getCharacterInitKey(character) {
   return `name:${name}|family:${family}`
 }
 
+function getPlayerMemberSuffix() {
+  const memberNumber = hostWindow?.Player?.MemberNumber
+  if (memberNumber === undefined || memberNumber === null || memberNumber === '') {
+    return 'DEFAULT'
+  }
+  return String(memberNumber)
+}
+
+function buildPlayerScopedStorageKey(prefix) {
+  return `${prefix}_${getPlayerMemberSuffix()}`
+}
+
+// Legacy key from the old precedence bug:
+// 'VPWardrobe_local' + hostWindow.Player ? hostWindow.Player.MemberNumber : 'DEFAULT'
+function getLegacyBuggyWardrobeLocalKey() {
+  return hostWindow?.Player ? hostWindow.Player.MemberNumber : 'DEFAULT'
+}
+
+const CLOUD_QUOTA_LIMIT_BYTES = 180 * 1024
+const CLOUD_QUOTA_WARN_RATIO = 0.8
+
 export const useFileSystemStore = defineStore('fs', {
   state: () => ({
     fs: new FileSystem('Home'),
@@ -109,6 +130,27 @@ export const useFileSystemStore = defineStore('fs', {
 
     // filters: store the activeFilters array (names) for other consumers
     activeFilters: [],
+
+    cloudQuota: {
+      limitBytes: CLOUD_QUOTA_LIMIT_BYTES,
+      warnRatio: CLOUD_QUOTA_WARN_RATIO,
+      usedBytes: 0,
+      usageRatio: 0,
+      isWarning: false,
+      isOverLimit: false,
+      lastMeasuredAt: null,
+      lastError: ''
+    },
+    cloudSyncStats: {
+      totalNodes: 0,
+      totalFolders: 0,
+      totalLeaves: 0,
+      enabledNodes: 0,
+      enabledFolders: 0,
+      enabledLeaves: 0,
+      payloadBytes: 0
+    },
+    cloudSyncTreePreview: null,
 
     // default replacement mode used when selecting/focusing an item
     defaultReplaceMode: DEFAULT_REPLACE_MODE, // 'fill-empty' | 'merge-replace' | 'full-replace'
@@ -168,6 +210,13 @@ export const useFileSystemStore = defineStore('fs', {
       const characterData = Array.isArray(state.characterItem) ? state.characterItem : []
       const hoverData = Array.isArray(state.activeItem?.data) ? state.activeItem.data : []
       return buildSlotPresenceMap(characterData, hoverData)
+    },
+
+    cloudUsagePercent: (state) => {
+      const ratio = Number(state.cloudQuota?.usageRatio || 0)
+      const percent = ratio * 100
+      if (!Number.isFinite(percent)) return 0
+      return Math.max(0, Math.min(100, percent))
     },
 
     // 兼容性的直接访问 renderer canvas（如果需要）
@@ -354,19 +403,218 @@ export const useFileSystemStore = defineStore('fs', {
       }
     },
 
+    _buildCloudSyncTreeFromSnapshot(node, options = {}) {
+      const { forceIncludeRoot = false } = options
+      if (!node || typeof node !== 'object') return null
+
+      const isFolder = node.type === 'folder' && Array.isArray(node.children)
+      const enabled = node.cloudSync !== false
+
+      if (!isFolder) {
+        if (!enabled) return null
+        return { ...node }
+      }
+
+      const children = []
+      for (const child of node.children || []) {
+        const picked = this._buildCloudSyncTreeFromSnapshot(child)
+        if (picked) children.push(picked)
+      }
+
+      if (!forceIncludeRoot && !enabled && children.length === 0) {
+        return null
+      }
+
+      return {
+        ...node,
+        type: 'folder',
+        inheritCloudSync: typeof node.inheritCloudSync === 'boolean' ? node.inheritCloudSync : true,
+        children
+      }
+    },
+
+    _collectCloudSyncStatsFromSnapshot(snapshot) {
+      const stats = {
+        totalNodes: 0,
+        totalFolders: 0,
+        totalLeaves: 0,
+        enabledNodes: 0,
+        enabledFolders: 0,
+        enabledLeaves: 0
+      }
+
+      const walk = (node) => {
+        if (!node || typeof node !== 'object') return
+        const isFolder = node.type === 'folder' && Array.isArray(node.children)
+        const enabled = node.cloudSync !== false
+
+        stats.totalNodes += 1
+        if (enabled) stats.enabledNodes += 1
+
+        if (isFolder) {
+          stats.totalFolders += 1
+          if (enabled) stats.enabledFolders += 1
+          for (const child of node.children || []) walk(child)
+        } else {
+          stats.totalLeaves += 1
+          if (enabled) stats.enabledLeaves += 1
+        }
+      }
+
+      walk(snapshot)
+      return stats
+    },
+
+    buildCloudSyncTree() {
+      const snapshot = this.fs.toJSON()
+      const tree = this._buildCloudSyncTreeFromSnapshot(snapshot, { forceIncludeRoot: true })
+      if (tree) return tree
+      return {
+        name: snapshot?.name || 'Home',
+        type: 'folder',
+        children: [],
+        cloudSync: false,
+        inheritCloudSync: true,
+        updatedAt: Date.now()
+      }
+    },
+
+    collectCloudSyncStats() {
+      const snapshot = this.fs.toJSON()
+      const stats = this._collectCloudSyncStatsFromSnapshot(snapshot)
+      const cloudTree = this._buildCloudSyncTreeFromSnapshot(snapshot, { forceIncludeRoot: true }) || {
+        name: snapshot?.name || 'Home',
+        type: 'folder',
+        children: []
+      }
+      const payloadBytes = this.storage.estimatePayloadBytes(cloudTree)
+      return {
+        ...stats,
+        payloadBytes
+      }
+    },
+
+    refreshCloudQuotaStats(snapshot = null) {
+      const sourceSnapshot = snapshot || this.fs.toJSON()
+      const cloudTree = this._buildCloudSyncTreeFromSnapshot(sourceSnapshot, { forceIncludeRoot: true }) || {
+        name: sourceSnapshot?.name || 'Home',
+        type: 'folder',
+        children: []
+      }
+      const stats = this._collectCloudSyncStatsFromSnapshot(sourceSnapshot)
+      const payloadBytes = this.storage.estimatePayloadBytes(cloudTree)
+
+      const limitBytes = Number(this.cloudQuota?.limitBytes || CLOUD_QUOTA_LIMIT_BYTES)
+      const warnRatio = Number(this.cloudQuota?.warnRatio || CLOUD_QUOTA_WARN_RATIO)
+      const usageRatio = limitBytes > 0 ? (payloadBytes / limitBytes) : 0
+      const isOverLimit = limitBytes > 0 ? payloadBytes > limitBytes : false
+      const isWarning = !isOverLimit && usageRatio >= warnRatio
+      const lastError = isOverLimit
+        ? `Cloud payload exceeds quota: ${payloadBytes}/${limitBytes}`
+        : ''
+
+      this.cloudSyncTreePreview = cloudTree
+      this.cloudSyncStats = {
+        ...stats,
+        payloadBytes
+      }
+      this.cloudQuota = {
+        ...this.cloudQuota,
+        usedBytes: payloadBytes,
+        usageRatio,
+        isWarning,
+        isOverLimit,
+        lastMeasuredAt: Date.now(),
+        lastError
+      }
+
+      return this.cloudQuota
+    },
+
+    _applyNodeCloudSync(node, enabled, recursive) {
+      if (!node || typeof node !== 'object') return false
+      const nextEnabled = !!enabled
+      let changed = false
+
+      const applyOne = (target) => {
+        if (!target || typeof target !== 'object') return
+        if (target.cloudSync !== nextEnabled) {
+          target.cloudSync = nextEnabled
+          changed = true
+        }
+        target.updatedAt = Date.now()
+        const isFolder = target.type === 'folder' && Array.isArray(target.children)
+        if (recursive && isFolder) {
+          for (const child of target.children) applyOne(child)
+        }
+      }
+
+      applyOne(node)
+      return changed
+    },
+
+    setNodeCloudSync(node, enabled, options = {}) {
+      if (!node || typeof node !== 'object') return false
+      const recursive = node.type === 'folder' ? options.recursive !== false : false
+      const changed = this._applyNodeCloudSync(node, enabled, recursive)
+      if (changed) {
+        this.saveAll()
+      } else {
+        this.refreshCloudQuotaStats()
+      }
+      return changed
+    },
+
+    setPathCloudSync(path, enabled, options = {}) {
+      if (!Array.isArray(path) || path.length === 0) return false
+      const node = this.fs.getNode(path)
+      if (!node) return false
+      return this.setNodeCloudSync(node, enabled, options)
+    },
+
     saveAll() {
       try {
-        this.storage.saveOnline('key', this.fs.toJSON())
-        this.storage.saveLocal('VPWardrobe_local' + hostWindow.Player ? hostWindow.Player.MemberNumber : 'DEFAULT', this.fs.toJSON())
+        const snapshot = this.fs.toJSON()
+        const localKey = buildPlayerScopedStorageKey('VPWardrobe_local')
+
+        // Local remains full snapshot regardless of cloud quota.
+        this.storage.saveLocal(localKey, snapshot)
+
+        const quota = this.refreshCloudQuotaStats(snapshot)
+        const cloudTree = this.cloudSyncTreePreview || this._buildCloudSyncTreeFromSnapshot(snapshot, { forceIncludeRoot: true })
+
+        if (quota?.isOverLimit) {
+          console.warn('saveAll skipped cloud sync due to quota limit', {
+            usedBytes: quota.usedBytes,
+            limitBytes: quota.limitBytes
+          })
+          return
+        }
+
+        // Cloud persistence now stores only cloudSync-enabled subtree.
+        this.storage.saveOnline('key', cloudTree)
       } catch (e) {
         console.warn('saveAll failed', e)
       }
     },
     loadAll() {
       try {
-        const Onlinedata = this.storage.loadOnline('key')
-        const Localdata = this.storage.loadLocal('VPWardrobe_local' + hostWindow.Player ? hostWindow.Player.MemberNumber : 'DEFAULT')
-        if (Localdata || Onlinedata) this.fs.fromMultipleJSON([Onlinedata, Localdata])
+        const onlineData = this.storage.loadOnline('key')
+        const localKey = buildPlayerScopedStorageKey('VPWardrobe_local')
+        let localData = this.storage.loadLocal(localKey)
+
+        if (!localData) {
+          const legacyLocalKey = getLegacyBuggyWardrobeLocalKey()
+          if (legacyLocalKey !== undefined && legacyLocalKey !== null) {
+            localData = this.storage.loadLocal(legacyLocalKey)
+            if (localData) {
+              this.storage.saveLocal(localKey, localData)
+            }
+          }
+        }
+
+        if (localData || onlineData) this.fs.fromMultipleJSON([onlineData, localData])
+        this.refreshCloudQuotaStats()
       } catch (e) {
         console.warn('loadAll failed', e)
       }
@@ -1086,7 +1334,7 @@ export const useFileSystemStore = defineStore('fs', {
     saveHistory() {
       try {
         const historyData = this.history.toJSON()
-        const key = 'VPWardrobe_history_' + (hostWindow.Player ? hostWindow.Player.MemberNumber : 'DEFAULT')
+        const key = buildPlayerScopedStorageKey('VPWardrobe_history')
         this.storage.saveLocal(key, historyData)
       } catch (e) {
         console.warn('saveHistory failed', e)
@@ -1098,7 +1346,7 @@ export const useFileSystemStore = defineStore('fs', {
      */
     loadHistory() {
       try {
-        const key = 'VPWardrobe_history_' + (hostWindow.Player ? hostWindow.Player.MemberNumber : 'DEFAULT')
+        const key = buildPlayerScopedStorageKey('VPWardrobe_history')
         const historyData = this.storage.loadLocal(key)
         if (historyData) {
           this.history.fromJSON(historyData)

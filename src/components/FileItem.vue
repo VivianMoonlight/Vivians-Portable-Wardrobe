@@ -323,6 +323,20 @@ function onDrop(e) {
 
 const draggable = !!props.item
 const isPreviewLocked = computed(() => fsStore.isPreviewLockedOn(props.item))
+const isCloudSyncEnabled = computed(() => props.item?.cloudSync !== false)
+const cloudToggleTitle = computed(() => {
+  if (props.item?.type === 'folder') return t('fileItem.cloudToggleFolderTitle')
+  return t('fileItem.cloudToggleFileTitle')
+})
+const cloudToggleLabel = computed(() => {
+  return isCloudSyncEnabled.value ? t('fileItem.cloudOn') : t('fileItem.cloudOff')
+})
+
+function onToggleCloudSync() {
+  if (!props.item) return
+  const nextEnabled = !isCloudSyncEnabled.value
+  fsStore.setNodeCloudSync(props.item, nextEnabled, { recursive: props.item.type === 'folder' })
+}
 </script>
 
 <template>
@@ -346,6 +360,18 @@ const isPreviewLocked = computed(() => fsStore.isPreviewLockedOn(props.item))
     </div>
     <div class="file-info">
       <span class="file-name" :title="item.name">{{ item.name }}</span>
+    </div>
+    <div class="file-sync-row">
+      <button
+        class="cloud-sync-toggle"
+        :class="{ active: isCloudSyncEnabled }"
+        type="button"
+        @click.stop.prevent="onToggleCloudSync"
+        :title="cloudToggleTitle"
+        :aria-label="cloudToggleTitle"
+      >
+        {{ cloudToggleLabel }}
+      </button>
     </div>
 
     <!-- 将菜单 teleport 到 body 可以避免被父容器的 overflow/transform/position 影响 -->
@@ -447,6 +473,35 @@ const isPreviewLocked = computed(() => fsStore.isPreviewLockedOn(props.item))
   display: inline-block;
 }
 
+.file-sync-row {
+  margin-top: 6px;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.cloud-sync-toggle {
+  border: 1px solid var(--color-border-base, #d6dbe2);
+  background: var(--color-bg-base, #fff);
+  color: var(--color-text-secondary, #475569);
+  border-radius: var(--radius-sm, 6px);
+  padding: 3px 8px;
+  font-size: var(--font-size-xs, 11px);
+  line-height: 1.2;
+  cursor: pointer;
+  transition: all var(--transition-fast, 0.15s) ease;
+}
+
+.cloud-sync-toggle:hover {
+  background: var(--color-bg-hover, #f0f4f8);
+}
+
+.cloud-sync-toggle.active {
+  border-color: var(--color-success, #10b981);
+  color: var(--color-success, #10b981);
+  background: color-mix(in srgb, var(--color-success, #10b981) 10%, var(--color-bg-base, #fff));
+}
+
 .file-item-card.view-small {
   padding: 8px;
 }
@@ -526,6 +581,13 @@ const isPreviewLocked = computed(() => fsStore.isPreviewLockedOn(props.item))
 
 .file-item-card.view-list .file-name {
   max-width: none;
+}
+
+.file-item-card.view-list .file-sync-row {
+  width: auto;
+  margin-top: 0;
+  margin-left: auto;
+  justify-content: flex-end;
 }
 
 /* 右键菜单样式（fixed 定位，基于 left/top） */

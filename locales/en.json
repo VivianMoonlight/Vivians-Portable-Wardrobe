@@ -10,7 +10,11 @@
     "confirmDelete": "Are you sure you want to delete this item?",
     "elementDefaultName": "Element",
     "sendError": "Send to Studio failed",
-    "exportBCX": "Export as BCX"
+    "exportBCX": "Export as BCX",
+    "cloudOn": "Cloud On",
+    "cloudOff": "Cloud Off",
+    "cloudToggleFileTitle": "Toggle cloud sync for this file",
+    "cloudToggleFolderTitle": "Toggle cloud sync for this folder and its children"
   },
   "fileManager": {
     "title": "Wardrobe",
@@ -38,6 +42,11 @@
     "sortRecent": "Recent",
     "sortName": "Name",
     "sortType": "Type",
+    "cloudUsageTitle": "Cloud Usage",
+    "cloudUsageAria": "Cloud storage usage",
+    "cloudUsageOk": "Within limit",
+    "cloudUsageWarn": "Approaching limit",
+    "cloudUsageOver": "Over 180KB limit",
     "filterAll": "All",
     "filterFolder": "Folders",
     "filterOutfit": "Outfits",

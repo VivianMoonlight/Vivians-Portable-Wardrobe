@@ -23,7 +23,10 @@ export class FileSystem {
     if (fileTree) {
       this.fromJSON(fileTree); // restore from provided fileTree
     } else {
-      this.root = { name: rootName, type: 'folder', children: [] };
+      this.root = this._normalizeNode(
+        { name: rootName, type: 'folder', children: [], cloudSync: true, inheritCloudSync: true, updatedAt: Date.now() },
+        { forceFolder: true, defaultCloudSync: true, defaultUpdatedAt: Date.now(), defaultName: rootName }
+      );
     }
   }
 
@@ -32,6 +35,48 @@ export class FileSystem {
    * @returns {Object} Root folder node
    */
   getRoot() { return this.root; }
+
+  _normalizeTimestamp(value, fallback = null) {
+    const timestamp = Number(value);
+    return Number.isFinite(timestamp) && timestamp > 0 ? timestamp : fallback;
+  }
+
+  _touchNode(node) {
+    if (!node || typeof node !== 'object') return;
+    node.updatedAt = Date.now();
+  }
+
+  _normalizeNode(node, { forceFolder = false, defaultCloudSync = true, defaultUpdatedAt = null, defaultName = '' } = {}) {
+    const source = (node && typeof node === 'object') ? node : {};
+    const hasChildren = Array.isArray(source.children);
+    const isFolder = forceFolder || source.type === 'folder' || hasChildren;
+    const resolvedCloudSync = typeof source.cloudSync === 'boolean' ? source.cloudSync : !!defaultCloudSync;
+    const resolvedUpdatedAt = this._normalizeTimestamp(source.updatedAt, defaultUpdatedAt);
+    const normalized = {
+      ...source,
+      name: (typeof source.name === 'string' && source.name.length > 0) ? source.name : defaultName,
+      cloudSync: resolvedCloudSync,
+      updatedAt: resolvedUpdatedAt
+    };
+
+    if (isFolder) {
+      const resolvedInheritCloudSync = typeof source.inheritCloudSync === 'boolean' ? source.inheritCloudSync : true;
+      const children = Array.isArray(source.children) ? source.children : [];
+      normalized.type = 'folder';
+      normalized.inheritCloudSync = resolvedInheritCloudSync;
+      normalized.children = children.map(child => this._normalizeNode(child, {
+        defaultCloudSync: resolvedCloudSync,
+        defaultUpdatedAt,
+        defaultName: ''
+      }));
+      return normalized;
+    }
+
+    delete normalized.children;
+    delete normalized.inheritCloudSync;
+    if (!normalized.type) normalized.type = 'file';
+    return normalized;
+  }
 
   /**
    * Finds index of child by name in a node
@@ -84,8 +129,15 @@ export class FileSystem {
   addFile(parentPath, file) {
     const parent = this.getNode(parentPath);
     if (!parent || parent.type !== 'folder') throw new Error('Parent not found or not a folder');
-    parent.children.push(file);
-    return file;
+    const now = Date.now();
+    const normalizedFile = this._normalizeNode(file, {
+      defaultCloudSync: parent.cloudSync !== false,
+      defaultUpdatedAt: now,
+      defaultName: typeof file?.name === 'string' ? file.name : 'Untitled'
+    });
+    parent.children.push(normalizedFile);
+    this._touchNode(parent);
+    return normalizedFile;
   }
 
   /**
@@ -101,8 +153,22 @@ export class FileSystem {
     if (existing !== -1 && parent.children[existing].type === 'folder') {
       return parent.children[existing];
     }
-    const folder = { name: folderName, type: 'folder', children: [] };
+    const now = Date.now();
+    const folder = this._normalizeNode({
+      name: folderName,
+      type: 'folder',
+      children: [],
+      cloudSync: parent.cloudSync !== false,
+      inheritCloudSync: true,
+      updatedAt: now
+    }, {
+      forceFolder: true,
+      defaultCloudSync: parent.cloudSync !== false,
+      defaultUpdatedAt: now,
+      defaultName: folderName
+    });
     parent.children.push(folder);
+    this._touchNode(parent);
     return folder;
   }
 
@@ -118,6 +184,7 @@ export class FileSystem {
     const idx = parent.children.findIndex(c => c === file);
     if (idx === -1) return false;
     parent.children.splice(idx, 1);
+    this._touchNode(parent);
     return true;
   }
 
@@ -134,7 +201,12 @@ export class FileSystem {
     if (!fromNode || !toNode || toNode.type !== 'folder') return false;
     const idx = fromNode.children.findIndex(c => c === item);
     if (idx === -1) return false;
-    const [movedItem] = fromNode.children.splice(idx, 1);
+    const [rawMovedItem] = fromNode.children.splice(idx, 1);
+    const movedItem = this._normalizeNode(rawMovedItem, {
+      defaultCloudSync: fromNode.cloudSync !== false,
+      defaultUpdatedAt: Date.now(),
+      defaultName: typeof rawMovedItem?.name === 'string' ? rawMovedItem.name : ''
+    });
 
     // Prevent moving folder into itself or descendant
     if (movedItem.type === 'folder') {
@@ -153,10 +225,20 @@ export class FileSystem {
     const existingIdx = this._findIn(toNode, movedItem.name);
     if (existingIdx !== -1 && movedItem.type === 'folder' && toNode.children[existingIdx].type === 'folder') {
       FileSystem.mergeRoots(toNode.children[existingIdx], movedItem);
+      toNode.children[existingIdx] = this._normalizeNode(toNode.children[existingIdx], {
+        forceFolder: true,
+        defaultCloudSync: toNode.cloudSync !== false,
+        defaultUpdatedAt: null,
+        defaultName: toNode.children[existingIdx].name
+      });
+      this._touchNode(fromNode);
+      this._touchNode(toNode);
       return true;
     }
 
     toNode.children.push(movedItem);
+    this._touchNode(fromNode);
+    this._touchNode(toNode);
     return true;
   }
 
@@ -173,6 +255,8 @@ export class FileSystem {
     const idx = parent.children.findIndex(c => c === item);
     if (idx === -1) return false;
     parent.children[idx].name = newName;
+    this._touchNode(parent.children[idx]);
+    this._touchNode(parent);
     return true;
   }
 
@@ -201,10 +285,21 @@ export class FileSystem {
     if (!source || !Array.isArray(source.children)) return;
     if (!target.children) target.children = [];
     source.children.forEach(child => {
-      if (child.type === 'folder') {
+      const childIsFolder = child && (child.type === 'folder' || Array.isArray(child.children));
+      if (childIsFolder) {
         let existing = target.children.find(f => f.type === 'folder' && f.name === child.name);
         if (!existing) {
-          existing = { name: child.name, type: 'folder', children: [] };
+          const childCloudSync = typeof child.cloudSync === 'boolean'
+            ? child.cloudSync
+            : (typeof target.cloudSync === 'boolean' ? target.cloudSync : true);
+          existing = {
+            name: child.name,
+            type: 'folder',
+            children: [],
+            cloudSync: childCloudSync,
+            inheritCloudSync: typeof child.inheritCloudSync === 'boolean' ? child.inheritCloudSync : true,
+            updatedAt: Number.isFinite(Number(child.updatedAt)) ? Number(child.updatedAt) : null
+          };
           target.children.push(existing);
         }
         FileSystem.mergeRoots(existing, child);
@@ -229,21 +324,41 @@ export class FileSystem {
   fromJSON(json) {
     if (!json || typeof json !== 'object') {
       // fallback: create empty root
-      this.root = { name: 'Home', type: 'folder', children: [] };
+      this.root = this._normalizeNode({ name: 'Home', type: 'folder', children: [], cloudSync: true, inheritCloudSync: true }, {
+        forceFolder: true,
+        defaultCloudSync: true,
+        defaultUpdatedAt: null,
+        defaultName: 'Home'
+      });
       return;
     }
-    // Defensive normalization: ensure root has expected shape
-    this.root = Object.assign({ name: json.name ?? 'Home', type: 'folder', children: [] }, json);
-    if (!Array.isArray(this.root.children)) this.root.children = [];
+    // Defensive normalization: ensure root has expected shape and cloud-ready defaults.
+    this.root = this._normalizeNode(json, {
+      forceFolder: true,
+      defaultCloudSync: true,
+      defaultUpdatedAt: null,
+      defaultName: json.name ?? 'Home'
+    });
   }
 
   fromMultipleJSON(jsonArray) {
     if (!Array.isArray(jsonArray)) return;
-    this.root = { name: 'Home', type: 'folder', children: [] };
+    this.root = this._normalizeNode({ name: 'Home', type: 'folder', children: [], cloudSync: true, inheritCloudSync: true }, {
+      forceFolder: true,
+      defaultCloudSync: true,
+      defaultUpdatedAt: null,
+      defaultName: 'Home'
+    });
     jsonArray.forEach(json => {
       if (json && typeof json === 'object') {
         FileSystem.mergeRoots(this.root, json);
       }
+    });
+    this.root = this._normalizeNode(this.root, {
+      forceFolder: true,
+      defaultCloudSync: true,
+      defaultUpdatedAt: null,
+      defaultName: this.root.name || 'Home'
     });
   }
   

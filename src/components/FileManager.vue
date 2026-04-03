@@ -50,6 +50,35 @@ const sortLabel = computed(() => {
   return map[sortBy.value] || t('fileManager.sortRecent')
 })
 
+const cloudQuota = computed(() => fsStore.cloudQuota || {})
+const cloudUsedBytes = computed(() => Number(cloudQuota.value?.usedBytes || 0))
+const cloudLimitBytes = computed(() => Number(cloudQuota.value?.limitBytes || 180 * 1024))
+const cloudUsagePercent = computed(() => {
+  const percent = Number(cloudQuota.value?.usageRatio || 0) * 100
+  if (!Number.isFinite(percent)) return 0
+  return Math.max(0, Math.min(100, percent))
+})
+const cloudUsageLabel = computed(() => `${formatBytes(cloudUsedBytes.value)} / ${formatBytes(cloudLimitBytes.value)}`)
+const cloudBarStateClass = computed(() => {
+  if (cloudQuota.value?.isOverLimit) return 'is-over'
+  if (cloudQuota.value?.isWarning) return 'is-warn'
+  return 'is-ok'
+})
+const cloudStatusText = computed(() => {
+  if (cloudQuota.value?.isOverLimit) return t('fileManager.cloudUsageOver')
+  if (cloudQuota.value?.isWarning) return t('fileManager.cloudUsageWarn')
+  return t('fileManager.cloudUsageOk')
+})
+
+function formatBytes(bytes) {
+  const value = Number(bytes || 0)
+  if (!Number.isFinite(value) || value <= 0) return '0 KB'
+  if (value < 1024) return `${value.toFixed(0)} B`
+  const kb = value / 1024
+  if (kb < 1024) return `${kb.toFixed(1)} KB`
+  return `${(kb / 1024).toFixed(2)} MB`
+}
+
 // items in current folder (raw)
 const items = computed(() => fsStore.currentNode?.children ?? [])
 
@@ -247,6 +276,7 @@ const panelStyle = computed(() => {
 
 // 全局监听 - 仅在非嵌入模式下注册（嵌入时外层 modal 负责）
 onMounted(() => {
+  fsStore.refreshCloudQuotaStats()
   if (!props.embedded) {
     hostWindow.addEventListener('mousemove', onDrag)
     hostWindow.addEventListener('mouseup', endDrag)
@@ -350,6 +380,19 @@ function onPanelClick(e) {
           <span v-if="idx<fsStore.currentPath.length-1" class="divider">›</span>
         </template>
       </nav>
+
+      <div class="cloud-usage-card" role="status" :aria-label="t('fileManager.cloudUsageAria')">
+        <div class="cloud-usage-head">
+          <span class="cloud-usage-title">{{ t('fileManager.cloudUsageTitle') }}</span>
+          <span class="cloud-usage-size">{{ cloudUsageLabel }}</span>
+        </div>
+        <div class="cloud-usage-bar">
+          <div class="cloud-usage-fill" :class="cloudBarStateClass" :style="{ width: cloudUsagePercent + '%' }"></div>
+        </div>
+        <div class="cloud-usage-foot">
+          <span class="cloud-usage-state" :class="cloudBarStateClass">{{ cloudStatusText }}</span>
+        </div>
+      </div>
 
       <div class="toolbar">
         <div class="search-row">
@@ -616,6 +659,83 @@ function onPanelClick(e) {
   border: 1px solid var(--color-primary, rgba(60,130,200,0.18)); 
 }
 .divider { margin:0 2px; color: var(--color-text-muted, #94a3b8); font-size:17px; }
+
+.cloud-usage-card {
+  border: 1px solid var(--color-border-base, #d6dbe2);
+  background: var(--color-bg-base, #fff);
+  border-radius: var(--radius-md, 8px);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cloud-usage-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cloud-usage-title {
+  color: var(--color-text-secondary, #475569);
+  font-size: var(--font-size-sm, 12px);
+  font-weight: var(--font-weight-semibold, 600);
+}
+
+.cloud-usage-size {
+  color: var(--color-text-primary, #0f172a);
+  font-size: var(--font-size-sm, 12px);
+  font-weight: var(--font-weight-semibold, 600);
+}
+
+.cloud-usage-bar {
+  width: 100%;
+  height: 8px;
+  border-radius: var(--radius-full, 9999px);
+  background: var(--color-bg-panel, #e2e8f0);
+  overflow: hidden;
+}
+
+.cloud-usage-fill {
+  height: 100%;
+  width: 0;
+  transition: width var(--transition-fast, 0.15s) ease;
+}
+
+.cloud-usage-fill.is-ok {
+  background: var(--color-success, #10b981);
+}
+
+.cloud-usage-fill.is-warn {
+  background: var(--color-warning, #f59e0b);
+}
+
+.cloud-usage-fill.is-over {
+  background: var(--color-danger, #dc2626);
+}
+
+.cloud-usage-foot {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.cloud-usage-state {
+  font-size: var(--font-size-xs, 11px);
+  font-weight: var(--font-weight-medium, 500);
+}
+
+.cloud-usage-state.is-ok {
+  color: var(--color-success, #10b981);
+}
+
+.cloud-usage-state.is-warn {
+  color: var(--color-warning, #b45309);
+}
+
+.cloud-usage-state.is-over {
+  color: var(--color-danger, #dc2626);
+}
 
 /* toolbar and search */
 .toolbar { margin-top: var(--space-sm, 6px); }
