@@ -181,7 +181,22 @@ export class FileSystem {
   removeFile(parentPath, file) {
     const parent = this.getNode(parentPath);
     if (!parent || !parent.children) return false;
-    const idx = parent.children.findIndex(c => c === file);
+    let idx = parent.children.findIndex(c => c === file);
+
+    // Fallback for reactive proxy/raw reference mismatch.
+    if (idx === -1 && file && typeof file === 'object') {
+      idx = parent.children.findIndex((c) => {
+        if (!c || typeof c !== 'object') return false;
+        if (c.name !== file.name) return false;
+        if ((c.type || 'file') !== (file.type || 'file')) return false;
+        // Prefer updatedAt when available to avoid deleting same-name siblings incorrectly.
+        if (c.updatedAt && file.updatedAt) {
+          return c.updatedAt === file.updatedAt;
+        }
+        return true;
+      });
+    }
+
     if (idx === -1) return false;
     parent.children.splice(idx, 1);
     this._touchNode(parent);
