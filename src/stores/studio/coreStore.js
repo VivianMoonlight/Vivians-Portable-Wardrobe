@@ -416,7 +416,7 @@ export const useStudioCoreStore = defineStore('studioCore', {
       }
 
       try {
-        const newPartClone = studio.UpdateSpecificPartFromLayerEntries(focusedPart, entries)
+        const newPartClone = this.updateSpecificPartFromLayerEntries(studio, focusedPart, entries)
         if (!newPartClone) return null
 
         const uid = focusedPart._uid || this.ensurePartUid(studio, focusedPart)
@@ -482,7 +482,7 @@ export const useStudioCoreStore = defineStore('studioCore', {
         })
       }
 
-      const newPart = studio.UpdateSpecificPartFromLayerEntries(part, entries)
+      const newPart = this.updateSpecificPartFromLayerEntries(studio, part, entries)
       if (!newPart) return
 
       const selectedStackIndex = studio.selectedIndex
@@ -534,6 +534,125 @@ export const useStudioCoreStore = defineStore('studioCore', {
         schedulePart: false,
         touchFocusedPart: false
       })
+    },
+
+    batchUpdatePartLayerEntries(studio, updates = [], options = {}) {
+      if (!Array.isArray(updates) || updates.length === 0) return false
+
+      let changedCount = 0
+      for (const update of updates) {
+        const changed = this.updatePartLayerEntries(studio, update?.part, update?.entries, {
+          deferRefresh: true,
+          historyMeta: options?.historyMeta,
+          _fromFacade: true
+        })
+        if (changed) changedCount++
+      }
+
+      const normalizedHistoryMeta = studio._normalizeHistoryMeta(
+        options?.historyMeta,
+        'layer.batchApplyLayerDeltas',
+        {
+          interactionKind: studio._editorRealtimeInteractionKind,
+          changedParts: changedCount
+        }
+      )
+
+      const historyMode = options?.deferCommit === true ? 'throttled' : 'immediate'
+
+      return studio._finalizeMutation({
+        changed: changedCount > 0,
+        deferCommit: options?.deferCommit === true,
+        scope: 'editor',
+        historyMode,
+        historyMeta: normalizedHistoryMeta,
+        schedulePart: false,
+        touchFocusedPart: false
+      })
+    },
+
+    updateSpecificPartFromLayerEntries(studio, part, entries = []) {
+      if (!entries && !part?.layerEntries) return null
+      if (!part) return null
+
+      try {
+        const asset = studio.resolveAssetForPart(part)
+        const previousEntries = studio.getLayerEntriesForPart(part, { forceRebuild: false, clone: true })
+        const deltas = studio._deriveLayerDeltas(previousEntries, entries)
+
+        if (Array.isArray(deltas) && deltas.length > 0) {
+          const patchResult = applyLayerDeltasToPart(part, deltas, { asset })
+          if (patchResult?.changed && patchResult?.part) {
+            const patchedPart = patchResult.part
+            const uid = part._uid || this.ensurePartUid(studio, part)
+            patchedPart.layerEntries = fastClone(entries)
+            try { patchedPart._uid = uid } catch (e) { console.warn(e) }
+            return patchedPart
+          }
+        }
+
+        const newPart = LayerTranslator.reconstructPartFromLayerEntries(entries, part, { originalAsset: asset })
+        if (!newPart) return null
+        const uid = part._uid || this.ensurePartUid(studio, part)
+        newPart.layerEntries = fastClone(entries)
+        try { newPart._uid = uid } catch (e) { console.warn(e) }
+        return newPart
+      } catch (e) {
+        console.error('[studioCoreStore] updateSpecificPartFromLayerEntries failed', e)
+        return null
+      }
+    },
+
+    schedulePartUpdate(studio) {
+      if (studio._pendingPartUpdate) return
+      studio._pendingPartUpdate = true
+
+      studio._refreshScheduler.scheduleRefresh(() => {
+        studio._pendingPartUpdate = false
+        this.doUpdateAllStacksPartFromLayerEntries(studio)
+      })
+    },
+
+    updateAllStacksPartFromLayerEntries(studio) {
+      studio._pendingPartUpdate = false
+      this.doUpdateAllStacksPartFromLayerEntries(studio)
+    },
+
+    doUpdateAllStacksPartFromLayerEntries(studio) {
+      try {
+        const newStacks = studio.stacks.map(el => {
+          const copy = fastClone(el)
+          if (Array.isArray(copy.data)) {
+            copy.data = copy.data.map(p => {
+              try {
+                if (p && Array.isArray(p.layerEntries)) {
+                  const updatedPart = this.updateSpecificPartFromLayerEntries(studio, p, p.layerEntries)
+                  if (updatedPart) return updatedPart
+                }
+              } catch (e) { /* ignore */ }
+              return p
+            })
+          }
+          return copy
+        })
+
+        studio.stacks = newStacks
+        studio._scheduleRefresh()
+      } catch (e) {
+        console.error('[studioCoreStore] updateAllStacksPartFromLayerEntries failed', e)
+      }
+
+      const focusedPart = studio.focusedPart
+      if (focusedPart && Array.isArray(focusedPart.layerEntries)) {
+        try {
+          const updatedFocusedPart = this.updateSpecificPartFromLayerEntries(studio, focusedPart, focusedPart.layerEntries)
+          if (updatedFocusedPart) {
+            this.updateFocusedPartInPlace(studio, updatedFocusedPart)
+          }
+        } catch (e) {
+          console.error('[studioCoreStore] updateAllStacksPartFromLayerEntries failed for focusedPart', e)
+        }
+      }
     }
   }
 })

@@ -37,7 +37,6 @@ import {
 */
 import * as Palette from '@/services/PaletteService'
 import * as LayerTranslator from '@/services/LayerTranslator'
-import { applyLayerDeltasToPart } from '@/services/PartPatchApplier'
 import { useStudioPanelStore } from '@/stores/studio/panelStore'
 import { useStudioHistoryStore } from '@/stores/studio/historyStore'
 import { useStudioPersistenceStore } from '@/stores/studio/persistenceStore'
@@ -1543,38 +1542,8 @@ const useStudioStoreBase = defineStore('studio', {
         })
       }
 
-      if (!Array.isArray(updates) || updates.length === 0) return false
-
-      let changedCount = 0
-      for (const update of updates) {
-        const changed = this.updatePartLayerEntries(update?.part, update?.entries, {
-          deferRefresh: true,
-          historyMeta: options?.historyMeta,
-          _fromFacade: true
-        })
-        if (changed) changedCount++
-      }
-
-      const normalizedHistoryMeta = this._normalizeHistoryMeta(
-        options?.historyMeta,
-        'layer.batchApplyLayerDeltas',
-        {
-          interactionKind: this._editorRealtimeInteractionKind,
-          changedParts: changedCount
-        }
-      )
-
-      const historyMode = options?.deferCommit === true ? 'throttled' : 'immediate'
-
-      return this._finalizeMutation({
-        changed: changedCount > 0,
-        deferCommit: options?.deferCommit === true,
-        scope: 'editor',
-        historyMode,
-        historyMeta: normalizedHistoryMeta,
-        schedulePart: false,
-        touchFocusedPart: false
-      })
+      const coreStore = this._getCoreStore()
+      return coreStore.batchUpdatePartLayerEntries(this, updates, options)
     },
 
     // -------------------------
@@ -2125,94 +2094,26 @@ const useStudioStoreBase = defineStore('studio', {
     },
 
     UpdateSpecificPartFromLayerEntries(part, entries = []) {
-      if (!entries && !part.layerEntries) {
-        return null
-      }
-      if (!part) {
-        return null
-      }
-      try {
-        const asset = this.resolveAssetForPart(part)
-        const previousEntries = this.getLayerEntriesForPart(part, { forceRebuild: false, clone: true })
-        const deltas = this._deriveLayerDeltas(previousEntries, entries)
-
-        if (Array.isArray(deltas) && deltas.length > 0) {
-          const patchResult = applyLayerDeltasToPart(part, deltas, { asset })
-          if (patchResult?.changed && patchResult?.part) {
-            const patchedPart = patchResult.part
-            const uid = part._uid || this.ensurePartUid(part)
-            patchedPart.layerEntries = fastClone(entries)
-            try { patchedPart._uid = uid } catch (e) { console.warn(e) }
-            return patchedPart
-          }
-        }
-
-        const newPart = LayerTranslator.reconstructPartFromLayerEntries(entries, part, { originalAsset: asset })
-        if (!newPart) return null
-        const uid = part._uid || this.ensurePartUid(part)
-        newPart.layerEntries = fastClone(entries)
-        try { newPart._uid = uid } catch (e) { console.warn(e) }
-        return newPart
-      } catch (e) {
-        console.error('[studioStore] UpdateSpecificPartFromLayerEntries failed', e)
-        return null
-      }
+      const coreStore = this._getCoreStore()
+      return coreStore.updateSpecificPartFromLayerEntries(this, part, entries)
     },
 
     /**
      * Schedule part update from layer entries (batched)
      */
     _schedulePartUpdate() {
-      if (this._pendingPartUpdate) return
-      this._pendingPartUpdate = true
-
-      this._refreshScheduler.scheduleRefresh(() => {
-        this._pendingPartUpdate = false
-        this._doUpdateAllStacksPartFromLayerEntries()
-      })
+      const coreStore = this._getCoreStore()
+      return coreStore.schedulePartUpdate(this)
     },
 
     UpdateAllStacksPartFromLayerEntries() {
-      this._pendingPartUpdate = false
-      this._doUpdateAllStacksPartFromLayerEntries()
+      const coreStore = this._getCoreStore()
+      return coreStore.updateAllStacksPartFromLayerEntries(this)
     },
 
     _doUpdateAllStacksPartFromLayerEntries() {
-      try {
-        const newStacks = this.stacks.map(el => {
-          const copy = fastClone(el)
-          if (Array.isArray(copy.data)) {
-            copy.data = copy.data.map(p => {
-              try {
-                if (p && Array.isArray(p.layerEntries)) {
-                  const updatedPart = this.UpdateSpecificPartFromLayerEntries(p, p.layerEntries)
-                  if (updatedPart) return updatedPart
-                }
-              } catch (e) { /* ignore */ }
-              return p
-            })
-          }
-          return copy
-        })
-
-        this.stacks = newStacks
-        this._scheduleRefresh()
-      } catch (e) {
-        console.error('[studioStore] UpdateAllStacksPartFromLayerEntries failed', e)
-      }
-
-      const fp = this.focusedPart
-      if (fp && Array.isArray(fp.layerEntries)) {
-        try {
-          const updatedFocusedPart = this.UpdateSpecificPartFromLayerEntries(fp, fp.layerEntries)
-          if (updatedFocusedPart) {
-            this._updateFocusedPartInPlace(updatedFocusedPart)
-          }
-        }
-        catch (e) {
-          console.error('[studioStore] UpdateAllStacksPartFromLayerEntries failed for focusedPart', e)
-        }
-      }
+      const coreStore = this._getCoreStore()
+      return coreStore.doUpdateAllStacksPartFromLayerEntries(this)
     },
 
     _buildLayerEntryReuseKey(part, stackIndex, partIndex) {

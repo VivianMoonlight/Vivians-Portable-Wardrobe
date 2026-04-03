@@ -217,7 +217,7 @@ flowchart LR
   - 选择派生工具：`getPrimaryMoveLayerIndex/getPaletteTargetsForCurrentSelection/getPaletteTargetForLayer/isPaletteTargetActive`。
 - 迁移到 `studioCoreStore`（Wave 7 主体）:
   - Part 真值写入链路：`_resolvePartLocation/_applyPartLayerDeltasInternal/applyPartLayerDeltas/batchApplyPartLayerDeltas/updatePartFromLayerEntries/updatePartLayerEntries`。
-  - 兼容回退与重建：`UpdateSpecificPartFromLayerEntries/_schedulePartUpdate/UpdateAllStacksPartFromLayerEntries/_doUpdateAllStacksPartFromLayerEntries`。
+  - 兼容回退与重建（已完成）：`UpdateSpecificPartFromLayerEntries/_schedulePartUpdate/UpdateAllStacksPartFromLayerEntries/_doUpdateAllStacksPartFromLayerEntries/batchUpdatePartLayerEntries` 已下沉到 core。
   - 基础身份与聚焦写入：`ensurePartUid/findPartByUid/_updateFocusedPartInPlace/_updateFocusedPartProperty`。
   - stack 主写入入口：`add/remove/move/select/clear/rename`。
 - 迁移到 `studioPersistenceStore` + `studioHistoryStore` + `studioPanelStore`（收尾清理）:
@@ -256,8 +256,9 @@ flowchart LR
 - 已完成第三部：`studioStore` 资产入口（`loadAssetData`、资产检索族、`applyAssetToSelectedStack`）下沉为 asset 委托。
 - 已完成第四部：Part 真值写入链路底层能力（`_resolvePartLocation`、`_applyPartLayerDeltasInternal`、`_updateFocusedPartInPlace`、`_updateFocusedPartProperty`）已迁入 `coreStore`，`studioStore` 对应入口改为薄代理。
 - 已完成第五部：Part 写入上层编排（`applyPartLayerDeltas`、`batchApplyPartLayerDeltas`、`updatePartFromLayerEntries`、`updatePartLayerEntries`）已迁入 `coreStore`，`studioStore` 对应入口仅保留 facade 分流与薄委托。
+- 已完成第六部：`UpdateSpecificPartFromLayerEntries` 与批量回写链路（`batchUpdatePartLayerEntries`、`_schedulePartUpdate`、`UpdateAllStacksPartFromLayerEntries`、`_doUpdateAllStacksPartFromLayerEntries`）已定责到 `coreStore`；`studioStore` 对应入口均为薄委托。
 - 验证：已执行 `npm run build`，构建通过。
-- 待完成：补 asset/render bridge 后收敛组件直调 `studioStore` 入口，并继续评估 `UpdateSpecificPartFromLayerEntries` 及批量回写链路的最终归属（core 或独立写入服务）。
+- 待完成：补 asset/render bridge 后收敛组件直调 `studioStore` 入口，并评估将 layer 重建复用工具进一步抽离为独立 service 的必要性。
 
 完成标准:
 - `studioStore` 退化为薄 facade（或删除）。
