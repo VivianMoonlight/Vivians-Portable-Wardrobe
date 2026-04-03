@@ -184,7 +184,7 @@ import { useFileSystemStore } from '@/stores/fileSystemStore.js'
 import Studio from '@/components/Studio/Studio.vue'
 import MobileWardrobeShell from '@/components/mobile/MobileWardrobeShell.vue'
 import { ExternalAdapter } from '@/utils/external_adapters.js'
-import { useStudioStore } from '@/stores/studioStore.js'
+import { useStudioDomainStores } from '@/stores/studio'
 import { useWorkbenchStore } from '@/stores/workbenchStore.js'
 import { PlayerHost, hostWindow, doc } from '@/utils/host-window.js'
 import { MOBILE_LAYOUT_BREAKPOINT } from '@/config/uiLayout.js'
@@ -206,7 +206,7 @@ const props = defineProps({
 const emit = defineEmits(['close'])
 
 const fs = useFileSystemStore()
-const studioStore = useStudioStore()
+const { studio: studioStore } = useStudioDomainStores()
 const workbenchStore = useWorkbenchStore()
 
 const isMobile = ref(false)

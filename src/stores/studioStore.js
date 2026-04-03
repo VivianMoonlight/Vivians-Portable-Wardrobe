@@ -20,9 +20,7 @@ import * as PriorityActions from '@/studio/priority-actions.js'
 import { getStudioFacade } from '@/studio/StudioFacade'
 import {
   PANEL_HOST,
-  PANEL_VISIBILITY,
-  createHostActiveDefaults,
-  createPanelRuntimeDefaults
+  PANEL_VISIBILITY
 } from '@/studio/panel-system'
 import {
   isStudioFacadeEnabled,
@@ -139,6 +137,45 @@ function ensureSelectionProxyBindings(store) {
   return store
 }
 
+function ensurePanelProxyBindings(store) {
+  if (!store || store._panelDomainProxyReady === true) return store
+
+  const panelStore = useStudioPanelStore()
+  const proxyKeys = [
+    'workspaceMode',
+    'taskStage',
+    'activeContextPanel',
+    'panelStates',
+    'panelRuntime',
+    'hostActivePanels',
+    'historyTrayExpanded',
+    'storageModalVisible',
+    'pinnedPanel',
+    'mobileTab',
+    'firstRunGuideDone',
+    'palettePanelVisible',
+    'layerManagerActive',
+    'historyPanelVisible'
+  ]
+
+  for (const key of proxyKeys) {
+    const descriptor = Object.getOwnPropertyDescriptor(store, key)
+    if (descriptor && (descriptor.get || descriptor.set)) continue
+
+    Object.defineProperty(store, key, {
+      configurable: true,
+      enumerable: true,
+      get: () => panelStore[key],
+      set: (value) => {
+        panelStore[key] = value
+      }
+    })
+  }
+
+  store._panelDomainProxyReady = true
+  return store
+}
+
 function ensurePaletteProxyBindings(store) {
   if (!store || store._paletteDomainProxyReady === true) return store
 
@@ -222,16 +259,12 @@ const useStudioStoreBase = defineStore('studio', {
       stackIndex: null,
       partIndex: null
     },
-    layerManagerActive: false,
 
     assetGroupsRaw: [],
     assetIndex: {},
 
     // internal per-part uid counter and mapping
     _partUidCounter: 1,
-
-    // NEW: central palette panel visibility (UI-level)
-    palettePanelVisible: false,
 
     focusedPartUpdateFlag: 0,
 
@@ -277,30 +310,6 @@ const useStudioStoreBase = defineStore('studio', {
       color: null,
       priority: null
     },
-
-    // History panel visibility
-    historyPanelVisible: false,
-    // Studio V2 UI state
-    workspaceMode: 'pro', // fixed to 'pro'
-    // Deprecated: legacy stage state machine is no longer used for UI gating.
-    // Keep this field only for backward compatibility with older callers.
-    taskStage: 'assemble', // legacy: 'assemble' | 'replace' | 'polish' | 'commit'
-    activeContextPanel: null, // 'inspector' | 'asset' | null
-    panelStates: {
-      inspector: 'pinned',
-      asset: 'hidden',
-      palette: 'hidden',
-      layer: 'hidden',
-      history: 'hidden',
-      saves: 'hidden'
-    }, // 'pinned' | 'peek' | 'hidden'
-    panelRuntime: createPanelRuntimeDefaults(),
-    hostActivePanels: createHostActiveDefaults(),
-    historyTrayExpanded: false,
-    storageModalVisible: false,
-    pinnedPanel: null,
-    mobileTab: 'structure', // 'structure' | 'replace' | 'property' | 'history'
-    firstRunGuideDone: false,
 
     // Preview stack and refresh scheduler state moved to renderStore (Wave 6).
   }),
@@ -359,17 +368,17 @@ const useStudioStoreBase = defineStore('studio', {
       return PreviewActions.canUseMoveTool(state)
     },
 
-    isPanelVisible(state) {
+    isPanelVisible() {
       return (panelId) => {
-        if (!panelId || !state.panelRuntime?.[panelId]) return false
-        return state.panelRuntime[panelId].state !== PANEL_VISIBILITY.HIDDEN
+        if (!panelId || !this.panelRuntime?.[panelId]) return false
+        return this.panelRuntime[panelId].state !== PANEL_VISIBILITY.HIDDEN
       }
     },
 
-    getActivePanelForHost(state) {
+    getActivePanelForHost() {
       return (host) => {
         if (!host) return null
-        return state.hostActivePanels?.[host] || null
+        return this.hostActivePanels?.[host] || null
       }
     }
   },
@@ -548,21 +557,8 @@ const useStudioStoreBase = defineStore('studio', {
     },
 
     _syncPanelDomainState() {
-      const panelStore = this._getPanelStore()
-      this.workspaceMode = panelStore.workspaceMode
-      this.taskStage = panelStore.taskStage
-      this.activeContextPanel = panelStore.activeContextPanel
-      this.panelStates = panelStore.panelStates
-      this.panelRuntime = panelStore.panelRuntime
-      this.hostActivePanels = panelStore.hostActivePanels
-      this.historyTrayExpanded = panelStore.historyTrayExpanded
-      this.storageModalVisible = panelStore.storageModalVisible
-      this.pinnedPanel = panelStore.pinnedPanel
-      this.mobileTab = panelStore.mobileTab
-      this.firstRunGuideDone = panelStore.firstRunGuideDone
-      this.palettePanelVisible = panelStore.palettePanelVisible
-      this.layerManagerActive = panelStore.layerManagerActive
-      this.historyPanelVisible = panelStore.historyPanelVisible
+      ensurePanelProxyBindings(this)
+      return true
     },
 
     setWorkspaceMode() {
@@ -3489,6 +3485,7 @@ const useStudioStoreBase = defineStore('studio', {
 
 export function useStudioStore(...args) {
   const store = useStudioStoreBase(...args)
+  ensurePanelProxyBindings(store)
   ensureRenderProxyBindings(store)
   ensureSelectionProxyBindings(store)
   ensurePaletteProxyBindings(store)

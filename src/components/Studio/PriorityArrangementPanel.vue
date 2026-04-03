@@ -81,11 +81,11 @@
 <script setup>
 import { ref, computed, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useStudioStore } from '@/stores/studioStore'
+import { useStudioDomainStores } from '@/stores/studio'
 
 const { t } = useI18n()
 
-const store = useStudioStore()
+const { studio: store } = useStudioDomainStores()
 const selected = computed(() => store.selectedElement)
 const hasSelected = computed(() => !!selected.value)
 

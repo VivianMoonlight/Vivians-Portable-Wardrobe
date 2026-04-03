@@ -75,12 +75,12 @@
 <script setup>
 import { ref, computed, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useStudioStore } from '@/stores/studioStore'
+import { useStudioDomainStores } from '@/stores/studio'
 import { isHiddenGroup } from '@/config/filterGroupConfig'
 import { throttle } from '@/utils/performance.js'
 
 const { t } = useI18n()
-const store = useStudioStore()
+const { studio: store } = useStudioDomainStores()
 
 // --- Refs ---
 const listBodyRef = ref(null)

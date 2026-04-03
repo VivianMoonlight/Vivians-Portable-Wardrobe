@@ -4,6 +4,13 @@
 - 把 `src/stores/studioStore.js` 从“全域中心”拆为“领域 store + 协调层”。
 - 先迁移低耦合 UI 领域，再迁移高风险渲染与核心数据领域。
 - 保持现有行为兼容，迁移期间只允许单向收敛，不新增长期桥接债务。
+- 目标形态固化为“分域状态 + 星型命令中枢（混合）”，而不是回退到单一星型状态中心。
+
+## 架构原则（目标形态）
+- 状态单一真值按领域归属：`core/asset/render/selection/palette/panel/history/persistence` 各自持有。
+- 写路径统一经命令中枢：`StudioFacade + StudioCommandBus + TransactionCoordinator`。
+- 读路径优先 domain/bridge 直读，不把查询重新收拢到单一状态中心。
+- 跨域一致性通过命令中枢的事务与元数据编排保证，不通过跨域直接写 state 保证。
 
 ## 现状锚点（基于代码）
 - 状态入口在 `src/stores/studioStore.js` 的 state/getters/actions 主体，体量和职责都过大。
@@ -17,6 +24,10 @@
 flowchart LR
   subgraph UI[UI Layer]
     VC[Vue Components]
+  end
+
+  subgraph HUB[Command Hub]
+    CMD[StudioFacade + StudioCommandBus + TransactionCoordinator]
   end
 
   subgraph Stores[Pinia Domain Stores]
@@ -38,14 +49,24 @@ flowchart LR
     STOR[StorageActions + SaveActions + StudioStorageService]
   end
 
-  VC --> PANEL
-  VC --> SELECT
-  VC --> PALETTE
-  VC --> ASSET
-  VC --> CORE
-  VC --> RENDER
-  VC --> HISTORY
-  VC --> PERSIST
+  VC --> CMD
+  VC -. read .-> PANEL
+  VC -. read .-> SELECT
+  VC -. read .-> PALETTE
+  VC -. read .-> ASSET
+  VC -. read .-> CORE
+  VC -. read .-> RENDER
+  VC -. read .-> HISTORY
+  VC -. read .-> PERSIST
+
+  CMD --> PANEL
+  CMD --> SELECT
+  CMD --> PALETTE
+  CMD --> ASSET
+  CMD --> CORE
+  CMD --> RENDER
+  CMD --> HISTORY
+  CMD --> PERSIST
 
   ASSET --> AIDX
   ASSET --> PTR
@@ -117,14 +138,16 @@ flowchart LR
 
 ### Wave 0: 建立迁移护栏（先做）
 - 新增 `src/stores/studio/index.js` 作为组合出口。
-- 统一 command 入口，禁止组件直接跨域写对方 state。
+- 统一 command 入口（星型命令中枢），禁止组件直接跨域写对方 state。
 - 定义最小契约:
-  - core.applyMutation(payload)
-  - render.requestRefresh(reason)
-  - history.capture(meta)
+  - `execute(command)`：统一写入入口（`type/payload/meta`）。
+  - `query(name, params)`：统一查询入口（允许逐步收口到 domain query service）。
+  - `beginInteraction/applyDelta/commitInteraction/cancelInteraction`：统一交互事务入口。
+  - domain action 契约显式化：禁止 domain 之间互相直接改写 state。
 
 完成标准:
 - 组件层仅使用组合出口，不再直接 import 单体 studioStore。
+- 组件写路径统一经命令中枢，读路径统一经 domain/bridge。
 
 ### Wave 1: 先拆 panel（最低风险）
 - 从 `studioStore` 移出:
@@ -225,7 +248,7 @@ flowchart LR
   - persistence/history 现有方法多数已是薄代理，可在组件全面桥接后清理 `studioStore` 同名兼容入口。
 
 保留清单（应保留为核心/桥接功能）:
-- 核心协调层（建议保留在 `studioStore`，直至 Wave 7 完成）:
+- 命令中枢层（建议逐步从 `studioStore` 壳中外提并固化）:
   - 命令与查询网关：`execute/query/getQueryNames`。
   - 交互事务网关：`beginInteraction/applyDelta/commitInteraction/cancelInteraction/forceEndRealtimeScope`。
   - 统一 mutation 编排：`_finalizeMutation/_finalizePaletteMutation/_finalizeEditorMutation`。
@@ -234,6 +257,7 @@ flowchart LR
   - `useStudioStore` 内 `ensureSelectionProxyBindings/ensurePaletteProxyBindings/ensureRenderProxyBindings`。
   - `_getPanelStore/_getSelectionStore/_getPaletteStore/_getRenderStore/_getHistoryStore/_getPersistenceStore`。
   - `_syncPanelDomainState/_syncFocusedPartIndexToSelectionDomain/_syncLegacyFromFocusState` 等双写同步入口。
+  - bridge 约束：仅做读模型拼装与兼容路由，不承载复杂写入编排。
 - 临时核心能力（可在 core/render 契约稳定后再评估迁移）:
   - `_reconstructStacksForRender`（当前作为 render pipeline 的核心回调契约，含 feature flag 分支）。
   - `_sanitizeStacksForPersistence`（当前是 persistence 入口统一清洗代理）。
@@ -258,7 +282,7 @@ flowchart LR
 - 已完成第五部：Part 写入上层编排（`applyPartLayerDeltas`、`batchApplyPartLayerDeltas`、`updatePartFromLayerEntries`、`updatePartLayerEntries`）已迁入 `coreStore`，`studioStore` 对应入口仅保留 facade 分流与薄委托。
 - 已完成第六部：`UpdateSpecificPartFromLayerEntries` 与批量回写链路（`batchUpdatePartLayerEntries`、`_schedulePartUpdate`、`UpdateAllStacksPartFromLayerEntries`、`_doUpdateAllStacksPartFromLayerEntries`）已定责到 `coreStore`；`studioStore` 对应入口均为薄委托。
 - 验证：已执行 `npm run build`，构建通过。
-- 待完成：补 asset/render bridge 后收敛组件直调 `studioStore` 入口，并评估将 layer 重建复用工具进一步抽离为独立 service 的必要性。
+- 待完成：补 asset/render bridge 后收敛组件直调 `studioStore` 入口，并继续外提命令中枢实现，最终将 `studioStore` 收敛为最小兼容壳（或删除）。
 
 完成标准:
 - `studioStore` 退化为薄 facade（或删除）。

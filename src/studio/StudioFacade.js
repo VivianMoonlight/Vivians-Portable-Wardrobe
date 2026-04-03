@@ -47,6 +47,18 @@ class StudioFacade {
     return getStudioQueryNames()
   }
 
+  registerCommandHandler(type, handler, options = {}) {
+    return this.commandBus.registerHandler(type, handler, options)
+  }
+
+  registerCommandHandlers(handlers = {}, options = {}) {
+    return this.commandBus.registerHandlers(handlers, options)
+  }
+
+  getRegisteredCommandTypes() {
+    return this.commandBus.getRegisteredCommandTypes()
+  }
+
   beginInteraction(kind = 'palette', meta = {}) {
     return this.transactionCoordinator.beginInteraction(kind, meta)
   }

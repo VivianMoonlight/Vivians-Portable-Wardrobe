@@ -3,7 +3,7 @@ import { ref, computed, onMounted, onBeforeUnmount, nextTick, toRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FileThumbnail from "./FileThumbnail.vue";
 import { useFileSystemStore } from '@/stores/fileSystemStore'
-import { useStudioStore } from '@/stores/studioStore'
+import { useStudioDomainStores } from '@/stores/studio'
 import { hostWindow, doc } from '@/utils/host-window.js'
 import { injectTheme } from '@/services/ThemeService'
 import * as DialogService from '@/services/DialogService.js'
@@ -15,7 +15,7 @@ const props = defineProps({
 const emit = defineEmits(["open-folder", "remove", "rename", "sent-to-studio"]);
 
 const fsStore = useFileSystemStore();
-const studio = useStudioStore();
+const { studio } = useStudioDomainStores();
 
 const { t } = useI18n(); // i18n translation function
 

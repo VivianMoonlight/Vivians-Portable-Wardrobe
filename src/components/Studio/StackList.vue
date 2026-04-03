@@ -225,11 +225,11 @@
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseButton from '../ui/BaseButton.vue'
-import { useStudioStore } from '@/stores/studioStore'
+import { useStudioDomainStores } from '@/stores/studio'
 import { doc } from '@/utils/host-window.js'
 
 const { t } = useI18n()
-const store = useStudioStore()
+const { studio: store } = useStudioDomainStores()
 const emit = defineEmits(['stack-selected'])
 
 const rootEl = ref(null)
