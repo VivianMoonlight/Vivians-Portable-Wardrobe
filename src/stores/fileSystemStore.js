@@ -613,7 +613,15 @@ export const useFileSystemStore = defineStore('fs', {
           }
         }
 
-        if (localData || onlineData) this.fs.fromMultipleJSON([onlineData, localData])
+        // Local snapshot is authoritative for full filesystem to avoid stale cloud data
+        // resurrecting locally deleted items when cloud sync is skipped by quota.
+        if (localData) {
+          this.fs.fromJSON(localData)
+        } else if (onlineData) {
+          this.fs.fromJSON(onlineData)
+          this.storage.saveLocal(localKey, onlineData)
+        }
+
         this.refreshCloudQuotaStats()
       } catch (e) {
         console.warn('loadAll failed', e)
