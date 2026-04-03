@@ -533,6 +533,7 @@ const autoSaveControls = useAutoSave(persistenceBridge, {
 const showRestoreBanner = ref(false)
 const restoreInfo = ref(null)
 const savesButtonRef = ref(null)
+let studioUnmounted = false
 
 // Inject theme
 const injectedTheme = injectTheme()
@@ -783,6 +784,7 @@ function escHandler(e) {
 }
 
 onMounted(async () => {
+  studioUnmounted = false
   updateIsMobile()
   if (!props.embedded) {
     hostWindow.addEventListener('pointermove', onPointerMove, { passive: true })
@@ -792,18 +794,38 @@ onMounted(async () => {
   // Enable auto-save
   persistenceBridge.enableAutoSave()
 
-  // Try to restore auto-saved data using new method
-  const result = await persistenceBridge.autoRestoreSession()
-  if (result.restored) {
-    restoreInfo.value = result
-    showRestoreBanner.value = true
-    console.log('[Studio] Auto-saved data restored from', new Date(result.save.timestamp).toLocaleString())
-  } else if (result.reason) {
-    console.log('[Studio] No auto-save data restored:', result.reason)
+  const runAutoRestore = async () => {
+    if (studioUnmounted) return
+    const result = await persistenceBridge.autoRestoreSession()
+    if (studioUnmounted) return
+
+    if (result.restored) {
+      restoreInfo.value = result
+      showRestoreBanner.value = true
+      console.log('[Studio] Auto-saved data restored from', new Date(result.save.timestamp).toLocaleString())
+    } else if (result.reason) {
+      console.log('[Studio] No auto-save data restored:', result.reason)
+    }
+  }
+
+  // Defer heavy restore work to keep first-open interaction responsive.
+  if (typeof hostWindow.requestIdleCallback === 'function') {
+    hostWindow.requestIdleCallback(() => {
+      runAutoRestore().catch((error) => {
+        console.warn('[Studio] Deferred auto-restore failed', error)
+      })
+    }, { timeout: 900 })
+  } else {
+    hostWindow.setTimeout(() => {
+      runAutoRestore().catch((error) => {
+        console.warn('[Studio] Deferred auto-restore failed', error)
+      })
+    }, 60)
   }
 })
 
 onBeforeUnmount(() => {
+  studioUnmounted = true
   if (!props.embedded) {
     hostWindow.removeEventListener('pointermove', onPointerMove)
     hostWindow.removeEventListener('pointerup', onPointerUp)

@@ -11,7 +11,10 @@ export const useStudioPersistenceStore = defineStore('studioPersistence', {
     lastSaveTime: null,
     saveStatus: 'idle',
     _saveStatusTimeout: null,
-    currentSaveId: null
+    currentSaveId: null,
+    _autoRestoreAttempted: false,
+    _autoRestorePromise: null,
+    _lastAutoRestoreResult: null
   }),
 
   actions: {
@@ -366,16 +369,40 @@ export const useStudioPersistenceStore = defineStore('studioPersistence', {
     },
 
     async autoRestoreSession(studio) {
-      const result = SaveActions.autoRestoreSession()
-      if (!result.restored) {
-        return result
+      if (this._autoRestorePromise) {
+        return this._autoRestorePromise
       }
 
-      const loadResult = await this.loadStudioSession(studio, result.save.id)
-      if (loadResult.success) {
-        return { restored: true, save: result.save }
+      if (this._autoRestoreAttempted) {
+        return this._lastAutoRestoreResult || { restored: false, reason: 'already-attempted' }
       }
-      return { restored: false }
+
+      this._autoRestoreAttempted = true
+
+      this._autoRestorePromise = (async () => {
+        const result = SaveActions.autoRestoreSession()
+        if (!result.restored) {
+          this._lastAutoRestoreResult = result
+          return result
+        }
+
+        const loadResult = await this.loadStudioSession(studio, result.save.id)
+        if (loadResult.success) {
+          const restoredResult = { restored: true, save: result.save }
+          this._lastAutoRestoreResult = restoredResult
+          return restoredResult
+        }
+
+        const failedResult = { restored: false, reason: 'load-failed' }
+        this._lastAutoRestoreResult = failedResult
+        return failedResult
+      })()
+
+      try {
+        return await this._autoRestorePromise
+      } finally {
+        this._autoRestorePromise = null
+      }
     }
   }
 })

@@ -264,14 +264,14 @@ if (Object.prototype.hasOwnProperty.call(tabMounted, activeTab.value)) {
     tabMounted[activeTab.value] = true
 }
 
-async function setActiveTab(tab) {
+function setActiveTab(tab) {
     if (isMobile.value && tab === 'studio') {
         workbenchStore.setMobileMainTab('wardrobe')
         return
     }
     workbenchStore.setActiveTab(tab)
     if (tab === 'studio') {
-        await studioStore.loadAssetData()
+        studioStore.loadAssetData().catch(() => { /* ignore */ })
     }
 }
 

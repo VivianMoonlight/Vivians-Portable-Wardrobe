@@ -8,7 +8,9 @@ import { resolveCraftForAssetSlot } from '@/studio/craft-resolver.js'
 export const useStudioAssetStore = defineStore('studioAsset', {
   state: () => ({
     assetGroupsRaw: [],
-    assetIndex: {}
+    assetIndex: {},
+    _assetLoaded: false,
+    _assetLoadingPromise: null
   }),
 
   actions: {
@@ -17,17 +19,44 @@ export const useStudioAssetStore = defineStore('studioAsset', {
       this.assetIndex = payload.assetIndex && typeof payload.assetIndex === 'object' ? payload.assetIndex : {}
     },
 
-    async loadAssetData(studio) {
-      const res = await AssetIndex.loadAssetData()
-      this.assetGroupsRaw = res.assetGroupsRaw
-      this.assetIndex = res.assetIndex
+    async loadAssetData(studio, options = {}) {
+      const forceReload = options?.force === true
 
-      if (studio) {
-        studio.assetGroupsRaw = res.assetGroupsRaw
-        studio.assetIndex = res.assetIndex
+      if (!forceReload && this._assetLoaded) {
+        if (studio) {
+          studio.assetGroupsRaw = this.assetGroupsRaw
+          studio.assetIndex = this.assetIndex
+        }
+        return this.assetGroupsRaw
       }
 
-      return res.assetGroupsRaw
+      if (!forceReload && this._assetLoadingPromise) {
+        const groups = await this._assetLoadingPromise
+        if (studio) {
+          studio.assetGroupsRaw = this.assetGroupsRaw
+          studio.assetIndex = this.assetIndex
+        }
+        return groups
+      }
+
+      this._assetLoadingPromise = (async () => {
+        const res = await AssetIndex.loadAssetData()
+        this.assetGroupsRaw = Array.isArray(res.assetGroupsRaw) ? res.assetGroupsRaw : []
+        this.assetIndex = res.assetIndex && typeof res.assetIndex === 'object' ? res.assetIndex : {}
+        this._assetLoaded = true
+        return this.assetGroupsRaw
+      })()
+
+      try {
+        const groups = await this._assetLoadingPromise
+        if (studio) {
+          studio.assetGroupsRaw = this.assetGroupsRaw
+          studio.assetIndex = this.assetIndex
+        }
+        return groups
+      } finally {
+        this._assetLoadingPromise = null
+      }
     },
 
     findAssetsGroupForPart(studio, part) {
