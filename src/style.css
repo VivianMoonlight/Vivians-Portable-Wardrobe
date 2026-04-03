@@ -4,7 +4,9 @@
  */
 
 /* Import normalize/reset */
-@import './styles/normalize.css';
+/* @import './styles/normalize.css'; */ 
+/* ⚠️ DEPRECATED - normalize.css is deprecated and disabled (2026-03-01) */
+/* Reason: !important rules cause conflicts. Use component scoped styles instead. */
 
 /* Import theme system */
 @import './styles/theme.css';
@@ -16,27 +18,37 @@
 @import './styles/responsive.css';
 
 /* ---------- Scrollable Containers ---------- */
-.scrollable {
+.vpw-scrollable {
   overflow: auto;
   -webkit-overflow-scrolling: touch;
   scrollbar-gutter: stable;
 }
 
 /* ---------- WebKit Scrollbar Styles ---------- */
-body::-webkit-scrollbar,
-.scrollable::-webkit-scrollbar {
+/* Apply scrollbar styles to scrollable elements within theme containers */
+.theme-light .vpw-scrollable::-webkit-scrollbar,
+.theme-dark .vpw-scrollable::-webkit-scrollbar,
+.theme-themed-light .vpw-scrollable::-webkit-scrollbar,
+.theme-themed-dark .vpw-scrollable::-webkit-scrollbar,
+.vpw-scrollable::-webkit-scrollbar {
   width: var(--scrollbar-size);
   height: var(--scrollbar-size);
 }
 
-body::-webkit-scrollbar-track,
-.scrollable::-webkit-scrollbar-track {
+.theme-light .vpw-scrollable::-webkit-scrollbar-track,
+.theme-dark .vpw-scrollable::-webkit-scrollbar-track,
+.theme-themed-light .vpw-scrollable::-webkit-scrollbar-track,
+.theme-themed-dark .vpw-scrollable::-webkit-scrollbar-track,
+.vpw-scrollable::-webkit-scrollbar-track {
   background: var(--scrollbar-track);
   border-radius: calc(var(--scrollbar-size) / 2);
 }
 
-body::-webkit-scrollbar-thumb,
-.scrollable::-webkit-scrollbar-thumb {
+.theme-light .vpw-scrollable::-webkit-scrollbar-thumb,
+.theme-dark .vpw-scrollable::-webkit-scrollbar-thumb,
+.theme-themed-light .vpw-scrollable::-webkit-scrollbar-thumb,
+.theme-themed-dark .vpw-scrollable::-webkit-scrollbar-thumb,
+.vpw-scrollable::-webkit-scrollbar-thumb {
   background-color: var(--scrollbar-thumb);
   border-radius: calc(var(--scrollbar-size) / 2);
   border: 3px solid transparent;
@@ -45,24 +57,36 @@ body::-webkit-scrollbar-thumb,
   transition: background-color 150ms ease, transform 120ms ease;
 }
 
-body::-webkit-scrollbar-thumb:hover,
-.scrollable::-webkit-scrollbar-thumb:hover {
+.theme-light .vpw-scrollable::-webkit-scrollbar-thumb:hover,
+.theme-dark .vpw-scrollable::-webkit-scrollbar-thumb:hover,
+.theme-themed-light .vpw-scrollable::-webkit-scrollbar-thumb:hover,
+.theme-themed-dark .vpw-scrollable::-webkit-scrollbar-thumb:hover,
+.vpw-scrollable::-webkit-scrollbar-thumb:hover {
   background-color: var(--scrollbar-thumb-hover);
 }
 
-body::-webkit-scrollbar-thumb:active,
-.scrollable::-webkit-scrollbar-thumb:active {
+.theme-light .vpw-scrollable::-webkit-scrollbar-thumb:active,
+.theme-dark .vpw-scrollable::-webkit-scrollbar-thumb:active,
+.theme-themed-light .vpw-scrollable::-webkit-scrollbar-thumb:active,
+.theme-themed-dark .vpw-scrollable::-webkit-scrollbar-thumb:active,
+.vpw-scrollable::-webkit-scrollbar-thumb:active {
   background-color: var(--scrollbar-thumb-active);
 }
 
-body::-webkit-scrollbar-corner,
-.scrollable::-webkit-scrollbar-corner {
+.theme-light .vpw-scrollable::-webkit-scrollbar-corner,
+.theme-dark .vpw-scrollable::-webkit-scrollbar-corner,
+.theme-themed-light .vpw-scrollable::-webkit-scrollbar-corner,
+.theme-themed-dark .vpw-scrollable::-webkit-scrollbar-corner,
+.vpw-scrollable::-webkit-scrollbar-corner {
   background: var(--scrollbar-corner);
 }
 
 /* ---------- Firefox Scrollbar ---------- */
-body,
-.scrollable {
+.theme-light .vpw-scrollable,
+.theme-dark .vpw-scrollable,
+.theme-themed-light .vpw-scrollable,
+.theme-themed-dark .vpw-scrollable,
+.vpw-scrollable {
   scrollbar-width: thin;
   scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }

@@ -26,7 +26,7 @@
       <div v-if="!hasPart" class="placeholder">{{ t('partInspector.noPartPlaceholder') }}</div>
 
       <div v-else class="content">
-        <div v-if="isReplaceStage" class="stage-hint stage-hint-replace">
+        <div v-if="false" class="stage-hint stage-hint-replace">
           <div class="stage-hint-title">{{ t('partInspector.replaceStageTitle') || '当前处于替换阶段' }}</div>
           <div class="stage-hint-text">{{ t('partInspector.replaceStageDesc') || '请在 Asset 面板选择并应用资源，应用后会自动回到精修。' }}</div>
           <button class="stage-hint-btn" @click="goToAssetPanel">{{ t('partInspector.goToAsset') || '前往替换面板' }}</button>
@@ -125,9 +125,9 @@
                   :groupName="item.groupName"
                   :layers="item.layers"
                   :part="part"
-                  :stackIndex="store.focusedPartIndex?.stackIndex ?? 0"
-                  :partIndex="store.focusedPartIndex?.partIndex ?? 0"
-                  :selectionMode="store.selectionMode"
+                  :stackIndex="focusedPartIndex?.stackIndex ?? 0"
+                  :partIndex="focusedPartIndex?.partIndex ?? 0"
+                  :selectionMode="selectionMode"
                   @save-layer="onSaveLayer" />
               </div>
               
@@ -137,9 +137,9 @@
                 <ColorableLayer
                   :layer="item.layer"
                   :part="part"
-                  :stackIndex="store.focusedPartIndex?.stackIndex ?? 0"
-                  :partIndex="store.focusedPartIndex?.partIndex ?? 0"
-                  :selectionMode="store.selectionMode"
+                  :stackIndex="focusedPartIndex?.stackIndex ?? 0"
+                  :partIndex="focusedPartIndex?.partIndex ?? 0"
+                  :selectionMode="selectionMode"
                   @save-layer="onSaveLayer" />
               </div>
             </template>
@@ -198,7 +198,8 @@
 <script setup>
 import { computed, ref, watch, nextTick, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useStudioStore } from '@/stores/studioStore'
+import { useStudioDomainStores } from '@/stores/studio'
+import { createStudioSelectionBridge } from '@/stores/studio/selectionBridge'
 import ColorableLayer from './ColorableLayer.vue'
 import LayerGroup from './LayerGroup.vue'
 import BatchEditPanel from './BatchEditPanel.vue'
@@ -206,34 +207,37 @@ import CollapsibleSection from '../ui/CollapsibleSection.vue'
 import { hostWindow, setTimeoutHost, doc } from '@/utils/host-window.js'
 import { AssetApi } from '@/utils/AssetApi'
 import * as Palette from '@/services/PaletteService'
-import * as LayerTranslator from '@/services/LayerTranslator'
+import { applyLayerDeltasToPart } from '@/services/PartPatchApplier'
 
 const { t } = useI18n()
 
-const store = useStudioStore()
+const { studio: store, selection } = useStudioDomainStores()
+const selectionBridge = createStudioSelectionBridge(store, selection)
 const part = computed(() => store.focusedPart)
 const updateFlag = computed(() => store.focusedPartUpdateFlag)
 const hasPart = computed(() => !!part.value)
+const selectionMode = computed(() => selectionBridge.selectionMode)
+const selectedLayers = computed(() => selectionBridge.selectedLayers)
+const selectedLayersCount = computed(() => selectionBridge.selectedLayersCount)
+const focusedPartIndex = computed(() => selectionBridge.focusedPartIndex)
 
 // Multi-selection state
-const isMultiMode = computed(() => store.selectionMode === 'multiple')
-const hasSelections = computed(() => store.selectedLayers && store.selectedLayers.length > 0)
-const taskStage = computed(() => store.taskStage || 'assemble')
-const isReplaceStage = computed(() => taskStage.value === 'replace')
-const isPolishStage = computed(() => taskStage.value === 'polish')
-const showStructureFields = computed(() => !isPolishStage.value)
-const showAdvancedSection = computed(() => !isPolishStage.value)
+const isMultiMode = computed(() => selectionMode.value === 'multiple')
+const hasSelections = computed(() => selectedLayersCount.value > 0)
+// taskStage is deprecated. Keep inspector fields visible for debugging regardless of legacy stages.
+const showStructureFields = computed(() => true)
+const showAdvancedSection = computed(() => true)
 const scopeLabel = computed(() => {
   if (!hasPart.value) return ''
   if (isMultiMode.value) {
-    const count = store.selectedLayers?.length || 0
+    const count = selectedLayersCount.value
     return `${t('partInspector.applyTo') || 'Apply to'} ${count} ${t('partInspector.layers') || 'layers'}`
   }
   return t('partInspector.applyToCurrentLayer') || 'Apply to current layer'
 })
 
 // Preview tool state
-const isMoveTool = computed(() => store.previewTool === 'move')
+const isMoveTool = computed(() => selectionBridge.previewTool === 'move')
 const canUseMoveTool = computed(() => store.canUseMoveTool)
 
 function togglePreviewTool() {
@@ -241,7 +245,8 @@ function togglePreviewTool() {
 }
 
 function goToAssetPanel() {
-  store.setTaskStage('replace')
+  // Deprecated: taskStage flow removed.
+  // store.setTaskStage('replace')
   store.openContextPanel('asset', 'inspector-goto-asset')
 }
 
@@ -254,6 +259,61 @@ const layerEntriesLocal = ref([])            // local deep-cloned copy used by c
 const focusedPartKey = ref(null)             // snapshot key for current focusedPart
 const layerHoverBlinkTimerId = ref(null)
 const layerHoverBlinkState = ref(null)
+const DISABLE_LAYER_HOVER_BLINK = true
+const layerEditInteractionActive = ref(false)
+const layerEditCommitTimerId = ref(null)
+
+function beginLayerEditInteraction() {
+  if (layerEditInteractionActive.value) return
+  try {
+    store.beginInteraction('layer-edit', { source: 'PartInspectorPanel' })
+    layerEditInteractionActive.value = true
+  } catch (e) {
+    layerEditInteractionActive.value = false
+  }
+}
+
+function clearLayerEditCommitTimer() {
+  const timerId = layerEditCommitTimerId.value
+  if (timerId !== null) {
+    hostWindow.clearTimeout(timerId)
+    layerEditCommitTimerId.value = null
+  }
+}
+
+function commitLayerEditInteraction() {
+  if (!layerEditInteractionActive.value) return false
+  clearLayerEditCommitTimer()
+  layerEditInteractionActive.value = false
+
+  let committed = false
+  try {
+    committed = !!store.commitInteraction()
+  } catch (e) {
+    committed = false
+  }
+
+  if (!committed) {
+    try {
+      committed = !!store.forceEndRealtimeScope?.('editor', {
+        commit: true,
+        interactionKind: 'layer-edit'
+      })
+    } catch (e) {
+      committed = false
+    }
+  }
+
+  return committed
+}
+
+function scheduleLayerEditInteractionCommit(delayMs = 160) {
+  clearLayerEditCommitTimer()
+  layerEditCommitTimerId.value = hostWindow.setTimeout(() => {
+    layerEditCommitTimerId.value = null
+    commitLayerEditInteraction()
+  }, Math.max(0, Number(delayMs) || 0))
+}
 
 // helper to build a stable key for focusedPart snapshot
 function buildPartKey(p) {
@@ -273,12 +333,12 @@ const refreshFunction = async (p) => {
     return
   }
 
-  // Prefer part.layerEntries attached in stacks if present and non-empty.
+  // Resolve entries from store source-of-truth first.
   let entries = null
   try {
-    if (Array.isArray(p.layerEntries) && p.layerEntries.length) {
-      // deep clone to avoid prop mutation
-      entries = JSON.parse(JSON.stringify(p.layerEntries))
+    if (typeof store.getLayerEntriesForPart === 'function') {
+      const resolved = store.getLayerEntriesForPart(p, { forceRebuild: false, clone: true })
+      entries = Array.isArray(resolved) ? resolved : []
     } else {
       // build from translator (store.buildLayerEntriesForPart will set store.translatedLayerEntries as side-effect)
       const built = store.buildLayerEntriesForPart(p) || []
@@ -306,11 +366,11 @@ watch(part, () => {
   stopLayerHoverBlink()
 })
 
-watch(() => `${store.focusedPartIndex?.stackIndex ?? 'n'}:${store.focusedPartIndex?.partIndex ?? 'n'}`, () => {
+watch(() => `${focusedPartIndex.value?.stackIndex ?? 'n'}:${focusedPartIndex.value?.partIndex ?? 'n'}`, () => {
   stopLayerHoverBlink()
 })
 
-watch(() => (store.selectedLayers || []).map(s => `${s.stackIndex}:${s.partIndex}:${s.layerIndex}`).join('|'), () => {
+watch(() => (selectedLayers.value || []).map(s => `${s.stackIndex}:${s.partIndex}:${s.layerIndex}`).join('|'), () => {
   stopLayerHoverBlink()
 })
 
@@ -404,12 +464,14 @@ function onTypeChange(e) {
     delete newProp.TypeRecord
   }
 
-  // Use the store's property update method which handles refresh
-  store._updateFocusedPartProperty('Property', newProp)
-  
-  // Force a full update cycle to ensure layers and preview catch up
-  store.RebuildAllStacksLayerEntriesFromParts()
-  store.refreshMergedAppearanceData()
+  store.execute({
+    type: 'part.updateProperty',
+    payload: {
+      property: newProp,
+      rebuildLayers: true,
+      refresh: true
+    }
+  })
 }
 
 /* ------- Vibrating Item Logic ------- */
@@ -461,12 +523,14 @@ function onVibratorModeChange(e) {
     }
   }
 
-  // Use the store's property update method which handles refresh
-  store._updateFocusedPartProperty('Property', newProp)
-  
-  // Force a full update cycle to ensure layers and preview catch up
-  store.RebuildAllStacksLayerEntriesFromParts()
-  store.refreshMergedAppearanceData()
+  store.execute({
+    type: 'part.updateProperty',
+    payload: {
+      property: newProp,
+      rebuildLayers: true,
+      refresh: true
+    }
+  })
 }
 
 /* ------- Modular Asset Logic (New) ------- */
@@ -508,10 +572,14 @@ function onModularChange(moduleKey, e) {
   newTR[moduleKey] = val
   newProp.TypeRecord = newTR
   
-  // Update store and trigger refresh
-  store._updateFocusedPartProperty('Property', newProp)
-  store.RebuildAllStacksLayerEntriesFromParts()
-  store.refreshMergedAppearanceData()
+  store.execute({
+    type: 'part.updateProperty',
+    payload: {
+      property: newProp,
+      rebuildLayers: true,
+      refresh: true
+    }
+  })
 }
 
 /* ------- Text Item Logic ------- */
@@ -581,8 +649,14 @@ function onTextFieldInput(fieldKey, maxLength, e) {
 
   const newProp = { ...(part.value.Property || {}) }
   newProp[fieldKey] = nextVal
-  store._updateFocusedPartProperty('Property', newProp)
-  store.refreshMergedAppearanceData()
+  store.execute({
+    type: 'part.updateProperty',
+    payload: {
+      property: newProp,
+      rebuildLayers: false,
+      refresh: true
+    }
+  })
 }
 
 /* ------- Description / Group 编辑（简化） ------- */
@@ -605,12 +679,10 @@ function saveDescription() {
   if (!hasPart.value) { editingDescription.value = false; return }
   const desc = (editDescription.value ?? '').trim()
   if (!desc || desc === partDescription.value) { editingDescription.value = false; return }
-  const updated = { ...part.value, Description: desc }
-  if (updated.Asset && typeof updated.Asset === 'object') {
-    updated.Asset = { ...updated.Asset, Description: desc }
-  }
-  store.focusPart(updated)
-  try { store.translateFocusedPartToLayers() } catch (e) { }
+  store.applyFocusedPartMetadata?.({
+    Description: desc,
+    Asset: { Description: desc }
+  })
   editingDescription.value = false
 }
 function cancelDescription() { editingDescription.value = false }
@@ -626,12 +698,10 @@ function saveGroup() {
   const g = (editGroup.value ?? '').trim()
   const old = part.value?.Group || ''
   if (!g || g === old) { editingGroup.value = false; return }
-  const updated = { ...part.value, Group: g }
-  if (updated.Asset && typeof updated.Asset === 'object') {
-    updated.Asset = { ...updated.Asset, Group: { ...(updated.Asset.Group || {}), Name: g } }
-  }
-  store.focusPart(updated)
-  try { store.translateFocusedPartToLayers() } catch (e) { }
+  store.applyFocusedPartMetadata?.({
+    Group: g,
+    Asset: { Group: { Name: g } }
+  })
   editingGroup.value = false
 }
 function cancelGroup() { editingGroup.value = false }
@@ -643,6 +713,85 @@ function focusFirstEditInput() {
       el && el.focus()
     } catch (e) { }
   }, 12)
+}
+
+function _buildLayerDeltaForSave(previousLayer, nextLayer) {
+  const nextIndex = Number(nextLayer?.layerIndex)
+  const previousIndex = Number(previousLayer?.layerIndex)
+  const layerIndex = Number.isFinite(nextIndex) ? nextIndex : previousIndex
+  if (!Number.isFinite(layerIndex)) return null
+
+  const delta = { layerIndex }
+  let changed = false
+
+  if ((previousLayer?.colorText ?? '') !== (nextLayer?.colorText ?? '')) {
+    delta.colorText = nextLayer?.colorText ?? ''
+    changed = true
+  }
+
+  if ((previousLayer?.opacity ?? 1) !== (nextLayer?.opacity ?? 1)) {
+    delta.opacity = nextLayer?.opacity ?? 1
+    changed = true
+  }
+
+  if ((previousLayer?.drawingLeft ?? null) !== (nextLayer?.drawingLeft ?? null)) {
+    delta.drawingLeft = nextLayer?.drawingLeft ?? null
+    changed = true
+  }
+
+  if ((previousLayer?.drawingTop ?? null) !== (nextLayer?.drawingTop ?? null)) {
+    delta.drawingTop = nextLayer?.drawingTop ?? null
+    changed = true
+  }
+
+  if (
+    (previousLayer?.isOverridePriority ?? false) !== (nextLayer?.isOverridePriority ?? false) ||
+    (previousLayer?.overridePriority ?? null) !== (nextLayer?.overridePriority ?? null)
+  ) {
+    delta.isOverridePriority = !!nextLayer?.isOverridePriority
+    delta.overridePriority = nextLayer?.overridePriority ?? null
+    changed = true
+  }
+
+  const previousSubLayers = Array.isArray(previousLayer?.subLayers) ? previousLayer.subLayers : []
+  const nextSubLayers = Array.isArray(nextLayer?.subLayers) ? nextLayer.subLayers : []
+  if (nextSubLayers.length > 0) {
+    const subLayerDeltas = []
+    for (const subLayer of nextSubLayers) {
+      const subIndex = Number(subLayer?.layerIndex)
+      if (!Number.isFinite(subIndex)) continue
+
+      const previousSub = previousSubLayers.find(item => Number(item?.layerIndex) === subIndex)
+      if (!previousSub) continue
+
+      const subDelta = { layerIndex: subIndex }
+      let subChanged = false
+
+      if ((previousSub?.opacity ?? 1) !== (subLayer?.opacity ?? 1)) {
+        subDelta.opacity = subLayer?.opacity ?? 1
+        subChanged = true
+      }
+      if ((previousSub?.drawingLeft ?? null) !== (subLayer?.drawingLeft ?? null)) {
+        subDelta.drawingLeft = subLayer?.drawingLeft ?? null
+        subChanged = true
+      }
+      if ((previousSub?.drawingTop ?? null) !== (subLayer?.drawingTop ?? null)) {
+        subDelta.drawingTop = subLayer?.drawingTop ?? null
+        subChanged = true
+      }
+
+      if (subChanged) {
+        subLayerDeltas.push(subDelta)
+      }
+    }
+
+    if (subLayerDeltas.length > 0) {
+      delta.subLayers = subLayerDeltas
+      changed = true
+    }
+  }
+
+  return changed ? delta : null
 }
 
 /* ------- Child save handler: validate snapshot then persist ------- */
@@ -671,9 +820,29 @@ function onSaveLayer(payload) {
 
   // Defensive clone of local entries, replace index
   const copy = layerEntriesLocal.value.map((m) => (m.layerIndex === idx ? JSON.parse(JSON.stringify(newLayer)) : JSON.parse(JSON.stringify(m))))
-  // persist via store; updatePartFromLayerEntries will reconstruct part & update stacks/focusedPart
   try {
-    store.updatePartFromLayerEntries(copy)
+    const previousLayer = layerEntriesLocal.value.find((entry) => Number(entry?.layerIndex) === Number(idx)) || null
+    const semanticDelta = _buildLayerDeltaForSave(previousLayer, newLayer)
+    const hasLayerChanged = JSON.stringify(previousLayer || {}) !== JSON.stringify(newLayer || {})
+
+    beginLayerEditInteraction()
+
+    if (semanticDelta) {
+      store.execute({
+        type: 'part.applyLayerDeltas',
+        payload: { part: part.value, deltas: [semanticDelta] },
+        meta: { deferCommit: true }
+      })
+    } else if (hasLayerChanged) {
+      // Fallback bridge for unsupported edits during migration.
+      store.updatePartFromLayerEntries(copy, {
+        deferCommit: true,
+        _fromFacade: true
+      })
+    }
+
+    scheduleLayerEditInteractionCommit()
+
     // after update, re-sync local entries to canonical translated entries
     try {
       const latest = Array.isArray(store.translatedLayerEntries) ? store.translatedLayerEntries : []
@@ -709,45 +878,60 @@ function _isAnyLayerFocused(layerIndices, stackIndex, partIndex) {
   return false
 }
 
-function _applyLayerBlinkOpacity(entries, indicesSet, visible, opacityMap) {
-  for (const entry of entries || []) {
-    const targetIdx = Number(entry?.layerIndex)
-    if (Number.isFinite(targetIdx) && indicesSet.has(targetIdx)) {
-      if (!opacityMap.has(targetIdx)) {
-        opacityMap.set(targetIdx, entry?.opacity ?? 1)
-      }
-      entry.opacity = visible ? (opacityMap.get(targetIdx) ?? 1) : 0
+function _collectBlinkOpacityDeltas(context, visible) {
+  if (!context) return []
+
+  const indicesSet = new Set(context.layerIndices || [])
+  if (indicesSet.size === 0) return []
+
+  const sourceEntries = Array.isArray(context.sourceLayerEntries) ? context.sourceLayerEntries : []
+  const opacityMap = context.originalOpacityMap instanceof Map ? context.originalOpacityMap : new Map()
+  const deltasByLayer = new Map()
+
+  const upsert = (layerIndex, sourceOpacity) => {
+    const numericLayerIndex = Number(layerIndex)
+    if (!Number.isFinite(numericLayerIndex) || !indicesSet.has(numericLayerIndex)) return
+
+    if (!opacityMap.has(numericLayerIndex)) {
+      opacityMap.set(numericLayerIndex, sourceOpacity ?? 1)
     }
+
+    const targetOpacity = visible ? (opacityMap.get(numericLayerIndex) ?? 1) : 0
+    deltasByLayer.set(numericLayerIndex, {
+      layerIndex: numericLayerIndex,
+      opacity: targetOpacity
+    })
+  }
+
+  for (const entry of sourceEntries) {
+    upsert(entry?.layerIndex, entry?.opacity)
     if (Array.isArray(entry?.subLayers)) {
       for (const sub of entry.subLayers) {
-        const subIdx = Number(sub?.layerIndex)
-        if (Number.isFinite(subIdx) && indicesSet.has(subIdx)) {
-          if (!opacityMap.has(subIdx)) {
-            opacityMap.set(subIdx, sub?.opacity ?? 1)
-          }
-          sub.opacity = visible ? (opacityMap.get(subIdx) ?? 1) : 0
-        }
+        upsert(sub?.layerIndex, sub?.opacity)
       }
     }
   }
+
+  return Array.from(deltasByLayer.values())
 }
 
 function _buildLayerHoverBlinkAppearance(context, visible) {
   if (!context) return null
-  const { stackIndex, partIndex, layerIndices, sourceLayerEntries } = context
+  const { stackIndex, partIndex, layerIndices } = context
   if (!Number.isFinite(stackIndex) || !Number.isFinite(partIndex)) return null
   const indicesSet = new Set(layerIndices || [])
   if (indicesSet.size === 0) return null
+
+  const blinkDeltas = _collectBlinkOpacityDeltas(context, visible)
+  if (!blinkDeltas.length) return null
 
   const renderStacks = (store.stacks || []).map((el, si) => {
     const data = Array.isArray(el?.data) ? el.data : []
     const nextData = data.map((p, pi) => {
       if (si !== stackIndex || pi !== partIndex) return p
-      const baseEntries = _cloneLayerEntries(sourceLayerEntries)
-      _applyLayerBlinkOpacity(baseEntries, indicesSet, visible, context.originalOpacityMap)
       const asset = (typeof store.resolveAssetForPart === 'function') ? store.resolveAssetForPart(p) : null
-      const rebuilt = LayerTranslator.reconstructPartFromLayerEntries(baseEntries, p, { originalAsset: asset })
-      return rebuilt || p
+      const patched = applyLayerDeltasToPart(p, blinkDeltas, { asset })
+      return patched?.changed && patched?.part ? patched.part : p
     })
     return { data: nextData, filterList: Array.isArray(el?.filterList) ? el.filterList : [] }
   })
@@ -762,15 +946,20 @@ function _buildLayerHoverBlinkAppearance(context, visible) {
 function _applyLayerHoverBlinkFrame(context, visible) {
   const appearance = _buildLayerHoverBlinkAppearance(context, visible)
   if (!appearance) return
-  const activeRenderer = store.useOptimizedRenderer ? store.previewRenderer : store.renderer
-  store.mergedAppearanceData = appearance
-  try { activeRenderer.renderPreviewWithItem(appearance) } catch (e) { /* ignore */ }
+  
+  // Update the layer blink preview on the stack (priority 1: lower than asset hover to avoid interrupting asset selection)
+  const previewId = `layer-blink-${context.stackIndex}-${context.partIndex}`
+  store.pushPreview(previewId, 1, appearance, 'layer-blink')
 }
 
 function startLayerHoverBlink(layerIndices) {
+  if (DISABLE_LAYER_HOVER_BLINK) {
+    stopLayerHoverBlink()
+    return
+  }
   if (!hasPart.value || !Array.isArray(layerIndices) || layerIndices.length === 0) return
-  const stackIndex = Number(store.focusedPartIndex?.stackIndex)
-  const partIndex = Number(store.focusedPartIndex?.partIndex)
+  const stackIndex = Number(focusedPartIndex.value?.stackIndex)
+  const partIndex = Number(focusedPartIndex.value?.partIndex)
   if (!Number.isFinite(stackIndex) || !Number.isFinite(partIndex)) return
 
   const uniqueIndices = Array.from(new Set(layerIndices.filter(v => Number.isFinite(Number(v))).map(Number)))
@@ -803,6 +992,13 @@ function startLayerHoverBlink(layerIndices) {
   layerHoverBlinkTimerId.value = hostWindow.setInterval(() => {
     const latest = layerHoverBlinkState.value
     if (!latest) return
+    
+    // Stop blinking if a higher priority preview (asset-hover) becomes active
+    if (store.isPreviewActive && store.isPreviewActive('asset-hover')) {
+      stopLayerHoverBlink()
+      return
+    }
+    
     latest.visible = !latest.visible
     _applyLayerHoverBlinkFrame(latest, latest.visible)
   }, 260)
@@ -817,14 +1013,17 @@ function stopLayerHoverBlink() {
   const context = layerHoverBlinkState.value
   layerHoverBlinkState.value = null
   if (!context) return
-  try { store.refreshMergedAppearanceData() } catch (e) { /* ignore */ }
+  
+  // Remove layer blink preview from stack
+  const previewId = `layer-blink-${context.stackIndex}-${context.partIndex}`
+  store.popPreview(previewId)
 }
 
 function onSingleLayerMouseEnter(layer) {
   const idx = Number(layer?.layerIndex)
   if (!Number.isFinite(idx)) return
-  const stackIndex = Number(store.focusedPartIndex?.stackIndex)
-  const partIndex = Number(store.focusedPartIndex?.partIndex)
+  const stackIndex = Number(focusedPartIndex.value?.stackIndex)
+  const partIndex = Number(focusedPartIndex.value?.partIndex)
   if (Number.isFinite(stackIndex) && Number.isFinite(partIndex) &&
       store.isLayerFocused({ stackIndex, partIndex, layerIndex: idx })) {
     stopLayerHoverBlink()
@@ -836,8 +1035,8 @@ function onSingleLayerMouseEnter(layer) {
 function onLayerGroupMouseEnter(layers) {
   const indices = _collectLayerIndices(layers)
   if (!indices.length) return
-  const stackIndex = Number(store.focusedPartIndex?.stackIndex)
-  const partIndex = Number(store.focusedPartIndex?.partIndex)
+  const stackIndex = Number(focusedPartIndex.value?.stackIndex)
+  const partIndex = Number(focusedPartIndex.value?.partIndex)
   if (Number.isFinite(stackIndex) && Number.isFinite(partIndex) && _isAnyLayerFocused(indices, stackIndex, partIndex)) {
     stopLayerHoverBlink()
     return
@@ -919,6 +1118,14 @@ function handleKeydown(e) {
 }
 
 onBeforeUnmount(() => {
+  clearLayerEditCommitTimer()
+  const committed = commitLayerEditInteraction()
+  if (!committed) {
+    store.forceEndRealtimeScope?.('editor', {
+      commit: true,
+      interactionKind: 'layer-edit'
+    })
+  }
   stopLayerHoverBlink()
 })
 </script>
@@ -1018,10 +1225,10 @@ onBeforeUnmount(() => {
 .mode-chip {
   padding: 4px 10px;
   border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-xl, 12px);
+  border-radius: var(--radius-md, 8px);
   font-size: 12px;
   color: var(--color-text-secondary);
-  background: var(--color-bg-surface);
+  background: var(--color-bg-base);
   cursor: pointer;
   transition: all 0.15s ease;
 }
@@ -1039,7 +1246,7 @@ onBeforeUnmount(() => {
 .mode-chip.active {
   color: var(--color-text-primary);
   border-color: var(--color-border-focus);
-  background: var(--color-selection-single-bg);
+  background: var(--color-bg-surface);
 }
 
 .mode-chip.scope {
@@ -1056,7 +1263,7 @@ onBeforeUnmount(() => {
   overflow: auto;
   padding: 10px;
   border-radius: var(--radius-md, 8px);
-  background: linear-gradient(180deg, var(--color-bg-base), var(--color-bg-surface));
+  background: var(--color-bg-base);
   border: 1px solid var(--panel-border);
   box-sizing: border-box;
 }
@@ -1165,8 +1372,8 @@ onBeforeUnmount(() => {
 
 .edit-input:focus {
   border-color: var(--color-border-focus);
-  background: linear-gradient(180deg, var(--color-bg-base), var(--color-bg-surface));
-  box-shadow: 0 0 0 4px var(--color-selection-single-bg);
+  background: var(--color-bg-base);
+  box-shadow: 0 0 0 2px var(--color-selection-single-bg);
 }
 
 .text-limit {
@@ -1195,7 +1402,7 @@ onBeforeUnmount(() => {
 }
 
 .tiny-edit {
-  background: linear-gradient(180deg, var(--color-bg-surface), var(--color-bg-base));
+  background: var(--color-bg-surface);
   color: var(--accent);
   border-color: var(--color-selection-single-border);
 }
@@ -1236,7 +1443,7 @@ onBeforeUnmount(() => {
 .prop-block {
   margin-top: 12px;
   padding-top: 10px;
-  border-top: 1px dashed var(--color-border-base);
+  border-top: 1px solid var(--color-border-base);
 }
 
 .prop-title {
@@ -1269,7 +1476,7 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 12px;
   padding: 6px 8px;
-  background: var(--color-bg-surface);
+  background: var(--color-bg-base);
   border-radius: var(--radius-md, 8px);
   border: 1px solid var(--color-border-base);
   box-sizing: border-box;

@@ -29,9 +29,9 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { useStudioStore } from '@/stores/studioStore'
+import { useStudioDomainStores } from '@/stores/studio'
 
-const store = useStudioStore()
+const { studio: store } = useStudioDomainStores()
 const selected = computed(() => store.selectedElement)
 const hasData = computed(() => !!selected.value && Array.isArray(selected.value.data))
 const format = ref('pretty') // 'pretty' or 'compact'

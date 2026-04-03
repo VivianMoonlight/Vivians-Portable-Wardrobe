@@ -29,12 +29,12 @@
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useStudioStore } from '@/stores/studioStore'
+import { useStudioDomainStores } from '@/stores/studio'
 import { useFileSystemStore } from '@/stores/fileSystemStore'
 
 const { t } = useI18n()
 
-const store = useStudioStore()
+const { studio: store } = useStudioDomainStores()
 const fsStore = useFileSystemStore()
 
 const part = computed(() => store.focusedPart)

@@ -4,8 +4,8 @@
  * LayerTranslator (pure function) - OPTIMIZED
  *
  * Exports:
- *   - buildLayerEntriesForPart(part, deps)
- *   - reconstructPartFromLayerEntries(entries, originalPart, extra)
+ *   - buildLayerEntriesForPart(part, deps) // read-side UI projection builder
+ *   - reconstructPartFromLayerEntries(entries, originalPart, extra) // legacy compatibility fallback
  *
  * PERFORMANCE OPTIMIZATIONS:
  *   - Uses structuredClone when available
@@ -565,7 +565,7 @@ export function buildLayerEntriesForPart(part, deps = {}) {
 }
 
 // =============================================
-// Reconstruct Part - OPTIMIZED
+// Reconstruct Part - Legacy Compatibility Fallback
 // =============================================
 
 export function reconstructPartFromLayerEntries(entries, originalPart, extra = {}) {

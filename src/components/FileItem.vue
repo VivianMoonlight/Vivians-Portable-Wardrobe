@@ -3,7 +3,7 @@ import { ref, computed, onMounted, onBeforeUnmount, nextTick, toRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FileThumbnail from "./FileThumbnail.vue";
 import { useFileSystemStore } from '@/stores/fileSystemStore'
-import { useStudioStore } from '@/stores/studioStore'
+import { useStudioDomainStores } from '@/stores/studio'
 import { hostWindow, doc } from '@/utils/host-window.js'
 import { injectTheme } from '@/services/ThemeService'
 import * as DialogService from '@/services/DialogService.js'
@@ -15,7 +15,7 @@ const props = defineProps({
 const emit = defineEmits(["open-folder", "remove", "rename", "sent-to-studio"]);
 
 const fsStore = useFileSystemStore();
-const studio = useStudioStore();
+const { studio } = useStudioDomainStores();
 
 const { t } = useI18n(); // i18n translation function
 
@@ -221,10 +221,12 @@ onBeforeUnmount(() => {
 
 // hover 处理：进入时设置 ActiveItem，离开时清理
 function onMouseEnter() {
+  if (fsStore.lockedItem) return
   if (!canUseHover()) return
   fsStore.setActiveItem(props.item);
 }
 function onMouseLeave() {
+  if (fsStore.lockedItem) return
   if (!canUseHover()) return
   if (fsStore.activeItem && fsStore.activeItem.data && Array.isArray(fsStore.activeItem.data)) {
     fsStore.setActiveItem(-1);
@@ -242,24 +244,26 @@ function setActiveFromInteraction() {
 }
 
 function onFocusIn() {
+  if (fsStore.lockedItem) return
   setActiveFromInteraction()
 }
 
 function onFocusOut(e) {
+  if (fsStore.lockedItem) return
   if (rootEl.value && e?.relatedTarget && rootEl.value.contains(e.relatedTarget)) return
   if (fsStore.activeItem === props.item) {
     fsStore.setActiveItem(-1)
   }
 }
 
-// 左键点击行为：文件夹则触发展开，否则 no-op
+// 左键点击行为：文件夹触发展开；文件切换预览锁定
 function onClick() {
   if (!props.item) return
   if (props.item.type === 'folder') {
     emit('open-folder')
     return
   }
-  setActiveFromInteraction()
+  fsStore.togglePreviewLock(props.item)
 }
 
 // 双击：文件夹打开，文件则把 active 数据应用到角色（按需求，这里应用的是 store.activeItem）
@@ -318,10 +322,25 @@ function onDrop(e) {
 }
 
 const draggable = !!props.item
+const isPreviewLocked = computed(() => fsStore.isPreviewLockedOn(props.item))
+const isCloudSyncEnabled = computed(() => props.item?.cloudSync !== false)
+const cloudToggleTitle = computed(() => {
+  if (props.item?.type === 'folder') return t('fileItem.cloudToggleFolderTitle')
+  return t('fileItem.cloudToggleFileTitle')
+})
+const cloudToggleLabel = computed(() => {
+  return isCloudSyncEnabled.value ? t('fileItem.cloudOn') : t('fileItem.cloudOff')
+})
+
+function onToggleCloudSync() {
+  if (!props.item) return
+  const nextEnabled = !isCloudSyncEnabled.value
+  fsStore.setNodeCloudSync(props.item, nextEnabled, { recursive: props.item.type === 'folder' })
+}
 </script>
 
 <template>
-  <div ref="rootEl" class="file-item-card" :class="[themeClass, `view-${viewMode}`, { 'drop-target': isDragOver }]" @click="onClick"
+  <div ref="rootEl" class="file-item-card" :class="[themeClass, `view-${viewMode}`, { 'drop-target': isDragOver, 'is-preview-locked': isPreviewLocked }]" @click="onClick"
     @dblclick="onDoubleClick" @contextmenu.capture="onContextMenu" @mouseenter="onMouseEnter" @mouseleave="onMouseLeave"
     @focusin="onFocusIn" @focusout="onFocusOut" tabindex="0"
     :draggable="draggable" @dragstart="onDragStart" @dragend="onDragEnd" @dragover="onDragOver" @dragleave="onDragLeave"
@@ -341,6 +360,18 @@ const draggable = !!props.item
     </div>
     <div class="file-info">
       <span class="file-name" :title="item.name">{{ item.name }}</span>
+    </div>
+    <div class="file-sync-row">
+      <button
+        class="cloud-sync-toggle"
+        :class="{ active: isCloudSyncEnabled }"
+        type="button"
+        @click.stop.prevent="onToggleCloudSync"
+        :title="cloudToggleTitle"
+        :aria-label="cloudToggleTitle"
+      >
+        {{ cloudToggleLabel }}
+      </button>
     </div>
 
     <!-- 将菜单 teleport 到 body 可以避免被父容器的 overflow/transform/position 影响 -->
@@ -393,6 +424,11 @@ const draggable = !!props.item
   box-shadow: 0 0 0 2px var(--color-primary-bg, rgba(59, 130, 246, 0.2));
 }
 
+.file-item-card.is-preview-locked {
+  border-color: var(--color-accent, #0ea5a4);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent, #0ea5a4) 24%, transparent);
+}
+
 @media (hover: hover) and (pointer: fine) {
   .file-item-card:hover {
     box-shadow: var(--shadow-md, 0 4px 12px rgba(0, 0, 0, 0.1));
@@ -435,6 +471,35 @@ const draggable = !!props.item
   text-overflow: ellipsis;
   white-space: nowrap;
   display: inline-block;
+}
+
+.file-sync-row {
+  margin-top: 6px;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.cloud-sync-toggle {
+  border: 1px solid var(--color-border-base, #d6dbe2);
+  background: var(--color-bg-base, #fff);
+  color: var(--color-text-secondary, #475569);
+  border-radius: var(--radius-sm, 6px);
+  padding: 3px 8px;
+  font-size: var(--font-size-xs, 11px);
+  line-height: 1.2;
+  cursor: pointer;
+  transition: all var(--transition-fast, 0.15s) ease;
+}
+
+.cloud-sync-toggle:hover {
+  background: var(--color-bg-hover, #f0f4f8);
+}
+
+.cloud-sync-toggle.active {
+  border-color: var(--color-success, #10b981);
+  color: var(--color-success, #10b981);
+  background: color-mix(in srgb, var(--color-success, #10b981) 10%, var(--color-bg-base, #fff));
 }
 
 .file-item-card.view-small {
@@ -516,6 +581,13 @@ const draggable = !!props.item
 
 .file-item-card.view-list .file-name {
   max-width: none;
+}
+
+.file-item-card.view-list .file-sync-row {
+  width: auto;
+  margin-top: 0;
+  margin-left: auto;
+  justify-content: flex-end;
 }
 
 /* 右键菜单样式（fixed 定位，基于 left/top） */

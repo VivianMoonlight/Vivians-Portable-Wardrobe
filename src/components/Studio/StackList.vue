@@ -225,11 +225,11 @@
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseButton from '../ui/BaseButton.vue'
-import { useStudioStore } from '@/stores/studioStore'
+import { useStudioDomainStores } from '@/stores/studio'
 import { doc } from '@/utils/host-window.js'
 
 const { t } = useI18n()
-const store = useStudioStore()
+const { studio: store } = useStudioDomainStores()
 const emit = defineEmits(['stack-selected'])
 
 const rootEl = ref(null)
@@ -440,12 +440,10 @@ function commitRename(idx) {
   if (!nextName || !store.stacks[idx]) return
   if (String(store.stacks[idx].name || '').trim() === nextName) return
 
-  const nextStacks = [...store.stacks]
-  nextStacks[idx] = { ...nextStacks[idx], name: nextName }
-  store.stacks = nextStacks
-
-  try { store.refreshMergedAppearanceData && store.refreshMergedAppearanceData() } catch (e) { }
-  try { store.pushHistorySnapshot && store.pushHistorySnapshot() } catch (e) { }
+  store.execute({
+    type: 'stack.rename',
+    payload: { stackIndex: idx, newName: nextName }
+  })
 }
 
 function cancelRename() {

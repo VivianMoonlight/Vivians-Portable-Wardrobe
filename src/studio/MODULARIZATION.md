@@ -14,7 +14,6 @@
 | Palette Actions | `src/studio/palette-actions.js` | 调色板操作：应用颜色/标签、保存颜色等 |
 | Focus Actions | `src/studio/focus-actions.js` | 焦点操作：聚焦部分/属性、替换模式等 |
 | Rendering Actions | `src/studio/rendering-actions.js` | 渲染操作：合并外观更新、刷新等 |
-| Undo/Redo Actions | `src/studio/undo-redo-actions.js` | 撤销/重做管理 |
 | Layer Actions | `src/studio/layer-actions.js` | 图层操作：图层条目构建、更新、重建等 |
 | Selection Actions | `src/studio/selection-actions.js` | 多选操作：图层选择、批量编辑等 |
 | Preview Actions | `src/studio/preview-actions.js` | 预览工具操作：视图/移动模式切换等 |
@@ -395,29 +394,20 @@ async loadStudioSession(id) {
 }
 ```
 
-### 示例：使用 Undo/Redo Actions
+### 示例：使用 historyStore（Wave 2）
 
 ```javascript
-import * as UndoActions from '@/studio/undo-redo-actions.js'
+import { useStudioHistoryStore } from '@/stores/studio/historyStore'
 
-// 在 state 初始化时：
-_undoRedoManager: UndoActions.initUndoRedoManager(this)
+const historyStore = useStudioHistoryStore()
 
 // 在 actions 中：
 undo() {
-  UndoActions.performUndo(this, {
-    _undoRedoManager: this._undoRedoManager,
-    refreshMergedAppearanceData: this.refreshMergedAppearanceData.bind(this),
-    triggerFocusedPartUpdate: this.triggerFocusedPartUpdate.bind(this)
-  })
+  return historyStore.undo(this)
 }
 
 redo() {
-  UndoActions.performRedo(this, {
-    _undoRedoManager: this._undoRedoManager,
-    refreshMergedAppearanceData: this.refreshMergedAppearanceData.bind(this),
-    triggerFocusedPartUpdate: this.triggerFocusedPartUpdate.bind(this)
-  })
+  return historyStore.redo(this)
 }
 ```
 

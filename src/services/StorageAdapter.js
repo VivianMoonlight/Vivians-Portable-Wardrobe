@@ -39,6 +39,41 @@ export class StorageAdapter {
     }
 
     /**
+     * Serializes an object for persistence.
+     * @param {Object} obj
+     * @returns {string|null}
+     */
+    serializeForSave(obj) {
+        try {
+            return JSON.stringify(obj);
+        } catch (e) {
+            console.error('[StorageAdapter] serializeForSave failed:', e);
+            return null;
+        }
+    }
+
+    /**
+     * Estimates compressed payload size in bytes/characters for a persisted object.
+     * Uses the same compression path as saveLocal/saveOnline.
+     * @param {Object} obj
+     * @returns {number}
+     */
+    estimatePayloadBytes(obj) {
+        const serialized = this.serializeForSave(obj);
+        if (serialized === null) return 0;
+        try {
+            const compressed = this._compress(serialized);
+            if (typeof compressed === 'string') {
+                return compressed.length;
+            }
+            return String(compressed ?? '').length;
+        } catch (e) {
+            console.error('[StorageAdapter] estimatePayloadBytes failed:', e);
+            return 0;
+        }
+    }
+
+    /**
      * Saves JSON object to local storage with arbitrary key.
      * @param {string|number} key - key name or member id
      * @param {Object} obj - object to save
@@ -55,7 +90,9 @@ export class StorageAdapter {
             return false;
         }
         try {
-            const payload = this._compress(JSON.stringify(obj));
+            const serialized = this.serializeForSave(obj);
+            if (serialized === null) return false;
+            const payload = this._compress(serialized);
             this.local.set(this.prefix + k, payload);
             return true;
         } catch (e) {
@@ -102,7 +139,9 @@ export class StorageAdapter {
         }
         const k = this._normalizeKey(key);
         try {
-            const payload = this._compress(JSON.stringify(obj));
+            const serialized = this.serializeForSave(obj);
+            if (serialized === null) return;
+            const payload = this._compress(serialized);
             // call set with key where possible
             return this.online.set(k, payload);
         } catch (e) {

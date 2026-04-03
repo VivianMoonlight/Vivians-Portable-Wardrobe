@@ -40,6 +40,47 @@ Beta版本加载器
 })();
 ```
 
+
+Dev版本加载器
+
+```
+// ==UserScript==
+// @name         Vivians Portable Wardrobe (Dev Loader)
+// @namespace    https://www.bondageprojects.com/
+// @version      0.10.1-dev.1
+// @description  Dev loader for Vivian's Portable Wardrobe
+// @author       VivianMoonlight
+// @match        https://bondageprojects.elementfx.com/*
+// @match        https://www.bondageprojects.elementfx.com/*
+// @match        https://bondage-europe.com/*
+// @match        https://www.bondage-europe.com/*
+// @match        https://bondage-asia.com/*
+// @match        https://www.bondage-asia.com/*
+// @match        http://localhost:*/*
+// @run-at       document-end
+// @grant        none
+// @updateURL    https://cdn.jsdelivr.net/gh/vivianmoonlight/Vivians-Portable-Wardrobe@dev/ViviansPortableWardrobeLoader.user.js
+// @downloadURL  https://cdn.jsdelivr.net/gh/vivianmoonlight/Vivians-Portable-Wardrobe@dev/ViviansPortableWardrobeLoader.user.js
+// ==/UserScript==
+
+
+(function () {
+  'use strict';
+
+  const DEV_SCRIPT_URL =
+    'https://cdn.jsdelivr.net/gh/vivianmoonlight/Vivians-Portable-Wardrobe@dev/out/Vivians-Portable-Wardrobe.user.js';
+
+  setTimeout(() => {
+    const script = document.createElement('script');
+    script.type = 'module';
+    script.crossOrigin = 'anonymous';
+    script.src = `${DEV_SCRIPT_URL}?t=${Date.now()}`;
+    script.onload = () => script.remove();
+    document.head.appendChild(script);
+  }, 1000);
+})();
+```
+
 # The 0.9 Version is out now! / v0.9版本已发布
 
 A BC script that adds a **portable wardrobe system** with a preview mirror and advanced outfit management.  

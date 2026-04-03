@@ -73,14 +73,14 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useStudioStore } from '@/stores/studioStore'
+import { useStudioDomainStores } from '@/stores/studio'
 import { isHiddenGroup } from '@/config/filterGroupConfig'
 import { throttle } from '@/utils/performance.js'
 
 const { t } = useI18n()
-const store = useStudioStore()
+const { studio: store } = useStudioDomainStores()
 
 // --- Refs ---
 const listBodyRef = ref(null)
@@ -89,6 +89,7 @@ const listBodyRef = ref(null)
 const dropTarget = ref(null) // uniqueId
 const dropPosition = ref(null) // 'top' | 'middle' | 'bottom'
 const draggedItem = ref(null)
+const priorityDragInteractionActive = ref(false)
 
 // --- Grouping State ---
 const expandedGroupKeys = ref(new Set())
@@ -236,6 +237,16 @@ function onDragStart(e, item) {
         e.preventDefault()
         return
     }
+
+    if (!priorityDragInteractionActive.value) {
+        try {
+            store.beginInteraction('priority-drag', { source: 'LayerManagerWidget' })
+            priorityDragInteractionActive.value = true
+        } catch (err) {
+            priorityDragInteractionActive.value = false
+        }
+    }
+
     draggedItem.value = item
     e.dataTransfer.effectAllowed = 'move'
 }
@@ -243,30 +254,42 @@ function onDragStart(e, item) {
 // Throttle Store Updates
 const throttledStoreUpdate = throttle(async (updates) => {
     // updates: Array of { part, layerIndex, priority }
-
-    // 1. Group by Part
-    const partsMap = new Map() // partUid -> { part, entries }
+    const partsMap = new Map() // partUid -> { part, deltas }
 
     for (const up of updates) {
-        const p = up.part
-        if (!partsMap.has(p._uid)) {
-            // Deep clone entries
-            const entries = p.layerEntries.map(e => ({ ...e }))
-            partsMap.set(p._uid, { part: p, entries })
+        const p = up?.part
+        if (!p) continue
+
+        const layerIndex = Number(up?.layerIndex)
+        if (!Number.isFinite(layerIndex)) continue
+
+        const priority = Number(up?.priority)
+        if (!Number.isFinite(priority)) continue
+
+        const key = p._uid || p
+        if (!partsMap.has(key)) {
+            partsMap.set(key, { part: p, deltas: [] })
         }
-        const group = partsMap.get(p._uid)
-        if (group.entries[up.layerIndex]) {
-            group.entries[up.layerIndex].overridePriority = up.priority
-            group.entries[up.layerIndex].isOverridePriority = true
-        }
+
+        partsMap.get(key).deltas.push({
+            layerIndex,
+            isOverridePriority: true,
+            overridePriority: priority
+        })
     }
 
-    // 2. Commit all
-    for (const val of partsMap.values()) {
-        store.updatePartLayerEntries(val.part, val.entries)
+    const updatesPayload = Array.from(partsMap.values()).filter(up => Array.isArray(up.deltas) && up.deltas.length > 0)
+    if (updatesPayload.length > 0) {
+        store.execute({
+            type: 'layer.batchApplyLayerDeltas',
+            payload: { updates: updatesPayload },
+            meta: {
+                deferCommit: true,
+                interactionKind: 'priority-drag',
+                source: 'LayerManagerWidget'
+            }
+        })
     }
-
-    store.refreshMergedAppearanceData()
 }, 200)
 
 function checkAutoScroll(e) {
@@ -337,11 +360,31 @@ function onDrop(e, targetItem) {
 }
 
 function onDragEnd() {
+    try { throttledStoreUpdate.flush && throttledStoreUpdate.flush() } catch (e) { /* ignore */ }
+
     dropTarget.value = null
     dropPosition.value = null
     draggedItem.value = null
     throttledStoreUpdate.cancel()
+
+    if (priorityDragInteractionActive.value) {
+        try {
+            store.commitInteraction()
+        } catch (err) {
+            try { store.cancelInteraction() } catch (e) { /* ignore */ }
+        } finally {
+            priorityDragInteractionActive.value = false
+        }
+    }
 }
+
+onBeforeUnmount(() => {
+    try { throttledStoreUpdate.cancel() } catch (e) { /* ignore */ }
+    if (priorityDragInteractionActive.value) {
+        try { store.cancelInteraction() } catch (e) { /* ignore */ }
+        priorityDragInteractionActive.value = false
+    }
+})
 
 </script>
 
@@ -350,6 +393,8 @@ function onDragEnd() {
     display: flex;
     flex-direction: column;
     height: 100%;
+    min-width: 0;
+    min-height: 0;
     /* Fill parent */
     overflow: hidden;
     background: var(--color-bg-surface, #fafbfc);
@@ -377,6 +422,8 @@ function onDragEnd() {
 
 .lm-body {
     flex: 1;
+    min-width: 0;
+    min-height: 0;
     overflow-y: auto;
     background: var(--color-bg-surface, #fafbfc);
     padding: var(--space-xs, 4px) 0;

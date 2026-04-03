@@ -24,6 +24,7 @@ const props = defineProps({
 const emit = defineEmits(['close'])
 const fsStore = useFileSystemStore()
 const workbenchStore = useWorkbenchStore()
+const panelRootEl = ref(null)
 
 // local search state
 const searchQuery = ref('')
@@ -48,6 +49,30 @@ const sortLabel = computed(() => {
   }
   return map[sortBy.value] || t('fileManager.sortRecent')
 })
+
+const cloudQuota = computed(() => fsStore.cloudQuota || {})
+const cloudUsedBytes = computed(() => Number(cloudQuota.value?.usedBytes || 0))
+const cloudLimitBytes = computed(() => Number(cloudQuota.value?.limitBytes || 180 * 1024))
+const cloudUsagePercent = computed(() => {
+  const percent = Number(cloudQuota.value?.usageRatio || 0) * 100
+  if (!Number.isFinite(percent)) return 0
+  return Math.max(0, Math.min(100, percent))
+})
+const cloudUsageLabel = computed(() => `${formatBytes(cloudUsedBytes.value)} / ${formatBytes(cloudLimitBytes.value)}`)
+const cloudBarStateClass = computed(() => {
+  if (cloudQuota.value?.isOverLimit) return 'is-over'
+  if (cloudQuota.value?.isWarning) return 'is-warn'
+  return 'is-ok'
+})
+
+function formatBytes(bytes) {
+  const value = Number(bytes || 0)
+  if (!Number.isFinite(value) || value <= 0) return '0 KB'
+  if (value < 1024) return `${value.toFixed(0)} B`
+  const kb = value / 1024
+  if (kb < 1024) return `${kb.toFixed(1)} KB`
+  return `${(kb / 1024).toFixed(2)} MB`
+}
 
 // items in current folder (raw)
 const items = computed(() => fsStore.currentNode?.children ?? [])
@@ -246,6 +271,7 @@ const panelStyle = computed(() => {
 
 // 全局监听 - 仅在非嵌入模式下注册（嵌入时外层 modal 负责）
 onMounted(() => {
+  fsStore.refreshCloudQuotaStats()
   if (!props.embedded) {
     hostWindow.addEventListener('mousemove', onDrag)
     hostWindow.addEventListener('mouseup', endDrag)
@@ -292,11 +318,24 @@ function onBreadcrumbDrop(e, idx) {
   const fromPath = Array.isArray(payload.fromPath) ? payload.fromPath : fsStore.currentPath
   fsStore.moveFile(payload.name, fromPath, targetPath)
 }
+
+function onPanelClick(e) {
+  const path = (e.composedPath && e.composedPath()) || []
+  if (!panelRootEl.value || !path.includes(panelRootEl.value)) return
+
+  const clickedFileItem = path.some(node => {
+    if (!node || !node.classList || typeof node.classList.contains !== 'function') return false
+    return node.classList.contains('file-item-card')
+  })
+  if (clickedFileItem) return
+
+  fsStore.clearSelection()
+}
 </script>
 
 <template>
   <!-- 使用更统一的视觉风格，参考 FilterManager 的配色与按钮样式 -->
-  <div class="file-manager-panel" :class="themeClass" :style="panelStyle">
+  <div ref="panelRootEl" class="file-manager-panel" :class="themeClass" :style="panelStyle" @click.capture="onPanelClick">
     <div class="panel-inner">
       <div class="panel-top">
         <div class="title">
@@ -434,6 +473,13 @@ function onBreadcrumbDrop(e, idx) {
             <button class="chip-btn" @click="onAddFolder">{{ t('fileManager.newFolderTitle') }}</button>
           </div>
         </div>
+      </div>
+
+      <div class="cloud-usage-strip" role="status" :aria-label="t('fileManager.cloudUsageAria')">
+        <div class="cloud-usage-strip-track">
+          <div class="cloud-usage-fill" :class="cloudBarStateClass" :style="{ width: cloudUsagePercent + '%' }"></div>
+        </div>
+        <span class="cloud-usage-strip-size" :class="cloudBarStateClass">{{ cloudUsageLabel }}</span>
       </div>
 
       <!-- 嵌入模式下隐藏 resize handle -->
@@ -602,6 +648,60 @@ function onBreadcrumbDrop(e, idx) {
   border: 1px solid var(--color-primary, rgba(60,130,200,0.18)); 
 }
 .divider { margin:0 2px; color: var(--color-text-muted, #94a3b8); font-size:17px; }
+
+.cloud-usage-strip {
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 20px;
+}
+
+.cloud-usage-strip-track {
+  flex: 1;
+  min-width: 0;
+  height: 5px;
+  border-radius: var(--radius-full, 9999px);
+  background: var(--color-bg-panel, #e2e8f0);
+  overflow: hidden;
+}
+
+.cloud-usage-fill {
+  height: 100%;
+  width: 0;
+  transition: width var(--transition-fast, 0.15s) ease;
+}
+
+.cloud-usage-fill.is-ok {
+  background: var(--color-success, #10b981);
+}
+
+.cloud-usage-fill.is-warn {
+  background: var(--color-warning, #f59e0b);
+}
+
+.cloud-usage-fill.is-over {
+  background: var(--color-danger, #dc2626);
+}
+
+.cloud-usage-strip-size {
+  white-space: nowrap;
+  font-size: var(--font-size-xs, 11px);
+  font-weight: var(--font-weight-medium, 500);
+  color: var(--color-text-secondary, #64748b);
+}
+
+.cloud-usage-strip-size.is-ok {
+  color: var(--color-success, #10b981);
+}
+
+.cloud-usage-strip-size.is-warn {
+  color: var(--color-warning, #b45309);
+}
+
+.cloud-usage-strip-size.is-over {
+  color: var(--color-danger, #dc2626);
+}
 
 /* toolbar and search */
 .toolbar { margin-top: var(--space-sm, 6px); }

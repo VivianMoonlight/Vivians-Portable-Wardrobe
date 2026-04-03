@@ -28,7 +28,7 @@ function onInput(event) {
 
 <template>
   <input
-    :class="['input-base', `input-${size}`, { 'input-error': error }]"
+    :class="['vpw-input-base', `vpw-input-${size}`, { 'vpw-input-error': error }]"
     :type="type"
     :value="modelValue"
     :placeholder="placeholder"
@@ -38,7 +38,7 @@ function onInput(event) {
 </template>
 
 <style scoped>
-.input-base {
+.vpw-input-base {
   width: 100%;
   border: 1px solid var(--color-border-base, #e2e8f0);
   border-radius: var(--radius-md, 8px);
@@ -51,42 +51,42 @@ function onInput(event) {
   box-sizing: border-box;
 }
 
-.input-base:focus {
+.vpw-input-base:focus {
   border-color: var(--color-selection-single, #3b82f6);
   box-shadow: 0 0 0 3px var(--color-selection-single-bg, rgba(65, 122, 237, 0.08));
 }
 
-.input-base:disabled {
+.vpw-input-base:disabled {
   opacity: 0.5;
   cursor: not-allowed;
   background: var(--color-bg-surface, #f8fafc);
 }
 
-.input-base::placeholder {
+.vpw-input-base::placeholder {
   color: var(--color-text-tertiary, #64748b);
 }
 
 /* Sizes */
-.input-sm {
+.vpw-input-sm {
   padding: var(--space-xs, 4px) var(--space-sm, 8px);
   font-size: var(--font-size-sm, 12px);
 }
 
-.input-md {
+.vpw-input-md {
   padding: var(--space-sm, 8px) var(--space-md, 12px);
 }
 
-.input-lg {
+.vpw-input-lg {
   padding: var(--space-md, 12px) var(--space-lg, 16px);
   font-size: var(--font-size-md, 14px);
 }
 
 /* Error state */
-.input-error {
+.vpw-input-error {
   border-color: var(--color-error, #ef4444);
 }
 
-.input-error:focus {
+.vpw-input-error:focus {
   border-color: var(--color-error, #ef4444);
   box-shadow: 0 0 0 3px var(--color-error-bg, rgba(239, 68, 68, 0.1));
 }

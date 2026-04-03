@@ -1,5 +1,6 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { hostWindow, doc } from '@/utils/host-window.js'
+import { MOBILE_LAYOUT_BREAKPOINT } from '@/config/uiLayout.js'
 
 export function useWindowDragResize(options = {}) {
 	const {
@@ -9,7 +10,7 @@ export function useWindowDragResize(options = {}) {
 		defaultWidth = 1000,
 		defaultHeight = 640,
 		defaultMargin = 12,
-		mobileBreakpoint = 900,
+		mobileBreakpoint = MOBILE_LAYOUT_BREAKPOINT,
 		focusedZIndex = 10050,
 		mobileMargin = 8
 	} = options

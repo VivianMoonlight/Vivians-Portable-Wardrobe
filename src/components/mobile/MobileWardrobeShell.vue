@@ -2,7 +2,7 @@
   <div class="mobile-shell" role="dialog" :aria-label="t('fileManagerPanel.ariaLabel')">
     <header class="mobile-header">
       <div class="mobile-title">{{ t('fileManagerPanel.title') }}</div>
-      <button class="mobile-close" @click="emit('close')" aria-label="关闭">&times;</button>
+      <button class="mobile-close" @click="emit('close')" :aria-label="t('studio.closeTitle')">&times;</button>
     </header>
 
     <nav class="mobile-main-tabs" role="tablist" :aria-label="t('fileManagerPanel.tabAriaLabel')">
@@ -85,7 +85,7 @@
         </div>
       </div>
 
-      <nav class="mobile-sub-tabs" role="tablist" :aria-label="'Workspace panes'">
+      <nav class="mobile-sub-tabs" role="tablist" :aria-label="t('fileManagerPanel.tabAriaLabel')">
         <button
           v-for="pane in subTabs"
           :key="pane.id"
@@ -102,7 +102,7 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FileManager from '@/components/FileManager.vue'
 import HistoryViewer from '@/components/HistoryViewer.vue'
@@ -133,20 +133,6 @@ const { setTheme, currentTheme } = theme
 // 调试模式
 const debugMode = ref(false)
 
-// 初始化文件系统（当 MobileWardrobeShell 挂载时）
-onMounted(() => {
-  console.log('[MobileWardrobeShell] Mounted, initializing filesystem...')
-  const target = hostWindow.CurrentCharacter || hostWindow.Player || null
-  if (target) {
-    fsStore.initialize(target)
-    console.log('[MobileWardrobeShell] Filesystem initialized')
-    console.log('[FileSystem] currentNode:', fsStore.currentNode)
-    console.log('[FileSystem] items:', fsStore.currentNode?.children?.length || 0)
-  } else {
-    console.warn('[MobileWardrobeShell] No character/player found')
-  }
-})
-
 const themedAvailable = computed(() => {
   if (!theme.getThemedStatus) return false
   const status = theme.getThemedStatus()
@@ -170,9 +156,9 @@ const activePane = computed(() => {
 })
 
 const subTabs = computed(() => [
-  { id: 'preview', label: '预览' },
-  { id: 'wardrobe', label: activeMainTab.value === 'history' ? '历史' : '衣柜' },
-  { id: 'filter', label: 'Filter' }
+  { id: 'preview', label: t('previewWidget.title') },
+  { id: 'wardrobe', label: activeMainTab.value === 'history' ? t('fileManagerPanel.tabHistory') : t('fileManagerPanel.tabWardrobe') },
+  { id: 'filter', label: t('filterManager.ariaLabel') }
 ])
 
 const paneOrder = ['preview', 'wardrobe', 'filter']
@@ -315,7 +301,7 @@ async function onPreviewApplyToCurrent() {
 }
 
 .mobile-title {
-  font-size: 16px;
+  font-size: var(--font-size-xl, 17px);
   font-weight: 600;
   color: var(--color-text-primary, #1f2937);
 }
@@ -347,7 +333,7 @@ async function onPreviewApplyToCurrent() {
   border: 1px solid var(--color-border-base, #e2e8f0);
   background: var(--color-bg-base, #fff);
   color: var(--color-text-secondary, #64748b);
-  font-size: 13px;
+  font-size: var(--font-size-base, 14px);
   font-weight: 600;
 }
 
@@ -654,7 +640,7 @@ async function onPreviewApplyToCurrent() {
   border: 1px solid var(--color-border-base, #e2e8f0);
   background: var(--color-bg-base, #fff);
   color: var(--color-text-secondary, #64748b);
-  font-size: 13px;
+  font-size: var(--font-size-base, 14px);
   font-weight: 600;
 }
 
@@ -676,7 +662,7 @@ async function onPreviewApplyToCurrent() {
 }
 
 .settings-title {
-  font-size: 16px;
+  font-size: var(--font-size-lg, 16px);
   margin: 0 0 14px;
 }
 
@@ -708,13 +694,13 @@ async function onPreviewApplyToCurrent() {
 }
 
 .theme-label {
-  font-size: 14px;
+  font-size: var(--font-size-md, 15px);
   font-weight: 500;
 }
 
 .theme-warning {
   margin-left: auto;
-  font-size: 11px;
+  font-size: var(--font-size-xs, 12px);
   color: var(--color-warning, #f59e0b);
 }
 </style>

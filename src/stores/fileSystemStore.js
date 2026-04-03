@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { toRaw } from 'vue'
 import { FileSystem } from '@/services/FileSystem'
 import { RenderService } from '@/services/RenderService'
 import { StorageAdapter } from '@/services/StorageAdapter'
@@ -10,6 +11,7 @@ import { classifyToGroup, getGroupMeta, isHiddenGroup } from '@/config/filterGro
 import { hostWindow } from '@/utils/host-window.js'
 import { HistoryRecord } from '@/utils/history_record.js'
 import { ExternalAdapter } from '@/utils/external_adapters.js'
+import { applyPlayerCraftingToBundle } from '@/studio/craft-resolver.js'
 
 function getGroupNameFromPart(part) {
   if (!part) return ''
@@ -29,6 +31,68 @@ function buildSlotPresenceMap(characterData = [], hoverData = []) {
   }
   return map
 }
+
+const SLOT_MODE_EMPTY = 'empty'
+const SLOT_MODE_ORIGINAL = 'original'
+const SLOT_MODE_INCOMING = 'incoming'
+const SLOT_MODE_AUTO = 'auto'
+
+const DEFAULT_REPLACE_MODE = 'merge-replace'
+const REPLACE_MODE_SET = new Set(['fill-empty', 'merge-replace', 'full-replace'])
+const SLOT_MODE_SET = new Set([SLOT_MODE_EMPTY, SLOT_MODE_ORIGINAL, SLOT_MODE_INCOMING, SLOT_MODE_AUTO])
+
+function normalizeReplaceMode(mode) {
+  return REPLACE_MODE_SET.has(mode) ? mode : DEFAULT_REPLACE_MODE
+}
+
+function normalizeSlotMode(mode) {
+  return SLOT_MODE_SET.has(mode) ? mode : SLOT_MODE_EMPTY
+}
+
+function groupPartsBySlot(parts = []) {
+  const grouped = new Map()
+  for (const part of Array.isArray(parts) ? parts : []) {
+    const slotKey = getGroupNameFromPart(part)
+    if (!slotKey) continue
+    if (!grouped.has(slotKey)) grouped.set(slotKey, [])
+    grouped.get(slotKey).push(part)
+  }
+  return grouped
+}
+
+function getCharacterInitKey(character) {
+  if (!character || typeof character !== 'object') return 'none'
+
+  const memberNumber = Number(character.MemberNumber)
+  if (Number.isFinite(memberNumber)) {
+    return `member:${memberNumber}`
+  }
+
+  const name = typeof character.Name === 'string' ? character.Name : ''
+  const family = typeof character.AssetFamily === 'string' ? character.AssetFamily : ''
+  return `name:${name}|family:${family}`
+}
+
+function getPlayerMemberSuffix() {
+  const memberNumber = hostWindow?.Player?.MemberNumber
+  if (memberNumber === undefined || memberNumber === null || memberNumber === '') {
+    return 'DEFAULT'
+  }
+  return String(memberNumber)
+}
+
+function buildPlayerScopedStorageKey(prefix) {
+  return `${prefix}_${getPlayerMemberSuffix()}`
+}
+
+// Legacy key from the old precedence bug:
+// 'VPWardrobe_local' + hostWindow.Player ? hostWindow.Player.MemberNumber : 'DEFAULT'
+function getLegacyBuggyWardrobeLocalKey() {
+  return hostWindow?.Player ? hostWindow.Player.MemberNumber : 'DEFAULT'
+}
+
+const CLOUD_QUOTA_LIMIT_BYTES = 180 * 1024
+const CLOUD_QUOTA_WARN_RATIO = 0.8
 
 export const useFileSystemStore = defineStore('fs', {
   state: () => ({
@@ -59,13 +123,43 @@ export const useFileSystemStore = defineStore('fs', {
 
     activeItem: { data: [] },
 
+    // 当前是否锁定到某个文件项（锁定时忽略 hover/focus 预览切换）
+    lockedItem: null,
+
     characterItem: [],
 
     // filters: store the activeFilters array (names) for other consumers
     activeFilters: [],
 
-    // outfit apply mode for selected filters
-    applyMode: 'merge-replace', // 'fill-empty' | 'merge-replace' | 'full-replace'
+    cloudQuota: {
+      limitBytes: CLOUD_QUOTA_LIMIT_BYTES,
+      warnRatio: CLOUD_QUOTA_WARN_RATIO,
+      usedBytes: 0,
+      usageRatio: 0,
+      isWarning: false,
+      isOverLimit: false,
+      lastMeasuredAt: null,
+      lastError: ''
+    },
+    cloudSyncStats: {
+      totalNodes: 0,
+      totalFolders: 0,
+      totalLeaves: 0,
+      enabledNodes: 0,
+      enabledFolders: 0,
+      enabledLeaves: 0,
+      payloadBytes: 0
+    },
+    cloudSyncTreePreview: null,
+
+    // default replacement mode used when selecting/focusing an item
+    defaultReplaceMode: DEFAULT_REPLACE_MODE, // 'fill-empty' | 'merge-replace' | 'full-replace'
+
+    // legacy alias kept for compatibility with existing callers
+    applyMode: DEFAULT_REPLACE_MODE,
+
+    // per-slot control state: { [slotKey]: { mode: 'empty' | 'original' | 'incoming' | 'auto', locked?: boolean } }
+    slotControlMap: {},
 
 
     // FilterService instance (not serialized) and a reactive snapshot for UI
@@ -74,7 +168,15 @@ export const useFileSystemStore = defineStore('fs', {
 
     // History tracking
     _loadingFromHistory: false,
-    _historyDebounceTimer: null
+    _historyDebounceTimer: null,
+
+    // initialization lifecycle
+    _persistedLoaded: false,
+    _corePrewarmed: false,
+    _corePrewarmPromise: null,
+    _historyFilterInitPromise: null,
+    _filterInitPromise: null,
+    _lastInitializedCharacterKey: null
 
   }),
   getters: {
@@ -110,6 +212,13 @@ export const useFileSystemStore = defineStore('fs', {
       return buildSlotPresenceMap(characterData, hoverData)
     },
 
+    cloudUsagePercent: (state) => {
+      const ratio = Number(state.cloudQuota?.usageRatio || 0)
+      const percent = ratio * 100
+      if (!Number.isFinite(percent)) return 0
+      return Math.max(0, Math.min(100, percent))
+    },
+
     // 兼容性的直接访问 renderer canvas（如果需要）
     previewCanvas: state => state.renderer.getCanvas(state.previewItem),
     _previewCanvas: state => state.renderer._getCanvas(state.previewItem)
@@ -123,16 +232,98 @@ export const useFileSystemStore = defineStore('fs', {
       this.character = character
     },
 
-    initialize(character) {
-      this.setCharacter(character)
+    _loadPersistedDataOnce() {
+      if (this._persistedLoaded) return
       this.loadAll()
-      this.history.initFilter()
-      //this.loadHistory()
-      this.initFilterServiceDefault()
-      this.characterItem = AssetApi.collectOutfitData(character)
-      this.activeItem = { data: JSON.parse(JSON.stringify(this.characterItem)) } // deep copy
+      this._persistedLoaded = true
+    },
+
+    async _ensureHistoryFilterInitialized() {
+      if (Array.isArray(this.history?.filter) && this.history.filter.length > 0) {
+        return true
+      }
+
+      if (this._historyFilterInitPromise) {
+        await this._historyFilterInitPromise
+        return true
+      }
+
+      this._historyFilterInitPromise = (async () => {
+        try {
+          await this.history.initFilter()
+        } catch (e) {
+          console.warn('history.initFilter failed', e)
+        }
+      })()
+
+      try {
+        await this._historyFilterInitPromise
+      } finally {
+        this._historyFilterInitPromise = null
+      }
+
+      return true
+    },
+
+    async preInitialize(character = null) {
+      const target = character || hostWindow.CurrentCharacter || hostWindow.Player || null
+      this.setCharacter(target)
+
+      if (this._corePrewarmed) return true
+      if (this._corePrewarmPromise) {
+        await this._corePrewarmPromise
+        return true
+      }
+
+      this._corePrewarmPromise = (async () => {
+        this._loadPersistedDataOnce()
+        await Promise.allSettled([
+          this._ensureHistoryFilterInitialized(),
+          this.initFilterServiceDefault()
+        ])
+        this._corePrewarmed = true
+      })()
+
+      try {
+        await this._corePrewarmPromise
+      } finally {
+        this._corePrewarmPromise = null
+      }
+
+      return true
+    },
+
+    async initialize(character, options = {}) {
+      const target = character || hostWindow.CurrentCharacter || hostWindow.Player || null
+      this.setCharacter(target)
+
+      if (options.preInitialize !== false) {
+        await this.preInitialize(target)
+      } else {
+        this._loadPersistedDataOnce()
+      }
+
+      const characterKey = getCharacterInitKey(target)
+      const hasCharacterData = Array.isArray(this.characterItem) && this.characterItem.length > 0
+      const shouldRefreshCharacter = options.refreshCharacter !== false
+        || !hasCharacterData
+        || this._lastInitializedCharacterKey !== characterKey
+
+      if (shouldRefreshCharacter) {
+        this.characterItem = AssetApi.collectOutfitData(target)
+      }
+
+      if (options.keepSelection !== true) {
+        this.lockedItem = null
+        this.activeItem = { data: JSON.parse(JSON.stringify(this.characterItem || [])) }
+      } else if (!Array.isArray(this.activeItem?.data)) {
+        this.activeItem = { data: JSON.parse(JSON.stringify(this.characterItem || [])) }
+      }
+
       this.previewItem = { data: [] }
+      this._applyDefaultModeToUnlockedSlots(this.characterItem, this.activeItem.data, { mode: this.defaultReplaceMode })
       this.updatePreviewItem()
+      this._lastInitializedCharacterKey = characterKey
     },
 
 
@@ -142,12 +333,11 @@ export const useFileSystemStore = defineStore('fs', {
     updatePreviewItem() {
       if (typeof this.renderer.renderPreviewWithItem === 'function') {
         this.previewItem = { data: [] } // 清理旧的
-        const filterSet = new Set(this.activeFilters || [])
         const characterData = Array.isArray(this.characterItem) ? this.characterItem.slice() : []
         const sourceData = Array.isArray(this.activeItem?.data) ? this.activeItem.data : []
-        const resolvedMode = this.applyMode || 'merge-replace'
 
-        this.previewItem.data = this._buildBundleByMode(characterData, sourceData, filterSet, resolvedMode)
+        this._ensureSlotControls(characterData, sourceData)
+        this.previewItem.data = this._buildBundleBySlotControls(characterData, sourceData)
         this.renderer.renderPreviewWithItem(this.previewItem)
       }
     },
@@ -213,19 +403,218 @@ export const useFileSystemStore = defineStore('fs', {
       }
     },
 
+    _buildCloudSyncTreeFromSnapshot(node, options = {}) {
+      const { forceIncludeRoot = false } = options
+      if (!node || typeof node !== 'object') return null
+
+      const isFolder = node.type === 'folder' && Array.isArray(node.children)
+      const enabled = node.cloudSync !== false
+
+      if (!isFolder) {
+        if (!enabled) return null
+        return { ...node }
+      }
+
+      const children = []
+      for (const child of node.children || []) {
+        const picked = this._buildCloudSyncTreeFromSnapshot(child)
+        if (picked) children.push(picked)
+      }
+
+      if (!forceIncludeRoot && !enabled && children.length === 0) {
+        return null
+      }
+
+      return {
+        ...node,
+        type: 'folder',
+        inheritCloudSync: typeof node.inheritCloudSync === 'boolean' ? node.inheritCloudSync : true,
+        children
+      }
+    },
+
+    _collectCloudSyncStatsFromSnapshot(snapshot) {
+      const stats = {
+        totalNodes: 0,
+        totalFolders: 0,
+        totalLeaves: 0,
+        enabledNodes: 0,
+        enabledFolders: 0,
+        enabledLeaves: 0
+      }
+
+      const walk = (node) => {
+        if (!node || typeof node !== 'object') return
+        const isFolder = node.type === 'folder' && Array.isArray(node.children)
+        const enabled = node.cloudSync !== false
+
+        stats.totalNodes += 1
+        if (enabled) stats.enabledNodes += 1
+
+        if (isFolder) {
+          stats.totalFolders += 1
+          if (enabled) stats.enabledFolders += 1
+          for (const child of node.children || []) walk(child)
+        } else {
+          stats.totalLeaves += 1
+          if (enabled) stats.enabledLeaves += 1
+        }
+      }
+
+      walk(snapshot)
+      return stats
+    },
+
+    buildCloudSyncTree() {
+      const snapshot = this.fs.toJSON()
+      const tree = this._buildCloudSyncTreeFromSnapshot(snapshot, { forceIncludeRoot: true })
+      if (tree) return tree
+      return {
+        name: snapshot?.name || 'Home',
+        type: 'folder',
+        children: [],
+        cloudSync: false,
+        inheritCloudSync: true,
+        updatedAt: Date.now()
+      }
+    },
+
+    collectCloudSyncStats() {
+      const snapshot = this.fs.toJSON()
+      const stats = this._collectCloudSyncStatsFromSnapshot(snapshot)
+      const cloudTree = this._buildCloudSyncTreeFromSnapshot(snapshot, { forceIncludeRoot: true }) || {
+        name: snapshot?.name || 'Home',
+        type: 'folder',
+        children: []
+      }
+      const payloadBytes = this.storage.estimatePayloadBytes(cloudTree)
+      return {
+        ...stats,
+        payloadBytes
+      }
+    },
+
+    refreshCloudQuotaStats(snapshot = null) {
+      const sourceSnapshot = snapshot || this.fs.toJSON()
+      const cloudTree = this._buildCloudSyncTreeFromSnapshot(sourceSnapshot, { forceIncludeRoot: true }) || {
+        name: sourceSnapshot?.name || 'Home',
+        type: 'folder',
+        children: []
+      }
+      const stats = this._collectCloudSyncStatsFromSnapshot(sourceSnapshot)
+      const payloadBytes = this.storage.estimatePayloadBytes(cloudTree)
+
+      const limitBytes = Number(this.cloudQuota?.limitBytes || CLOUD_QUOTA_LIMIT_BYTES)
+      const warnRatio = Number(this.cloudQuota?.warnRatio || CLOUD_QUOTA_WARN_RATIO)
+      const usageRatio = limitBytes > 0 ? (payloadBytes / limitBytes) : 0
+      const isOverLimit = limitBytes > 0 ? payloadBytes > limitBytes : false
+      const isWarning = !isOverLimit && usageRatio >= warnRatio
+      const lastError = isOverLimit
+        ? `Cloud payload exceeds quota: ${payloadBytes}/${limitBytes}`
+        : ''
+
+      this.cloudSyncTreePreview = cloudTree
+      this.cloudSyncStats = {
+        ...stats,
+        payloadBytes
+      }
+      this.cloudQuota = {
+        ...this.cloudQuota,
+        usedBytes: payloadBytes,
+        usageRatio,
+        isWarning,
+        isOverLimit,
+        lastMeasuredAt: Date.now(),
+        lastError
+      }
+
+      return this.cloudQuota
+    },
+
+    _applyNodeCloudSync(node, enabled, recursive) {
+      if (!node || typeof node !== 'object') return false
+      const nextEnabled = !!enabled
+      let changed = false
+
+      const applyOne = (target) => {
+        if (!target || typeof target !== 'object') return
+        if (target.cloudSync !== nextEnabled) {
+          target.cloudSync = nextEnabled
+          changed = true
+        }
+        target.updatedAt = Date.now()
+        const isFolder = target.type === 'folder' && Array.isArray(target.children)
+        if (recursive && isFolder) {
+          for (const child of target.children) applyOne(child)
+        }
+      }
+
+      applyOne(node)
+      return changed
+    },
+
+    setNodeCloudSync(node, enabled, options = {}) {
+      if (!node || typeof node !== 'object') return false
+      const recursive = node.type === 'folder' ? options.recursive !== false : false
+      const changed = this._applyNodeCloudSync(node, enabled, recursive)
+      if (changed) {
+        this.saveAll()
+      } else {
+        this.refreshCloudQuotaStats()
+      }
+      return changed
+    },
+
+    setPathCloudSync(path, enabled, options = {}) {
+      if (!Array.isArray(path) || path.length === 0) return false
+      const node = this.fs.getNode(path)
+      if (!node) return false
+      return this.setNodeCloudSync(node, enabled, options)
+    },
+
     saveAll() {
       try {
-        this.storage.saveOnline('key', this.fs.toJSON())
-        this.storage.saveLocal('VPWardrobe_local' + hostWindow.Player ? hostWindow.Player.MemberNumber : 'DEFAULT', this.fs.toJSON())
+        const snapshot = this.fs.toJSON()
+        const localKey = buildPlayerScopedStorageKey('VPWardrobe_local')
+
+        // Local remains full snapshot regardless of cloud quota.
+        this.storage.saveLocal(localKey, snapshot)
+
+        const quota = this.refreshCloudQuotaStats(snapshot)
+        const cloudTree = this.cloudSyncTreePreview || this._buildCloudSyncTreeFromSnapshot(snapshot, { forceIncludeRoot: true })
+
+        if (quota?.isOverLimit) {
+          console.warn('saveAll skipped cloud sync due to quota limit', {
+            usedBytes: quota.usedBytes,
+            limitBytes: quota.limitBytes
+          })
+          return
+        }
+
+        // Cloud persistence now stores only cloudSync-enabled subtree.
+        this.storage.saveOnline('key', cloudTree)
       } catch (e) {
         console.warn('saveAll failed', e)
       }
     },
     loadAll() {
       try {
-        const Onlinedata = this.storage.loadOnline('key')
-        const Localdata = this.storage.loadLocal('VPWardrobe_local' + hostWindow.Player ? hostWindow.Player.MemberNumber : 'DEFAULT')
-        if (Localdata || Onlinedata) this.fs.fromMultipleJSON([Onlinedata, Localdata])
+        const onlineData = this.storage.loadOnline('key')
+        const localKey = buildPlayerScopedStorageKey('VPWardrobe_local')
+        let localData = this.storage.loadLocal(localKey)
+
+        if (!localData) {
+          const legacyLocalKey = getLegacyBuggyWardrobeLocalKey()
+          if (legacyLocalKey !== undefined && legacyLocalKey !== null) {
+            localData = this.storage.loadLocal(legacyLocalKey)
+            if (localData) {
+              this.storage.saveLocal(localKey, localData)
+            }
+          }
+        }
+
+        if (localData || onlineData) this.fs.fromMultipleJSON([onlineData, localData])
+        this.refreshCloudQuotaStats()
       } catch (e) {
         console.warn('loadAll failed', e)
       }
@@ -240,9 +629,11 @@ export const useFileSystemStore = defineStore('fs', {
       this.renderer.startThumbFor(item0)
     },
 
-    setActiveItem(item) {
+    setActiveItem(item, options = {}) {
+      const { ignoreLock = false } = options
       if (item === -1) {
         this.activeItem = { data: JSON.parse(JSON.stringify(this.characterItem)) } // deep copy
+        this._ensureSlotControls(this.characterItem, this.activeItem.data)
         this.updatePreviewItem()
         //this._scheduleHistoryAdd()
         return
@@ -252,61 +643,388 @@ export const useFileSystemStore = defineStore('fs', {
         return
       }
 
+      if (!ignoreLock && this.lockedItem && item !== this.lockedItem) {
+        // 预览锁定时，忽略来自 hover/focus 的切换
+        return
+      }
+
       this.activeItem = { data: item ? item.data : null }
+      this._ensureSlotControls(this.characterItem, this.activeItem.data)
       this.updatePreviewItem()
       //this._scheduleHistoryAdd()
     },
 
-    // 新：从 FilterPanel 更新 activeFilters（传入数组或 Set）
-    setActiveFilters(listOrSet) {
-      const arr = Array.isArray(listOrSet) ? listOrSet : Array.from(listOrSet || [])
-      this.activeFilters = arr
+    togglePreviewLock(item) {
+      if (!item || item.type === 'folder') return false
+
+      if (this.lockedItem === item) {
+        this.clearPreviewLock()
+        return false
+      }
+
+      this.lockedItem = item
+      this.setActiveItem(item, { ignoreLock: true })
+      return true
     },
 
-    setApplyMode(mode) {
-      const allowed = new Set(['fill-empty', 'merge-replace', 'full-replace'])
-      this.applyMode = allowed.has(mode) ? mode : 'merge-replace'
+    clearPreviewLock() {
+      this.clearSelection()
+    },
+
+    clearSelection() {
+      this.lockedItem = null
+      this.setActiveItem(-1, { ignoreLock: true })
+    },
+
+    isPreviewLockedOn(item) {
+      return !!item && this.lockedItem === item
+    },
+
+    // 兼容入口：外部仍可写 activeFilters，此时映射到未锁定 slot 的 empty/incoming 模式
+    setActiveFilters(listOrSet) {
+      const selected = new Set(
+        (Array.isArray(listOrSet) ? listOrSet : Array.from(listOrSet || []))
+          .filter(v => typeof v === 'string' && v)
+      )
+      this._ensureSlotControls()
+
+      const next = { ...(this.slotControlMap || {}) }
+      let changed = false
+      for (const key of this._collectKnownSlotKeys()) {
+        const prev = this.getSlotControlState(key)
+        if (prev.locked) continue
+        const nextMode = selected.has(key) ? SLOT_MODE_INCOMING : SLOT_MODE_EMPTY
+        if (prev.mode !== nextMode) {
+          next[key] = { mode: nextMode, locked: false }
+          changed = true
+        }
+      }
+
+      if (changed) {
+        this.slotControlMap = next
+      }
+      this._syncActiveFiltersFromSlotControls()
+      if (changed) {
+        this.updatePreviewItem()
+      }
+    },
+
+    setDefaultReplaceMode(mode) {
+      const resolved = normalizeReplaceMode(mode)
+      this.defaultReplaceMode = resolved
+      this.applyMode = resolved
+      this._syncActiveFiltersFromSlotControls()
       this.updatePreviewItem()
     },
 
-    _buildBundleByMode(characterData, outfitData, filterSet, mode) {
-      const selectedGroups = new Set(Array.from(filterSet || []).filter(Boolean))
-      if (selectedGroups.size === 0) return Array.isArray(characterData) ? characterData.slice() : []
+    setApplyMode(mode) {
+      this.setDefaultReplaceMode(mode)
+    },
 
-      const base = Array.isArray(characterData) ? characterData.slice() : []
-      const incoming = Array.isArray(outfitData)
-        ? outfitData.filter(part => selectedGroups.has(getGroupNameFromPart(part)))
-        : []
+    _collectKnownSlotKeys(characterData = null, sourceData = null) {
+      const keys = new Set(Object.keys(this.slotControlMap || {}))
 
-      if (mode === 'fill-empty') {
-        const existing = new Set(base.map(getGroupNameFromPart).filter(Boolean))
-        const toAdd = incoming.filter(part => !existing.has(getGroupNameFromPart(part)))
-        return base.concat(toAdd)
+      const snapshotItems = Array.isArray(this.filterSnapshot?.items) ? this.filterSnapshot.items : []
+      for (const item of snapshotItems) {
+        if (item?.key) keys.add(item.key)
       }
 
-      if (mode === 'full-replace') {
-        const preserved = base.filter(part => !selectedGroups.has(getGroupNameFromPart(part)))
-        return preserved.concat(incoming)
+      const characterParts = Array.isArray(characterData)
+        ? characterData
+        : (Array.isArray(this.characterItem) ? this.characterItem : [])
+      for (const part of characterParts) {
+        const slotKey = getGroupNameFromPart(part)
+        if (slotKey) keys.add(slotKey)
       }
 
-      const incomingGroups = new Set(incoming.map(getGroupNameFromPart).filter(Boolean))
-      const preserved = base.filter(part => !incomingGroups.has(getGroupNameFromPart(part)))
-      return preserved.concat(incoming)
+      const incomingParts = Array.isArray(sourceData)
+        ? sourceData
+        : (Array.isArray(this.activeItem?.data) ? this.activeItem.data : [])
+      for (const part of incomingParts) {
+        const slotKey = getGroupNameFromPart(part)
+        if (slotKey) keys.add(slotKey)
+      }
+
+      return Array.from(keys)
+    },
+
+    _ensureSlotControls(characterData = null, sourceData = null) {
+      const keys = this._collectKnownSlotKeys(characterData, sourceData)
+      const current = this.slotControlMap || {}
+      const next = { ...current }
+      let changed = false
+
+      for (const key of keys) {
+        const prev = current[key]
+        if (!prev) {
+          next[key] = { mode: SLOT_MODE_AUTO, locked: false }
+          changed = true
+          continue
+        }
+        const nextMode = normalizeSlotMode(prev.mode)
+        if (nextMode !== prev.mode || !!prev.locked) {
+          next[key] = { mode: nextMode, locked: false }
+          changed = true
+        }
+      }
+
+      if (changed) {
+        this.slotControlMap = next
+      }
+      this._syncActiveFiltersFromSlotControls()
+      return keys
+    },
+
+    _syncActiveFiltersFromSlotControls() {
+      const keys = this._collectKnownSlotKeys()
+      const characterData = Array.isArray(this.characterItem) ? this.characterItem : []
+      const incomingData = Array.isArray(this.activeItem?.data) ? this.activeItem.data : []
+      const inCharacter = new Set(characterData.map(getGroupNameFromPart).filter(Boolean))
+      const inIncoming = new Set(incomingData.map(getGroupNameFromPart).filter(Boolean))
+
+      const next = []
+      for (const key of keys) {
+        const mode = normalizeSlotMode(this.slotControlMap?.[key]?.mode)
+        const effectiveMode = this._resolveEffectiveSlotMode(mode, {
+          inCharacter: inCharacter.has(key),
+          inIncoming: inIncoming.has(key)
+        })
+        if (effectiveMode !== SLOT_MODE_EMPTY) {
+          next.push(key)
+        }
+      }
+      this.activeFilters = Array.from(new Set(next))
+    },
+
+    _resolveEffectiveSlotMode(slotMode, { inCharacter = false, inIncoming = false, replaceMode = null } = {}) {
+      const mode = normalizeSlotMode(slotMode)
+      if (mode === SLOT_MODE_AUTO) {
+        return this._resolveModeByDefaultReplace(
+          replaceMode || this.defaultReplaceMode,
+          inCharacter,
+          inIncoming
+        )
+      }
+      return mode
+    },
+
+    _resolveModeByDefaultReplace(defaultMode, inCharacter, inIncoming) {
+      const resolvedMode = normalizeReplaceMode(defaultMode)
+
+      if (resolvedMode === 'fill-empty') {
+        if (inCharacter) return SLOT_MODE_ORIGINAL
+        if (inIncoming) return SLOT_MODE_INCOMING
+        return SLOT_MODE_ORIGINAL
+      }
+
+      if (resolvedMode === 'full-replace') {
+        return SLOT_MODE_INCOMING
+      }
+
+      if (inIncoming) return SLOT_MODE_INCOMING
+      if (inCharacter) return SLOT_MODE_ORIGINAL
+      return SLOT_MODE_ORIGINAL
+    },
+
+    _setUnlockedSlotsToMode(mode, characterData = null, sourceData = null) {
+      const nextMode = normalizeSlotMode(mode)
+      const keys = this._collectKnownSlotKeys(characterData, sourceData)
+      const current = this.slotControlMap || {}
+      const next = { ...current }
+      let changed = false
+
+      for (const key of keys) {
+        const prev = current[key]
+        const prevMode = normalizeSlotMode(prev?.mode)
+        if (!prev || prevMode !== nextMode || !!prev?.locked) {
+          next[key] = { mode: nextMode, locked: false }
+          changed = true
+        }
+      }
+
+      if (changed) {
+        this.slotControlMap = next
+      }
+      this._syncActiveFiltersFromSlotControls()
+      return changed
+    },
+
+    _applyDefaultModeToUnlockedSlots(characterData = null, sourceData = null, { mode = null } = {}) {
+      this._ensureSlotControls(characterData, sourceData)
+      this._syncActiveFiltersFromSlotControls()
+      return false
+    },
+
+    _buildBundleBySlotControls(characterData, sourceData, slotControlMapOverride = null, replaceModeOverride = null) {
+      const characterParts = Array.isArray(characterData) ? characterData : []
+      const incomingParts = Array.isArray(sourceData) ? sourceData : []
+      const slotControlMap = slotControlMapOverride || this.slotControlMap || {}
+      const replaceMode = normalizeReplaceMode(replaceModeOverride || this.defaultReplaceMode)
+
+      const byCharacterSlot = groupPartsBySlot(characterParts)
+      const byIncomingSlot = groupPartsBySlot(incomingParts)
+
+      const slotOrder = []
+      const seen = new Set()
+      const pushSlot = (slotKey) => {
+        if (!slotKey || seen.has(slotKey)) return
+        seen.add(slotKey)
+        slotOrder.push(slotKey)
+      }
+
+      for (const part of characterParts) pushSlot(getGroupNameFromPart(part))
+      for (const part of incomingParts) pushSlot(getGroupNameFromPart(part))
+      for (const slotKey of this._collectKnownSlotKeys(characterParts, incomingParts)) pushSlot(slotKey)
+
+      const bundle = []
+      for (const slotKey of slotOrder) {
+        const mode = this._resolveEffectiveSlotMode(slotControlMap?.[slotKey]?.mode, {
+          inCharacter: byCharacterSlot.has(slotKey),
+          inIncoming: byIncomingSlot.has(slotKey),
+          replaceMode
+        })
+        if (mode === SLOT_MODE_ORIGINAL) {
+          const parts = byCharacterSlot.get(slotKey) || []
+          bundle.push(...parts)
+          continue
+        }
+        if (mode === SLOT_MODE_INCOMING) {
+          const parts = byIncomingSlot.get(slotKey) || []
+          bundle.push(...parts)
+        }
+      }
+      return bundle
+    },
+
+    _buildBundleWithModeOverride(characterData, sourceData, overrideMode) {
+      if (!overrideMode) {
+        return this._buildBundleBySlotControls(characterData, sourceData)
+      }
+      return this._buildBundleBySlotControls(characterData, sourceData, null, overrideMode)
+    },
+
+    getSlotControlState(key) {
+      const slotState = this.slotControlMap?.[key]
+      return {
+        mode: normalizeSlotMode(slotState?.mode),
+        locked: false
+      }
+    },
+
+    setSlotMode(key, mode) {
+      if (!key) return false
+      this._ensureSlotControls()
+
+      const prev = this.getSlotControlState(key)
+      const nextMode = normalizeSlotMode(mode)
+      if (prev.mode === nextMode) return true
+
+      this.slotControlMap = {
+        ...(this.slotControlMap || {}),
+        [key]: { mode: nextMode, locked: false }
+      }
+      this._syncActiveFiltersFromSlotControls()
+      this.updatePreviewItem()
+      return true
+    },
+
+    setAllSlotModes(mode) {
+      this._ensureSlotControls()
+
+      const nextMode = normalizeSlotMode(mode)
+      const current = this.slotControlMap || {}
+      const next = { ...current }
+      let changed = false
+
+      for (const key of this._collectKnownSlotKeys()) {
+        const prev = this.getSlotControlState(key)
+        if (prev.mode === nextMode) continue
+        next[key] = { mode: nextMode, locked: false }
+        changed = true
+      }
+
+      if (changed) {
+        this.slotControlMap = next
+        this._syncActiveFiltersFromSlotControls()
+        this.updatePreviewItem()
+      }
+      return changed
+    },
+
+    setGroupSlotModes(groupID, mode) {
+      const groupKeys = this._getGroupSlotKeys(groupID)
+      if (groupKeys.length === 0) return false
+
+      this._ensureSlotControls()
+
+      const nextMode = normalizeSlotMode(mode)
+      const current = this.slotControlMap || {}
+      const next = { ...current }
+      let changed = false
+
+      for (const key of groupKeys) {
+        const prev = this.getSlotControlState(key)
+        if (prev.mode === nextMode) continue
+        next[key] = { mode: nextMode, locked: false }
+        changed = true
+      }
+
+      if (changed) {
+        this.slotControlMap = next
+        this._syncActiveFiltersFromSlotControls()
+        this.updatePreviewItem()
+      }
+      return changed
+    },
+
+    setSlotLocked(key, locked = true) {
+      return false
+    },
+
+    toggleSlotLock(key) {
+      return false
+    },
+
+    setAllSlotLocks(locked = true) {
+      return false
+    },
+
+    invertSlotLocks() {
+      return false
+    },
+
+    _getGroupSlotKeys(groupID) {
+      const groups = Array.isArray(this.filterSnapshot?.groups) ? this.filterSnapshot.groups : []
+      const group = groups.find(g => g?.groupID === groupID)
+      if (!group || !Array.isArray(group.itemList)) return []
+      return group.itemList.map(item => item?.key).filter(Boolean)
+    },
+
+    setGroupSlotLocks(groupID, locked = true) {
+      return false
+    },
+
+    invertGroupSlotLocks(groupID) {
+      return false
     },
 
     applyFilteredOutfitToCharacter({ outfitData = null, mode = null } = {}) {
-      const target = this.character || hostWindow.CurrentCharacter || hostWindow.Player
+      const rawCharacter = this.character ? toRaw(this.character) : null
+      const target = rawCharacter || hostWindow.CurrentCharacter || hostWindow.Player
       if (!target) return false
 
       const characterData = AssetApi.collectOutfitData(target)
       const sourceData = Array.isArray(outfitData)
         ? outfitData
         : (Array.isArray(this.activeItem?.data) ? this.activeItem.data : [])
-      const filterSet = new Set(this.activeFilters || [])
-      const resolvedMode = mode || this.applyMode || 'merge-replace'
 
-      const bundle = this._buildBundleByMode(characterData, sourceData, filterSet, resolvedMode)
-      const ok = ExternalAdapter.applyOutfitToCharacter(target, bundle)
+      this._ensureSlotControls(characterData, sourceData)
+      const bundle = this._buildBundleWithModeOverride(characterData, sourceData, mode)
+      const hydratedBundle = applyPlayerCraftingToBundle(bundle, {
+        player: hostWindow?.Player,
+        assetGet: typeof hostWindow?.AssetGet === 'function' ? hostWindow.AssetGet.bind(hostWindow) : null
+      })
+      const ok = ExternalAdapter.applyOutfitToCharacter(target, hydratedBundle)
       if (ok) {
         this.characterItem = AssetApi.collectOutfitData(target)
         this.updatePreviewItem()
@@ -314,8 +1032,13 @@ export const useFileSystemStore = defineStore('fs', {
       return !!ok
     },
 
+    applyCurrentPreviewToCharacter() {
+      return this.applyFilteredOutfitToCharacter()
+    },
+
     removeSelectedSlotsFromCharacter() {
-      const target = this.character || hostWindow.CurrentCharacter || hostWindow.Player
+      const rawCharacter = this.character ? toRaw(this.character) : null
+      const target = rawCharacter || hostWindow.CurrentCharacter || hostWindow.Player
       if (!target) return false
 
       const selectedGroups = new Set((this.activeFilters || []).filter(Boolean))
@@ -337,10 +1060,29 @@ export const useFileSystemStore = defineStore('fs', {
 
     // Initialize/rebuild FilterService from an items array (array of { key, data })
     async initFilterServiceDefault() {
-      if (!this.filterService) {
-        const itemsArray = await fetchFilterData()
-        this.initFilterService(itemsArray)
+      if (this.filterService) return true
+
+      if (this._filterInitPromise) {
+        await this._filterInitPromise
+        return !!this.filterService
       }
+
+      this._filterInitPromise = (async () => {
+        try {
+          const itemsArray = await fetchFilterData()
+          this.initFilterService(itemsArray)
+        } catch (e) {
+          console.warn('initFilterServiceDefault failed', e)
+        }
+      })()
+
+      try {
+        await this._filterInitPromise
+      } finally {
+        this._filterInitPromise = null
+      }
+
+      return !!this.filterService
     },
 
     initFilterService(itemsArray) {
@@ -351,19 +1093,23 @@ export const useFileSystemStore = defineStore('fs', {
       this.filterService = new FilterService(itemsArray || [])
       // subscribe
       this._onFilterChange = (snapshot) => {
-        // update reactive snapshot and activeFilters
+        // update reactive snapshot and slot controls
         this.filterSnapshot = snapshot
         try {
-          const active = Array.from(this.filterService.getActiveSet())
-          this.activeFilters = active
-          // 更新预览
+          const hasSlotControls = Object.keys(this.slotControlMap || {}).length > 0
+          const characterData = Array.isArray(this.characterItem) ? this.characterItem : []
+          const sourceData = Array.isArray(this.activeItem?.data) ? this.activeItem.data : []
+
+          this._ensureSlotControls(characterData, sourceData)
+          if (!hasSlotControls) {
+            this._applyDefaultModeToUnlockedSlots(characterData, sourceData, { mode: this.defaultReplaceMode })
+          }
+
           this.updatePreviewItem()
         } catch (e) {
           // ignore
         }
       }
-      const active = Array.from(this.filterService.getActiveSet())
-      this.activeFilters = active
       this.filterService.onChange(this._onFilterChange)
       try { this.filterService.emitChange() } catch (e) { }
     },
@@ -399,13 +1145,54 @@ export const useFileSystemStore = defineStore('fs', {
       return isHiddenGroup(groupID)
     },
 
-    // Wrapper methods for UI -> service
-    filterToggle(key) { if (this.filterService) this.filterService.toggle(key) },
-    filterSetActive(key, v) { if (this.filterService) this.filterService.setActive(key, !!v) },
-    filterSetAll(v) { if (this.filterService) this.filterService.setAll(!!v) },
-    filterInvertAll() { if (this.filterService) this.filterService.invertAll() },
-    filterSetGroupAll(groupID, v) { if (this.filterService) this.filterService.setGroupAll(groupID, !!v) },
-    filterInvertGroup(groupID) { if (this.filterService) this.filterService.invertGroup(groupID) },
+    // Wrapper methods for UI compatibility -> mode APIs (deprecated semantic bridge)
+    filterToggle(key) {
+      const currentMode = this.getSlotControlState(key).mode
+      return this.setSlotMode(key, currentMode === SLOT_MODE_EMPTY ? SLOT_MODE_AUTO : SLOT_MODE_EMPTY)
+    },
+    filterSetActive(key, v) { return this.setSlotMode(key, v ? SLOT_MODE_AUTO : SLOT_MODE_EMPTY) },
+    filterSetAll(v) { return this.setAllSlotModes(v ? SLOT_MODE_AUTO : SLOT_MODE_EMPTY) },
+    filterInvertAll() {
+      this._ensureSlotControls()
+      const next = { ...(this.slotControlMap || {}) }
+      let changed = false
+      for (const key of this._collectKnownSlotKeys()) {
+        const mode = this.getSlotControlState(key).mode
+        const nextMode = mode === SLOT_MODE_EMPTY ? SLOT_MODE_AUTO : SLOT_MODE_EMPTY
+        if (mode !== nextMode) {
+          next[key] = { mode: nextMode, locked: false }
+          changed = true
+        }
+      }
+      if (changed) {
+        this.slotControlMap = next
+        this._syncActiveFiltersFromSlotControls()
+        this.updatePreviewItem()
+      }
+      return changed
+    },
+    filterSetGroupAll(groupID, v) { return this.setGroupSlotModes(groupID, v ? SLOT_MODE_AUTO : SLOT_MODE_EMPTY) },
+    filterInvertGroup(groupID) {
+      const groupKeys = this._getGroupSlotKeys(groupID)
+      if (groupKeys.length === 0) return false
+      this._ensureSlotControls()
+      const next = { ...(this.slotControlMap || {}) }
+      let changed = false
+      for (const key of groupKeys) {
+        const mode = this.getSlotControlState(key).mode
+        const nextMode = mode === SLOT_MODE_EMPTY ? SLOT_MODE_AUTO : SLOT_MODE_EMPTY
+        if (mode !== nextMode) {
+          next[key] = { mode: nextMode, locked: false }
+          changed = true
+        }
+      }
+      if (changed) {
+        this.slotControlMap = next
+        this._syncActiveFiltersFromSlotControls()
+        this.updatePreviewItem()
+      }
+      return changed
+    },
 
     // ---------------------
     // Search wrapper
@@ -547,7 +1334,7 @@ export const useFileSystemStore = defineStore('fs', {
     saveHistory() {
       try {
         const historyData = this.history.toJSON()
-        const key = 'VPWardrobe_history_' + (hostWindow.Player ? hostWindow.Player.MemberNumber : 'DEFAULT')
+        const key = buildPlayerScopedStorageKey('VPWardrobe_history')
         this.storage.saveLocal(key, historyData)
       } catch (e) {
         console.warn('saveHistory failed', e)
@@ -559,7 +1346,7 @@ export const useFileSystemStore = defineStore('fs', {
      */
     loadHistory() {
       try {
-        const key = 'VPWardrobe_history_' + (hostWindow.Player ? hostWindow.Player.MemberNumber : 'DEFAULT')
+        const key = buildPlayerScopedStorageKey('VPWardrobe_history')
         const historyData = this.storage.loadLocal(key)
         if (historyData) {
           this.history.fromJSON(historyData)

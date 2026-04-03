@@ -41,7 +41,7 @@
                         </nav>
                     </div>
                     <div class="fm-header-actions">
-                        <button class="close-btn" @click="requestClose" aria-label="关闭">&times;</button>
+                        <button class="close-btn" @click="requestClose" :aria-label="t('studio.closeTitle')">&times;</button>
                     </div>
                 </header>
 
@@ -61,12 +61,12 @@
                             <button class="left-action-btn save-btn" :title="t('fileManagerPanel.saveCharacter')"
                                 @click.stop="saveCharacterToFolder">
 
-                                <span class="la-text">Save</span>
+                                <span class="la-text">{{ t('fileManagerPanel.saveCharacter') }}</span>
                             </button>
                             <button class="left-action-btn import-btn" :title="t('fileManagerPanel.importBCX')"
                                 @click.stop="importBCX">
 
-                                <span class="la-text">Import BCX</span>
+                                <span class="la-text">{{ t('fileManagerPanel.importBCX') }}</span>
                             </button>
                         </div>
                     </aside>
@@ -88,6 +88,7 @@
                         <div
                             id="workbench-tab-history"
                             ref="historyTabRef"
+                            v-if="tabMounted.history"
                             v-show="activeTab === 'history'"
                             class="tab-panel"
                             role="tabpanel"
@@ -97,6 +98,7 @@
                         <div
                             id="workbench-tab-studio"
                             ref="studioTabRef"
+                            v-if="tabMounted.studio"
                             v-show="activeTab === 'studio'"
                             class="tab-panel tab-panel-studio"
                             role="tabpanel"
@@ -106,6 +108,7 @@
                         <div
                             id="workbench-tab-settings"
                             ref="settingsTabRef"
+                            v-if="tabMounted.settings"
                             v-show="activeTab === 'settings'"
                             class="tab-panel settings-panel"
                             role="tabpanel"
@@ -170,7 +173,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick, toRaw } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, watch, nextTick, toRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
 import LZString from 'lz-string'
 import FileManager from '@/components/FileManager.vue'
@@ -181,9 +184,10 @@ import { useFileSystemStore } from '@/stores/fileSystemStore.js'
 import Studio from '@/components/Studio/Studio.vue'
 import MobileWardrobeShell from '@/components/mobile/MobileWardrobeShell.vue'
 import { ExternalAdapter } from '@/utils/external_adapters.js'
-import { useStudioStore } from '@/stores/studioStore.js'
+import { useStudioDomainStores } from '@/stores/studio'
 import { useWorkbenchStore } from '@/stores/workbenchStore.js'
 import { PlayerHost, hostWindow, doc } from '@/utils/host-window.js'
+import { MOBILE_LAYOUT_BREAKPOINT } from '@/config/uiLayout.js'
 import { useTheme, injectTheme } from '@/services/ThemeService'
 import * as DialogService from '@/services/DialogService.js'
 
@@ -194,7 +198,6 @@ const theme = useTheme()
 const { setTheme, currentTheme } = theme
 
 const WINDOW_MARGIN = 12 // 保持与 CSS 中的 margin/间距一致
-const MOBILE_BREAKPOINT = 900
 
 const props = defineProps({
     visible: { type: Boolean, default: false },
@@ -203,7 +206,7 @@ const props = defineProps({
 const emit = defineEmits(['close'])
 
 const fs = useFileSystemStore()
-const studioStore = useStudioStore()
+const { studio: studioStore } = useStudioDomainStores()
 const workbenchStore = useWorkbenchStore()
 
 const isMobile = ref(false)
@@ -250,15 +253,25 @@ const wardrobeTabRef = ref(null)
 const historyTabRef = ref(null)
 const studioTabRef = ref(null)
 const settingsTabRef = ref(null)
+const tabMounted = reactive({
+    wardrobe: true,
+    history: false,
+    studio: false,
+    settings: false
+})
 
-async function setActiveTab(tab) {
+if (Object.prototype.hasOwnProperty.call(tabMounted, activeTab.value)) {
+    tabMounted[activeTab.value] = true
+}
+
+function setActiveTab(tab) {
     if (isMobile.value && tab === 'studio') {
         workbenchStore.setMobileMainTab('wardrobe')
         return
     }
     workbenchStore.setActiveTab(tab)
     if (tab === 'studio') {
-        await studioStore.loadAssetData()
+        studioStore.loadAssetData().catch(() => { /* ignore */ })
     }
 }
 
@@ -348,7 +361,11 @@ watch(
             ensurePanelDefaults()
             // 初始化文件系统（使用当前角色或 Player）
             const target = hostWindow.CurrentCharacter || hostWindow.Player || null
-            fs.initialize(target)
+            try {
+                await fs.initialize(target)
+            } catch (e) {
+                console.warn('fs.initialize failed', e)
+            }
 
             // 当打开时，自动提升 z-index 以确保可视
             panelZ.value = FOCUSED_Z
@@ -786,7 +803,7 @@ function escHandler(e) {
 const prevOverflowX = ref('')
 
 function updateIsMobile() {
-    isMobile.value = hostWindow.innerWidth < MOBILE_BREAKPOINT
+    isMobile.value = hostWindow.innerWidth < MOBILE_LAYOUT_BREAKPOINT
 }
 
 watch(isMobile, (v) => {
@@ -804,7 +821,10 @@ watch(isMobile, (v) => {
 
 watch(
     () => activeTab.value,
-    async () => {
+    async (tab) => {
+        if (tab && Object.prototype.hasOwnProperty.call(tabMounted, tab)) {
+            tabMounted[tab] = true
+        }
         await nextTick()
         focusActivePanel()
     }
@@ -818,6 +838,17 @@ onMounted(() => {
     updateIsMobile()
     // 当组件挂载时确保 panel 不超出（处理首次渲染时）
     ensurePanelDefaults()
+
+    const runPreInitialize = () => {
+        const target = hostWindow.CurrentCharacter || hostWindow.Player || null
+        fs.preInitialize(target).catch(() => { /* ignore */ })
+    }
+    if (typeof hostWindow.requestIdleCallback === 'function') {
+        hostWindow.requestIdleCallback(() => runPreInitialize(), { timeout: 1200 })
+    } else {
+        hostWindow.setTimeout(() => runPreInitialize(), 200)
+    }
+
     if (activeTab.value === 'studio') {
         studioStore.loadAssetData().catch(() => { /* ignore */ })
     }
@@ -1114,17 +1145,28 @@ function onWindowResize() {
 .tab-panel {
     width: 100%;
     height: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
 }
 
 .tab-panel-studio {
     display: flex;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
     min-height: 0;
     overflow: hidden;
 }
 
 .tab-panel-studio > * {
     flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
     min-height: 0;
+    overflow: hidden;
 }
 
 .fm-main.fm-main-studio {
@@ -1200,7 +1242,7 @@ function onWindowResize() {
     top: -20px;
     left: 50%;
     transform: translateX(-50%);
-    font-size: 11px;
+    font-size: var(--font-size-xs, 12px);
     color: var(--color-warning, #f59e0b);
     background: var(--color-warning-bg, rgba(245, 158, 11, 0.1));
     padding: 2px 6px;
@@ -1225,8 +1267,8 @@ function onWindowResize() {
 
 /* right aside */
 .main-right {
-    flex: 0 0 clamp(240px, 32vw, 320px);
-    min-width: 200px;
+    flex: 0 0 clamp(300px, 38vw, 430px);
+    min-width: 0;
     max-width: 100%;
     box-sizing: border-box;
     overflow-y: auto;
@@ -1342,8 +1384,8 @@ function onWindowResize() {
     }
 
     .main-right {
-        max-width: 32%;
-        flex: 0 0 clamp(240px, 28vw, 320px);
+        max-width: 42%;
+        flex: 0 0 clamp(320px, 36vw, 440px);
     }
 
     .fm-mobile-actions {

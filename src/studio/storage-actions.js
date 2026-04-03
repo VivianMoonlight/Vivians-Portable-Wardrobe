@@ -6,6 +6,14 @@
 import { toRaw } from 'vue'
 import { hostWindow, setTimeoutHost } from '@/utils/host-window.js'
 
+function getPersistableStacks(state) {
+  const sourceStacks = toRaw(state.stacks)
+  if (typeof state?._sanitizeStacksForPersistence === 'function') {
+    return state._sanitizeStacksForPersistence(sourceStacks)
+  }
+  return sourceStacks
+}
+
 /**
  * Download JSON data as a file
  * @param {Object} data - Data to download
@@ -60,7 +68,10 @@ export function readJsonFile(file) {
  * @returns {boolean} True if successful
  */
 export function exportStacksToJsonFile(state, filename = 'stacks.json') {
-  const payload = { stacks: toRaw(state.stacks), _partUidCounter: state._partUidCounter }
+  const payload = {
+    stacks: getPersistableStacks(state),
+    _partUidCounter: state._partUidCounter
+  }
   return downloadJsonFile(payload, filename)
 }
 
@@ -140,7 +151,7 @@ export async function importPaletteFromJsonFile(file) {
  */
 export function exportStudioSnapshot(state, filename = 'studio_snapshot.json') {
   const payload = {
-    stacks: toRaw(state.stacks),
+    stacks: getPersistableStacks(state),
     paletteMap: toRaw(state.paletteMap),
     _paletteNextCounter: state._paletteNextCounter,
     _partUidCounter: state._partUidCounter
@@ -182,7 +193,7 @@ export async function importStudioSnapshotFromFile(file) {
 export function persistStacksToLocalStorage(state) {
   try {
     const payload = {
-      stacks: state.stacks,
+      stacks: getPersistableStacks(state),
       _partUidCounter: state._partUidCounter
     }
     hostWindow.localStorage.setItem('studio_stacks_v1', JSON.stringify(payload))

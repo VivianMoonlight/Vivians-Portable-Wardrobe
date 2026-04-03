@@ -5,7 +5,7 @@
 
     <!-- 值显示 -->
     <span v-if="isSimple" class="value-simple">{{ simpleValue }}</span>
-    <div v-else class="value-complex" @mouseenter="showDetails = true" @mouseleave="showDetails = false">
+    <div v-else class="value-complex" @mouseenter="onMouseEnter" @mouseleave="onMouseLeave">
       <span class="complex-label">{{ complexLabel }}</span>
       <span class="detail-icon">ℹ</span>
 
@@ -21,12 +21,31 @@
 
 <script setup>
 import { computed, ref } from 'vue'
+import { debounce } from '@/utils/performance.js'
 
 const props = defineProps({
   value: [String, Array, Object]
 })
 
-const showDetails = ref(false)
+// ✅ Debounce show/hide to prevent flickering on rapid hover
+const showDetailsImmediate = ref(false)
+const showDetailsDebounced = debounce((val) => {
+  showDetailsImmediate.value = val
+}, 150)  // 150ms debounce delay
+
+const showDetails = computed(() => showDetailsImmediate.value)
+
+function onMouseEnter() {
+  // Cancel any pending debounce on leave
+  showDetailsDebounced.cancel?.()
+  showDetailsDebounced(true)
+}
+
+function onMouseLeave() {
+  // If mouse leaves quickly, cancel the show and immediately hide
+  showDetailsDebounced.cancel?.()
+  showDetailsImmediate.value = false
+}
 
 const isSimple = computed(() => {
   return typeof props.value === 'string' && /^#[0-9a-f]{6}$/i.test(props.value)

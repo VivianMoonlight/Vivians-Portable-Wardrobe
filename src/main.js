@@ -3,7 +3,11 @@ import { createPinia } from 'pinia';
 import { setupI18n } from './i18n.js';
 import App from './App.vue';
 import { registerModWithSdk, hookDrawCharacter, hookHistory } from './utils/register.js';
+
+// 🔴 CRITICAL: Import global styles BEFORE any component styles
+// This ensures normalize and theme styles are applied first and not overridden by scoped styles
 import './style.css';
+
 import * as LayerTranslator from './services/LayerTranslator.js';
 import { useFileSystemStore } from './stores/fileSystemStore.js';
 import { collectOutfitData } from './utils/AssetApi.js';

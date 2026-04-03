@@ -10,7 +10,11 @@
     "confirmDelete": "确认删除该项目吗？",
     "elementDefaultName": "元素",
     "sendError": "发送到 Studio 失败",
-    "exportBCX": "导出为 BCX"
+    "exportBCX": "导出为 BCX",
+    "cloudOn": "云同步开",
+    "cloudOff": "云同步关",
+    "cloudToggleFileTitle": "切换此文件是否云同步",
+    "cloudToggleFolderTitle": "切换此文件夹及其子项是否云同步"
   },
   "fileManager": {
     "title": "衣橱",
@@ -38,6 +42,11 @@
     "sortRecent": "最近修改",
     "sortName": "名称",
     "sortType": "类型",
+    "cloudUsageTitle": "云端占用",
+    "cloudUsageAria": "云端容量占用",
+    "cloudUsageOk": "容量正常",
+    "cloudUsageWarn": "容量接近上限",
+    "cloudUsageOver": "超出 180KB 上限",
     "filterAll": "全部",
     "filterFolder": "文件夹",
     "filterOutfit": "套装",
@@ -49,11 +58,33 @@
     "allOff": "全关",
     "invert": "反选",
     "applyModeLabel": "应用模式",
+    "defaultReplaceModeLabel": "默认替换模式",
     "modeFillEmpty": "仅增添空槽",
     "modeMergeReplace": "增添并替换",
     "modeFullReplace": "完全置换",
-    "applyCurrent": "按模式应用",
+    "applyCurrent": "应用到角色",
     "removeSelected": "移除选中槽位",
+    "lockAll": "全部锁定",
+    "unlockAll": "全部解锁",
+    "invertLock": "反转锁定",
+    "lock": "锁定",
+    "unlock": "解锁",
+    "allModeOriginal": "全选原有",
+    "allModeIncoming": "全选新有",
+    "allModeEmpty": "全选空",
+    "allModeAuto": "全选自动",
+    "groupModeOriginal": "组内原有",
+    "groupModeIncoming": "组内新有",
+    "groupModeEmpty": "组内全空",
+    "groupModeAuto": "组内自动",
+    "groupLockAll": "组内全锁",
+    "groupUnlockAll": "组内全解",
+    "groupInvertLock": "组内反转锁定",
+    "slotModeAriaLabel": "槽位模式",
+    "slotModeEmpty": "空",
+    "slotModeOriginal": "原",
+    "slotModeIncoming": "新",
+    "slotModeAuto": "自动",
     "slotLegendAria": "槽位状态图例",
     "inCharacter": "角色已有",
     "inHover": "悬浮套装有",
@@ -296,14 +327,87 @@
     "clearTitle": "清空所有历史记录",
     "clearConfirmMessage": "确定要清空所有历史记录吗？此操作无法撤销。",
     "currentState": "当前状态",
+    "timelineSubtitle": "浏览并跳转到任意编辑状态",
     "undoCount": "可撤销",
     "redoCount": "可重做",
+    "undoAction": "撤销",
+    "redoAction": "重做",
+    "totalStates": "总数",
     "emptyState": "暂无历史记录。您的更改将在此处跟踪。",
     "justNow": "刚刚",
     "minutesAgo": "{count} 分钟前",
     "hoursAgo": "{count} 小时前",
     "undoItem": "之前的状态",
-    "redoItem": "未来的状态"
+    "redoItem": "未来的状态",
+    "pastTag": "过去",
+    "futureTag": "未来",
+    "currentTag": "当前",
+    "scrollHint": "横向滚动可查看更多状态",
+    "jumpLatest": "跳至最新",
+    "hasFutureState": "存在可重做状态",
+    "stateChange": "状态变更",
+    "initialState": "初始状态",
+    "actionTypeLabels": {
+      "part": {
+        "updateMetadata": "更新部件元数据",
+        "updateProperty": "更新部件属性",
+        "applyLayerDeltas": "应用部件图层改动"
+      },
+      "layer": {
+        "batchApplyLayerDeltas": "批量应用图层改动"
+      },
+      "batch": {
+        "updateOpacity": "批量更新不透明度",
+        "updateOffset": "批量更新偏移",
+        "updateColor": "批量更新颜色",
+        "updatePriority": "批量更新优先级"
+      },
+      "palette": {
+        "applyColor": "应用颜色",
+        "applyTag": "应用调色标签",
+        "applyTagOffset": "应用标签偏移",
+        "resetTagOffset": "重置标签偏移",
+        "updateTag": "更新调色标签",
+        "createTagAndReplace": "创建标签并替换",
+        "renameTagReferences": "重命名标签引用",
+        "deleteTag": "删除调色标签",
+        "clear": "清空调色板",
+        "savedColor": {
+          "add": "添加收藏颜色",
+          "update": "更新收藏颜色",
+          "delete": "删除收藏颜色",
+          "clear": "清空收藏颜色"
+        }
+      },
+      "stack": {
+        "add": "新增堆栈",
+        "remove": "删除堆栈",
+        "move": "移动堆栈",
+        "clear": "清空堆栈",
+        "rename": "重命名堆栈"
+      },
+      "asset": {
+        "apply": "应用资源"
+      }
+    },
+    "actionScopeLabels": {
+      "part": "部件",
+      "layer": "图层",
+      "batch": "批量",
+      "palette": "调色",
+      "stack": "堆栈",
+      "asset": "资源"
+    },
+    "operationContentLabels": {
+      "color": "颜色",
+      "opacity": "透明度",
+      "shift": "位移",
+      "order": "顺序",
+      "layer": "图层",
+      "property": "属性",
+      "tag": "标签",
+      "general": "编辑"
+    }
   },
   "groupNames": {
     "Item": "道具",
@@ -367,7 +471,7 @@
   },
   "sidePreview": {
     "ariaLabel": "预览面板",
-    "hint": "Hover 文件项查看预览"
+    "hint": "悬停可预览，单击可锁定/解锁当前预览"
   },
   "stackDetail": {
     "ariaLabel": "Stack 详细信息面板",

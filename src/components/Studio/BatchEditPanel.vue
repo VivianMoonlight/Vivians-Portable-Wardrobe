@@ -1,154 +1,318 @@
 <template>
   <div class="batch-edit-controls" v-if="true">
+    <div class="property-tabs">
+      <button
+        class="tab-btn"
+        :class="{ active: activeProperty === 'opacity' }"
+        @click="activeProperty = 'opacity'"
+      >
+        {{ t("batchEdit.opacity") || "Opacity" }}
+      </button>
+      <button
+        class="tab-btn"
+        :class="{ active: activeProperty === 'offset' }"
+        @click="activeProperty = 'offset'"
+      >
+        {{ t("batchEdit.offset") || "Offset" }}
+      </button>
+      <button
+        class="tab-btn"
+        :class="{ active: activeProperty === 'priority' }"
+        @click="activeProperty = 'priority'"
+      >
+        {{ t("batchEdit.priority") || "Priority" }}
+      </button>
+      <button
+        class="tab-btn"
+        :class="{ active: activeProperty === 'color' }"
+        @click="activeProperty = 'color'"
+      >
+        {{ t("batchEdit.color") || "Color" }}
+      </button>
+    </div>
 
-        <div class="property-tabs">
-          <button class="tab-btn" :class="{ active: activeProperty === 'opacity' }" @click="activeProperty = 'opacity'">{{ t('batchEdit.opacity') || 'Opacity' }}</button>
-          <button class="tab-btn" :class="{ active: activeProperty === 'offset' }" @click="activeProperty = 'offset'">{{ t('batchEdit.offset') || 'Offset' }}</button>
-          <button class="tab-btn" :class="{ active: activeProperty === 'priority' }" @click="activeProperty = 'priority'">{{ t('batchEdit.priority') || 'Priority' }}</button>
-          <button class="tab-btn" :class="{ active: activeProperty === 'color' }" @click="activeProperty = 'color'">{{ t('batchEdit.color') || 'Color' }}</button>
-        </div>
-
-        <div class="control-section" v-if="activeProperty === 'opacity'">
-          <div class="section-header">
-            <label>{{ t('batchEdit.opacity') || 'Opacity' }}</label>
-            <div class="mode-toggle">
-              <button class="mode-btn" :class="{ active: opacityMode === 'absolute' }" @click="opacityMode = 'absolute'" :title="t('batchEdit.absoluteMode') || 'Set to exact value'">=</button>
-              <button class="mode-btn" :class="{ active: opacityMode === 'relative' }" @click="opacityMode = 'relative'" :title="t('batchEdit.relativeMode') || 'Adjust by amount'">±</button>
-            </div>
-          </div>
-          <div class="control-group">
-            <input type="range" class="slider-input" v-model.number="opacityValue" :min="opacityMode === 'relative' ? -100 : 0" :max="100" @input="applyOpacity" />
-            <input v-model.number="opacityValue" class="num-input" type="number" :min="opacityMode === 'relative' ? -100 : 0" :max="100" step="1" @input="applyOpacity" />
-            <span class="unit">%</span>
-          </div>
-        </div>
-
-        <div class="control-section" v-if="activeProperty === 'offset'">
-          <div class="section-header">
-            <label>{{ t('batchEdit.offset') || 'Offset' }}</label>
-            <div class="mode-toggle">
-              <button class="mode-btn" :class="{ active: offsetMode === 'absolute' }" @click="offsetMode = 'absolute'" :title="t('batchEdit.absoluteMode') || 'Set to exact value'">=</button>
-              <button class="mode-btn" :class="{ active: offsetMode === 'relative' }" @click="offsetMode = 'relative'" :title="t('batchEdit.relativeMode') || 'Adjust by amount'">±</button>
-            </div>
-          </div>
-
-          <div class="visual-move-section">
-            <button class="visual-move-toggle" :class="{ active: visualMoveEnabled }" @click="toggleVisualMove" :title="t('batchEdit.visualMove') || 'Visual Move'">
-              <span class="icon">✥</span>
-              <span class="label">{{ t('batchEdit.visualMove') || 'Visual Move' }}</span>
-            </button>
-            <span class="info-text" v-if="visualMoveEnabled">{{ selectedCount === 1 ? t('batchEdit.visualMoveSingle') : t('batchEdit.visualMoveMultiple', { count: selectedCount }) }}</span>
-          </div>
-
-          <div class="control-group">
-            <div class="offset-input-group">
-              <span class="input-label">X</span>
-              <input v-model.number="offsetX" class="num-input" type="number" step="1" :placeholder="offsetMode === 'relative' ? '0' : 'X'" @input="applyOffset" />
-            </div>
-            <div class="offset-input-group">
-              <span class="input-label">Y</span>
-              <input v-model.number="offsetY" class="num-input" type="number" step="1" :placeholder="offsetMode === 'relative' ? '0' : 'Y'" @input="applyOffset" />
-            </div>
-          </div>
-        </div>
-
-        <div class="control-section" v-if="activeProperty === 'priority'">
-          <div class="section-header">
-            <label>{{ t('batchEdit.priority') || 'Priority' }}</label>
-            <div class="mode-toggle">
-              <button class="mode-btn" :class="{ active: priorityMode === 'absolute' }" @click="priorityMode = 'absolute'" :title="t('batchEdit.absoluteMode') || 'Set to exact value'">=</button>
-              <button class="mode-btn" :class="{ active: priorityMode === 'relative' }" @click="priorityMode = 'relative'" :title="t('batchEdit.relativeMode') || 'Adjust by amount'">±</button>
-            </div>
-          </div>
-          <div class="control-group">
-            <input v-model.number="priorityValue" class="num-input" type="number" step="1" :placeholder="priorityMode === 'relative' ? '0' : 'Priority'" @input="applyPriority" />
-          </div>
-        </div>
-
-        <div class="control-section" v-if="activeProperty === 'color'">
-          <div class="section-header">
-            <label>{{ t('batchEdit.color') || 'Color' }}</label>
-            <span class="info-text" v-if="colorableCount < selectedCount">{{ colorableCount }} {{ t('batchEdit.colorable') || 'colorable' }}</span>
-          </div>
-          <div class="control-group">
-            <button class="palette-btn" @click="openPaletteForBatch" :disabled="selectedCount === 0" :title="t('batchEdit.openPalette') || 'Open palette to select color'">🎨 {{ t('batchEdit.selectColor') || 'Select Color' }}</button>
-          </div>
-        </div>
-
-        <!-- Actions -->
-        <div class="actions-section">
-          <button class="clear-btn" @click="clearSelection">
-            {{ t('batchEdit.clearSelection') || 'Clear Selection' }}
+    <div class="control-section" v-if="activeProperty === 'opacity'">
+      <div class="section-header">
+        <label>{{ t("batchEdit.opacity") || "Opacity" }}</label>
+        <div class="mode-toggle">
+          <button
+            class="mode-btn"
+            :class="{ active: opacityMode === 'absolute' }"
+            @click="opacityMode = 'absolute'"
+            :title="t('batchEdit.absoluteMode') || 'Set to exact value'"
+          >
+            =
+          </button>
+          <button
+            class="mode-btn"
+            :class="{ active: opacityMode === 'relative' }"
+            @click="opacityMode = 'relative'"
+            :title="t('batchEdit.relativeMode') || 'Adjust by amount'"
+          >
+            ±
           </button>
         </div>
+      </div>
+      <div class="control-group">
+        <input
+          type="range"
+          class="slider-input"
+          v-model.number="opacityValue"
+          :min="opacityMode === 'relative' ? -100 : 0"
+          :max="100"
+          @input="applyOpacity"
+        />
+        <input
+          v-model.number="opacityValue"
+          class="num-input"
+          type="number"
+          :min="opacityMode === 'relative' ? -100 : 0"
+          :max="100"
+          step="1"
+          @input="applyOpacity"
+        />
+        <span class="unit">%</span>
+      </div>
+    </div>
 
-        <div v-if="resultSummary" class="result-summary" :class="resultSummary.type">
-          <span>{{ t('batchEdit.updated') || 'Updated' }}: {{ resultSummary.updated }}</span>
-          <span>{{ t('batchEdit.skipped') || 'Skipped' }}: {{ resultSummary.skipped }}</span>
-          <span>{{ t('batchEdit.failed') || 'Failed' }}: {{ resultSummary.failed }}</span>
+    <div class="control-section" v-if="activeProperty === 'offset'">
+      <div class="section-header">
+        <label>{{ t("batchEdit.offset") || "Offset" }}</label>
+        <div class="mode-toggle">
+          <button
+            class="mode-btn"
+            :class="{ active: offsetMode === 'absolute' }"
+            @click="offsetMode = 'absolute'"
+            :title="t('batchEdit.absoluteMode') || 'Set to exact value'"
+          >
+            =
+          </button>
+          <button
+            class="mode-btn"
+            :class="{ active: offsetMode === 'relative' }"
+            @click="offsetMode = 'relative'"
+            :title="t('batchEdit.relativeMode') || 'Adjust by amount'"
+          >
+            ±
+          </button>
         </div>
+      </div>
 
-        <!-- Feedback Message -->
-        <div v-if="feedbackMessage" class="feedback-message" :class="feedbackType">
-          {{ feedbackMessage }}
+      <div class="visual-move-section">
+        <button
+          class="visual-move-toggle"
+          :class="{ active: visualMoveEnabled }"
+          @click="toggleVisualMove"
+          :title="t('batchEdit.visualMove') || 'Visual Move'"
+        >
+          <span class="icon">✥</span>
+          <span class="label">{{ t("batchEdit.visualMove") || "Visual Move" }}</span>
+        </button>
+        <span class="info-text" v-if="visualMoveEnabled">{{
+          selectedCount === 1
+            ? t("batchEdit.visualMoveSingle")
+            : t("batchEdit.visualMoveMultiple", { count: selectedCount })
+        }}</span>
+      </div>
+
+      <div class="control-group">
+        <div class="offset-input-group">
+          <span class="input-label">X</span>
+          <input
+            v-model.number="offsetX"
+            class="num-input"
+            type="number"
+            step="1"
+            :placeholder="offsetMode === 'relative' ? '0' : 'X'"
+            @input="applyOffset"
+          />
         </div>
+        <div class="offset-input-group">
+          <span class="input-label">Y</span>
+          <input
+            v-model.number="offsetY"
+            class="num-input"
+            type="number"
+            step="1"
+            :placeholder="offsetMode === 'relative' ? '0' : 'Y'"
+            @input="applyOffset"
+          />
+        </div>
+      </div>
+    </div>
+
+    <div class="control-section" v-if="activeProperty === 'priority'">
+      <div class="section-header">
+        <label>{{ t("batchEdit.priority") || "Priority" }}</label>
+        <div class="mode-toggle">
+          <button
+            class="mode-btn"
+            :class="{ active: priorityMode === 'absolute' }"
+            @click="priorityMode = 'absolute'"
+            :title="t('batchEdit.absoluteMode') || 'Set to exact value'"
+          >
+            =
+          </button>
+          <button
+            class="mode-btn"
+            :class="{ active: priorityMode === 'relative' }"
+            @click="priorityMode = 'relative'"
+            :title="t('batchEdit.relativeMode') || 'Adjust by amount'"
+          >
+            ±
+          </button>
+        </div>
+      </div>
+      <div class="control-group">
+        <input
+          v-model.number="priorityValue"
+          class="num-input"
+          type="number"
+          step="1"
+          :placeholder="priorityMode === 'relative' ? '0' : 'Priority'"
+          @input="applyPriority"
+        />
+      </div>
+    </div>
+
+    <div class="control-section" v-if="activeProperty === 'color'">
+      <div class="section-header">
+        <label>{{ t("batchEdit.color") || "Color" }}</label>
+        <span class="info-text" v-if="colorableCount < selectedCount"
+          >{{ colorableCount }} {{ t("batchEdit.colorable") || "colorable" }}</span
+        >
+      </div>
+      <div class="control-group">
+        <button
+          class="palette-btn"
+          @click="openPaletteForBatch"
+          :disabled="selectedCount === 0"
+          :title="t('batchEdit.openPalette') || 'Open palette to select color'"
+        >
+          🎨 {{ t("batchEdit.selectColor") || "Select Color" }}
+        </button>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="actions-section">
+      <button class="clear-btn" @click="clearSelection">
+        {{ t("batchEdit.clearSelection") || "Clear Selection" }}
+      </button>
+    </div>
+
+    <div v-if="resultSummary" class="result-summary" :class="resultSummary.type">
+      <span>{{ t("batchEdit.updated") || "Updated" }}: {{ resultSummary.updated }}</span>
+      <span>{{ t("batchEdit.skipped") || "Skipped" }}: {{ resultSummary.skipped }}</span>
+      <span>{{ t("batchEdit.failed") || "Failed" }}: {{ resultSummary.failed }}</span>
+    </div>
+
+    <!-- Feedback Message -->
+    <div v-if="feedbackMessage" class="feedback-message" :class="feedbackType">
+      {{ feedbackMessage }}
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { useStudioStore } from '@/stores/studioStore.js'
-import { throttle } from '@/utils/performance.js'
+import { ref, computed, watch, onBeforeUnmount } from "vue";
+import { useI18n } from "vue-i18n";
+import { useStudioDomainStores } from "@/stores/studio";
+import { createStudioSelectionBridge } from "@/stores/studio/selectionBridge";
+import { throttle } from "@/utils/performance.js";
 
-const { t } = useI18n()
-const store = useStudioStore()
+const { t } = useI18n();
+const { studio: store, selection } = useStudioDomainStores();
+const selectionBridge = createStudioSelectionBridge(store, selection);
 
 // UI State
-const feedbackMessage = ref('')
-const feedbackType = ref('success') // 'success' | 'warning' | 'error'
-const activeProperty = ref('opacity')
-const resultSummary = ref(null)
+const feedbackMessage = ref("");
+const feedbackType = ref("success"); // 'success' | 'warning' | 'error'
+const activeProperty = ref("opacity");
+const resultSummary = ref(null);
 
 // Opacity
-const opacityMode = ref('absolute')
-const opacityValue = ref(100)
+const opacityMode = ref("absolute");
+const opacityValue = ref(100);
 
 // Offset
-const offsetMode = ref('absolute')
-const offsetX = ref(0)
-const offsetY = ref(0)
+const offsetMode = ref("absolute");
+const offsetX = ref(0);
+const offsetY = ref(0);
 
 // Priority
-const priorityMode = ref('absolute')
-const priorityValue = ref(0)
+const priorityMode = ref("absolute");
+const priorityValue = ref(0);
 
 // Visual Move
-const visualMoveEnabled = ref(false)
+const visualMoveEnabled = ref(false);
+const batchInteractionActive = ref(false);
+const batchInteractionCommitTimerId = ref(null);
 
 // Computed
-const hasSelections = computed(() => store.selectedLayers && store.selectedLayers.length > 0)
-const selectedCount = computed(() => store.selectedLayers ? store.selectedLayers.length : 0)
+const hasSelections = computed(
+  () => selectionBridge.selectedLayersCount > 0
+);
+const selectedCount = computed(() =>
+  selectionBridge.selectedLayersCount
+);
 
 const colorableCount = computed(() => {
-  const data = store.getSelectedLayersData()
-  return data.filter(d => d.layer && d.layer.isColorable).length
-})
+  const data = store.getSelectedLayersData();
+  return data.filter((d) => d.layer && d.layer.isColorable).length;
+});
 
 // Methods
 
-function showFeedback(message, type = 'success') {
-  feedbackMessage.value = message
-  feedbackType.value = type
+function beginBatchEditInteraction() {
+  if (batchInteractionActive.value) return;
+  try {
+    store.beginInteraction("batch-edit", { source: "BatchEditPanel" });
+    batchInteractionActive.value = true;
+  } catch (e) {
+    batchInteractionActive.value = false;
+  }
+}
+
+function clearBatchEditInteractionCommitTimer() {
+  const timerId = batchInteractionCommitTimerId.value;
+  if (timerId !== null) {
+    clearTimeout(timerId);
+    batchInteractionCommitTimerId.value = null;
+  }
+}
+
+function commitBatchEditInteraction() {
+  if (!batchInteractionActive.value) return;
+  clearBatchEditInteractionCommitTimer();
+  batchInteractionActive.value = false;
+  try {
+    store.commitInteraction();
+  } catch (e) {
+    /* ignore */
+  }
+}
+
+function scheduleBatchEditInteractionCommit(delayMs = 160) {
+  clearBatchEditInteractionCommitTimer();
+  batchInteractionCommitTimerId.value = setTimeout(() => {
+    batchInteractionCommitTimerId.value = null;
+    commitBatchEditInteraction();
+  }, Math.max(0, Number(delayMs) || 0));
+}
+
+function showFeedback(message, type = "success") {
+  feedbackMessage.value = message;
+  feedbackType.value = type;
   setTimeout(() => {
-    feedbackMessage.value = ''
-  }, 3000)
+    feedbackMessage.value = "";
+  }, 3000);
 }
 
 function setResultSummary(result) {
   if (!result) {
-    resultSummary.value = null
-    return
+    resultSummary.value = null;
+    return;
   }
 
   if (!result.success) {
@@ -156,143 +320,284 @@ function setResultSummary(result) {
       updated: 0,
       skipped: 0,
       failed: selectedCount.value,
-      type: 'error'
-    }
-    return
+      type: "error",
+    };
+    return;
   }
 
-  const updated = Number(result.updatedCount || 0)
-  const skipped = Number(result.skippedCount || Math.max(0, selectedCount.value - updated))
-  const failed = 0
+  const updated = Number(result.updatedCount || 0);
+  const skipped = Number(
+    result.skippedCount || Math.max(0, selectedCount.value - updated)
+  );
+  const failed = 0;
 
   resultSummary.value = {
     updated,
     skipped,
     failed,
-    type: skipped > 0 ? 'warning' : 'success'
-  }
+    type: skipped > 0 ? "warning" : "success",
+  };
 }
 
 // Throttled apply functions
-const applyOpacity = throttle(function() {
-  try {
-    if (selectedCount.value === 0) return
-    
-    // Set property focus to indicate batch editing mode
-    store.setPropertyFocus('opacity')
-    
-    const result = store.batchUpdateOpacity(opacityValue.value, opacityMode.value)
-    setResultSummary(result)
-    if (result.success) {
-      showFeedback(`${t('batchEdit.updated') || 'Updated'} ${result.updatedCount} ${t('batchEdit.layers') || 'layers'}`, 'success')
-    } else {
-      showFeedback(result.reason || t('batchEdit.failed') || 'Operation failed', 'error')
-    }
-  } catch (e) {
-    console.error('[BatchEditPanel] applyOpacity error:', e)
-    showFeedback(t('batchEdit.error') || 'An error occurred', 'error')
-  }
-}, 100, { leading: true, trailing: true })
+const applyOpacity = throttle(
+  function () {
+    try {
+      if (selectedCount.value === 0) return;
 
-const applyOffset = throttle(function() {
-  try {
-    if (selectedCount.value === 0) return
-    
-    // Set property focus to indicate batch editing mode
-    store.setPropertyFocus('drawing')
-    
-    const x = offsetX.value || 0
-    const y = offsetY.value || 0
-    const result = store.batchUpdateOffset(x, y, offsetMode.value)
-    setResultSummary(result)
-    if (result.success) {
-      showFeedback(`${t('batchEdit.updated') || 'Updated'} ${result.updatedCount} ${t('batchEdit.layers') || 'layers'}`, 'success')
-    } else {
-      showFeedback(result.reason || t('batchEdit.failed') || 'Operation failed', 'error')
-    }
-  } catch (e) {
-    console.error('[BatchEditPanel] applyOffset error:', e)
-    showFeedback(t('batchEdit.error') || 'An error occurred', 'error')
-  }
-}, 100, { leading: true, trailing: true })
+      // Set property focus to indicate batch editing mode
+      store.setPropertyFocus("opacity");
 
-const applyPriority = throttle(function() {
-  try {
-    if (selectedCount.value === 0) return
-    
-    // Set property focus to indicate batch editing mode
-    store.setPropertyFocus('priority')
-    
-    const result = store.batchUpdatePriority(priorityValue.value, priorityMode.value)
-    setResultSummary(result)
-    if (result.success) {
-      showFeedback(`${t('batchEdit.updated') || 'Updated'} ${result.updatedCount} ${t('batchEdit.layers') || 'layers'}`, 'success')
-    } else {
-      showFeedback(result.reason || t('batchEdit.failed') || 'Operation failed', 'error')
+      const parsedValue = Number(opacityValue.value);
+      if (!Number.isFinite(parsedValue)) return;
+
+      const normalizedValue =
+        opacityMode.value === "relative"
+          ? Math.max(-100, Math.min(100, parsedValue))
+          : Math.max(0, Math.min(100, parsedValue));
+
+      beginBatchEditInteraction();
+
+      const result = store.execute({
+        type: "batch.updateOpacity",
+        payload: {
+          value: normalizedValue,
+          mode: opacityMode.value,
+        },
+        meta: { deferCommit: true },
+      });
+      scheduleBatchEditInteractionCommit();
+      setResultSummary(result);
+      if (result.success) {
+        showFeedback(
+          `${t("batchEdit.updated") || "Updated"} ${result.updatedCount} ${
+            t("batchEdit.layers") || "layers"
+          }`,
+          "success"
+        );
+      } else {
+        showFeedback(
+          result.reason || t("batchEdit.failed") || "Operation failed",
+          "error"
+        );
+      }
+    } catch (e) {
+      console.error("[BatchEditPanel] applyOpacity error:", e);
+      showFeedback(t("batchEdit.error") || "An error occurred", "error");
     }
-  } catch (e) {
-    console.error('[BatchEditPanel] applyPriority error:', e)
-    showFeedback(t('batchEdit.error') || 'An error occurred', 'error')
-  }
-}, 100, { leading: true, trailing: true })
+  },
+  100,
+  { leading: true, trailing: true }
+);
+
+const applyOffset = throttle(
+  function () {
+    try {
+      if (selectedCount.value === 0) return;
+
+      // Set property focus to indicate batch editing mode
+      store.setPropertyFocus("drawing");
+
+      const parsedX = Number(offsetX.value);
+      const parsedY = Number(offsetY.value);
+
+      const x =
+        offsetMode.value === "relative"
+          ? Number.isFinite(parsedX)
+            ? parsedX
+            : 0
+          : Number.isFinite(parsedX)
+          ? parsedX
+          : null;
+      const y =
+        offsetMode.value === "relative"
+          ? Number.isFinite(parsedY)
+            ? parsedY
+            : 0
+          : Number.isFinite(parsedY)
+          ? parsedY
+          : null;
+
+      if (offsetMode.value === "absolute" && x === null && y === null) return;
+
+      beginBatchEditInteraction();
+
+      const result = store.execute({
+        type: "batch.updateOffset",
+        payload: {
+          x,
+          y,
+          mode: offsetMode.value,
+        },
+        meta: { deferCommit: true },
+      });
+      scheduleBatchEditInteractionCommit();
+      setResultSummary(result);
+      if (result.success) {
+        showFeedback(
+          `${t("batchEdit.updated") || "Updated"} ${result.updatedCount} ${
+            t("batchEdit.layers") || "layers"
+          }`,
+          "success"
+        );
+      } else {
+        showFeedback(
+          result.reason || t("batchEdit.failed") || "Operation failed",
+          "error"
+        );
+      }
+    } catch (e) {
+      console.error("[BatchEditPanel] applyOffset error:", e);
+      showFeedback(t("batchEdit.error") || "An error occurred", "error");
+    }
+  },
+  100,
+  { leading: true, trailing: true }
+);
+
+const applyPriority = throttle(
+  function () {
+    try {
+      if (selectedCount.value === 0) return;
+
+      // Set property focus to indicate batch editing mode
+      store.setPropertyFocus("priority");
+
+      const parsedValue = Number(priorityValue.value);
+      if (!Number.isFinite(parsedValue)) return;
+
+      beginBatchEditInteraction();
+
+      const result = store.execute({
+        type: "batch.updatePriority",
+        payload: {
+          value: parsedValue,
+          mode: priorityMode.value,
+        },
+        meta: { deferCommit: true },
+      });
+      scheduleBatchEditInteractionCommit();
+      setResultSummary(result);
+      if (result.success) {
+        showFeedback(
+          `${t("batchEdit.updated") || "Updated"} ${result.updatedCount} ${
+            t("batchEdit.layers") || "layers"
+          }`,
+          "success"
+        );
+      } else {
+        showFeedback(
+          result.reason || t("batchEdit.failed") || "Operation failed",
+          "error"
+        );
+      }
+    } catch (e) {
+      console.error("[BatchEditPanel] applyPriority error:", e);
+      showFeedback(t("batchEdit.error") || "An error occurred", "error");
+    }
+  },
+  100,
+  { leading: true, trailing: true }
+);
 
 function openPaletteForBatch() {
   try {
     // Set property focus to indicate batch editing mode
-    store.setPropertyFocus('color')
+    store.setPropertyFocus("color");
 
-    const colorableTargets = store.getPaletteTargetsForCurrentSelection()
-    
+    const colorableTargets = store.getPaletteTargetsForCurrentSelection();
+
     if (colorableTargets.length === 0) {
-      setResultSummary({ success: true, updatedCount: 0, skippedCount: selectedCount.value })
-      showFeedback(t('batchEdit.noColorableLayers') || 'No colorable layers selected', 'warning')
-      return
+      setResultSummary({
+        success: true,
+        updatedCount: 0,
+        skippedCount: selectedCount.value,
+      });
+      showFeedback(
+        t("batchEdit.noColorableLayers") || "No colorable layers selected",
+        "warning"
+      );
+      return;
     }
-    
-    store.openPalettePanel(colorableTargets)
-    setResultSummary({ success: true, updatedCount: colorableTargets.length, skippedCount: Math.max(0, selectedCount.value - colorableTargets.length) })
+
+    store.openPalettePanel(colorableTargets);
+    setResultSummary({
+      success: true,
+      updatedCount: colorableTargets.length,
+      skippedCount: Math.max(0, selectedCount.value - colorableTargets.length),
+    });
   } catch (e) {
-    console.error('[BatchEditPanel] openPaletteForBatch error:', e)
-    showFeedback(t('batchEdit.error') || 'An error occurred', 'error')
+    console.error("[BatchEditPanel] openPaletteForBatch error:", e);
+    showFeedback(t("batchEdit.error") || "An error occurred", "error");
   }
 }
 
 function clearSelection() {
-  store.clearLayerSelection()
+  store.clearLayerSelection();
 }
 
 function toggleVisualMove() {
-  visualMoveEnabled.value = !visualMoveEnabled.value
+  visualMoveEnabled.value = !visualMoveEnabled.value;
   if (visualMoveEnabled.value) {
     // Set property focus to drawing when enabling visual move
-    store.setPropertyFocus('drawing')
-    store.setPreviewTool('move')
+    store.setPropertyFocus("drawing");
+    store.setPreviewTool("move");
   } else {
-    store.setPreviewTool('view')
+    store.setPreviewTool("view");
   }
 }
 
 // Watch for selection changes to reset values
-watch(() => store.selectedLayers.length, (newCount, oldCount) => {
-  if (newCount === 0 && oldCount > 0) {
-    // Reset to defaults when selection is cleared
-    opacityValue.value = 100
-    opacityMode.value = 'absolute'
-    offsetX.value = 0
-    offsetY.value = 0
-    offsetMode.value = 'absolute'
-    priorityValue.value = 0
-    priorityMode.value = 'absolute'
-    feedbackMessage.value = ''
-    resultSummary.value = null
-    visualMoveEnabled.value = false
+watch(
+  () => selectionBridge.selectedLayersCount,
+  (newCount, oldCount) => {
+    if (newCount === 0 && oldCount > 0) {
+      clearBatchEditInteractionCommitTimer();
+      if (batchInteractionActive.value) {
+        commitBatchEditInteraction();
+      }
+
+      applyOpacity.cancel();
+      applyOffset.cancel();
+      applyPriority.cancel();
+
+      // Reset to defaults when selection is cleared
+      opacityValue.value = 100;
+      opacityMode.value = "absolute";
+      offsetX.value = 0;
+      offsetY.value = 0;
+      offsetMode.value = "absolute";
+      priorityValue.value = 0;
+      priorityMode.value = "absolute";
+      feedbackMessage.value = "";
+      resultSummary.value = null;
+      visualMoveEnabled.value = false;
+    }
   }
-})
+);
 
 // Sync visual move state with store preview tool
-watch(() => store.previewTool, (newTool) => {
-  visualMoveEnabled.value = newTool === 'move'
-})
+watch(
+  () => selectionBridge.previewTool,
+  (newTool) => {
+    visualMoveEnabled.value = newTool === "move";
+  }
+);
+
+onBeforeUnmount(() => {
+  applyOpacity.flush();
+  applyOffset.flush();
+  applyPriority.flush();
+
+  clearBatchEditInteractionCommitTimer();
+  if (batchInteractionActive.value) {
+    commitBatchEditInteraction();
+  }
+
+  applyOpacity.cancel();
+  applyOffset.cancel();
+  applyPriority.cancel();
+});
 </script>
 
 <style scoped>
@@ -304,7 +609,7 @@ watch(() => store.previewTool, (newTool) => {
   padding: 12px;
   border-radius: var(--radius-md, 8px);
   border: 1px solid var(--color-border-base);
-  background: var(--color-bg-surface);
+  background: var(--color-bg-base);
 }
 
 .property-tabs {
@@ -315,9 +620,9 @@ watch(() => store.previewTool, (newTool) => {
 
 .tab-btn {
   padding: 5px 10px;
-  border: 1px solid var(--color-accent-purple-light);
+  border: 1px solid var(--color-border-base);
   background: var(--color-bg-base);
-  color: var(--color-accent-purple);
+  color: var(--color-text-secondary);
   border-radius: var(--radius-sm, 6px);
   font-size: 12px;
   font-weight: 600;
@@ -325,9 +630,9 @@ watch(() => store.previewTool, (newTool) => {
 }
 
 .tab-btn.active {
-  background: var(--color-accent-purple);
-  color: var(--color-text-inverse);
-  border-color: var(--color-accent-purple);
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  border-color: var(--color-border-focus);
 }
 
 .control-section {
@@ -345,29 +650,30 @@ watch(() => store.previewTool, (newTool) => {
 
 .section-header label {
   font-weight: 600;
-  color: var(--color-accent-purple-dark);
+  color: var(--color-text-primary);
   font-size: 13px;
 }
 
 .info-text {
   font-size: 11px;
-  color: var(--color-accent-purple-light);
+  color: var(--color-text-tertiary);
   font-style: italic;
 }
 
 .mode-toggle {
   display: flex;
   gap: 2px;
-  background: var(--color-accent-purple-bg-subtle);
+  background: var(--color-bg-surface);
   padding: 2px;
   border-radius: var(--radius-sm, 6px);
+  border: 1px solid var(--color-border-light);
 }
 
 .mode-btn {
   padding: 4px 10px;
-  border: none;
+  border: 1px solid transparent;
   background: transparent;
-  color: var(--color-accent-purple);
+  color: var(--color-text-secondary);
   font-size: 12px;
   font-weight: 600;
   border-radius: var(--radius-xs, 4px);
@@ -376,13 +682,13 @@ watch(() => store.previewTool, (newTool) => {
 }
 
 .mode-btn:hover {
-  background: var(--color-accent-purple-bg-light);
+  background: var(--color-bg-hover);
 }
 
 .mode-btn.active {
-  background: var(--color-accent-purple);
-  color: var(--color-text-inverse);
-  box-shadow: 0 1px 3px var(--color-panel-glassmorphism-shadow);
+  background: var(--color-bg-base);
+  color: var(--color-text-primary);
+  border-color: var(--color-border-focus);
 }
 
 .control-group {
@@ -402,22 +708,22 @@ watch(() => store.previewTool, (newTool) => {
   width: 60px;
   padding: 6px 8px;
   border-radius: var(--radius-sm, 6px);
-  border: 1px solid var(--color-accent-purple-light);
+  border: 1px solid var(--color-border-base);
   font-size: 13px;
   outline: none;
   background: var(--color-bg-base);
-  color: var(--color-accent-purple-dark);
+  color: var(--color-text-primary);
   text-align: center;
 }
 
 .num-input:focus {
-  border-color: var(--color-accent-purple);
-  box-shadow: 0 0 0 3px var(--color-accent-purple-bg-light);
+  border-color: var(--color-border-focus);
+  box-shadow: 0 0 0 2px var(--color-selection-single-bg);
 }
 
 .unit {
   font-size: 12px;
-  color: var(--color-accent-purple-light);
+  color: var(--color-text-muted);
   font-weight: 600;
 }
 
@@ -429,7 +735,7 @@ watch(() => store.previewTool, (newTool) => {
 
 .input-label {
   font-size: 11px;
-  color: var(--color-accent-purple-light);
+  color: var(--color-text-tertiary);
   font-weight: 700;
 }
 
@@ -447,7 +753,11 @@ watch(() => store.previewTool, (newTool) => {
 }
 
 .apply-btn:hover {
-  background: linear-gradient(135deg, var(--color-accent-purple-hover), var(--color-primary-hover));
+  background: linear-gradient(
+    135deg,
+    var(--color-accent-purple-hover),
+    var(--color-primary-hover)
+  );
   box-shadow: 0 2px 6px var(--color-panel-glassmorphism-shadow);
 }
 
@@ -457,9 +767,9 @@ watch(() => store.previewTool, (newTool) => {
 
 .palette-btn {
   padding: 8px 16px;
-  border: 1px solid var(--color-accent-purple-light);
+  border: 1px solid var(--color-border-base);
   background: var(--color-bg-base);
-  color: var(--color-accent-purple);
+  color: var(--color-text-primary);
   border-radius: var(--radius-sm, 6px);
   font-size: 13px;
   font-weight: 600;
@@ -469,8 +779,8 @@ watch(() => store.previewTool, (newTool) => {
 }
 
 .palette-btn:hover {
-  background: var(--color-accent-purple-bg-subtle);
-  border-color: var(--color-accent-purple);
+  background: var(--color-bg-hover);
+  border-color: var(--color-border-focus);
 }
 
 .visual-move-section {
@@ -486,10 +796,9 @@ watch(() => store.previewTool, (newTool) => {
   justify-content: center;
   gap: 6px;
   padding: 8px 12px;
-  border: 1px solid var(--color-accent-purple-light);
-  background: var(--color-panel-glassmorphism-bg);
-  backdrop-filter: blur(4px);
-  color: var(--color-accent-purple);
+  border: 1px solid var(--color-border-base);
+  background: var(--color-bg-base);
+  color: var(--color-text-primary);
   border-radius: var(--radius-sm, 6px);
   font-size: 13px;
   font-weight: 600;
@@ -498,15 +807,14 @@ watch(() => store.previewTool, (newTool) => {
 }
 
 .visual-move-toggle:hover {
-  background: var(--color-accent-purple-bg-subtle);
-  border-color: var(--color-accent-purple);
+  background: var(--color-bg-hover);
+  border-color: var(--color-border-focus);
 }
 
 .visual-move-toggle.active {
-  background: var(--color-accent-purple);
-  color: var(--color-text-inverse);
-  border-color: var(--color-accent-purple);
-  box-shadow: 0 2px 6px var(--color-panel-glassmorphism-shadow);
+  background: var(--color-selection-single-bg);
+  color: var(--color-text-primary);
+  border-color: var(--color-selection-single-border);
 }
 
 .visual-move-toggle .icon {
@@ -529,14 +837,14 @@ watch(() => store.previewTool, (newTool) => {
   display: flex;
   gap: 8px;
   padding-top: 8px;
-  border-top: 1px dashed var(--color-panel-glassmorphism-border);
+  border-top: 1px solid var(--color-border-light);
 }
 
 .clear-btn {
   padding: 7px 14px;
   border: 1px solid var(--color-border-light);
   background: var(--color-bg-base);
-  color: var(--color-primary);
+  color: var(--color-text-primary);
   border-radius: var(--radius-sm, 6px);
   font-size: 12px;
   font-weight: 600;
@@ -547,7 +855,7 @@ watch(() => store.previewTool, (newTool) => {
 
 .clear-btn:hover {
   background: var(--color-bg-hover);
-  border-color: var(--color-accent-purple-light);
+  border-color: var(--color-border-focus);
 }
 
 .feedback-message {

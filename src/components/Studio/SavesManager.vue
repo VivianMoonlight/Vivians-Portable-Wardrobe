@@ -20,7 +20,7 @@
       </div>
 
       <div v-for="save in sortedSaves" :key="save.id" class="save-item"
-        :class="{ 'auto-save': save.isAutoSave, 'current': save.id === store.currentSaveId }">
+        :class="{ 'auto-save': save.isAutoSave, 'current': save.id === persistence.currentSaveId }">
         
         <div class="save-icon">
           {{ save.isAutoSave ? '⚡' : '💾' }}
@@ -29,7 +29,7 @@
         <div class="save-info">
           <div class="save-name" v-if="renamingId !== save.id">
             {{ save.name }}
-            <span v-if="save.id === store.currentSaveId" class="current-badge">
+            <span v-if="save.id === persistence.currentSaveId" class="current-badge">
               {{ t('savesManager.current') || 'Current' }}
             </span>
           </div>
@@ -71,12 +71,12 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useStudioStore } from '@/stores/studioStore'
+import { useStudioDomainStores } from '@/stores/studio'
 import { StudioStorageService } from '@/services/StudioStorageService'
 import * as DialogService from '@/services/DialogService'
 
 const { t } = useI18n()
-const store = useStudioStore()
+const { studio: store, persistence } = useStudioDomainStores()
 const emit = defineEmits(['close'])
 
 const saves = ref([])
@@ -106,7 +106,10 @@ async function createNewSave() {
   )
   if (!name) return
 
-  const result = await store.saveStudioSession(name)
+  const result = await store.execute({
+    type: 'saves.save',
+    payload: { name }
+  })
   if (result.success) {
     refreshList()
     await DialogService.alert(t('savesManager.saved') || 'Saved successfully!')
@@ -121,7 +124,10 @@ async function loadSave(id) {
   )
   if (!confirmed) return
 
-  const result = await store.loadStudioSession(id)
+  const result = await store.execute({
+    type: 'saves.load',
+    payload: { id }
+  })
   if (result.success) {
     await DialogService.alert(t('savesManager.loaded') || 'Loaded successfully!')
   } else {
@@ -134,10 +140,22 @@ function startRename(id, currentName) {
   renameValue.value = currentName
 }
 
-function commitRename(id) {
-  if (renameValue.value.trim()) {
-    StudioStorageService.renameSave(id, renameValue.value.trim())
-    refreshList()
+async function commitRename(id) {
+  const normalizedName = renameValue.value.trim()
+  if (normalizedName) {
+    const result = await store.execute({
+      type: 'saves.rename',
+      payload: {
+        id,
+        newName: normalizedName
+      }
+    })
+
+    if (result?.success) {
+      refreshList()
+    } else {
+      await DialogService.alert(t('savesManager.renameFailed') || 'Rename failed')
+    }
   }
   cancelRename()
 }
@@ -153,7 +171,10 @@ async function deleteSave(id) {
   )
   if (!confirmed) return
 
-  const result = StudioStorageService.deleteSave(id)
+  const result = await store.execute({
+    type: 'saves.delete',
+    payload: { id }
+  })
   if (result.success) {
     refreshList()
   } else {

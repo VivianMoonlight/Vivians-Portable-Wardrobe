@@ -1,0 +1,314 @@
+# StudioStore 拆分蓝图
+
+## 目标
+- 把 `src/stores/studioStore.js` 从“全域中心”拆为“领域 store + 协调层”。
+- 先迁移低耦合 UI 领域，再迁移高风险渲染与核心数据领域。
+- 保持现有行为兼容，迁移期间只允许单向收敛，不新增长期桥接债务。
+- 目标形态固化为“分域状态 + 星型命令中枢（混合）”，而不是回退到单一星型状态中心。
+
+## 架构原则（目标形态）
+- 状态单一真值按领域归属：`core/asset/render/selection/palette/panel/history/persistence` 各自持有。
+- 写路径统一经命令中枢：`StudioFacade + StudioCommandBus + TransactionCoordinator`。
+- 读路径优先 domain/bridge 直读，不把查询重新收拢到单一状态中心。
+- 跨域一致性通过命令中枢的事务与元数据编排保证，不通过跨域直接写 state 保证。
+
+## 现状锚点（基于代码）
+- 状态入口在 `src/stores/studioStore.js` 的 state/getters/actions 主体，体量和职责都过大。
+- 面板系统逻辑集中在 open/close/toggle/hydrate/persist 一组方法，和业务编辑逻辑耦合。
+- 渲染路径同时包含 RenderService 与 OptimizedRenderService，并叠加 render pipeline 开关。
+- 历史与存储链路并存：UndoRedo、本地 autosave、多存档、导入导出。
+- 资产查询已直接调用 AssetIndexService，但 asset.apply 仍通过 AssetActions。
+
+## 目标领域切分图
+```mermaid
+flowchart LR
+  subgraph UI[UI Layer]
+    VC[Vue Components]
+  end
+
+  subgraph HUB[Command Hub]
+    CMD[StudioFacade + StudioCommandBus + TransactionCoordinator]
+  end
+
+  subgraph Stores[Pinia Domain Stores]
+    CORE[studioCoreStore\nstack + focusedPart + part uid]
+    PANEL[studioPanelStore\npanelRuntime + hostActive + layout hydrate/persist]
+    SELECT[studioSelectionStore\nselection + focusState + replaceTarget]
+    PALETTE[studioPaletteStore\npaletteMap + savedColors + palette ops]
+    RENDER[studioRenderStore\nmergedAppearance + renderer + scheduler + preview stack]
+    HISTORY[studioHistoryStore\nundo/redo + historyRevision]
+    PERSIST[studioPersistenceStore\nimport/export + autosave + sessions]
+    ASSET[studioAssetStore\nasset data load + asset apply orchestration]
+  end
+
+  subgraph Services[Service Layer]
+    AIDX[AssetIndexService]
+    PTR[LayerTranslator / PartPatchApplier]
+    PRIO[PriorityService]
+    RS[RenderService / OptimizedRenderService]
+    STOR[StorageActions + SaveActions + StudioStorageService]
+  end
+
+  VC --> CMD
+  VC -. read .-> PANEL
+  VC -. read .-> SELECT
+  VC -. read .-> PALETTE
+  VC -. read .-> ASSET
+  VC -. read .-> CORE
+  VC -. read .-> RENDER
+  VC -. read .-> HISTORY
+  VC -. read .-> PERSIST
+
+  CMD --> PANEL
+  CMD --> SELECT
+  CMD --> PALETTE
+  CMD --> ASSET
+  CMD --> CORE
+  CMD --> RENDER
+  CMD --> HISTORY
+  CMD --> PERSIST
+
+  ASSET --> AIDX
+  ASSET --> PTR
+  PALETTE --> PTR
+  RENDER --> RS
+  PERSIST --> STOR
+  CORE --> PTR
+  HISTORY --> STOR
+```
+
+## 领域职责边界
+
+### 1) studioCoreStore
+- 负责:
+  - stacks、selectedIndex、focusedPartIndex、_partUidCounter。
+  - 核心 stack CRUD（add/remove/move/select/clear）。
+  - 只维护 Part 级真值，不负责 UI 面板、autosave、渲染策略。
+- 输入:
+  - 来自 selection/asset/palette 的变更命令。
+- 输出:
+  - 对 render/history 的统一 mutation 事件。
+
+### 2) studioPanelStore
+- 负责:
+  - panelRuntime、hostActivePanels、panelStates、workspace/mobile tab。
+  - openPanel/closePanel/togglePanel、hydrateUiLayout/persistUiLayout。
+- 不负责:
+  - 任何编辑数据写入、渲染刷新、历史记录。
+
+### 3) studioSelectionStore
+- 负责:
+  - focusState、selectedLayers、selectionMode、replaceTarget、activeFocusContext。
+  - 多选与 replace 模式状态机。
+- 不负责:
+  - 直接写 stacks 数据。
+
+### 4) studioPaletteStore
+- 负责:
+  - paletteMap、savedColors、_paletteNextCounter、paletteMode。
+  - tag 与颜色映射操作。
+- 协作:
+  - 通过 command 调用 core 进行 Part 层写入。
+
+### 5) studioRenderStore
+- 负责:
+  - mergedAppearanceData、preview stack、scheduler、渲染触发。
+  - renderer 选择与 render pipeline 编排。
+- 不负责:
+  - stack 结构修改、存储读写。
+
+### 6) studioHistoryStore
+- 负责:
+  - UndoRedoManager 生命周期、historyRevision、undo/redo/jump。
+- 输入:
+  - 来自 core 的 mutation 快照。
+
+### 7) studioPersistenceStore
+- 负责:
+  - 本地持久化、导入导出、autosave、多存档。
+- 不负责:
+  - 业务编辑状态机。
+
+### 8) studioAssetStore
+- 负责:
+  - assetGroupsRaw/assetIndex 加载与查询。
+  - asset.apply 的编排（调用 core 写入 + render/history 通知）。
+
+## 迁移顺序（建议执行波次）
+
+### Wave 0: 建立迁移护栏（先做）
+- 新增 `src/stores/studio/index.js` 作为组合出口。
+- 统一 command 入口（星型命令中枢），禁止组件直接跨域写对方 state。
+- 定义最小契约:
+  - `execute(command)`：统一写入入口（`type/payload/meta`）。
+  - `query(name, params)`：统一查询入口（允许逐步收口到 domain query service）。
+  - `beginInteraction/applyDelta/commitInteraction/cancelInteraction`：统一交互事务入口。
+  - domain action 契约显式化：禁止 domain 之间互相直接改写 state。
+
+完成标准:
+- 组件层仅使用组合出口，不再直接 import 单体 studioStore。
+- 组件写路径统一经命令中枢，读路径统一经 domain/bridge。
+
+### Wave 1: 先拆 panel（最低风险）
+- 从 `studioStore` 移出:
+  - panelRuntime/hostActivePanels/panelStates。
+  - open/close/toggle/hydrate/persist panel 相关 action。
+- 新建 `src/stores/studio/panelStore.js`。
+
+完成标准:
+- 面板行为与现状一致。
+- panel 本地持久化键保持兼容。
+
+### Wave 2: 拆 history（低到中风险）
+- 移出 UndoRedo 管理与 history panel 显隐逻辑。
+- 新建 `src/stores/studio/historyStore.js`。
+- 保留旧入口代理一版后删除。
+
+完成标准:
+- undo/redo/jump 行为一致。
+- historyRevision 仍可驱动 UI 刷新。
+
+### Wave 3: 拆 persistence（中风险）
+- 移出 autosave、save/load session、import/export。
+- 新建 `src/stores/studio/persistenceStore.js`。
+- 统一保存前清洗流程（strip layerEntries）只保留一个实现。
+
+完成标准:
+- autosave、手动存档、导入导出端到端可用。
+
+### Wave 4: 拆 selection/focus（中风险）
+- 移出 selectedLayers/selectionMode/focusState/replaceTarget。
+- 新建 `src/stores/studio/selectionStore.js`。
+- 通过 core command 触发数据变更，不直接改 stacks。
+
+实施进度（2026-04-02）:
+- 已完成第一部：`selectionStore` 与 `selectionBridge` 已接入，`studioStore` 通过 `_syncSelectionDomainState` 进行兼容期双写同步。
+- 已完成第二部：`Studio.vue`、`PartInspectorPanel.vue`、`PreviewWidget.vue`、`PartListPanel.vue`、`AssetSelectorPanel.vue`、`BatchEditPanel.vue`、`LayerGroup.vue`、`ColorableLayer.vue` 的 selection/focus 读取已迁移至 bridge。
+- 收口已启动：`studioStore` state 中 selection/focus 镜像字段已删除，改为通过 `selectionStore` 代理访问。
+- 收口第二批已完成：`_syncSelectionDomainState` 调用链已清理，`focusedPartIndex` 同步收敛为 `_syncFocusedPartIndexToSelectionDomain` 单一路径；`focusState -> selection mirrors` 的反解逻辑已下沉到 `selectionStore.applyFocusState(...)`。
+- 待完成：继续收敛 façade 兼容入口，评估 `studioStore` 中 focus 兼容方法的删除窗口。
+
+完成标准:
+- 单选/多选/replace 三条路径行为不变。
+
+### Wave 5: 拆 palette（中到高风险）
+- 移出 paletteMap/savedColors/tag 相关操作。
+- 新建 `src/stores/studio/paletteStore.js`。
+- palette 写路径统一改为 semantic delta 到 core。
+
+实施进度（2026-04-03）:
+- 已完成第一部：`paletteStore` 与 `paletteBridge` 已接入，`useStudioDomainStores()` 已暴露 `palette` 域。
+- 已完成第二部：`studioStore` state 中 palette 领域镜像字段（`paletteMap`、`savedColors`、`_paletteNextCounter`、`_paletteVersion`、`paletteModeActive`、`paletteWorkMode`、`paletteUpdateFlag`、palette realtime flags）已删除，改为通过 `paletteStore` 代理访问。
+- 已完成第三部：`PalettePanel.vue` 的 palette 读取路径已迁移到 `paletteBridge`（`paletteSnapshot`、`savedColors`、`activePaletteTargets`、`paletteModeActive`、`paletteUpdateFlag`、`paletteMap` 监听）。
+- 已完成第四部：`PalettePanel.vue` 的 palette 写路径已统一经 `paletteBridge -> paletteStore actions` 入口（交互事务、调色、tag 操作、savedColors 操作、advanced 偏移流程）。
+- 已完成第五部：`paletteStore` 已承接 `savedColors` 与 `paletteMode/workMode/open/close` 的真实实现；`studioStore` 对应方法已收敛为薄代理。
+- 已完成第六部：`paletteStore` 已承接 tag 相关核心实现（create/rename/delete/update/apply），`studioStore` 对应入口已收敛为薄代理。
+- 删除窗口评估：当以下条件全部满足后可删除 `studioStore` 的 palette 兼容层。
+  - `StudioCommandBus` 与 `StudioFacade` 的 palette 命令处理不再调用 `studioStore` 的 palette 兼容方法。（已完成）
+  - 全仓检索无组件/业务代码直接调用 `studioStore` 的 palette 兼容方法（仅允许领域桥接/兼容代码存在）。（已完成）
+  - 完成至少一轮 palette 回归（调色、tag offset、批量应用、undo/redo）并通过构建。（已完成自动化项：构建 + 类型检查；交互回归待手工执行）
+
+完成标准:
+- 调色、tag 偏移、批量应用与回退全部可用。
+
+### Wave 6: 拆 render（高风险）
+- 新建 `src/stores/studio/renderStore.js`。
+- 先搬 preview stack 与 scheduler，再搬 renderer 选择与 pipeline。
+- 逐步消除 `useOptimizedRenderer` 双路径依赖，最终单主路径。
+
+实施进度（2026-04-03）:
+- 已完成第一部：`renderStore` 已接入，`useStudioDomainStores()` 已暴露 `render` 域。
+- 已完成第二部：`studioStore` state 中 preview stack 与 scheduler 相关镜像字段（`_previewStack`、`_activePreviewId`、`_refreshScheduler`、`_pendingMergedRefresh`、`_pendingLayerRefresh`）已删除，改为通过 `renderStore` 代理访问。
+- 已完成第三部：`mergedAppearanceData`、`translatedLayerEntries`、renderer/pipeline 相关状态已迁移到 `renderStore` 持有；`studioStore` 对应镜像字段已删除并改为 render 代理。
+- 已完成第四部：preview/refresh/layer refresh/renderer toggle/destroy 等 render 编排入口已收敛为 `studioStore -> renderStore` 薄委托，`renderStore` 内部统一调度刷新执行。
+- 验证：已执行 `npm run build`，构建通过。
+- 待完成：评估 `studioStore` 中 render 兼容入口删除窗口，并完成一轮渲染交互回归（预览覆盖、快速路径、全量刷新、切换 renderer）。
+
+#### studioStore 残留评估（2026-04-03）
+
+迁移清单（应继续下沉到分区 Store）:
+- 迁移到 `studioRenderStore`（并补 `renderBridge`）:
+  - UI 侧仍直接依赖 `studioStore` 的 render 兼容入口：`pushPreview/popPreview/isPreviewActive/refreshMergedAppearanceData`。
+  - UI 侧仍直接读取 render 代理字段：`mergedAppearanceData/renderer/previewRenderer/translatedLayerEntries`。
+  - 目标：组件改为 `render` 域或 `renderBridge` 调用后，删除 `studioStore` 对应 render 兼容入口。
+- 迁移到 `studioAssetStore`:
+  - `assetGroupsRaw/assetIndex` 状态与资产检索方法：`loadAssetData/findAssetsGroupForPart/findAssetGroupEntryForPart/getAssetCandidatesForPart/resolveAssetForPart/getGroupDescriptionForPart/matchesSearchForPart`。
+  - `applyAssetToSelectedStack` 资产应用编排（保留 command 入口，但执行体迁到 asset 域）。
+- 迁移到 `studioSelectionStore`:
+  - 统一焦点/选择状态机实现：`focusLayer/setPropertyFocus/clearFocus/focusClear/clearPropertyFocus`。
+  - 图层选择行为：`toggleSelectionMode/toggleLayerSelection/selectAllLayers/clearLayerSelection/selectLayerRange/getSelectedLayersData`。
+  - 选择派生工具：`getPrimaryMoveLayerIndex/getPaletteTargetsForCurrentSelection/getPaletteTargetForLayer/isPaletteTargetActive`。
+- 迁移到 `studioCoreStore`（Wave 7 主体）:
+  - Part 真值写入链路：`_resolvePartLocation/_applyPartLayerDeltasInternal/applyPartLayerDeltas/batchApplyPartLayerDeltas/updatePartFromLayerEntries/updatePartLayerEntries`。
+  - 兼容回退与重建（已完成）：`UpdateSpecificPartFromLayerEntries/_schedulePartUpdate/UpdateAllStacksPartFromLayerEntries/_doUpdateAllStacksPartFromLayerEntries/batchUpdatePartLayerEntries` 已下沉到 core。
+  - 基础身份与聚焦写入：`ensurePartUid/findPartByUid/_updateFocusedPartInPlace/_updateFocusedPartProperty`。
+  - stack 主写入入口：`add/remove/move/select/clear/rename`。
+- 迁移到 `studioPersistenceStore` + `studioHistoryStore` + `studioPanelStore`（收尾清理）:
+  - `toggleHistoryPanel` 可直接由 panel 域承接，`studioStore` 保留临时代理后删除。
+  - persistence/history 现有方法多数已是薄代理，可在组件全面桥接后清理 `studioStore` 同名兼容入口。
+
+保留清单（应保留为核心/桥接功能）:
+- 命令中枢层（建议逐步从 `studioStore` 壳中外提并固化）:
+  - 命令与查询网关：`execute/query/getQueryNames`。
+  - 交互事务网关：`beginInteraction/applyDelta/commitInteraction/cancelInteraction/forceEndRealtimeScope`。
+  - 统一 mutation 编排：`_finalizeMutation/_finalizePaletteMutation/_finalizeEditorMutation`。
+  - 历史元数据与策略：`_normalizeHistoryMeta/_mergeHistoryMeta/_setDeferredHistoryMeta/_consumePendingHistoryMeta`。
+- 跨域桥接层（迁移期建议保留）:
+  - `useStudioStore` 内 `ensureSelectionProxyBindings/ensurePaletteProxyBindings/ensureRenderProxyBindings`。
+  - `_getPanelStore/_getSelectionStore/_getPaletteStore/_getRenderStore/_getHistoryStore/_getPersistenceStore`。
+  - `_syncPanelDomainState/_syncFocusedPartIndexToSelectionDomain/_syncLegacyFromFocusState` 等双写同步入口。
+  - bridge 约束：仅做读模型拼装与兼容路由，不承载复杂写入编排。
+- 临时核心能力（可在 core/render 契约稳定后再评估迁移）:
+  - `_reconstructStacksForRender`（当前作为 render pipeline 的核心回调契约，含 feature flag 分支）。
+  - `_sanitizeStacksForPersistence`（当前是 persistence 入口统一清洗代理）。
+
+删除窗口判定（render 兼容层）:
+- 当且仅当组件层不再直接调用 `studioStore` 的 render 兼容入口/字段（统一改为 `render` 域或 `renderBridge`）后，删除 `studioStore` render 兼容层。
+
+完成标准:
+- 预览渲染路径稳定。
+- 快速路径与全量刷新回退机制行为一致。
+
+### Wave 7: 收口 core + asset（高风险收尾）
+- 新建 `src/stores/studio/coreStore.js` 与 `src/stores/studio/assetStore.js`。
+- core 保留纯数据写入与选择索引。
+- asset 仅保留加载与 apply 编排；删除 `asset-actions` 纯透传函数。
+
+实施进度（2026-04-03）:
+- 已完成第一部：新增 `coreStore` 与 `assetStore`，并在 `useStudioDomainStores()` 暴露 `core`、`asset` 域。
+- 已完成第二部：`studioStore` 已接入 `_getCoreStore/_getAssetStore`，并将核心 stack 入口（`add/remove/move/select/clear`）以及 `ensurePartUid/findPartByUid` 下沉为 core 委托。
+- 已完成第三部：`studioStore` 资产入口（`loadAssetData`、资产检索族、`applyAssetToSelectedStack`）下沉为 asset 委托。
+- 已完成第四部：Part 真值写入链路底层能力（`_resolvePartLocation`、`_applyPartLayerDeltasInternal`、`_updateFocusedPartInPlace`、`_updateFocusedPartProperty`）已迁入 `coreStore`，`studioStore` 对应入口改为薄代理。
+- 已完成第五部：Part 写入上层编排（`applyPartLayerDeltas`、`batchApplyPartLayerDeltas`、`updatePartFromLayerEntries`、`updatePartLayerEntries`）已迁入 `coreStore`，`studioStore` 对应入口仅保留 facade 分流与薄委托。
+- 已完成第六部：`UpdateSpecificPartFromLayerEntries` 与批量回写链路（`batchUpdatePartLayerEntries`、`_schedulePartUpdate`、`UpdateAllStacksPartFromLayerEntries`、`_doUpdateAllStacksPartFromLayerEntries`）已定责到 `coreStore`；`studioStore` 对应入口均为薄委托。
+- 验证：已执行 `npm run build`，构建通过。
+- 待完成：补 asset/render bridge 后收敛组件直调 `studioStore` 入口，并继续外提命令中枢实现，最终将 `studioStore` 收敛为最小兼容壳（或删除）。
+
+完成标准:
+- `studioStore` 退化为薄 facade（或删除）。
+- 组件仅依赖领域 store，不再依赖单体 store。
+
+## 迁移期间约束
+- 每个 wave 完成后都跑 `npm run build`。
+- 每个 wave 只允许一个“主迁移主题”，避免交叉重构。
+- 不新增新的 legacy alias；旧接口只做代理并标注删除窗口。
+- 对 feature flag 做生命周期标注：保留、固化、删除。
+
+## 回归检查清单
+- 面板:
+  - context/tool dock/bottom tray/modal 的 panel 切换正确。
+- 编辑:
+  - stack CRUD、part focus、replace 流程正确。
+- 颜色:
+  - palette tag、offset、批量应用与撤销正确。
+- 渲染:
+  - hover preview、layer blink、普通刷新正确。
+- 持久化:
+  - autosave、session、import/export、恢复流程正确。
+
+## 推荐首个实现 PR
+- PR-1 只做 Wave 1（panel store 拆分）。
+- PR-2 做 Wave 2（history store）。
+- PR-3 做 Wave 3（persistence store）。
+
+这样可以先把 UI 状态与存储从核心编辑链路里剥离，再进入 selection/palette/render 的高风险区域。

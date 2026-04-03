@@ -5,6 +5,7 @@
  */
 import * as AssetIndex from '@/services/AssetIndexService'
 import { AssetApi } from '@/utils/AssetApi'
+import { applyCraftVisualToPart } from '@/studio/craft-resolver.js'
 
 function buildInitialPartProperty(asset, groupName, assetName, fastClone) {
   const sourceTypeRecord = asset?.Property?.TypeRecord
@@ -139,7 +140,7 @@ export function matchesSearchForPart(state, part, term) {
  * @returns {Object} Updated state
  */
 export function applyAssetToSelectedStack(state, asset, replaceTarget = null, helpers) {
-  const { ensurePartUid, _buildLayerEntriesWithCache, fastClone } = helpers
+  const { ensurePartUid, _buildLayerEntriesWithCache, fastClone, resolveCraftForAssetSlot } = helpers
 
   if (!asset) {
     return { stacks: state.stacks, focusedPartIndex: state.focusedPartIndex }
@@ -162,8 +163,17 @@ export function applyAssetToSelectedStack(state, asset, replaceTarget = null, he
       Group: groupName,
       Color: asset.DefaultColor ?? asset.DefaultColour ?? asset.Default ?? null
     }
+
     if (partProperty) {
       newPart.Property = partProperty
+    }
+
+    const resolvedCraft = typeof resolveCraftForAssetSlot === 'function'
+      ? resolveCraftForAssetSlot({ assetName: asset.Name, groupName })
+      : null
+    if (resolvedCraft) {
+      newPart.Craft = resolvedCraft
+      applyCraftVisualToPart(newPart, resolvedCraft, fastClone)
     }
 
     try { ensurePartUid(newPart) } catch (e) { console.warn(e) }

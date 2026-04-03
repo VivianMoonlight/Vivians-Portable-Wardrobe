@@ -33,7 +33,7 @@
 
       <!-- Optional overlay hints -->
       <div v-if="activeTool === 'move' && store.canUseMoveTool" class="mode-hint">
-        {{ isDraggingMultipleLayers ? t('previewWidget.moveHintMultiple', { count: store.selectedLayers.length }) : t('previewWidget.moveHint') }}
+        {{ isDraggingMultipleLayers ? t('previewWidget.moveHintMultiple', { count: selectedLayersCount }) : t('previewWidget.moveHint') }}
       </div>
     </div>
   </div>
@@ -42,14 +42,16 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount, watch, nextTick, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useStudioStore } from '@/stores/studioStore'
+import { useStudioDomainStores } from '@/stores/studio'
+import { createStudioSelectionBridge } from '@/stores/studio/selectionBridge'
 import { RenderApi } from '@/utils/RenderApi'
 import { hostWindow, doc } from '@/utils/host-window.js'
 import { throttle } from '@/utils/performance.js'
 
 const { t } = useI18n()
 
-const store = useStudioStore()
+const { studio: store, panel, selection } = useStudioDomainStores()
+const selectionBridge = createStudioSelectionBridge(store, selection)
 const canvas = ref(null)
 const wrap = ref(null)
 let resizeObserver = null
@@ -58,13 +60,16 @@ const hasItem = computed(() => !!store.selectedElement && !!store.focusedPart)
 const selectedName = computed(() => store.selectedElement?.name ?? '')
 
 // Layer Manager State
-const layerManagerActive = computed(() => store.layerManagerActive)
+const layerManagerActive = computed(() => panel.layerManagerActive)
 function toggleLayerManager() {
   store.toggleLayerManager()
 }
 
 // Tools state - now from store
-const activeTool = computed(() => store.previewTool)
+const activeTool = computed(() => selectionBridge.previewTool)
+const selectedLayersCount = computed(() => selectionBridge.selectedLayersCount)
+const selectionMode = computed(() => selectionBridge.selectionMode)
+const focusedPartIndex = computed(() => selectionBridge.focusedPartIndex)
 
 // Interaction state for pan / zoom
 const latestSrc = ref(null) // keep latest source (image/canvas/video) to redraw during pan/zoom
@@ -212,48 +217,114 @@ function refresh() {
 // -------------------------------------------------------------
 const updateLayerPosition = throttle((layerIdx, newLeft, newTop) => {
   const part = store.focusedPart
-  if (!part || !Array.isArray(part.layerEntries)) return
+  if (!part) return
 
-  // Create a clean copy of layer entries to modify
-  const entriesCopy = part.layerEntries.map(e => ({ ...e }))
-  const layer = entriesCopy[layerIdx]
+  const entries = typeof store.getLayerEntriesForPart === 'function'
+    ? store.getLayerEntriesForPart(part, { forceRebuild: false, clone: false })
+    : []
+  if (!Array.isArray(entries) || entries.length === 0) return
 
-  if (layer) {
-    layer.drawingLeft = Math.round(newLeft)
-    layer.drawingTop = Math.round(newTop)
+  const directLayer = entries.find(entry => Number(entry?.layerIndex) === Number(layerIdx))
+  const layer = directLayer || entries[layerIdx]
+  if (!layer) return
 
-    // Commit to store
-    store.updatePartFromLayerEntries(entriesCopy)
+  const layerIndex = Number(layer.layerIndex)
+  if (!Number.isFinite(layerIndex)) return
+
+  const delta = {
+    layerIndex,
+    drawingLeft: Math.round(newLeft),
+    drawingTop: Math.round(newTop)
   }
-}, 32) // ~30fps throttle
+
+  if (Array.isArray(layer.subLayers) && layer.subLayers.length > 0) {
+    const subLayers = layer.subLayers
+      .map(sub => {
+        const subIndex = Number(sub?.layerIndex)
+        if (!Number.isFinite(subIndex)) return null
+        return {
+          layerIndex: subIndex,
+          drawingLeft: Math.round(newLeft),
+          drawingTop: Math.round(newTop)
+        }
+      })
+      .filter(Boolean)
+
+    if (subLayers.length > 0) {
+      delta.subLayers = subLayers
+    }
+  }
+
+  store.execute({
+    type: 'part.applyLayerDeltas',
+    payload: { part, deltas: [delta] },
+    meta: { deferCommit: true }
+  })
+}, 32, { leading: true, trailing: true }) // ~30fps throttle
 
 // Throttled multi-layer update
 const updateMultipleLayersOffset = throttle((deltaX, deltaY) => {
-  // Get all selected layers and update each with absolute position based on their initial offset + delta
   const layersData = store.getSelectedLayersData()
-  
+  const partsMap = new Map()
+
   for (let i = 0; i < layersData.length && i < multiLayerStartOffsets.value.length; i++) {
-    const { layer } = layersData[i]
-    const startOffset = multiLayerStartOffsets.value[i]
-    
-    layer.drawingLeft = Math.round(startOffset.left + deltaX)
-    layer.drawingTop = Math.round(startOffset.top + deltaY)
-    if (layer.subLayers) {
-      layer.subLayers.forEach((subLayer) => {
-        subLayer.drawingLeft = layer.drawingLeft
-        subLayer.drawingTop = layer.drawingTop
+    const target = layersData[i]
+    const part = target?.part
+    if (!part) continue
+
+    const layerIndex = Number(target?.selection?.layerIndex)
+    if (!Number.isFinite(layerIndex)) continue
+
+    const partKey = part._uid || `${target?.selection?.stackIndex ?? 's'}:${target?.selection?.partIndex ?? 'p'}`
+    if (!partsMap.has(partKey)) {
+      partsMap.set(partKey, {
+        part,
+        deltas: []
       })
     }
+
+    const startOffset = multiLayerStartOffsets.value[i] || { left: 0, top: 0 }
+    const nextLeft = Math.round((startOffset.left || 0) + deltaX)
+    const nextTop = Math.round((startOffset.top || 0) + deltaY)
+
+    const group = partsMap.get(partKey)
+    const currentLayer = target?.layer
+    const delta = {
+      layerIndex,
+      drawingLeft: nextLeft,
+      drawingTop: nextTop
+    }
+
+    if (Array.isArray(currentLayer?.subLayers) && currentLayer.subLayers.length > 0) {
+      const subLayers = currentLayer.subLayers
+        .map(sub => {
+          const subIndex = Number(sub?.layerIndex)
+          if (!Number.isFinite(subIndex)) return null
+          return {
+            layerIndex: subIndex,
+            drawingLeft: nextLeft,
+            drawingTop: nextTop
+          }
+        })
+        .filter(Boolean)
+
+      if (subLayers.length > 0) {
+        delta.subLayers = subLayers
+      }
+    }
+
+    group.deltas.push(delta)
   }
-  
-  // Trigger refresh
-  if (layersData.length > 0) {
-    store._scheduleLayerRefresh()
-    store._schedulePartUpdate()
-    store._scheduleRefresh()
-    store.triggerFocusedPartUpdate()
+
+  const updates = Array.from(partsMap.values())
+  if (updates.length > 0) {
+    store.execute({
+      type: 'layer.batchApplyLayerDeltas',
+      payload: { updates },
+      meta: { deferCommit: true }
+    })
   }
-}, 32) // ~30fps throttle
+}, 32, { leading: true, trailing: true }) // ~30fps throttle
 
 // -------------------------------------------------------------
 // Interaction Handlers (Pointer Logic)
@@ -271,10 +342,14 @@ function onPointerDown(e) {
   if (activeTool.value === 'move') {
     // --- MOVE MODE ---
     const part = store.focusedPart
-    if (part && Array.isArray(part.layerEntries) && part.layerEntries.length > 0) {
+    const entries = part && typeof store.getLayerEntriesForPart === 'function'
+      ? store.getLayerEntriesForPart(part, { forceRebuild: false, clone: false })
+      : []
+
+    if (part && Array.isArray(entries) && entries.length > 0) {
       // Check if we're in multi-selection mode with multiple layers
-      const isMultiMode = store.selectionMode === 'multiple'
-      const selectedCount = store.selectedLayers.length
+      const isMultiMode = selectionMode.value === 'multiple'
+      const selectedCount = selectedLayersCount.value
 
       if (isMultiMode && selectedCount > 0) {
         // Multi-layer dragging
@@ -288,12 +363,15 @@ function onPointerDown(e) {
           left: layer.drawingLeft || 0,
           top: layer.drawingTop || 0
         }))
+        
+        // Begin transaction for multi-layer drag
+        store.beginInteraction('preview-move')
       } else {
         // Single layer dragging (existing behavior)
         const idx = store.getPrimaryMoveLayerIndex(part)
 
-        const stackIndex = store.focusedPartIndex?.stackIndex
-        const partIndex = store.focusedPartIndex?.partIndex
+        const stackIndex = focusedPartIndex.value?.stackIndex
+        const partIndex = focusedPartIndex.value?.partIndex
         if (typeof stackIndex === 'number' && typeof partIndex === 'number') {
           const layerInfo = { stackIndex, partIndex, layerIndex: idx }
           if (!store.isLayerFocused(layerInfo)) {
@@ -302,14 +380,19 @@ function onPointerDown(e) {
           store.setPropertyFocus('drawing')
         }
 
-        const layer = part.layerEntries[idx]
-        targetLayerIndex.value = idx
+        const layer = entries.find(entry => Number(entry?.layerIndex) === Number(idx)) || entries[idx]
+        if (!layer) return
+
+        targetLayerIndex.value = Number.isFinite(Number(layer.layerIndex)) ? Number(layer.layerIndex) : idx
         dragStartLayerVals.value = {
           left: layer.drawingLeft || 0,
           top: layer.drawingTop || 0
         }
         dragStartPointer.value = { x: e.clientX, y: e.clientY }
         isDraggingLayer.value = true
+        
+        // Begin transaction for single-layer drag
+        store.beginInteraction('preview-move')
       }
     }
   } else {
@@ -359,18 +442,46 @@ function onPointerMove(e) {
   }
 }
 
+function finalizePreviewMoveInteraction(commit = true) {
+  if (!store) return false
+
+  let finalized = false
+  try {
+    finalized = commit ? !!store.commitInteraction() : !!store.cancelInteraction()
+  } catch (err) {
+    finalized = false
+  }
+
+  if (!finalized && typeof store.forceEndRealtimeScope === 'function') {
+    try {
+      finalized = !!store.forceEndRealtimeScope('editor', {
+        commit,
+        interactionKind: 'preview-move'
+      })
+    } catch (err) {
+      finalized = false
+    }
+  }
+
+  return finalized
+}
+
 function onPointerUp(e) {
   if (pointerId.value !== null && e.pointerId !== pointerId.value) return
+
+  const hadDrag = isDraggingLayer.value || isDraggingMultipleLayers.value
 
   // Cleanup Move
   if (isDraggingLayer.value) {
     isDraggingLayer.value = false
-    updateLayerPosition.cancel() // clear any pending throttle
+    updateLayerPosition.flush()
+    updateLayerPosition.cancel()
   }
 
   if (isDraggingMultipleLayers.value) {
     isDraggingMultipleLayers.value = false
-    updateMultipleLayersOffset.cancel() // clear any pending throttle
+    updateMultipleLayersOffset.flush()
+    updateMultipleLayersOffset.cancel()
     multiLayerStartOffsets.value = []
   }
 
@@ -382,6 +493,47 @@ function onPointerUp(e) {
     if (c) c.releasePointerCapture && c.releasePointerCapture(e.pointerId)
   } catch (err) { /* ignore */ }
   pointerId.value = null
+
+  // Commit the preview-move interaction if we were dragging
+  if (hadDrag) {
+    finalizePreviewMoveInteraction(true)
+  }
+}
+
+function onPointerCancel(e) {
+  if (pointerId.value !== null && e.pointerId !== pointerId.value) return
+
+  const hadDrag = isDraggingLayer.value || isDraggingMultipleLayers.value
+
+  // Cleanup Move
+  if (isDraggingLayer.value) {
+    isDraggingLayer.value = false
+    updateLayerPosition.flush()
+    updateLayerPosition.cancel()
+  }
+
+  if (isDraggingMultipleLayers.value) {
+    isDraggingMultipleLayers.value = false
+    updateMultipleLayersOffset.flush()
+    updateMultipleLayersOffset.cancel()
+    multiLayerStartOffsets.value = []
+  }
+
+  // Cleanup View
+  isPanning.value = false
+
+  try {
+    const c = canvas.value
+    if (c) c.releasePointerCapture && c.releasePointerCapture(e.pointerId)
+  } catch (err) { /* ignore */ }
+  pointerId.value = null
+
+  // If canvas deltas were already applied, prefer committing to keep history consistent.
+  if (hadDrag) {
+    finalizePreviewMoveInteraction(true)
+  } else {
+    finalizePreviewMoveInteraction(false)
+  }
 }
 
 // Wheel zoom — zoom towards pointer
@@ -438,6 +590,7 @@ onMounted(() => {
     c.addEventListener('pointerdown', onPointerDown)
     hostWindow.addEventListener('pointermove', onPointerMove, { passive: false })
     hostWindow.addEventListener('pointerup', onPointerUp)
+    hostWindow.addEventListener('pointercancel', onPointerCancel)
     c.addEventListener('wheel', onWheel, { passive: false })
     c.addEventListener('dblclick', onDoubleClick)
   }
@@ -453,6 +606,9 @@ onBeforeUnmount(() => {
   }
   hostWindow.removeEventListener('pointermove', onPointerMove)
   hostWindow.removeEventListener('pointerup', onPointerUp)
+  hostWindow.removeEventListener('pointercancel', onPointerCancel)
+  updateLayerPosition.flush()
+  updateMultipleLayersOffset.flush()
   updateLayerPosition.cancel()
   updateMultipleLayersOffset.cancel()
 })
@@ -536,6 +692,7 @@ watch(() => store.mergedAppearanceData, () => updatePreview(), { deep: true })
   padding: 8px;
   box-sizing: border-box;
   height: 100%;
+  min-width: 0;
   min-height: 0;
 }
 
@@ -545,6 +702,7 @@ watch(() => store.mergedAppearanceData, () => updatePreview(), { deep: true })
   align-items: center;
   justify-content: center;
   position: relative;
+  min-width: 0;
   min-height: 0;
   overflow: hidden;
   background: var(--color-bg-surface);
