@@ -180,6 +180,37 @@ export function resolveCraftForAssetSlot({
   return null
 }
 
+export function resolveCraftEntriesForAssetSlot({
+  assetName,
+  groupName,
+  player = null,
+  playerCrafting = null,
+  assetGet = null,
+  cloneFn = deepClone
+} = {}) {
+  const normalizedAssetName = normalizeText(assetName)
+  const normalizedGroupName = normalizeText(groupName)
+  if (!normalizedAssetName || !normalizedGroupName) return []
+
+  const targetPlayer = player || hostWindow?.Player || null
+  const craftingList = Array.isArray(playerCrafting) ? playerCrafting : readPlayerCrafting(targetPlayer)
+  if (!Array.isArray(craftingList) || craftingList.length === 0) return []
+
+  const assetGetFn = resolveAssetGet(assetGet)
+  const cloner = typeof cloneFn === 'function' ? cloneFn : deepClone
+  const out = []
+
+  for (const entry of craftingList) {
+    if (!entry || typeof entry !== 'object') continue
+    const itemName = extractCraftItemName(entry)
+    if (!itemName || itemName !== normalizedAssetName) continue
+    if (!validateGroupMatch(entry, normalizedGroupName, targetPlayer, assetGetFn)) continue
+    out.push(cloner(entry))
+  }
+
+  return out
+}
+
 export function applyCraftVisualToPart(part, craftEntry, cloneFn = deepClone) {
   if (!part || typeof part !== 'object' || !craftEntry || typeof craftEntry !== 'object') {
     return part

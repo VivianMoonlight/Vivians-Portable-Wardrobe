@@ -106,6 +106,8 @@ export const useStudioAssetStore = defineStore('studioAsset', {
         ensurePartUid: studio.ensurePartUid.bind(studio),
         _buildLayerEntriesWithCache: studio._buildLayerEntriesWithCache.bind(studio),
         fastClone: fastClone,
+        selectedCraftEntry: options?.selectedCraftEntry || null,
+        autoResolveCraft: options?.autoResolveCraft === true,
         resolveCraftForAssetSlot: ({ assetName, groupName }) => resolveCraftForAssetSlot({
           assetName,
           groupName,

@@ -2369,7 +2369,12 @@ const useStudioStoreBase = defineStore('studio', {
       if (!options?._fromFacade && isStudioFacadeEnabled()) {
         return this.execute({
           type: 'asset.apply',
-          payload: { asset, replaceTarget },
+          payload: {
+            asset,
+            replaceTarget,
+            selectedCraftEntry: options?.selectedCraftEntry || null,
+            autoResolveCraft: options?.autoResolveCraft === true
+          },
           meta: {}
         })
       }

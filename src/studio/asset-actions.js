@@ -140,7 +140,14 @@ export function matchesSearchForPart(state, part, term) {
  * @returns {Object} Updated state
  */
 export function applyAssetToSelectedStack(state, asset, replaceTarget = null, helpers) {
-  const { ensurePartUid, _buildLayerEntriesWithCache, fastClone, resolveCraftForAssetSlot } = helpers
+  const {
+    ensurePartUid,
+    _buildLayerEntriesWithCache,
+    fastClone,
+    resolveCraftForAssetSlot,
+    selectedCraftEntry,
+    autoResolveCraft = false
+  } = helpers
 
   if (!asset) {
     return { stacks: state.stacks, focusedPartIndex: state.focusedPartIndex }
@@ -168,9 +175,11 @@ export function applyAssetToSelectedStack(state, asset, replaceTarget = null, he
       newPart.Property = partProperty
     }
 
-    const resolvedCraft = typeof resolveCraftForAssetSlot === 'function'
-      ? resolveCraftForAssetSlot({ assetName: asset.Name, groupName })
-      : null
+    const resolvedCraft = selectedCraftEntry && typeof selectedCraftEntry === 'object'
+      ? fastClone(selectedCraftEntry)
+      : (autoResolveCraft && typeof resolveCraftForAssetSlot === 'function'
+          ? resolveCraftForAssetSlot({ assetName: asset.Name, groupName })
+          : null)
     if (resolvedCraft) {
       newPart.Craft = resolvedCraft
       applyCraftVisualToPart(newPart, resolvedCraft, fastClone)

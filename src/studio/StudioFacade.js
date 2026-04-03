@@ -135,6 +135,8 @@ class StudioFacade {
         })
       case 'asset.apply':
         return this.store.applyAssetToSelectedStack(payload.asset, payload.replaceTarget, {
+          selectedCraftEntry: payload.selectedCraftEntry || null,
+          autoResolveCraft: payload.autoResolveCraft === true,
           _fromFacade: true
         })
       case 'history.jump':

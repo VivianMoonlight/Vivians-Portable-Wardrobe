@@ -175,7 +175,7 @@ import * as Palette from "@/services/PaletteService";
 import { hostWindow, doc, setTimeoutHost } from "@/utils/host-window.js";
 import * as DialogService from "@/services/DialogService.js";
 import { throttle, debounce } from "@/utils/performance.js";
-import { readPlayerCrafting, resolveCraftForAssetSlot, applyCraftVisualToPart } from "@/studio/craft-resolver.js";
+import { readPlayerCrafting, resolveCraftEntriesForAssetSlot, applyCraftVisualToPart } from "@/studio/craft-resolver.js";
 
 const { t } = useI18n();
 
@@ -228,6 +228,11 @@ const assets = computed(() => {
 
 const playerCrafting = computed(() => readPlayerCrafting(hostWindow?.Player));
 
+const CRAFT_VARIANT_FLAG = "__vpwCraftVariant";
+const CRAFT_ENTRY_FIELD = "__vpwCraftEntry";
+const BASE_ASSET_FIELD = "__vpwBaseAsset";
+const VARIANT_ID_FIELD = "__vpwVariantId";
+
 function extractAssetName(asset) {
   if (!asset) return "";
   return String(asset.Name || asset.name || "").trim();
@@ -239,12 +244,24 @@ function extractAssetGroupName(asset) {
   return String(asset.Group?.Name || asset.Group?.name || "").trim();
 }
 
-function resolveCraftEntryForAsset(asset) {
-  const assetName = extractAssetName(asset);
-  const groupName = extractAssetGroupName(asset);
-  if (!assetName || !groupName) return null;
+function getBaseAsset(asset) {
+  if (!asset || typeof asset !== "object") return asset;
+  return asset[BASE_ASSET_FIELD] || asset;
+}
 
-  return resolveCraftForAssetSlot({
+function getCraftEntryFromAsset(asset) {
+  if (!asset || typeof asset !== "object") return null;
+  const entry = asset[CRAFT_ENTRY_FIELD];
+  return entry && typeof entry === "object" ? entry : null;
+}
+
+function resolveCraftEntriesForBaseAsset(asset) {
+  const baseAsset = getBaseAsset(asset);
+  const assetName = extractAssetName(baseAsset);
+  const groupName = extractAssetGroupName(baseAsset);
+  if (!assetName || !groupName) return [];
+
+  return resolveCraftEntriesForAssetSlot({
     assetName,
     groupName,
     player: hostWindow?.Player,
@@ -254,13 +271,42 @@ function resolveCraftEntryForAsset(asset) {
   });
 }
 
+const selectableAssets = computed(() => {
+  const out = [];
+  for (const candidate of assets.value || []) {
+    out.push(candidate);
+
+    if (!candidate || typeof candidate !== "object") continue;
+    const craftEntries = resolveCraftEntriesForBaseAsset(candidate);
+    if (!Array.isArray(craftEntries) || craftEntries.length === 0) continue;
+
+    for (let i = 0; i < craftEntries.length; i++) {
+      const craftEntry = craftEntries[i];
+      const craftName = (craftEntry?.Name || craftEntry?.Item || "craft").toString().trim();
+      const variantId = `${extractAssetGroupName(candidate)}::${extractAssetName(candidate)}::${craftName}::${i}`;
+      out.push({
+        ...candidate,
+        [CRAFT_VARIANT_FLAG]: true,
+        [CRAFT_ENTRY_FIELD]: craftEntry,
+        [BASE_ASSET_FIELD]: candidate,
+        [VARIANT_ID_FIELD]: variantId,
+      });
+    }
+  }
+  return out;
+});
+
+function resolveCraftEntryForAsset(asset) {
+  return getCraftEntryFromAsset(asset);
+}
+
 function isCraftAsset(asset) {
   return !!resolveCraftEntryForAsset(asset);
 }
 
 const craftCandidateCount = computed(() => {
   let count = 0;
-  for (const a of assets.value || []) {
+  for (const a of selectableAssets.value || []) {
     if (isCraftAsset(a)) count++;
   }
   return count;
@@ -269,15 +315,17 @@ const craftCandidateCount = computed(() => {
 // filtered assets according to searchTerm
 const filteredAssets = computed(() => {
   const term = (searchTerm.value || "").trim().toLowerCase();
-  let list = assets.value || [];
+  let list = selectableAssets.value || [];
   if (craftOnly.value) {
     list = list.filter((a) => isCraftAsset(a));
   }
   if (!term) return list;
   return list.filter((a) => {
     try {
-      const primary = assetPrimary(a).toLowerCase();
+      const primary = displayPrimaryLabel(a).toLowerCase();
       if (primary.includes(term)) return true;
+      const secondary = (displaySecondaryLabel(a) || "").toLowerCase();
+      if (secondary.includes(term)) return true;
       const name = (a && (a.Name || a.name || "")).toString().toLowerCase();
       if (name.includes(term)) return true;
       const desc = (a && (a.Description || a.Desc || a.description || ""))
@@ -303,7 +351,7 @@ function assetPrimary(a) {
 }
 
 function displayPrimaryLabel(asset) {
-  const fallbackPrimary = assetPrimary(asset);
+  const fallbackPrimary = assetPrimary(getBaseAsset(asset));
   const craftEntry = resolveCraftEntryForAsset(asset);
   const craftName = (craftEntry?.Name || "").toString().trim();
   if (!craftName) return fallbackPrimary;
@@ -311,7 +359,7 @@ function displayPrimaryLabel(asset) {
 }
 
 function displaySecondaryLabel(asset) {
-  const fallbackPrimary = assetPrimary(asset);
+  const fallbackPrimary = assetPrimary(getBaseAsset(asset));
   const craftEntry = resolveCraftEntryForAsset(asset);
   const craftName = (craftEntry?.Name || "").toString().trim();
   if (!craftName) return "";
@@ -324,6 +372,7 @@ function assetKey(a, idx) {
   try {
     if (!a) return String(idx);
     if (typeof a === "string") return "s_" + a;
+    if (a[VARIANT_ID_FIELD]) return "v_" + a[VARIANT_ID_FIELD];
     if (a.Name) return "n_" + a.Name;
     if (a.name) return "n_" + a.name;
     return "i_" + idx;
@@ -672,7 +721,7 @@ onBeforeUnmount(() => {
 });
 
 watch(
-  assets,
+  selectableAssets,
   () => {
     // When assets change, rebind/redraw canvases
     setTimeoutHost(() => redrawAllThumbs(), 12);
@@ -727,11 +776,15 @@ async function applyAsset(asset) {
   }
 
   try {
+    const baseAsset = getBaseAsset(asset);
+    const selectedCraftEntry = resolveCraftEntryForAsset(asset);
+
     const res = await store.execute({
       type: "asset.apply",
       payload: {
-        asset,
+        asset: baseAsset,
         replaceTarget: replaceTarget.value,
+        selectedCraftEntry,
       },
     });
 
@@ -757,37 +810,25 @@ async function applyAsset(asset) {
    ------------------------- */
 
 function createPreviewDataWithAsset(asset) {
+  const baseAsset = getBaseAsset(asset);
+  const selectedCraftEntry = resolveCraftEntryForAsset(asset);
+
   const groupName =
-    (asset.Group &&
-      (typeof asset.Group === "string"
-        ? asset.Group
-        : asset.Group.Name || asset.Group.name)) ||
+    (baseAsset.Group &&
+      (typeof baseAsset.Group === "string"
+        ? baseAsset.Group
+        : baseAsset.Group.Name || baseAsset.Group.name)) ||
     undefined;
 
   const newPart = {
-    Name: asset.Name,
+    Name: baseAsset.Name,
     Group: groupName,
-    Color: asset.DefaultColor ?? asset.DefaultColour ?? asset.Default ?? null,
+    Color: baseAsset.DefaultColor ?? baseAsset.DefaultColour ?? baseAsset.Default ?? null,
   };
 
-  const resolvedCraft = resolveCraftForAssetSlot({
-    assetName: asset.Name,
-    groupName,
-    player: hostWindow?.Player,
-    playerCrafting: playerCrafting.value,
-    assetGet: typeof hostWindow?.AssetGet === "function" ? hostWindow.AssetGet.bind(hostWindow) : null,
-    cloneFn: (v) => {
-      try {
-        return JSON.parse(JSON.stringify(v));
-      } catch (e) {
-        return v;
-      }
-    },
-  });
-
-  if (resolvedCraft) {
-    newPart.Craft = resolvedCraft;
-    applyCraftVisualToPart(newPart, resolvedCraft, (v) => {
+  if (selectedCraftEntry) {
+    newPart.Craft = selectedCraftEntry;
+    applyCraftVisualToPart(newPart, selectedCraftEntry, (v) => {
       try {
         return JSON.parse(JSON.stringify(v));
       } catch (e) {
