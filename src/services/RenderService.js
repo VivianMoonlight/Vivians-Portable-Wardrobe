@@ -9,7 +9,7 @@
  * - bigCanvas is used as a higher-resolution render target and we typically don't read it,
  *   so we use a normal context for it.
  */
-import { hostWindow, doc, setTimeoutHost } from '@/utils/host-window.js';
+import { doc, setTimeoutHost, clearTimeoutHost } from '@/utils/host-window.js';
 import { createCanvas, get2DContext } from '@/utils/canvas.js';
 
 export class RenderService {
@@ -27,6 +27,9 @@ export class RenderService {
         // item -> { promise, resolve, reject, timer }
         // keep pending waiters for getThumbCanvas()
         this._pending = new WeakMap();
+
+        // BC drawing uses shared global scratch canvases, so serialize render calls.
+        this._renderQueue = Promise.resolve();
     }
 
     _createThumbCanvas() {
@@ -43,6 +46,20 @@ export class RenderService {
      */
     _get2DContext(canvas, { willReadFrequently = false } = {}) {
         return get2DContext(canvas, willReadFrequently ? { willReadFrequently: true } : {});
+    }
+
+    _enqueueRender(task) {
+        const run = this._renderQueue.then(task, task);
+        this._renderQueue = run.catch(() => { });
+        return run;
+    }
+
+    _getDataKey(data) {
+        try {
+            return JSON.stringify(Array.isArray(data) ? data : []);
+        } catch {
+            return String(Date.now());
+        }
     }
 
     /**
@@ -129,17 +146,24 @@ export class RenderService {
              this.previewItem = meta;
          } */
 
+        const dataKey = this._getDataKey(item.data);
         if (this.registry.has(item) === false) {
             const canvas = this._createPreviewCanvas();
             const meta = {
                 canvas,
                 lastHash: null,
                 stopped: false,
-                timerId: null
+                timerId: null,
+                dataKey
             };
             this.registry.set(item, meta);
         }
         const meta = this.registry.get(item);
+        meta.dataKey = dataKey;
+        if (meta.timerId) {
+            clearTimeoutHost(meta.timerId);
+            meta.timerId = null;
+        }
         const ctx = this._get2DContext(meta.canvas, { willReadFrequently: true });
         if (!ctx) {
             console.error('[RenderService] renderPreviewWithItem: Failed to get canvas context');
@@ -174,7 +198,12 @@ export class RenderService {
         }
 
         // 若已有启动则返回已有 canvas
-        if (this.registry.has(item)) return this.registry.get(item).canvas;
+        const dataKey = this._getDataKey(item.data);
+        const existing = this.registry.get(item);
+        if (existing) {
+            if (existing.dataKey === dataKey) return existing.canvas;
+            this.stopFor(item);
+        }
 
         const canvas = this._createThumbCanvas();
 
@@ -188,20 +217,15 @@ export class RenderService {
             stopped: false,
             timerId: null,
             resolvePromise: externalResolve,
-            promise: stablePromise
+            promise: stablePromise,
+            dataKey
         };
         this.registry.set(item, meta);
 
         // bigCanvas: 临时高分辨率渲染目标（我们通常不从它读像素）
-        const bigCanvas = (typeof OffscreenCanvas !== 'undefined')
-            ? new OffscreenCanvas(Math.max(1, this.thumbwidth * 1), Math.max(1, this.thumbheight * 1))
-            : doc.createElement('canvas');
-        if (!(bigCanvas instanceof OffscreenCanvas)) {
-            bigCanvas.width = Math.max(1, this.thumbwidth * 1);
-            bigCanvas.height = Math.max(1, this.thumbheight * 1);
-        } else {
-            // OffscreenCanvas width/height are set in constructor
-        }
+        const bigCanvas = doc.createElement('canvas');
+        bigCanvas.width = Math.max(1, this.thumbwidth);
+        bigCanvas.height = Math.max(1, this.thumbheight);
 
         const bigCtx = this._get2DContext(bigCanvas, { willReadFrequently: false });
         // thumbnail ctx: we will read pixels frequently to compute hash -> ask for willReadFrequently
@@ -250,30 +274,33 @@ export class RenderService {
         const emptyhs = hashImage(empty);
 
         let lastHashes = [];
+        const maxEmptyRetry = Math.max(retry * 6, 24);
 
         const loop = async (count = 0) => {
             if (meta.stopped) return;
 
             // render into big canvas
             try {
-                if (bigCtx) bigCtx.clearRect(0, 0, bigCanvas.width, bigCanvas.height);
-                // drawCallback is expected to draw into provided ctx/canvas
-                await this.drawCallbacks.drawThumb({
-                    data: item.data,
-                    ctx: bigCtx || /* fallback */ ctx,
-                    canvas: bigCanvas,
-                    width: bigCanvas.width,
-                    height: bigCanvas.height
+                await this._enqueueRender(() => {
+                    if (meta.stopped) return false;
+                    if (bigCtx) bigCtx.clearRect(0, 0, bigCanvas.width, bigCanvas.height);
+                    // drawCallback is expected to draw into provided ctx/canvas
+                    return this.drawCallbacks.drawThumb({
+                        data: item.data,
+                        ctx: bigCtx || /* fallback */ ctx,
+                        canvas: bigCanvas,
+                        width: bigCanvas.width,
+                        height: bigCanvas.height
+                    });
                 });
             } catch (e) {
                 console.warn('[RenderService] drawCallback error:', e);
             }
+            if (meta.stopped) return;
 
             // 将 bigCanvas 缩放绘制到 thumbnail canvas（这一步不会读回像素）
             try {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
-                // If bigCanvas is OffscreenCanvas, drawImage supports it on main thread in some browsers;
-                // otherwise bigCanvas is a DOM canvas and drawImage works normally.
                 ctx.drawImage(
                     bigCanvas, 0, 0, bigCanvas.width, bigCanvas.height,
                     0, 0, canvas.width, canvas.height
@@ -291,6 +318,7 @@ export class RenderService {
                 // 如果 getImageData 继续失败，则退化为最简单的处理：标记稳定并 resolve
                 console.warn('[RenderService] getImageData failed, aborting hash:', e);
                 meta.stopped = true;
+                meta.timerId = null;
                 externalResolve(canvas);
                 this._resolvePending(item, canvas);
                 return;
@@ -299,13 +327,16 @@ export class RenderService {
             lastHashes.push(cur);
             if (lastHashes.length > 2) lastHashes.shift();
 
-            if (lastHashes.length === 2 &&
+            const isStable = lastHashes.length === 2 &&
                 lastHashes[0] === lastHashes[1] &&
                 //lastHashes[1] === lastHashes[2] &&
                 //lastHashes[2] === lastHashes[3] &&
-                meta.lastHash === cur &&
-                (cur !== emptyhs || count > retry)) {
+                meta.lastHash === cur;
+            const isEmpty = cur === emptyhs;
+
+            if (isStable && (!isEmpty || count > maxEmptyRetry)) {
                 meta.stopped = true;
+                meta.timerId = null;
                 // resolve stable promise and pending waiters
                 externalResolve(canvas);
                 this._resolvePending(item, canvas);
@@ -331,13 +362,13 @@ export class RenderService {
         const meta = this.registry.get(item);
         if (!meta) return;
         meta.stopped = true;
-        if (meta.timerId) clearTimeout(meta.timerId);
+        if (meta.timerId) clearTimeoutHost(meta.timerId);
         this.registry.delete(item);
 
         // reject any pending getThumbCanvas waiters
         const pend = this._pending.get(item);
         if (pend) {
-            if (pend.timer) clearTimeout(pend.timer);
+            if (pend.timer) clearTimeoutHost(pend.timer);
             try { pend.reject(new Error('Thumbnail generation stopped')); } catch { }
             this._pending.delete(item);
         }
@@ -349,7 +380,7 @@ export class RenderService {
     _resolvePending(item, canvas) {
         const pend = this._pending.get(item);
         if (pend) {
-            if (pend.timer) clearTimeout(pend.timer);
+            if (pend.timer) clearTimeoutHost(pend.timer);
             try { pend.resolve(canvas); } catch { }
             this._pending.delete(item);
         }

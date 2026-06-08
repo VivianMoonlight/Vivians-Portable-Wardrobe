@@ -4,6 +4,7 @@
  * Provides defensive checks and appropriate fallback values for all external interactions.
  */
 
+import LZString from 'lz-string';
 import { hostWindow } from './host-window.js';
 
 export const ExternalAdapter = {
@@ -37,21 +38,66 @@ export const ExternalAdapter = {
     },
 
     /**
+     * Copies text to clipboard with async API first and execCommand fallback.
+     * @param {string} text
+     */
+    copyTextToClipboard(text) {
+        const nav = hostWindow?.navigator;
+        if (nav?.clipboard?.writeText) {
+            nav.clipboard.writeText(text)
+                .then(() => {
+                    console.log("[ExternalAdapter] Outfit BCX code copied to clipboard");
+                })
+                .catch((error) => {
+                    console.warn("[ExternalAdapter] Clipboard API write failed, falling back:", error);
+                    this.copyTextToClipboardFallback(text);
+                });
+            return;
+        }
+        this.copyTextToClipboardFallback(text);
+    },
+
+    /**
+     * Fallback clipboard copy for environments without navigator.clipboard.
+     * @param {string} text
+     */
+    copyTextToClipboardFallback(text) {
+        try {
+            const doc = hostWindow?.document;
+            if (!doc) {
+                throw new Error('document is unavailable');
+            }
+            const textarea = doc.createElement('textarea');
+            textarea.value = text;
+            textarea.setAttribute('readonly', '');
+            textarea.style.position = 'fixed';
+            textarea.style.top = '-9999px';
+            textarea.style.left = '-9999px';
+            doc.body.appendChild(textarea);
+            textarea.focus();
+            textarea.select();
+            const copied = doc.execCommand('copy');
+            doc.body.removeChild(textarea);
+            if (copied) {
+                console.log("[ExternalAdapter] Outfit BCX code copied to clipboard (fallback)");
+            } else {
+                console.warn("[ExternalAdapter] Clipboard fallback did not copy text");
+            }
+        } catch (e) {
+            console.error("[ExternalAdapter] Failed to copy BCX code to clipboard:", e);
+        }
+    },
+
+    /**
      * Exports outfit data as compressed BCX code and copies to clipboard
      * @param {string} name - Outfit name
      * @param {Array} dataList - Outfit data list
      * @returns {string} Compressed BCX code
      */
-
     exportOutfitAsBCX(name, dataList) {
-        const code = LZString.compressToBase64(JSON.stringify(dataList));
-        //copy to clipboard
-        try {
-            hostWindow.navigator.clipboard.writeText(code);
-            console.log("[ExternalAdapter] Outfit BCX code copied to clipboard");
-        } catch (e) {
-            console.error("[ExternalAdapter] Failed to copy BCX code to clipboard:", e);
-        }
+        const normalizedData = Array.isArray(dataList) ? dataList : [];
+        const code = LZString.compressToBase64(JSON.stringify(normalizedData));
+        this.copyTextToClipboard(code);
         return code;
     },
 

@@ -34,6 +34,72 @@ export async function fetchAssetData() {
   }
 }
 
+function firstNonEmpty(...values) {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return '';
+}
+
+function getPartGroupName(part) {
+  return part?.Group || part?.Asset?.Group?.Name || part?.Asset?.Group?.name || '';
+}
+
+function getPartAssetName(part) {
+  return part?.Name || part?.Asset?.Name || part?.Asset?.name || '';
+}
+
+function getAssetDescriptionFromGame(groupName, assetName, character = null) {
+  if (!groupName || !assetName || typeof hostWindow?.AssetGet !== 'function') return '';
+
+  const families = [
+    character?.AssetFamily,
+    hostWindow?.Player?.AssetFamily,
+    'Female3DCG'
+  ].filter(Boolean);
+
+  for (const family of families) {
+    try {
+      const asset = hostWindow.AssetGet(family, groupName, assetName);
+      const dynamicDescription =
+        typeof asset?.DynamicDescription === 'function'
+          ? asset.DynamicDescription(character || hostWindow?.Player)
+          : '';
+      const description = firstNonEmpty(asset?.Description, dynamicDescription);
+      if (description) return description;
+    } catch (e) {
+      // Try the next available family.
+    }
+  }
+  return '';
+}
+
+export function getPartDisplayName(part, character = null) {
+  if (!part) return '';
+
+  const directDynamicDescription =
+    typeof part?.Asset?.DynamicDescription === 'function'
+      ? (() => {
+          try {
+            return part.Asset.DynamicDescription(character || hostWindow?.Player);
+          } catch (e) {
+            return '';
+          }
+        })()
+      : '';
+  const groupName = getPartGroupName(part);
+  const assetName = getPartAssetName(part);
+
+  return firstNonEmpty(
+    part?.Craft?.Name,
+    part?.Description,
+    part?.Asset?.Description,
+    directDynamicDescription,
+    getAssetDescriptionFromGame(groupName, assetName, character),
+    assetName
+  );
+}
+
 /**
  * Compares two typed asset options for equality
  * @param {JSONObject} optA - First typed asset option
@@ -433,6 +499,7 @@ export const AssetApi = {
   assembleBundle,
   stackOutfitData,
   fetchAssetData,
+  getPartDisplayName,
   applyToCharacter,
   getTypedAssetOptions,
   getVibratingAssetOptions,

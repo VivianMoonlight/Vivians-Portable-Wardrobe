@@ -1,5 +1,5 @@
 import { defineConfig } from 'vite'
-import vue from '@vitejs/plugin-vue'
+import react from '@vitejs/plugin-react'
 import monkey from 'vite-plugin-monkey'
 import path from 'path'
 import fs from 'fs'
@@ -19,53 +19,91 @@ const hosts = [
   //'http://localhost:5174/*',
 ]
 
-export default defineConfig({
-  plugins: [
-    vue(),
-    monkey({
-      entry: path.resolve(__dirname, 'src/main.js'),
-      userscript: {
-        name: 'Vivians Portable Wardrobe',
-        namespace: 'http://tampermonkey.net/',
-        version: VERSION,
-        description: 'Loader for Portable Wardrobe and Vue floating panel',
-        match: hosts,
-        // Tampermonkey auto-update URLs (served via GitHub Pages)
-        updateURL: 'https://vivianmoonlight.github.io/Vivians-Portable-Wardrobe/ViviansPortableWardrobeLoader.user.js',
-        downloadURL: 'https://vivianmoonlight.github.io/Vivians-Portable-Wardrobe/ViviansPortableWardrobeLoader.user.js',
-        // 建议使用相对路径或稳定托管的 URL（不要在示例中写入个人用户名）
-        // 若你在仓库里有 public/icon.png，使用 '/public/icon.png' 或 './icon.png' 并在 build 时内联/打包
-        //icon: '/public/icon.png',
-        grant: [
-          'GM_setValue', 'GM_getValue', 'GM_deleteValue', 'GM_listValues',
-          'GM_info', 'GM.setValue', 'GM.getValue', 'GM.deleteValue', 'GM.listValues'
+/**
+ * Two modes share one config:
+ *
+ * - default (build / `dev:userscript`) → vite-plugin-monkey, emits the Tampermonkey
+ *   userscript and serves a dev userscript that loads into the real game page.
+ * - `--mode mock` (`npm run dev`) → plain React app served from `dev/`, which mounts
+ *   the wardrobe UI into a Shadow DOM with mocked game globals. Instant local UI
+ *   preview without the Bondage Club runtime. The `$` (monkey virtual module) is
+ *   stubbed so host-window.js resolves outside monkey.
+ */
+export default defineConfig(({ mode }) => {
+  const isMock = mode === 'mock'
+
+  const alias = { '@': path.resolve(__dirname, './src') }
+  if (isMock) {
+    alias.$ = path.resolve(__dirname, './dev/monkey-shim.js')
+  }
+
+  return {
+    root: isMock ? path.resolve(__dirname, 'dev') : __dirname,
+    plugins: isMock
+      ? [react()]
+      : [
+          react(),
+          monkey({
+            entry: path.resolve(__dirname, 'src/main.tsx'),
+            userscript: {
+              name: 'Vivians Portable Wardrobe',
+              namespace: 'http://tampermonkey.net/',
+              version: VERSION,
+              description: 'Portable Wardrobe for Bondage Club (React + Mantine, Shadow DOM isolated)',
+              match: hosts,
+              // Tampermonkey auto-update URLs (served via GitHub Pages)
+              updateURL: 'https://vivianmoonlight.github.io/Vivians-Portable-Wardrobe/ViviansPortableWardrobeLoader.user.js',
+              downloadURL: 'https://vivianmoonlight.github.io/Vivians-Portable-Wardrobe/ViviansPortableWardrobeLoader.user.js',
+              //icon: '/public/icon.png',
+              grant: [
+                'GM_setValue', 'GM_getValue', 'GM_deleteValue', 'GM_listValues',
+                'GM_info', 'GM.setValue', 'GM.getValue', 'GM.deleteValue', 'GM.listValues',
+              ],
+            },
+            server: {
+              port: 5173,
+              open: true,
+            },
+            build: {
+              externalGlobals: {},
+              // All UI CSS is imported via `?inline` and injected into the Shadow DOM
+              // manually (see src/ui/shadow.ts); nothing is injected into the host page.
+            },
+          }),
         ],
-        // 你可以在这里补充 @updateURL/@downloadURL（发布时替换为 release/raw 链接）
-      },
-      server: {
-        port: 5173,
-        open: true,
-      },
-      build: {
-        externalGlobals: {},
-      },
-    }),
-  ],
-  build: {
-    outDir: 'dist',
-    sourcemap: true,
-    // 把所有静态资源尽可能内联，避免生成需要额外请求的文件
-    assetsInlineLimit: 10000000,
-    // rollup 配置：尝试把动态 import 的内容内联为单一包（避免生成相对 chunk）
-    rollupOptions: {
-      output: {
-        inlineDynamicImports: true,
-      }
-    }
-  },
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src'),
+    server: {
+      port: isMock ? 5180 : 5173,
+      open: true,
     },
-  },
+    // Keep the dep pre-bundle cache at the repo root (stable across modes, and
+    // not under dev/ which has no node_modules) and pre-declare the heavy deps so
+    // Vite optimizes them up-front instead of mid-session — the latter is what
+    // triggers "504 (Outdated Optimize Dep)".
+    cacheDir: path.resolve(__dirname, 'node_modules/.vite'),
+    optimizeDeps: {
+      include: [
+        'react',
+        'react-dom',
+        'react-dom/client',
+        '@mantine/core',
+        '@mantine/hooks',
+        'i18next',
+        'react-i18next',
+        'zustand',
+        'zustand/vanilla',
+      ],
+    },
+    build: {
+      outDir: 'dist',
+      sourcemap: true,
+      // Inline all static assets so the userscript stays a single file (no extra requests).
+      assetsInlineLimit: 10000000,
+      rollupOptions: {
+        output: {
+          inlineDynamicImports: true,
+        },
+      },
+    },
+    resolve: { alias },
+  }
 })

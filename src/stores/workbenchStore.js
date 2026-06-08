@@ -1,11 +1,11 @@
-import { defineStore } from 'pinia'
+import { defineStore } from './optionsStore'
 import { hostWindow } from '@/utils/host-window.js'
 
 const ACTIVE_TAB_KEY = 'vpw.workbench.activeTab'
 const WARDROBE_UI_KEY = 'vpw.workbench.wardrobeUi'
 const MOBILE_UI_KEY = 'vpw.workbench.mobileUi'
 
-const TABS = ['wardrobe', 'history', 'studio', 'settings']
+const TABS = ['wardrobe', 'history', 'settings']
 
 function safeLoadJson(key, fallback) {
   try {
@@ -62,7 +62,6 @@ export const useWorkbenchStore = defineStore('workbench', {
       tabScrollState: {
         wardrobe: { x: 0, y: 0 },
         history: { x: 0, y: 0 },
-        studio: { x: 0, y: 0 },
         settings: { x: 0, y: 0 }
       },
       wardrobeUi: safeLoadJson(WARDROBE_UI_KEY, defaultWardrobeUi),

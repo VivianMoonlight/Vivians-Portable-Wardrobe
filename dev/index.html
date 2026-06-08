@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VPW Dev Harness</title>
+    <style>
+      /* Loud host-page styles to prove the Shadow DOM UI is fully isolated. */
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Comic Sans MS", cursive;
+        background: repeating-linear-gradient(45deg, #1e3a8a, #1e3a8a 20px, #1d4ed8 20px, #1d4ed8 40px);
+        color: #fde047;
+      }
+      button { all: revert; background: hotpink !important; }
+      .host-note { padding: 24px; font-size: 18px; }
+    </style>
+  </head>
+  <body>
+    <div class="host-note">
+      Mock Bondage Club host page. Intentionally ugly host styles — the wardrobe
+      UI below renders inside a Shadow DOM and should be unaffected.
+    </div>
+    <script type="module" src="./main-dev.tsx"></script>
+  </body>
+</html>

@@ -1,3 +1,5 @@
+import { hostWindow } from './host-window.js';
+
 var bcModSdk = (function () {
     "use strict";
     const SDK_VERSION = "1.2.0";
@@ -390,12 +392,22 @@ var bcModSdk = (function () {
 
 
 export function registerModWithSdk(VERSION_NUMBER) {
-    if (!window.bcModSdk?.registerMod) {
+    // IMPORTANT: prefer the game's shared Mod SDK living on the PAGE window
+    // (unsafeWindow). The SDK embedded above resolves target functions on the
+    // userscript-sandbox `window` (see `let ctx = window`), which cannot see
+    // page globals like `CharacterRefresh` — that mismatch causes
+    // "Function CharacterRefresh to be patched not found".
+    const sdk =
+        (typeof hostWindow !== 'undefined' && hostWindow.bcModSdk) ||
+        (typeof window !== 'undefined' && window.bcModSdk) ||
+        null;
+
+    if (!sdk?.registerMod) {
         console.error('VPW: Mod SDK not available');
         return;
     }
 
-    const modApi = bcModSdk.registerMod(
+    const modApi = sdk.registerMod(
         {
             name: "Portable Wardrobe (VPW)",
             fullName: "Vivians Portable Wardrobe (VPW)",

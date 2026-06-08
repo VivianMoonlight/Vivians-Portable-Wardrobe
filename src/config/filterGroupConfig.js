@@ -41,67 +41,67 @@ export const GROUP_META = {
     Item: {
         displayName: 'Item',
         isHiddenGroup: false,
-        priority: 50
+        priority: 1
     },
     Cosplay: {
         displayName: 'Cosplay',
         isHiddenGroup: false,
-        priority: 20
+        priority: 70
     },
     Hair: {
         displayName: 'Hair',
         isHiddenGroup: false,
-        priority: 1
+        priority: 80
     },
     Headwear: {
         displayName: 'Headwear',
         isHiddenGroup: false,
-        priority: 2
+        priority: 10
     },
     Face: {
         displayName: 'Face',
         isHiddenGroup: false,
-        priority: 4
+        priority: 90
     },
     Markings: {
         displayName: 'Markings / Tattoos',
         isHiddenGroup: false,
-        priority: 15
+        priority: 100
     },
     ClothUpper: {
         displayName: 'Upper Clothing',
         isHiddenGroup: false,
-        priority: 6
+        priority: 20
     },
     ClothLower: {
         displayName: 'Lower Clothing',
         isHiddenGroup: false,
-        priority: 7
+        priority: 30
     },
     Hands: {
         displayName: 'Hands',
         isHiddenGroup: false,
-        priority: 8
+        priority: 40
     },
     Feet: {
         displayName: 'Feet',
         isHiddenGroup: false,
-        priority: 9
+        priority: 50
     },
     Accessories: {
         displayName: 'Accessories',
         isHiddenGroup: false,
-        priority: 10
+        priority: 60
     },
     HiddenBody: {
         displayName: 'Hidden Body Parts',
         isHiddenGroup: true,
-        priority: 100
+        priority: 120
     },
     Appearance: {
         displayName: 'Appearance',
         isHiddenGroup: false,
-        priority: 40 // Default fallback, 放在最后
+        priority: 110 // Default fallback, 放在最后
     }
 }
 

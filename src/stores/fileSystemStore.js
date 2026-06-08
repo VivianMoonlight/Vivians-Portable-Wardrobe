@@ -1,5 +1,4 @@
-import { defineStore } from 'pinia'
-import { toRaw } from 'vue'
+import { defineStore, toRaw } from './optionsStore'
 import { FileSystem } from '@/services/FileSystem'
 import { RenderService } from '@/services/RenderService'
 import { StorageAdapter } from '@/services/StorageAdapter'
@@ -11,7 +10,7 @@ import { classifyToGroup, getGroupMeta, isHiddenGroup } from '@/config/filterGro
 import { hostWindow } from '@/utils/host-window.js'
 import { HistoryRecord } from '@/utils/history_record.js'
 import { ExternalAdapter } from '@/utils/external_adapters.js'
-import { applyPlayerCraftingToBundle } from '@/studio/craft-resolver.js'
+import { applyPlayerCraftingToBundle } from '@/services/craft-resolver.js'
 
 function getGroupNameFromPart(part) {
   if (!part) return ''
@@ -35,11 +34,14 @@ function buildSlotPresenceMap(characterData = [], hoverData = []) {
 const SLOT_MODE_EMPTY = 'empty'
 const SLOT_MODE_ORIGINAL = 'original'
 const SLOT_MODE_INCOMING = 'incoming'
-const SLOT_MODE_AUTO = 'auto'
 
 const DEFAULT_REPLACE_MODE = 'merge-replace'
-const REPLACE_MODE_SET = new Set(['fill-empty', 'merge-replace', 'full-replace'])
-const SLOT_MODE_SET = new Set([SLOT_MODE_EMPTY, SLOT_MODE_ORIGINAL, SLOT_MODE_INCOMING, SLOT_MODE_AUTO])
+const REPLACE_MODE_PRESERVE = 'preserve'
+const REPLACE_MODE_SET = new Set(['fill-empty', 'merge-replace', 'full-replace', REPLACE_MODE_PRESERVE])
+// Slot has three explicit states only: original (keep character) / incoming
+// (take from selected outfit) / empty. The former lazy `auto` state is gone —
+// the default replacement mode is applied eagerly on outfit selection.
+const SLOT_MODE_SET = new Set([SLOT_MODE_EMPTY, SLOT_MODE_ORIGINAL, SLOT_MODE_INCOMING])
 
 function normalizeReplaceMode(mode) {
   return REPLACE_MODE_SET.has(mode) ? mode : DEFAULT_REPLACE_MODE
@@ -47,6 +49,27 @@ function normalizeReplaceMode(mode) {
 
 function normalizeSlotMode(mode) {
   return SLOT_MODE_SET.has(mode) ? mode : SLOT_MODE_EMPTY
+}
+
+/**
+ * Eagerly resolve a slot's explicit mode from the default replacement mode and
+ * the slot's presence. Replaces the old lazy `auto` resolution.
+ */
+function computeModeFromReplace(replaceMode, inChar, inIncoming) {
+  const mode = normalizeReplaceMode(replaceMode)
+  if (mode === REPLACE_MODE_PRESERVE) return SLOT_MODE_EMPTY
+  if (mode === 'fill-empty') {
+    if (inChar) return SLOT_MODE_ORIGINAL
+    if (inIncoming) return SLOT_MODE_INCOMING
+    return SLOT_MODE_EMPTY
+  }
+  if (mode === 'full-replace') {
+    return inIncoming ? SLOT_MODE_INCOMING : SLOT_MODE_EMPTY
+  }
+  // merge-replace (default)
+  if (inIncoming) return SLOT_MODE_INCOMING
+  if (inChar) return SLOT_MODE_ORIGINAL
+  return SLOT_MODE_EMPTY
 }
 
 function groupPartsBySlot(parts = []) {
@@ -58,6 +81,18 @@ function groupPartsBySlot(parts = []) {
     grouped.get(slotKey).push(part)
   }
   return grouped
+}
+
+function buildPartNameMapBySlot(parts = [], character = null) {
+  const grouped = groupPartsBySlot(parts)
+  const map = {}
+  for (const [slotKey, slotParts] of grouped.entries()) {
+    const names = slotParts
+      .map(part => AssetApi.getPartDisplayName(part, character))
+      .filter(Boolean)
+    map[slotKey] = Array.from(new Set(names)).join(', ')
+  }
+  return map
 }
 
 function getCharacterInitKey(character) {
@@ -100,6 +135,7 @@ export const useFileSystemStore = defineStore('fs', {
     history: new HistoryRecord('History', 100),
     currentPath: ['Home'],
     renderer: new RenderService({ drawCallbacks: RenderApi }),
+    thumbnailRefreshVersion: 0,
     character: null,
     storage: new StorageAdapter({
       online: {
@@ -158,7 +194,7 @@ export const useFileSystemStore = defineStore('fs', {
     // legacy alias kept for compatibility with existing callers
     applyMode: DEFAULT_REPLACE_MODE,
 
-    // per-slot control state: { [slotKey]: { mode: 'empty' | 'original' | 'incoming' | 'auto', locked?: boolean } }
+    // per-slot control state: { [slotKey]: { mode: 'empty' | 'original' | 'incoming', locked?: boolean } }
     slotControlMap: {},
 
 
@@ -210,6 +246,16 @@ export const useFileSystemStore = defineStore('fs', {
       const characterData = Array.isArray(state.characterItem) ? state.characterItem : []
       const hoverData = Array.isArray(state.activeItem?.data) ? state.activeItem.data : []
       return buildSlotPresenceMap(characterData, hoverData)
+    },
+
+    characterPartNameBySlot: (state) => {
+      const characterData = Array.isArray(state.characterItem) ? state.characterItem : []
+      return buildPartNameMapBySlot(characterData, state.character || hostWindow?.CurrentCharacter || hostWindow?.Player)
+    },
+
+    incomingPartNameBySlot: (state) => {
+      const hoverData = Array.isArray(state.activeItem?.data) ? state.activeItem.data : []
+      return buildPartNameMapBySlot(hoverData, state.character || hostWindow?.CurrentCharacter || hostWindow?.Player)
     },
 
     cloudUsagePercent: (state) => {
@@ -321,7 +367,7 @@ export const useFileSystemStore = defineStore('fs', {
       }
 
       this.previewItem = { data: [] }
-      this._applyDefaultModeToUnlockedSlots(this.characterItem, this.activeItem.data, { mode: this.defaultReplaceMode })
+      this._applyReplaceModeToAllSlots(this.defaultReplaceMode)
       this.updatePreviewItem()
       this._lastInitializedCharacterKey = characterKey
     },
@@ -637,11 +683,29 @@ export const useFileSystemStore = defineStore('fs', {
       this.renderer.startThumbFor(item0)
     },
 
+    refreshThumbnails(items = null) {
+      const targets = Array.isArray(items)
+        ? items
+        : ((this.currentNode?.children || []).filter(item => item?.type !== 'folder'))
+      const stamp = Date.now()
+      targets.forEach((item, index) => {
+        if (!item || item.type === 'folder') return
+        try { this.renderer.removeCanvas(item) } catch (e) { }
+        item.__thumbRefresh = stamp + index
+      })
+      this.thumbnailRefreshVersion = stamp
+    },
+
     setActiveItem(item, options = {}) {
       const { ignoreLock = false } = options
       if (item === -1) {
         this.activeItem = { data: JSON.parse(JSON.stringify(this.characterItem)) } // deep copy
-        this._ensureSlotControls(this.characterItem, this.activeItem.data)
+        if (this.defaultReplaceMode === REPLACE_MODE_PRESERVE) {
+          this._ensureSlotControls(this.characterItem, this.activeItem.data)
+        } else {
+          // New selection → (re)apply the default replacement mode to all slots.
+          this._applyReplaceModeToAllSlots(this.defaultReplaceMode)
+        }
         this.updatePreviewItem()
         //this._scheduleHistoryAdd()
         return
@@ -657,7 +721,12 @@ export const useFileSystemStore = defineStore('fs', {
       }
 
       this.activeItem = { data: item ? item.data : null }
-      this._ensureSlotControls(this.characterItem, this.activeItem.data)
+      if (this.defaultReplaceMode === REPLACE_MODE_PRESERVE) {
+        this._ensureSlotControls(this.characterItem, this.activeItem?.data)
+      } else {
+        // New outfit selected → reset every slot from the default replacement mode.
+        this._applyReplaceModeToAllSlots(this.defaultReplaceMode)
+      }
       this.updatePreviewItem()
       //this._scheduleHistoryAdd()
     },
@@ -721,7 +790,13 @@ export const useFileSystemStore = defineStore('fs', {
       const resolved = normalizeReplaceMode(mode)
       this.defaultReplaceMode = resolved
       this.applyMode = resolved
-      this._syncActiveFiltersFromSlotControls()
+      if (resolved === REPLACE_MODE_PRESERVE) {
+        this._ensureSlotControls()
+        this.updatePreviewItem()
+        return
+      }
+      // Changing the default re-applies it to all slots immediately.
+      this._applyReplaceModeToAllSlots(resolved)
       this.updatePreviewItem()
     },
 
@@ -756,16 +831,36 @@ export const useFileSystemStore = defineStore('fs', {
       return Array.from(keys)
     },
 
+    // Presence sets for slot resolution: which slot keys the character currently
+    // wears (`inCharacter`) and which the selected/hovered outfit provides
+    // (`inIncoming`). Defaults to the live characterItem / activeItem.
+    _presenceSets(characterData = null, sourceData = null) {
+      const characterParts = Array.isArray(characterData)
+        ? characterData
+        : (Array.isArray(this.characterItem) ? this.characterItem : [])
+      const incomingParts = Array.isArray(sourceData)
+        ? sourceData
+        : (Array.isArray(this.activeItem?.data) ? this.activeItem.data : [])
+      return {
+        inCharacter: new Set(characterParts.map(getGroupNameFromPart).filter(Boolean)),
+        inIncoming: new Set(incomingParts.map(getGroupNameFromPart).filter(Boolean)),
+      }
+    },
+
     _ensureSlotControls(characterData = null, sourceData = null) {
       const keys = this._collectKnownSlotKeys(characterData, sourceData)
       const current = this.slotControlMap || {}
       const next = { ...current }
       let changed = false
 
+      const { inCharacter, inIncoming } = this._presenceSets(characterData, sourceData)
+
       for (const key of keys) {
         const prev = current[key]
         if (!prev) {
-          next[key] = { mode: SLOT_MODE_AUTO, locked: false }
+          // Brand-new slot: seed its explicit mode from the default replacement mode.
+          const mode = computeModeFromReplace(this.defaultReplaceMode, inCharacter.has(key), inIncoming.has(key))
+          next[key] = { mode, locked: false }
           changed = true
           continue
         }
@@ -783,55 +878,104 @@ export const useFileSystemStore = defineStore('fs', {
       return keys
     },
 
-    _syncActiveFiltersFromSlotControls() {
+    // Eagerly (re)apply the default replacement mode to every known slot,
+    // overwriting the whole slotControlMap. Used when an outfit is selected or
+    // the default mode changes.
+    _applyReplaceModeToAllSlots(replaceMode = null) {
+      const mode = normalizeReplaceMode(replaceMode || this.defaultReplaceMode)
       const keys = this._collectKnownSlotKeys()
-      const characterData = Array.isArray(this.characterItem) ? this.characterItem : []
-      const incomingData = Array.isArray(this.activeItem?.data) ? this.activeItem.data : []
-      const inCharacter = new Set(characterData.map(getGroupNameFromPart).filter(Boolean))
-      const inIncoming = new Set(incomingData.map(getGroupNameFromPart).filter(Boolean))
-
-      const next = []
+      const { inCharacter, inIncoming } = this._presenceSets()
+      const next = {}
       for (const key of keys) {
-        const mode = normalizeSlotMode(this.slotControlMap?.[key]?.mode)
-        const effectiveMode = this._resolveEffectiveSlotMode(mode, {
-          inCharacter: inCharacter.has(key),
-          inIncoming: inIncoming.has(key)
-        })
-        if (effectiveMode !== SLOT_MODE_EMPTY) {
+        next[key] = { mode: computeModeFromReplace(mode, inCharacter.has(key), inIncoming.has(key)), locked: false }
+      }
+      this.slotControlMap = next
+      this._syncActiveFiltersFromSlotControls()
+    },
+
+    _syncActiveFiltersFromSlotControls() {
+      const next = []
+      for (const key of this._collectKnownSlotKeys()) {
+        if (normalizeSlotMode(this.slotControlMap?.[key]?.mode) !== SLOT_MODE_EMPTY) {
           next.push(key)
         }
       }
       this.activeFilters = Array.from(new Set(next))
     },
 
-    _resolveEffectiveSlotMode(slotMode, { inCharacter = false, inIncoming = false, replaceMode = null } = {}) {
-      const mode = normalizeSlotMode(slotMode)
-      if (mode === SLOT_MODE_AUTO) {
-        return this._resolveModeByDefaultReplace(
-          replaceMode || this.defaultReplaceMode,
-          inCharacter,
-          inIncoming
-        )
+    // ---- escalating scope toggles (global / per-group) ----
+    // For original/incoming: first press sets the slots that have a source
+    // (inCharacter / inIncoming) to the target mode without touching the rest
+    // (non-exclusive merge); once those are all set, a second press extends the
+    // target to every slot in scope (exclusive / full replace). For empty: set
+    // every slot in scope to empty.
+    _smartSetScope(keys, targetMode) {
+      const mode = normalizeSlotMode(targetMode)
+      const { inCharacter, inIncoming } = this._presenceSets()
+      let apply = keys
+      if (mode === SLOT_MODE_ORIGINAL || mode === SLOT_MODE_INCOMING) {
+        const presence = mode === SLOT_MODE_ORIGINAL ? inCharacter : inIncoming
+        const relevant = keys.filter((k) => presence.has(k))
+        const relevantAllTarget =
+          relevant.length > 0 && relevant.every((k) => normalizeSlotMode(this.slotControlMap?.[k]?.mode) === mode)
+        apply = relevantAllTarget ? keys : (relevant.length > 0 ? relevant : keys)
       }
-      return mode
+
+      const current = this.slotControlMap || {}
+      const next = { ...current }
+      let changed = false
+      for (const key of apply) {
+        if (normalizeSlotMode(current[key]?.mode) === mode) continue
+        next[key] = { mode, locked: false }
+        changed = true
+      }
+      if (changed) {
+        this.slotControlMap = next
+        this._syncActiveFiltersFromSlotControls()
+        this.updatePreviewItem()
+      }
+      return changed
     },
 
-    _resolveModeByDefaultReplace(defaultMode, inCharacter, inIncoming) {
-      const resolvedMode = normalizeReplaceMode(defaultMode)
+    // Tri-state for button styling: 'full' = every slot in scope is target;
+    // 'partial' = the relevant subset is all target (State A reached) but not
+    // every slot; 'none' otherwise.
+    _scopeModeState(keys, targetMode) {
+      const mode = normalizeSlotMode(targetMode)
+      if (keys.length === 0) return 'none'
+      const isTarget = (k) => normalizeSlotMode(this.slotControlMap?.[k]?.mode) === mode
+      if (keys.every(isTarget)) return 'full'
+      if (mode === SLOT_MODE_EMPTY) return 'none'
+      const { inCharacter, inIncoming } = this._presenceSets()
+      const presence = mode === SLOT_MODE_ORIGINAL ? inCharacter : inIncoming
+      const relevant = keys.filter((k) => presence.has(k))
+      if (relevant.length > 0 && relevant.every(isTarget)) return 'partial'
+      return 'none'
+    },
 
-      if (resolvedMode === 'fill-empty') {
-        if (inCharacter) return SLOT_MODE_ORIGINAL
-        if (inIncoming) return SLOT_MODE_INCOMING
-        return SLOT_MODE_ORIGINAL
-      }
+    smartSetAllMode(mode) {
+      this._ensureSlotControls()
+      return this._smartSetScope(this._collectKnownSlotKeys(), mode)
+    },
 
-      if (resolvedMode === 'full-replace') {
-        return SLOT_MODE_INCOMING
-      }
+    smartSetGroupMode(groupID, mode) {
+      const keys = this._getGroupSlotKeys(groupID)
+      if (keys.length === 0) return false
+      this._ensureSlotControls()
+      return this._smartSetScope(keys, mode)
+    },
 
-      if (inIncoming) return SLOT_MODE_INCOMING
-      if (inCharacter) return SLOT_MODE_ORIGINAL
-      return SLOT_MODE_ORIGINAL
+    getAllModeState(mode) {
+      return this._scopeModeState(this._collectKnownSlotKeys(), mode)
+    },
+
+    getGroupModeState(groupID, mode) {
+      return this._scopeModeState(this._getGroupSlotKeys(groupID), mode)
+    },
+
+    reapplyDefaultMode() {
+      this._applyReplaceModeToAllSlots(this.defaultReplaceMode)
+      this.updatePreviewItem()
     },
 
     _setUnlockedSlotsToMode(mode, characterData = null, sourceData = null) {
@@ -867,6 +1011,9 @@ export const useFileSystemStore = defineStore('fs', {
       const characterParts = Array.isArray(characterData) ? characterData : []
       const incomingParts = Array.isArray(sourceData) ? sourceData : []
       const slotControlMap = slotControlMapOverride || this.slotControlMap || {}
+      // An explicit replaceMode override means "resolve every slot from this
+      // mode now" (used by direct applies); otherwise use the stored per-slot modes.
+      const useOverride = !!replaceModeOverride
       const replaceMode = normalizeReplaceMode(replaceModeOverride || this.defaultReplaceMode)
 
       const byCharacterSlot = groupPartsBySlot(characterParts)
@@ -886,11 +1033,9 @@ export const useFileSystemStore = defineStore('fs', {
 
       const bundle = []
       for (const slotKey of slotOrder) {
-        const mode = this._resolveEffectiveSlotMode(slotControlMap?.[slotKey]?.mode, {
-          inCharacter: byCharacterSlot.has(slotKey),
-          inIncoming: byIncomingSlot.has(slotKey),
-          replaceMode
-        })
+        const mode = useOverride
+          ? computeModeFromReplace(replaceMode, byCharacterSlot.has(slotKey), byIncomingSlot.has(slotKey))
+          : normalizeSlotMode(slotControlMap?.[slotKey]?.mode)
         if (mode === SLOT_MODE_ORIGINAL) {
           const parts = byCharacterSlot.get(slotKey) || []
           bundle.push(...parts)
@@ -1108,9 +1253,13 @@ export const useFileSystemStore = defineStore('fs', {
           const characterData = Array.isArray(this.characterItem) ? this.characterItem : []
           const sourceData = Array.isArray(this.activeItem?.data) ? this.activeItem.data : []
 
-          this._ensureSlotControls(characterData, sourceData)
           if (!hasSlotControls) {
-            this._applyDefaultModeToUnlockedSlots(characterData, sourceData, { mode: this.defaultReplaceMode })
+            // First snapshot: seed all slots from the default replacement mode.
+            this._applyReplaceModeToAllSlots(this.defaultReplaceMode)
+          } else {
+            // Later snapshots only register newly-revealed slot keys (seeded
+            // from the default mode), preserving existing per-slot choices.
+            this._ensureSlotControls(characterData, sourceData)
           }
 
           this.updatePreviewItem()
@@ -1153,20 +1302,22 @@ export const useFileSystemStore = defineStore('fs', {
       return isHiddenGroup(groupID)
     },
 
-    // Wrapper methods for UI compatibility -> mode APIs (deprecated semantic bridge)
+    // Wrapper methods for UI compatibility -> mode APIs (deprecated semantic bridge).
+    // "active" maps to `incoming` (take from the selected outfit) now that `auto`
+    // is gone — consistent with setActiveFilters().
     filterToggle(key) {
       const currentMode = this.getSlotControlState(key).mode
-      return this.setSlotMode(key, currentMode === SLOT_MODE_EMPTY ? SLOT_MODE_AUTO : SLOT_MODE_EMPTY)
+      return this.setSlotMode(key, currentMode === SLOT_MODE_EMPTY ? SLOT_MODE_INCOMING : SLOT_MODE_EMPTY)
     },
-    filterSetActive(key, v) { return this.setSlotMode(key, v ? SLOT_MODE_AUTO : SLOT_MODE_EMPTY) },
-    filterSetAll(v) { return this.setAllSlotModes(v ? SLOT_MODE_AUTO : SLOT_MODE_EMPTY) },
+    filterSetActive(key, v) { return this.setSlotMode(key, v ? SLOT_MODE_INCOMING : SLOT_MODE_EMPTY) },
+    filterSetAll(v) { return this.setAllSlotModes(v ? SLOT_MODE_INCOMING : SLOT_MODE_EMPTY) },
     filterInvertAll() {
       this._ensureSlotControls()
       const next = { ...(this.slotControlMap || {}) }
       let changed = false
       for (const key of this._collectKnownSlotKeys()) {
         const mode = this.getSlotControlState(key).mode
-        const nextMode = mode === SLOT_MODE_EMPTY ? SLOT_MODE_AUTO : SLOT_MODE_EMPTY
+        const nextMode = mode === SLOT_MODE_EMPTY ? SLOT_MODE_INCOMING : SLOT_MODE_EMPTY
         if (mode !== nextMode) {
           next[key] = { mode: nextMode, locked: false }
           changed = true
@@ -1179,7 +1330,7 @@ export const useFileSystemStore = defineStore('fs', {
       }
       return changed
     },
-    filterSetGroupAll(groupID, v) { return this.setGroupSlotModes(groupID, v ? SLOT_MODE_AUTO : SLOT_MODE_EMPTY) },
+    filterSetGroupAll(groupID, v) { return this.setGroupSlotModes(groupID, v ? SLOT_MODE_INCOMING : SLOT_MODE_EMPTY) },
     filterInvertGroup(groupID) {
       const groupKeys = this._getGroupSlotKeys(groupID)
       if (groupKeys.length === 0) return false
@@ -1188,7 +1339,7 @@ export const useFileSystemStore = defineStore('fs', {
       let changed = false
       for (const key of groupKeys) {
         const mode = this.getSlotControlState(key).mode
-        const nextMode = mode === SLOT_MODE_EMPTY ? SLOT_MODE_AUTO : SLOT_MODE_EMPTY
+        const nextMode = mode === SLOT_MODE_EMPTY ? SLOT_MODE_INCOMING : SLOT_MODE_EMPTY
         if (mode !== nextMode) {
           next[key] = { mode: nextMode, locked: false }
           changed = true

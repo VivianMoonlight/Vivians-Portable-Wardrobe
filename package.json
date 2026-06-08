@@ -3,7 +3,9 @@
   "version": "0.10.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --mode mock",
+    "dev:userscript": "vite",
+    "typecheck": "tsc --noEmit",
     "build": "vite build",
     "release:patch": "node scripts/release.js patch",
     "release:minor": "node scripts/release.js minor",
@@ -13,22 +15,22 @@
     "publish:beta": "node scripts/publish-beta.js"
   },
   "dependencies": {
-    "@ckpack/vue-color": "^1.6.0",
-    "@jaames/iro": "^5.5.2",
-    "lodash-es": "^4.17.22",
-    "lodash.debounce": "^4.0.8",
-    "lodash.throttle": "^4.1.1",
+    "@mantine/core": "^8.3.18",
+    "@mantine/hooks": "^8.3.18",
+    "i18next": "^25.10.10",
     "lz-string": "^1.5.0",
-    "pinia": "^3.0.4",
-    "vue": "^3.2.0",
-    "vue-i18n": "^11.2.2"
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-i18next": "^16.6.6",
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
-    "@vitejs/plugin-vue": "^4.0.0",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-react": "^4.7.0",
     "typescript": "^5.9.3",
-    "vite": "^4.0.0",
-    "vite-plugin-monkey": "^6.0.1",
-    "vue-tsc": "^3.1.5"
+    "vite": "^7.3.5",
+    "vite-plugin-monkey": "^6.0.1"
   }
 }
