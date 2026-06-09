@@ -5,6 +5,7 @@ import { hostWindow } from '@/utils/host-window.js'
 import { ExternalAdapter } from '@/utils/external_adapters.js'
 import { getFs, useFs, type FileNode } from '@/stores/hooks'
 import { useDialog } from '@/ui/dialog/DialogProvider'
+import { OVERLAY_Z_INDEX } from '@/ui/z-index'
 import { FileThumbnail } from './FileThumbnail'
 
 type TimeFilter = 'all' | 'today' | 'week'
@@ -219,12 +220,12 @@ export function HistoryViewer() {
 
       {menu.visible && menu.record && (
         <Portal>
-          <Box onClick={closeMenu} style={{ position: 'fixed', inset: 0, zIndex: 100000 }} />
+          <Box onClick={closeMenu} style={{ position: 'fixed', inset: 0, zIndex: OVERLAY_Z_INDEX }} />
           <Paper
             withBorder
             shadow="md"
             radius="sm"
-            style={{ position: 'fixed', left: menu.x, top: menu.y, zIndex: 100001, minWidth: 150, padding: 4 }}
+            style={{ position: 'fixed', left: menu.x, top: menu.y, zIndex: OVERLAY_Z_INDEX + 1, minWidth: 150, padding: 4 }}
           >
             {[
               { key: 'apply', label: t('historyViewer.apply'), action: () => { closeMenu(); menu.record && applyRecord(menu.record) } },

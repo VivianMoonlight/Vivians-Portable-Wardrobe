@@ -653,5 +653,27 @@
     "minutesAgo": "{n}m ago",
     "hoursAgo": "{n}h ago",
     "daysAgo": "{n}d ago"
+  },
+  "wardrobeIO": {
+    "menuLabel": "Import / Export",
+    "importEmpty": "Imported data is empty.",
+    "importMerged": "Backup imported and merged into your wardrobe.",
+    "importReplaced": "Replaced the wardrobe with the imported backup.",
+    "importedAsFile": "Imported as a file into the current folder.",
+    "importNamePrompt": "Enter a name for the imported outfit:",
+    "importCancelled": "Import cancelled.",
+    "importUnrecognized": "Unrecognized import format.",
+    "playerWardrobeUnavailable": "Player wardrobe data is not available.",
+    "playerWardrobeImported": "Imported {count} outfits into \"{name}\".",
+    "playerWardrobeFailed": "Failed to import player wardrobe. See console for details.",
+    "bcxImportPrompt": "Paste BCX code (base64 + LZString):",
+    "bcxImportFailed": "Failed to decode/parse BCX. Check the input.",
+    "bcxCopied": "BCX code copied to clipboard.",
+    "backupSaveFailed": "Failed to save backup. See console for details.",
+    "backupParseFailed": "Failed to parse backup file (must be valid JSON).",
+    "saveCharacterEmpty": "No character outfit data to save.",
+    "saveCharacterPrompt": "Save character outfit — file name:",
+    "savedToFolder": "Saved \"{name}\" to the current folder.",
+    "saveFailed": "Save failed. See console for details."
   }
 }

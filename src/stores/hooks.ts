@@ -76,6 +76,7 @@ export interface FsCtx {
   // filters / slot controls
   filterSnapshot: { groups?: unknown[]; visibleGroups?: unknown[]; items?: unknown[] }
   defaultReplaceMode: string
+  slotControlMap: Record<string, { mode?: string; locked?: boolean }>
   slotPresenceMap: Record<string, { inCharacter?: boolean; inHover?: boolean }>
   getSlotControlState: (key: string) => { mode: string; locked?: boolean }
   setSlotMode: (key: string, mode: string) => boolean
@@ -109,6 +110,11 @@ export interface WbCtx {
 /** Reactive access to the fileSystem store (live Pinia-style context). */
 export function useFs(): FsCtx {
   return rawFs() as FsCtx
+}
+
+/** Fine-grained reactive access. Select stable state refs/primitives only. */
+export function useFsSelector<U>(selector: (ctx: FsCtx) => U): U {
+  return rawFs(selector as any) as U
 }
 
 /** Non-reactive access for event handlers / one-off reads. */

@@ -1,13 +1,16 @@
 import { useMemo, useState, type CSSProperties } from 'react'
-import { ActionIcon, Box, Breadcrumbs, Button, Group, Stack, Text, TextInput } from '@mantine/core'
+import { ActionIcon, Box, Breadcrumbs, Button, Group, Menu, Stack, Text, TextInput } from '@mantine/core'
 import { useTranslation } from 'react-i18next'
 import { useFs, useWb, type FileNode, type SearchHit } from '@/stores/hooks'
 import { useDialog } from '@/ui/dialog/DialogProvider'
+import { useWardrobeActions } from '@/ui/wardrobe-actions'
+import { OVERLAY_Z_INDEX } from '@/ui/z-index'
 import { FileItem } from './FileItem'
 
 export function FileManager() {
   const { t } = useTranslation()
   const dialog = useDialog()
+  const actions = useWardrobeActions()
   const fs = useFs()
   const wb = useWb()
   const [searchQuery, setSearchQuery] = useState('')
@@ -17,6 +20,10 @@ export function FileManager() {
 
   const items: FileNode[] = fs.currentNode?.children ?? []
   const currentPath = fs.currentPath
+  // FileSystem mutates children arrays in place, so `items` keeps the same
+  // reference after add/delete/rename. The store bumps `__rev` on every action,
+  // so depend on it to recompute the list after those mutations.
+  const fsRev = (fs as any).__rev
 
   const displayList: SearchHit[] = useMemo(() => {
     const q = searchQuery.trim()
@@ -38,7 +45,7 @@ export function FileManager() {
 
     return [...base].reverse()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, currentPath, searchQuery, searchScope])
+  }, [fsRev, items, currentPath, searchQuery, searchScope])
 
   const addFolder = async () => {
     const name = await dialog.prompt(t('fileManager.promptNewFolderName'))
@@ -54,6 +61,7 @@ export function FileManager() {
             fileViewMode === 'small'
               ? 'repeat(auto-fill, minmax(112px, 128px))'
               : 'repeat(auto-fill, minmax(160px, 180px))',
+          gridAutoRows: 'max-content',
           alignItems: 'start',
           gap: fileViewMode === 'small' ? 8 : 12,
         }
@@ -138,40 +146,64 @@ export function FileManager() {
           <Button variant="default" size="xs" onClick={addFolder}>
             {t('fileManager.newFolderTitle')}
           </Button>
+          <Menu position="bottom-end" withinPortal shadow="md" width={240} zIndex={OVERLAY_Z_INDEX}>
+            <Menu.Target>
+              <Button variant="default" size="xs">
+                {t('wardrobeIO.menuLabel')}
+              </Button>
+            </Menu.Target>
+            <Menu.Dropdown>
+              <Menu.Label>{t('fileManagerPanel.tabWardrobe')}</Menu.Label>
+              <Menu.Item onClick={() => void actions.importPlayerWardrobe()}>
+                {t('fileManagerPanel.importPlayerWardrobe')}
+              </Menu.Item>
+              <Menu.Item onClick={() => void actions.importBCX()}>
+                {t('fileManagerPanel.importBCX')}
+              </Menu.Item>
+              <Menu.Item onClick={() => void actions.saveCharacterToFolder()}>
+                {t('fileManagerPanel.saveCharacter')}
+              </Menu.Item>
+              <Menu.Divider />
+              <Menu.Item onClick={actions.saveBackup}>{t('fileManagerPanel.saveBackup')}</Menu.Item>
+              <Menu.Item onClick={actions.importBackup}>{t('fileManagerPanel.importBackup')}</Menu.Item>
+            </Menu.Dropdown>
+          </Menu>
         </Group>
       </Group>
 
-      <Box style={{ ...gridStyle, overflowY: 'auto', flex: 1, minHeight: 200, padding: 4 }}>
-        {displayList.length > 0 ? (
-          displayList.map((entry) => (
-            <FileItem
-              key={`${entry.path.join('/')}/${entry.item.name}`}
-              item={entry.item}
-              viewMode={fileViewMode}
-              onOpenFolder={() => {
-                if (entry.item.type === 'folder') fs.moveTo([...entry.path, entry.item.name])
-              }}
-              onRemove={() => fs.removeFile(entry.item, entry.path)}
-              onRename={(newName) => {
-                entry.item.name = newName
-                fs.saveAll()
-              }}
-            />
-          ))
-        ) : (
-          <Stack align="center" py="xl" style={{ gridColumn: '1 / -1' }}>
-            <Text c="dimmed">{t('fileManager.emptyTip')}</Text>
-            {searchQuery ? (
-              <Button variant="light" size="xs" onClick={() => setSearchQuery('')}>
-                {t('fileManager.clearSearch')}
-              </Button>
-            ) : (
-              <Button variant="light" size="xs" onClick={addFolder}>
-                {t('fileManager.newFolderTitle')}
-              </Button>
-            )}
-          </Stack>
-        )}
+      <Box style={{ overflowY: 'auto', flex: 1, minHeight: 200, padding: 4 }}>
+        <Box style={gridStyle}>
+          {displayList.length > 0 ? (
+            displayList.map((entry) => (
+              <FileItem
+                key={`${entry.path.join('/')}/${entry.item.name}`}
+                item={entry.item}
+                viewMode={fileViewMode}
+                onOpenFolder={() => {
+                  if (entry.item.type === 'folder') fs.moveTo([...entry.path, entry.item.name])
+                }}
+                onRemove={() => fs.removeFile(entry.item, entry.path)}
+                onRename={(newName) => {
+                  entry.item.name = newName
+                  fs.saveAll()
+                }}
+              />
+            ))
+          ) : (
+            <Stack align="center" py="xl" style={{ gridColumn: '1 / -1' }}>
+              <Text c="dimmed">{t('fileManager.emptyTip')}</Text>
+              {searchQuery ? (
+                <Button variant="light" size="xs" onClick={() => setSearchQuery('')}>
+                  {t('fileManager.clearSearch')}
+                </Button>
+              ) : (
+                <Button variant="light" size="xs" onClick={addFolder}>
+                  {t('fileManager.newFolderTitle')}
+                </Button>
+              )}
+            </Stack>
+          )}
+        </Box>
       </Box>
     </Stack>
   )

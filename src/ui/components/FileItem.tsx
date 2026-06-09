@@ -1,10 +1,11 @@
 import { useRef, useState, type CSSProperties, type DragEvent, type MouseEvent } from 'react'
-import { Box, Paper, Portal, Text, UnstyledButton } from '@mantine/core'
+import { Box, Button, Paper, Portal, Text, UnstyledButton } from '@mantine/core'
 import { useTranslation } from 'react-i18next'
 import { hostWindow } from '@/utils/host-window.js'
 import { ExternalAdapter } from '@/utils/external_adapters.js'
 import { getFs, useFs, type FileNode } from '@/stores/hooks'
 import { useDialog } from '@/ui/dialog/DialogProvider'
+import { OVERLAY_Z_INDEX } from '@/ui/z-index'
 import { FileThumbnail } from './FileThumbnail'
 
 interface FileItemProps {
@@ -101,11 +102,13 @@ export function FileItem({ item, viewMode, onOpenFolder, onRemove, onRename }: F
     if (ok) onRemove()
   }
 
-  const exportBcx = () => {
+  const exportBcx = async () => {
     closeMenu()
     if (isFolder) return
     try {
+      // Returns the BCX code and copies it to the clipboard.
       ExternalAdapter.exportOutfitAsBCX(item.name, Array.isArray(item.data) ? item.data : [])
+      await dialog.alert(t('wardrobeIO.bcxCopied'))
     } catch (e) {
       console.error('exportBCX failed', e)
     }
@@ -151,24 +154,34 @@ export function FileItem({ item, viewMode, onOpenFolder, onRemove, onRename }: F
   const isList = viewMode === 'list'
   const isSmall = viewMode === 'small'
   const isCard = !isList
+  // Card height is content-driven (thumbnail aspect-ratio + name). Do NOT put
+  // aspect-ratio on the card itself: as a direct grid item it doesn't reliably
+  // contribute to `auto` row sizing and the cards end up overlapping.
   const cardStyle: CSSProperties = {
     display: 'flex',
     flexDirection: isList ? 'row' : 'column',
-    alignItems: 'stretch',
-    justifyContent: isList ? undefined : 'space-between',
-    gap: isList ? 10 : 0,
+    alignItems: isList ? 'center' : 'stretch',
+    gap: isList ? 10 : 6,
     padding: isList ? '8px 10px' : 6,
     cursor: 'pointer',
     borderColor: isPreviewLocked ? 'var(--mantine-color-teal-5)' : undefined,
     minHeight: isList ? 64 : undefined,
-    aspectRatio: isCard ? '9 / 13.5' : undefined,
     width: isCard ? '100%' : undefined,
     overflow: 'hidden',
   }
   const thumbSize = isList ? 44 : undefined
 
+  const thumbInner = isFolder ? (
+    <Text size="xl" aria-hidden>
+      📁
+    </Text>
+  ) : (
+    <FileThumbnail item={item} />
+  )
+
   return (
-    <Paper
+    <>
+      <Paper
       ref={rootRef}
       withBorder
       radius="md"
@@ -185,29 +198,50 @@ export function FileItem({ item, viewMode, onOpenFolder, onRemove, onRename }: F
       onDragOver={onDragOver}
       onDrop={onDrop}
     >
-      <Box
-        style={{
-          width: isList ? thumbSize : '100%',
-          height: isList ? undefined : '100%',
-          aspectRatio: '9 / 16',
-          flex: isList ? '0 0 auto' : '1 1 auto',
-          minHeight: 0,
-          borderRadius: 8,
-          overflow: 'hidden',
-          background: 'var(--mantine-color-default-hover)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        {isFolder ? (
-          <Text size="xl" aria-hidden>
-            📁
-          </Text>
-        ) : (
-          <FileThumbnail item={item} />
-        )}
-      </Box>
+      {isList ? (
+        <Box
+          style={{
+            width: thumbSize,
+            aspectRatio: '9 / 16',
+            flex: '0 0 auto',
+            borderRadius: 8,
+            overflow: 'hidden',
+            background: 'var(--mantine-color-default-hover)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          {thumbInner}
+        </Box>
+      ) : (
+        // Card mode: percentage padding-top reserves a 9:16 box. Unlike CSS
+        // `aspect-ratio`, this contributes a reliable height during CSS Grid
+        // auto-row sizing, so cards never overlap their neighbours.
+        <Box
+          style={{
+            position: 'relative',
+            width: '100%',
+            paddingTop: '177.78%',
+            flex: '0 0 auto',
+            borderRadius: 8,
+            overflow: 'hidden',
+            background: 'var(--mantine-color-default-hover)',
+          }}
+        >
+          <Box
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            {thumbInner}
+          </Box>
+        </Box>
+      )}
 
       <Box
         style={{
@@ -215,7 +249,7 @@ export function FileItem({ item, viewMode, onOpenFolder, onRemove, onRename }: F
           flexDirection: isList ? 'row' : 'column',
           alignItems: isList ? 'center' : 'stretch',
           gap: isList ? 8 : 3,
-          flex: isList ? 1 : '0 0 38px',
+          flex: isList ? 1 : '0 0 auto',
           minWidth: 0,
           width: '100%',
           paddingTop: isList ? 0 : 5,
@@ -255,6 +289,7 @@ export function FileItem({ item, viewMode, onOpenFolder, onRemove, onRename }: F
         </UnstyledButton>
       </Box>
 
+      </Paper>
       {menu.visible && (
         <Portal>
           <ContextMenu
@@ -273,7 +308,7 @@ export function FileItem({ item, viewMode, onOpenFolder, onRemove, onRename }: F
           />
         </Portal>
       )}
-    </Paper>
+    </>
   )
 }
 
@@ -291,41 +326,67 @@ interface ContextMenuProps {
 
 function ContextMenu(props: ContextMenuProps) {
   const { t } = useTranslation()
-  const items: Array<{ key: string; label: string; action: () => void }> = []
+  const items: Array<{ key: string; label: string; action: () => void; kind?: 'danger' | 'muted' }> = []
   if (props.isFolder) items.push({ key: 'open', label: t('fileItem.open'), action: props.onOpen })
   items.push({ key: 'rename', label: t('fileItem.rename'), action: props.onRename })
-  items.push({ key: 'delete', label: t('fileItem.delete'), action: props.onDelete })
   if (!props.isFolder) {
     items.push({ key: 'apply', label: t('fileItem.apply'), action: props.onApply })
     items.push({ key: 'export', label: t('fileItem.exportBCX'), action: props.onExport })
   }
-  items.push({ key: 'cancel', label: t('fileItem.cancel'), action: props.onClose })
+  items.push({ key: 'delete', label: t('fileItem.delete'), action: props.onDelete, kind: 'danger' })
+  items.push({ key: 'cancel', label: t('fileItem.cancel'), action: props.onClose, kind: 'muted' })
 
   return (
     <>
-      {/* Backdrop to dismiss on outside click */}
+      {/* Backdrop to dismiss on outside click (stops the click from reaching the card) */}
       <Box
-        onClick={props.onClose}
-        onContextMenu={(e) => {
-          e.preventDefault()
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation()
           props.onClose()
         }}
-        style={{ position: 'fixed', inset: 0, zIndex: 100000 }}
+        onContextMenu={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          props.onClose()
+        }}
+        style={{ position: 'fixed', inset: 0, zIndex: OVERLAY_Z_INDEX }}
       />
       <Paper
         withBorder
         shadow="md"
-        radius="sm"
-        style={{ position: 'fixed', left: props.x, top: props.y, zIndex: 100001, minWidth: 160, padding: 4 }}
+        radius="md"
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+        onContextMenu={(e) => e.preventDefault()}
+        style={{
+          position: 'fixed',
+          left: props.x,
+          top: props.y,
+          zIndex: OVERLAY_Z_INDEX + 1,
+          minWidth: 188,
+          padding: 6,
+          overflow: 'hidden',
+        }}
       >
         {items.map((it) => (
-          <UnstyledButton
+          <Button
             key={it.key}
-            onClick={it.action}
-            style={{ display: 'block', width: '100%', padding: '8px 12px', borderRadius: 6, fontSize: 13 }}
+            variant="subtle"
+            color={it.kind === 'danger' ? 'red' : it.kind === 'muted' ? 'gray' : undefined}
+            size="sm"
+            fullWidth
+            justify="flex-start"
+            radius="sm"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation()
+              it.action()
+            }}
+            styles={{ root: { height: 34, paddingInline: 10 }, label: { fontWeight: 500 } }}
           >
             {it.label}
-          </UnstyledButton>
+          </Button>
         ))}
       </Paper>
     </>

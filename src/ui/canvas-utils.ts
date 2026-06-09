@@ -17,14 +17,19 @@ interface SizedCanvas extends HTMLCanvasElement {
 export function sizeCanvasToContainer(
   canvas: HTMLCanvasElement | null,
   target: HTMLElement | null,
-): void {
+): boolean {
   const c = canvas as SizedCanvas | null
-  if (!c || !target) return
+  if (!c || !target) return false
 
   const rect = target.getBoundingClientRect()
-  const cssW = Math.max(1, rect.width)
-  const cssH = Math.max(1, rect.height)
+  // Round so sub-pixel jitter doesn't oscillate a ResizeObserver feedback loop.
+  const cssW = Math.max(1, Math.round(rect.width))
+  const cssH = Math.max(1, Math.round(rect.height))
   const dpr = hostWindow.devicePixelRatio || 1
+
+  // No-op when nothing changed: avoids clearing/reallocating the canvas and
+  // re-triggering the observer ("ResizeObserver loop … undelivered notifications").
+  if (c.__cssW === cssW && c.__cssH === cssH && c.__dpr === dpr) return false
 
   c.width = Math.round(cssW * dpr)
   c.height = Math.round(cssH * dpr)
@@ -35,9 +40,10 @@ export function sizeCanvasToContainer(
   c.__dpr = dpr
 
   const ctx = c.getContext('2d')
-  if (!ctx) return
+  if (!ctx) return true
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
   ctx.clearRect(0, 0, cssW, cssH)
+  return true
 }
 
 /** Draw a source canvas/image centered & aspect-fit into the target canvas. */

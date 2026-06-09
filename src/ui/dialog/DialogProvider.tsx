@@ -8,6 +8,7 @@ import {
 } from 'react'
 import { Button, Group, Modal, Stack, Text, TextInput } from '@mantine/core'
 import { useTranslation } from 'react-i18next'
+import { OVERLAY_Z_INDEX } from '@/ui/z-index'
 
 /**
  * React replacement for the Vue `DialogService` (which mounted DialogModal.vue
@@ -74,29 +75,43 @@ export function DialogProvider({ children }: { children: ReactNode }) {
       <Modal
         opened={request !== null}
         onClose={() => settle(dismissValue)}
-        title={request?.title}
+        title={request?.title ? <Text fw={600}>{request.title}</Text> : undefined}
         centered
+        size="sm"
+        radius="md"
         withCloseButton={request?.kind !== 'alert'}
+        zIndex={OVERLAY_Z_INDEX}
+        overlayProps={{ backgroundOpacity: 0.45, blur: 2 }}
+        transitionProps={{ transition: 'pop', duration: 150 }}
       >
-        <Stack>
-          <Text size="sm">{request?.message}</Text>
+        <Stack gap="md">
+          {request?.message && (
+            <Text size="sm" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+              {request.message}
+            </Text>
+          )}
           {request?.kind === 'prompt' && (
             <TextInput
               data-autofocus
               value={inputValue}
               onChange={(event) => setInputValue(event.currentTarget.value)}
               onKeyDown={(event) => {
-                if (event.key === 'Enter') settle(confirmValue)
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  settle(confirmValue)
+                }
               }}
             />
           )}
-          <Group justify="flex-end">
+          <Group justify="flex-end" gap="sm" mt="xs">
             {request?.kind !== 'alert' && (
-              <Button variant="default" onClick={() => settle(dismissValue)}>
+              <Button variant="default" size="sm" onClick={() => settle(dismissValue)}>
                 {t('fileItem.cancel')}
               </Button>
             )}
-            <Button onClick={() => settle(confirmValue)}>OK</Button>
+            <Button size="sm" onClick={() => settle(confirmValue)}>
+              OK
+            </Button>
           </Group>
         </Stack>
       </Modal>

@@ -106,11 +106,17 @@ export function defineStore(_id: string, def: StoreDefinition): BoundStore {
 
   const useBound = ((selector?: (ctx: any) => any) => {
     ensure()
+    if (selector) {
+      // Selector callers opt into fine-grained subscriptions. Keep selectors on
+      // stable state refs/primitives; fresh derived objects belong in component
+      // useMemo so unrelated store actions do not wake the component.
+      return useStore(api!, () => selector(ctx))
+    }
     // Subscribe to the revision counter to drive re-renders; the actual value is
-    // computed from the live ctx so selectors returning fresh arrays/objects are
+    // computed from the live ctx so consumers returning fresh arrays/objects are
     // safe (no getSnapshot caching pitfalls).
     useStore(api!, (s) => s.__rev)
-    return selector ? selector(ctx) : ctx
+    return ctx
   }) as BoundStore
 
   useBound.getState = () => {

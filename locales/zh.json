@@ -653,5 +653,27 @@
     "minutesAgo": "{n}分钟前",
     "hoursAgo": "{n}小时前",
     "daysAgo": "{n}天前"
+  },
+  "wardrobeIO": {
+    "menuLabel": "导入 / 导出",
+    "importEmpty": "导入的数据为空。",
+    "importMerged": "备份已导入并合并到衣橱。",
+    "importReplaced": "已用导入备份替换当前衣橱。",
+    "importedAsFile": "已作为文件导入到当前文件夹。",
+    "importNamePrompt": "请输入导入服装的文件名：",
+    "importCancelled": "已取消导入。",
+    "importUnrecognized": "无法识别的导入格式。",
+    "playerWardrobeUnavailable": "无法获取角色 Wardrobe 数据。",
+    "playerWardrobeImported": "已导入 {count} 套服装到 \"{name}\"。",
+    "playerWardrobeFailed": "导入角色 Wardrobe 失败，请查看控制台。",
+    "bcxImportPrompt": "请粘贴 BCX 代码（base64 + LZString 压缩）：",
+    "bcxImportFailed": "BCX 解码或解析失败，请检查输入。",
+    "bcxCopied": "BCX 代码已复制到剪贴板。",
+    "backupSaveFailed": "保存备份失败，请查看控制台。",
+    "backupParseFailed": "解析备份文件失败（需为合法 JSON）。",
+    "saveCharacterEmpty": "当前没有可保存的角色服装数据。",
+    "saveCharacterPrompt": "保存角色服装 — 文件名：",
+    "savedToFolder": "已保存 \"{name}\" 到当前文件夹。",
+    "saveFailed": "保存失败，请查看控制台。"
   }
 }

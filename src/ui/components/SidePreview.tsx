@@ -73,10 +73,16 @@ export function SidePreview({ showApply = false }: SidePreviewProps) {
     }
 
     let ro: ResizeObserver | null = null
+    let rafId = 0
     if (target && typeof hostWindow.ResizeObserver === 'function') {
       ro = new hostWindow.ResizeObserver(() => {
-        sizeCanvasToContainer(canvas, target)
-        void update()
+        // Defer to the next frame so writing the canvas size doesn't re-enter the
+        // observer synchronously ("ResizeObserver loop … undelivered notifications").
+        if (rafId) hostWindow.cancelAnimationFrame(rafId)
+        rafId = hostWindow.requestAnimationFrame(() => {
+          rafId = 0
+          if (sizeCanvasToContainer(canvas, target)) void update()
+        })
       })
       ro.observe(target)
     }
@@ -84,6 +90,7 @@ export function SidePreview({ showApply = false }: SidePreviewProps) {
 
     return () => {
       disposed = true
+      if (rafId) hostWindow.cancelAnimationFrame(rafId)
       ro?.disconnect()
     }
   }, [previewData])

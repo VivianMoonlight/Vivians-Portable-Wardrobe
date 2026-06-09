@@ -72,16 +72,22 @@ export function FileThumbnail({ item }: FileThumbnailProps) {
     }
 
     let ro: ResizeObserver | null = null
+    let roRaf = 0
     if (canvas.parentElement && typeof hostWindow.ResizeObserver === 'function') {
       ro = new hostWindow.ResizeObserver(() => {
-        sizeCanvasToContainer(canvas, canvas.parentElement)
-        if (inViewport) void render()
+        // Defer to the next frame to avoid a synchronous ResizeObserver loop.
+        if (roRaf) hostWindow.cancelAnimationFrame(roRaf)
+        roRaf = hostWindow.requestAnimationFrame(() => {
+          roRaf = 0
+          if (sizeCanvasToContainer(canvas, canvas.parentElement) && inViewport) void render()
+        })
       })
       ro.observe(canvas.parentElement)
     }
 
     return () => {
       disposed = true
+      if (roRaf) hostWindow.cancelAnimationFrame(roRaf)
       io?.disconnect()
       ro?.disconnect()
     }
