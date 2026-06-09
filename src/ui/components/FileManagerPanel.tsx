@@ -302,7 +302,7 @@ export function FileManagerPanel({ opened, onClose }: FileManagerPanelProps) {
             </Tabs.Panel>
 
             <Tabs.Panel value="history" style={{ flex: 1, minHeight: 0, paddingTop: 12 }}>
-              <ThreeColumn showFilters={showFilters}>
+              <ThreeColumn showFilters={showFilters} showApply>
                 <HistoryViewer />
               </ThreeColumn>
             </Tabs.Panel>

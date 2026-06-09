@@ -362,7 +362,9 @@ const FilterGroupCard = memo(function FilterGroupCard({
   onApplyGroupMode,
   onSetSlotMode,
 }: FilterGroupCardProps) {
+  const { t } = useTranslation()
   const items = group.itemList ?? EMPTY_ITEMS
+  const groupDisplayName = t(`groupNames.${group.groupID}`, { defaultValue: group.displayName || group.groupID })
   const applyGroupMode = useCallback((mode: SlotMode) => onApplyGroupMode(group.groupID, mode), [group.groupID, onApplyGroupMode])
 
   return (
@@ -377,7 +379,7 @@ const FilterGroupCard = memo(function FilterGroupCard({
           justify="flex-start"
         >
           <Text size="xs" truncate>
-            {group.displayName || group.groupID}
+            {groupDisplayName}
             {group.isHiddenGroup ? ` (${hiddenBadge})` : ''}
           </Text>
         </Button>

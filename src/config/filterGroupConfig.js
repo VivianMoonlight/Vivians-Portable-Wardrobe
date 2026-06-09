@@ -416,9 +416,12 @@ export function getGroupDisplayName(groupID) {
     // 1b) 如果主程序把 i18n 挂到全局（例如 hostWindow__APP_I18N__），尝试使用它
     try {
         const gl = (typeof hostWindow !== 'undefined') ? (hostWindow.__APP_I18N__ || hostWindow.__VUE_I18N_GLOBAL__ || hostWindow.__VUE_I18N__) : null
-        if (gl && typeof gl.t === 'function') {
+        const translate = typeof gl?.t === 'function'
+            ? gl.t.bind(gl)
+            : (typeof gl?.global?.t === 'function' ? gl.global.t.bind(gl.global) : null)
+        if (translate) {
             const key = `groupNames.${groupID}`
-            const translated = gl.t(key)
+            const translated = translate(key)
             if (translated && translated !== key) return translated
         }
     } catch (e) {

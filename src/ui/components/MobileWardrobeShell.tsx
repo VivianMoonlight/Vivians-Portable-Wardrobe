@@ -80,7 +80,7 @@ export function MobileWardrobeShell({ onClose }: MobileWardrobeShellProps) {
           />
 
           <Box style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
-            {pane === 'preview' && <SidePreview showApply={mainTab === 'wardrobe'} />}
+            {pane === 'preview' && <SidePreview showApply={mainTab === 'wardrobe' || mainTab === 'history'} />}
             {pane === 'list' && (mainTab === 'history' ? <HistoryViewer /> : <FileManager />)}
             {pane === 'filter' && <FilterManager />}
           </Box>
