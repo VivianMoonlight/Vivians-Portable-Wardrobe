@@ -1,4 +1,5 @@
-import { defineStore, toRaw } from './optionsStore'
+import { createStore } from 'zustand/vanilla'
+import { useStore } from 'zustand'
 import { FileSystem } from '@/services/FileSystem'
 import { RenderService } from '@/services/RenderService'
 import { StorageAdapter } from '@/services/StorageAdapter'
@@ -120,6 +121,10 @@ function buildPlayerScopedStorageKey(prefix) {
   return `${prefix}_${getPlayerMemberSuffix()}`
 }
 
+function cloneOutfitData(data) {
+  return JSON.parse(JSON.stringify(Array.isArray(data) ? data : []))
+}
+
 // Legacy key from the old precedence bug:
 // 'VPWardrobe_local' + hostWindow.Player ? hostWindow.Player.MemberNumber : 'DEFAULT'
 function getLegacyBuggyWardrobeLocalKey() {
@@ -129,7 +134,95 @@ function getLegacyBuggyWardrobeLocalKey() {
 const CLOUD_QUOTA_LIMIT_BYTES = 180 * 1024
 const CLOUD_QUOTA_WARN_RATIO = 0.8
 
-export const useFileSystemStore = defineStore('fs', {
+function buildCloudSyncTreeFromSnapshot(node, options = {}) {
+  const { forceIncludeRoot = false } = options
+  if (!node || typeof node !== 'object') return null
+
+  const isFolder = node.type === 'folder' && Array.isArray(node.children)
+  const enabled = node.cloudSync !== false
+
+  if (!isFolder) {
+    if (!enabled) return null
+    return { ...node }
+  }
+
+  const children = []
+  for (const child of node.children || []) {
+    const picked = buildCloudSyncTreeFromSnapshot(child)
+    if (picked) children.push(picked)
+  }
+
+  if (!forceIncludeRoot && !enabled && children.length === 0) {
+    return null
+  }
+
+  return {
+    ...node,
+    type: 'folder',
+    inheritCloudSync: typeof node.inheritCloudSync === 'boolean' ? node.inheritCloudSync : true,
+    children
+  }
+}
+
+function collectCloudSyncStatsFromSnapshot(snapshot) {
+  const stats = {
+    totalNodes: 0,
+    totalFolders: 0,
+    totalLeaves: 0,
+    enabledNodes: 0,
+    enabledFolders: 0,
+    enabledLeaves: 0
+  }
+
+  const walk = (node) => {
+    if (!node || typeof node !== 'object') return
+    const isFolder = node.type === 'folder' && Array.isArray(node.children)
+    const enabled = node.cloudSync !== false
+
+    stats.totalNodes += 1
+    if (enabled) stats.enabledNodes += 1
+
+    if (isFolder) {
+      stats.totalFolders += 1
+      if (enabled) stats.enabledFolders += 1
+      for (const child of node.children || []) walk(child)
+    } else {
+      stats.totalLeaves += 1
+      if (enabled) stats.enabledLeaves += 1
+    }
+  }
+
+  walk(snapshot)
+  return stats
+}
+
+function applyNodeCloudSync(node, enabled, recursive) {
+  if (!node || typeof node !== 'object') return false
+  const nextEnabled = !!enabled
+  let changed = false
+
+  const applyOne = (target) => {
+    if (!target || typeof target !== 'object') return
+    if (target.cloudSync !== nextEnabled) {
+      target.cloudSync = nextEnabled
+      changed = true
+    }
+    target.updatedAt = Date.now()
+    const isFolder = target.type === 'folder' && Array.isArray(target.children)
+    if (recursive && isFolder) {
+      for (const child of target.children) applyOne(child)
+    }
+  }
+
+  applyOne(node)
+  return changed
+}
+
+function identityRaw(value) {
+  return value
+}
+
+const fileSystemStoreDefinition = {
   state: () => ({
     fs: new FileSystem('Home'),
     history: new HistoryRecord('History', 100),
@@ -361,9 +454,9 @@ export const useFileSystemStore = defineStore('fs', {
 
       if (options.keepSelection !== true) {
         this.lockedItem = null
-        this.activeItem = { data: JSON.parse(JSON.stringify(this.characterItem || [])) }
+        this.activeItem = { data: cloneOutfitData(this.characterItem) }
       } else if (!Array.isArray(this.activeItem?.data)) {
-        this.activeItem = { data: JSON.parse(JSON.stringify(this.characterItem || [])) }
+        this.activeItem = { data: cloneOutfitData(this.characterItem) }
       }
 
       this.previewItem = { data: [] }
@@ -450,70 +543,16 @@ export const useFileSystemStore = defineStore('fs', {
     },
 
     _buildCloudSyncTreeFromSnapshot(node, options = {}) {
-      const { forceIncludeRoot = false } = options
-      if (!node || typeof node !== 'object') return null
-
-      const isFolder = node.type === 'folder' && Array.isArray(node.children)
-      const enabled = node.cloudSync !== false
-
-      if (!isFolder) {
-        if (!enabled) return null
-        return { ...node }
-      }
-
-      const children = []
-      for (const child of node.children || []) {
-        const picked = this._buildCloudSyncTreeFromSnapshot(child)
-        if (picked) children.push(picked)
-      }
-
-      if (!forceIncludeRoot && !enabled && children.length === 0) {
-        return null
-      }
-
-      return {
-        ...node,
-        type: 'folder',
-        inheritCloudSync: typeof node.inheritCloudSync === 'boolean' ? node.inheritCloudSync : true,
-        children
-      }
+      return buildCloudSyncTreeFromSnapshot(node, options)
     },
 
     _collectCloudSyncStatsFromSnapshot(snapshot) {
-      const stats = {
-        totalNodes: 0,
-        totalFolders: 0,
-        totalLeaves: 0,
-        enabledNodes: 0,
-        enabledFolders: 0,
-        enabledLeaves: 0
-      }
-
-      const walk = (node) => {
-        if (!node || typeof node !== 'object') return
-        const isFolder = node.type === 'folder' && Array.isArray(node.children)
-        const enabled = node.cloudSync !== false
-
-        stats.totalNodes += 1
-        if (enabled) stats.enabledNodes += 1
-
-        if (isFolder) {
-          stats.totalFolders += 1
-          if (enabled) stats.enabledFolders += 1
-          for (const child of node.children || []) walk(child)
-        } else {
-          stats.totalLeaves += 1
-          if (enabled) stats.enabledLeaves += 1
-        }
-      }
-
-      walk(snapshot)
-      return stats
+      return collectCloudSyncStatsFromSnapshot(snapshot)
     },
 
     buildCloudSyncTree() {
       const snapshot = this.fs.toJSON()
-      const tree = this._buildCloudSyncTreeFromSnapshot(snapshot, { forceIncludeRoot: true })
+      const tree = buildCloudSyncTreeFromSnapshot(snapshot, { forceIncludeRoot: true })
       if (tree) return tree
       return {
         name: snapshot?.name || 'Home',
@@ -527,8 +566,8 @@ export const useFileSystemStore = defineStore('fs', {
 
     collectCloudSyncStats() {
       const snapshot = this.fs.toJSON()
-      const stats = this._collectCloudSyncStatsFromSnapshot(snapshot)
-      const cloudTree = this._buildCloudSyncTreeFromSnapshot(snapshot, { forceIncludeRoot: true }) || {
+      const stats = collectCloudSyncStatsFromSnapshot(snapshot)
+      const cloudTree = buildCloudSyncTreeFromSnapshot(snapshot, { forceIncludeRoot: true }) || {
         name: snapshot?.name || 'Home',
         type: 'folder',
         children: []
@@ -542,12 +581,12 @@ export const useFileSystemStore = defineStore('fs', {
 
     refreshCloudQuotaStats(snapshot = null) {
       const sourceSnapshot = snapshot || this.fs.toJSON()
-      const cloudTree = this._buildCloudSyncTreeFromSnapshot(sourceSnapshot, { forceIncludeRoot: true }) || {
+      const cloudTree = buildCloudSyncTreeFromSnapshot(sourceSnapshot, { forceIncludeRoot: true }) || {
         name: sourceSnapshot?.name || 'Home',
         type: 'folder',
         children: []
       }
-      const stats = this._collectCloudSyncStatsFromSnapshot(sourceSnapshot)
+      const stats = collectCloudSyncStatsFromSnapshot(sourceSnapshot)
       const payloadBytes = this.storage.estimatePayloadBytes(cloudTree)
 
       const limitBytes = Number(this.cloudQuota?.limitBytes || CLOUD_QUOTA_LIMIT_BYTES)
@@ -578,31 +617,13 @@ export const useFileSystemStore = defineStore('fs', {
     },
 
     _applyNodeCloudSync(node, enabled, recursive) {
-      if (!node || typeof node !== 'object') return false
-      const nextEnabled = !!enabled
-      let changed = false
-
-      const applyOne = (target) => {
-        if (!target || typeof target !== 'object') return
-        if (target.cloudSync !== nextEnabled) {
-          target.cloudSync = nextEnabled
-          changed = true
-        }
-        target.updatedAt = Date.now()
-        const isFolder = target.type === 'folder' && Array.isArray(target.children)
-        if (recursive && isFolder) {
-          for (const child of target.children) applyOne(child)
-        }
-      }
-
-      applyOne(node)
-      return changed
+      return applyNodeCloudSync(node, enabled, recursive)
     },
 
     setNodeCloudSync(node, enabled, options = {}) {
       if (!node || typeof node !== 'object') return false
       const recursive = node.type === 'folder' ? options.recursive !== false : false
-      const changed = this._applyNodeCloudSync(node, enabled, recursive)
+      const changed = applyNodeCloudSync(node, enabled, recursive)
       if (changed) {
         this.saveAll()
       } else {
@@ -627,7 +648,7 @@ export const useFileSystemStore = defineStore('fs', {
         this.storage.saveLocal(localKey, snapshot)
 
         const quota = this.refreshCloudQuotaStats(snapshot)
-        const cloudTree = this.cloudSyncTreePreview || this._buildCloudSyncTreeFromSnapshot(snapshot, { forceIncludeRoot: true })
+        const cloudTree = this.cloudSyncTreePreview || buildCloudSyncTreeFromSnapshot(snapshot, { forceIncludeRoot: true })
 
         if (quota?.isOverLimit) {
           console.warn('saveAll skipped cloud sync due to quota limit', {
@@ -699,7 +720,7 @@ export const useFileSystemStore = defineStore('fs', {
     setActiveItem(item, options = {}) {
       const { ignoreLock = false } = options
       if (item === -1) {
-        this.activeItem = { data: JSON.parse(JSON.stringify(this.characterItem)) } // deep copy
+        this.activeItem = { data: cloneOutfitData(this.characterItem) }
         if (this.defaultReplaceMode === REPLACE_MODE_PRESERVE) {
           this._ensureSlotControls(this.characterItem, this.activeItem.data)
         } else {
@@ -1162,7 +1183,7 @@ export const useFileSystemStore = defineStore('fs', {
     },
 
     applyFilteredOutfitToCharacter({ outfitData = null, mode = null } = {}) {
-      const rawCharacter = this.character ? toRaw(this.character) : null
+      const rawCharacter = this.character ? identityRaw(this.character) : null
       const target = rawCharacter || hostWindow.CurrentCharacter || hostWindow.Player
       if (!target) return false
 
@@ -1190,7 +1211,7 @@ export const useFileSystemStore = defineStore('fs', {
     },
 
     removeSelectedSlotsFromCharacter() {
-      const rawCharacter = this.character ? toRaw(this.character) : null
+      const rawCharacter = this.character ? identityRaw(this.character) : null
       const target = rawCharacter || hostWindow.CurrentCharacter || hostWindow.Player
       if (!target) return false
 
@@ -1475,7 +1496,7 @@ export const useFileSystemStore = defineStore('fs', {
       if (!record || !record.data) return
       try {
         this._loadingFromHistory = true
-        this.activeItem = { data: JSON.parse(JSON.stringify(record.data)) }
+        this.activeItem = { data: cloneOutfitData(record.data) }
         this.updatePreviewItem()
         // Reset flag after a short delay to allow the update to complete
         setTimeout(() => {
@@ -1515,4 +1536,80 @@ export const useFileSystemStore = defineStore('fs', {
       }
     }
   }
-})
+}
+
+function createFileSystemStore() {
+  let api = null
+  let ctx = null
+
+  const ensure = () => {
+    if (api) return
+
+    api = createStore(() => ({ ...fileSystemStoreDefinition.state(), __rev: 0 }))
+    const getters = fileSystemStoreDefinition.getters
+    const actions = fileSystemStoreDefinition.actions
+
+    const notify = () => {
+      const state = api.getState()
+      api.setState({ ...state, __rev: (state.__rev ?? 0) + 1 }, true)
+    }
+
+    ctx = new Proxy(Object.create(null), {
+      get(_target, prop) {
+        if (typeof prop === 'symbol') return undefined
+        if (prop === '$api') return api
+        if (prop === '$notify') return notify
+        if (prop in getters) return getters[prop](api.getState())
+        if (prop in actions) {
+          return (...args) => {
+            const before = api.getState()
+            const maybeNotify = () => {
+              if (api.getState() !== before) notify()
+            }
+            const result = actions[prop].apply(ctx, args)
+            if (result && typeof result.then === 'function') {
+              return result.finally(maybeNotify)
+            }
+            maybeNotify()
+            return result
+          }
+        }
+        return api.getState()[prop]
+      },
+      set(_target, prop, value) {
+        if (typeof prop === 'string') api.setState({ [prop]: value })
+        return true
+      },
+      has(_target, prop) {
+        const state = api.getState()
+        return prop in state || prop in getters || prop in actions
+      }
+    })
+  }
+
+  const useBound = (selector) => {
+    ensure()
+    if (selector) return useStore(api, () => selector(ctx))
+    useStore(api, (state) => state.__rev)
+    return ctx
+  }
+
+  useBound.getState = () => {
+    ensure()
+    return ctx
+  }
+  useBound.subscribe = (listener) => {
+    ensure()
+    return api.subscribe(listener)
+  }
+  Object.defineProperty(useBound, 'api', {
+    get() {
+      ensure()
+      return api
+    }
+  })
+
+  return useBound
+}
+
+export const useFileSystemStore = createFileSystemStore()

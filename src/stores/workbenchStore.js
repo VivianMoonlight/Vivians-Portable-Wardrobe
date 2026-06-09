@@ -1,4 +1,5 @@
-import { defineStore } from './optionsStore'
+import { createStore } from 'zustand/vanilla'
+import { useStore } from 'zustand'
 import { hostWindow } from '@/utils/host-window.js'
 
 const ACTIVE_TAB_KEY = 'vpw.workbench.activeTab'
@@ -50,72 +51,118 @@ const defaultMobileUi = {
   }
 }
 
-export const useWorkbenchStore = defineStore('workbench', {
-  state: () => {
-    const persistedTab = safeLoadString(ACTIVE_TAB_KEY, 'wardrobe')
-    const activeTab = TABS.includes(persistedTab) ? persistedTab : 'wardrobe'
+function createInitialState() {
+  const persistedTab = safeLoadString(ACTIVE_TAB_KEY, 'wardrobe')
+  const activeTab = TABS.includes(persistedTab) ? persistedTab : 'wardrobe'
 
-    return {
-      activeTab,
-      lastTab: activeTab,
-      tabVisitOrder: [activeTab],
-      tabScrollState: {
-        wardrobe: { x: 0, y: 0 },
-        history: { x: 0, y: 0 },
-        settings: { x: 0, y: 0 }
-      },
-      wardrobeUi: safeLoadJson(WARDROBE_UI_KEY, defaultWardrobeUi),
-      mobileUi: safeLoadJson(MOBILE_UI_KEY, defaultMobileUi)
+  return {
+    activeTab,
+    lastTab: activeTab,
+    tabVisitOrder: [activeTab],
+    tabScrollState: {
+      wardrobe: { x: 0, y: 0 },
+      history: { x: 0, y: 0 },
+      settings: { x: 0, y: 0 }
+    },
+    wardrobeUi: safeLoadJson(WARDROBE_UI_KEY, defaultWardrobeUi),
+    mobileUi: safeLoadJson(MOBILE_UI_KEY, defaultMobileUi)
+  }
+}
+
+const workbenchApi = createStore((set, get) => ({
+  ...createInitialState(),
+
+  setActiveTab(tab) {
+    if (!TABS.includes(tab)) return
+
+    const current = get()
+    if (current.activeTab === tab) return
+
+    const mobileUi = ['wardrobe', 'history', 'settings'].includes(tab)
+      ? { ...current.mobileUi, mainTab: tab }
+      : current.mobileUi
+
+    set({
+      activeTab: tab,
+      lastTab: current.activeTab,
+      tabVisitOrder: [
+        ...current.tabVisitOrder.filter((t) => t !== tab),
+        tab
+      ].slice(-10),
+      mobileUi
+    })
+
+    safeSave(ACTIVE_TAB_KEY, tab)
+    if (mobileUi !== current.mobileUi) {
+      safeSave(MOBILE_UI_KEY, JSON.stringify(mobileUi))
     }
   },
-  actions: {
-    setActiveTab(tab) {
-      if (!TABS.includes(tab) || this.activeTab === tab) return
-      this.lastTab = this.activeTab
-      this.activeTab = tab
-      this.tabVisitOrder = [
-        ...this.tabVisitOrder.filter((t) => t !== tab),
-        tab
-      ].slice(-10)
-      safeSave(ACTIVE_TAB_KEY, tab)
-      if (tab === 'wardrobe' || tab === 'history' || tab === 'settings') {
-        this.mobileUi.mainTab = tab
-        safeSave(MOBILE_UI_KEY, JSON.stringify(this.mobileUi))
+
+  switchToNextTab() {
+    const current = get()
+    const idx = TABS.indexOf(current.activeTab)
+    const next = TABS[(idx + 1) % TABS.length]
+    current.setActiveTab(next)
+  },
+
+  setTabScrollState(tab, state) {
+    if (!TABS.includes(tab)) return
+
+    set((current) => ({
+      tabScrollState: {
+        ...current.tabScrollState,
+        [tab]: {
+          x: Number(state?.x) || 0,
+          y: Number(state?.y) || 0
+        }
       }
-    },
-    switchToNextTab() {
-      const idx = TABS.indexOf(this.activeTab)
-      const next = TABS[(idx + 1) % TABS.length]
-      this.setActiveTab(next)
-    },
-    setTabScrollState(tab, state) {
-      if (!TABS.includes(tab)) return
-      this.tabScrollState[tab] = {
-        x: Number(state?.x) || 0,
-        y: Number(state?.y) || 0
-      }
-    },
-    setWardrobeUi(partial) {
-      this.wardrobeUi = {
-        ...this.wardrobeUi,
-        ...partial
-      }
-      safeSave(WARDROBE_UI_KEY, JSON.stringify(this.wardrobeUi))
-    },
-    setMobileMainTab(tab) {
-      if (!['wardrobe', 'history', 'settings'].includes(tab)) return
-      this.mobileUi.mainTab = tab
-      this.setActiveTab(tab)
-      safeSave(MOBILE_UI_KEY, JSON.stringify(this.mobileUi))
-    },
-    setMobilePane(mainTab, pane) {
-      if (!['wardrobe', 'history'].includes(mainTab)) return
-      if (!['preview', 'wardrobe', 'filter'].includes(pane)) return
-      this.mobileUi.panes = {
-        ...this.mobileUi.panes,
+    }))
+  },
+
+  setWardrobeUi(partial) {
+    const wardrobeUi = {
+      ...get().wardrobeUi,
+      ...partial
+    }
+
+    set({ wardrobeUi })
+    safeSave(WARDROBE_UI_KEY, JSON.stringify(wardrobeUi))
+  },
+
+  setMobileMainTab(tab) {
+    if (!['wardrobe', 'history', 'settings'].includes(tab)) return
+
+    const mobileUi = {
+      ...get().mobileUi,
+      mainTab: tab
+    }
+
+    set({ mobileUi })
+    get().setActiveTab(tab)
+    safeSave(MOBILE_UI_KEY, JSON.stringify(get().mobileUi))
+  },
+
+  setMobilePane(mainTab, pane) {
+    if (!['wardrobe', 'history'].includes(mainTab)) return
+    if (!['preview', 'wardrobe', 'filter'].includes(pane)) return
+
+    const mobileUi = {
+      ...get().mobileUi,
+      panes: {
+        ...get().mobileUi.panes,
         [mainTab]: pane
       }
-      safeSave(MOBILE_UI_KEY, JSON.stringify(this.mobileUi))
     }
+
+    set({ mobileUi })
+    safeSave(MOBILE_UI_KEY, JSON.stringify(mobileUi))
   }
-})
+}))
+
+export function useWorkbenchStore(selector) {
+  return useStore(workbenchApi, selector)
+}
+
+useWorkbenchStore.getState = workbenchApi.getState
+useWorkbenchStore.subscribe = workbenchApi.subscribe
+useWorkbenchStore.api = workbenchApi

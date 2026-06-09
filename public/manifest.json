@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Vivians Portable Wardrobe Loader",
   "version": "0.1.0",
-  "description": "Loader for Portable Wardrobe and Vue floating panel",
+  "description": "Loader for Portable Wardrobe React floating panel",
   "permissions": ["storage", "scripting"],
   "content_scripts": [
     {

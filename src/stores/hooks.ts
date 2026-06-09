@@ -1,13 +1,13 @@
 /**
  * Typed React access to the (JS, loosely-typed) Zustand-backed stores.
  *
- * The store modules stay plain JS (faithful reuse of the original Pinia logic
- * via the options-store adapter). These thin wrappers give components a clear,
- * documented contract without re-typing the whole 1.4k-line store.
+ * The large file-system store stays plain JS while it is being migrated from
+ * its original options-style shape. These thin wrappers give components a
+ * clear, documented contract without re-typing the whole 1.4k-line store.
  *
  * Calling a store hook with no selector subscribes to the store's revision
- * counter and returns the live Pinia-style context, so reads see current state
- * and any action re-renders the component.
+ * counter and returns the live store context, so reads see current state and
+ * any action re-renders the component.
  */
 // @ts-ignore — plain JS store module
 import { useFileSystemStore as rawFs } from './fileSystemStore.js'
@@ -107,7 +107,7 @@ export interface WbCtx {
   setWardrobeUi: (partial: Partial<WardrobeUi>) => void
 }
 
-/** Reactive access to the fileSystem store (live Pinia-style context). */
+/** Reactive access to the fileSystem store (live context). */
 export function useFs(): FsCtx {
   return rawFs() as FsCtx
 }
