@@ -1,14 +1,94 @@
-import { useEffect, useRef } from 'react'
-import { Box, Button, Text } from '@mantine/core'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Box, Button, Select, Text } from '@mantine/core'
 import { useTranslation } from 'react-i18next'
 import { hostWindow } from '@/utils/host-window.js'
+import { ExternalAdapter } from '@/utils/external_adapters.js'
 import { getFs, useFsSelector } from '@/stores/hooks'
 import { useDialog } from '@/ui/dialog/DialogProvider'
+import { OVERLAY_Z_INDEX } from '@/ui/z-index'
 import { drawSourceCentered, sizeCanvasToContainer } from '@/ui/canvas-utils'
 
 interface SidePreviewProps {
   /** Show the primary "apply to character" action below the preview. */
   showApply?: boolean
+}
+
+interface CharacterOption {
+  value: string
+  label: string
+  character: any
+}
+
+const gameWindow = hostWindow as any
+
+function getCharacterName(character: any): string {
+  const nickname = typeof character?.Nickname === 'string' ? character.Nickname.trim() : ''
+  const name = typeof character?.Name === 'string' ? character.Name.trim() : ''
+  const memberNumber = character?.MemberNumber !== undefined && character?.MemberNumber !== null
+    ? String(character.MemberNumber)
+    : ''
+  return nickname || name || memberNumber || 'Character'
+}
+
+function getCharacterKey(character: any, index: number): string {
+  const memberNumber = character?.MemberNumber
+  if (memberNumber !== undefined && memberNumber !== null && memberNumber !== '') {
+    return `member:${memberNumber}`
+  }
+  const characterId = character?.CharacterID
+  if (characterId) return `id:${characterId}`
+  return `slot:${index}`
+}
+
+function getRawCharacters(): any[] {
+  const chatRoomCharacters = Array.isArray(gameWindow.ChatRoomCharacter) ? gameWindow.ChatRoomCharacter : []
+  const candidates = [gameWindow.Player, ...chatRoomCharacters].filter(Boolean)
+  const seenKeys = new Set<string>()
+  const seenRefs = new Set<any>()
+  const unique: any[] = []
+
+  for (const character of candidates) {
+    const key = getCharacterKey(character, unique.length)
+    if (seenRefs.has(character) || seenKeys.has(key)) continue
+    seenRefs.add(character)
+    seenKeys.add(key)
+    unique.push(character)
+  }
+
+  return unique
+}
+
+function getSelectableCharacterOptions(): CharacterOption[] {
+  const seen = new Set<string>()
+  return getRawCharacters()
+    .map((character, index) => ({ character, index }))
+    .filter(({ character }) => (
+      ExternalAdapter.isSelfCharacter(character) ||
+      ExternalAdapter.canChangeClothesOnCharacter(character)
+    ))
+    .map(({ character, index }) => {
+      const key = getCharacterKey(character, index)
+      const baseName = getCharacterName(character)
+      return {
+        value: key,
+        label: baseName,
+        character,
+      }
+    })
+    .filter((option) => {
+      if (seen.has(option.value)) return false
+      seen.add(option.value)
+      return true
+    })
+}
+
+function areCharacterOptionsEqual(a: CharacterOption[], b: CharacterOption[]): boolean {
+  if (a.length !== b.length) return false
+  return a.every((option, index) => (
+    option.value === b[index]?.value &&
+    option.label === b[index]?.label &&
+    option.character === b[index]?.character
+  ))
 }
 
 /**
@@ -23,11 +103,45 @@ interface SidePreviewProps {
 export function SidePreview({ showApply = false }: SidePreviewProps) {
   const { t } = useTranslation()
   const previewItem = useFsSelector((fs) => fs.previewItem)
+  const selectedCharacter = useFsSelector((fs) => fs.character)
   const dialog = useDialog()
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const previewFrameRef = useRef<HTMLDivElement>(null)
+  const [characterOptions, setCharacterOptions] = useState<CharacterOption[]>(() => getSelectableCharacterOptions())
 
   const hasItem = !!previewItem
   const itemName = previewItem?.name ?? ''
+
+  const refreshCharacterOptions = useCallback(() => {
+    setCharacterOptions((current) => {
+      const next = getSelectableCharacterOptions()
+      return areCharacterOptionsEqual(current, next) ? current : next
+    })
+  }, [])
+
+  useEffect(() => {
+    refreshCharacterOptions()
+  }, [refreshCharacterOptions])
+
+  const characterSelectData = useMemo(
+    () => characterOptions.map(({ value, label }) => ({ value, label })),
+    [characterOptions],
+  )
+
+  const selectedCharacterValue = useMemo(() => {
+    const target = selectedCharacter || gameWindow.CurrentCharacter || gameWindow.Player
+    return characterOptions.find((option) => option.character === target)?.value ?? null
+  }, [characterOptions, selectedCharacter])
+
+  const onCharacterChange = (value: string | null) => {
+    const option = characterOptions.find((entry) => entry.value === value)
+    if (!option) return
+    void getFs().initialize(option.character, {
+      keepSelection: true,
+      refreshCharacter: true,
+      preserveSlotControls: true,
+    })
+  }
 
   const applyCurrent = async () => {
     const ok = getFs().applyCurrentPreviewToCharacter()
@@ -40,7 +154,7 @@ export function SidePreview({ showApply = false }: SidePreviewProps) {
     const store = getFs()
     const canvas = canvasRef.current
     if (!canvas) return
-    const target = canvas.parentElement
+    const target = previewFrameRef.current
 
     let disposed = false
 
@@ -106,16 +220,64 @@ export function SidePreview({ showApply = false }: SidePreviewProps) {
         padding: 8,
       }}
     >
-      <canvas
-        ref={canvasRef}
+      <Select
+        data={characterSelectData}
+        value={selectedCharacterValue}
+        onChange={onCharacterChange}
+        label={t('sidePreview.targetCharacter')}
+        placeholder={t('sidePreview.noTargetCharacter')}
+        aria-label={t('sidePreview.targetCharacter')}
+        disabled={characterSelectData.length === 0}
+        size="xs"
+        comboboxProps={{ withinPortal: true, zIndex: OVERLAY_Z_INDEX }}
+        style={{ width: '100%', flex: '0 0 auto' }}
+        styles={{
+          label: {
+            color: 'var(--mantine-color-dimmed)',
+            fontWeight: 700,
+            letterSpacing: 0,
+          },
+          input: {
+            background: 'var(--mantine-color-default)',
+            borderColor: 'var(--mantine-color-default-border)',
+            color: 'var(--mantine-color-text)',
+            fontWeight: 600,
+          },
+          dropdown: {
+            background: 'var(--mantine-color-body)',
+            borderColor: 'var(--mantine-color-default-border)',
+            boxShadow: 'var(--mantine-shadow-md)',
+            zIndex: OVERLAY_Z_INDEX,
+          },
+          option: {
+            color: 'var(--mantine-color-text)',
+            fontWeight: 600,
+          },
+        }}
+      />
+      <Box
+        ref={previewFrameRef}
         style={{
           width: '100%',
           flex: '1 1 auto',
           minHeight: 180,
+          minWidth: 0,
+          position: 'relative',
+          overflow: 'hidden',
           borderRadius: 10,
-          display: 'block',
         }}
-      />
+      >
+        <canvas
+          ref={canvasRef}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            display: 'block',
+          }}
+        />
+      </Box>
       {hasItem ? (
         <Text size="sm" fw={600} truncate w="100%" ta="center">
           {itemName}

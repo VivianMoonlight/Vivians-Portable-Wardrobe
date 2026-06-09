@@ -65,8 +65,11 @@ async function injectApp(): Promise<void> {
   // Guard so a hook failure never escalates to an unhandled rejection.
   try {
     if (modApi) {
-      const fsStore = useFileSystemStore.getState()
-      hookHistory(modApi, fsStore.history, collectOutfitData)
+      hookHistory(
+        modApi,
+        (data: unknown[]) => useFileSystemStore.getState().addToHistory(data),
+        collectOutfitData,
+      )
     }
   } catch (e) {
     console.error('[VPW] hookHistory failed', e)

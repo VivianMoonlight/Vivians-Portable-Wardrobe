@@ -110,7 +110,7 @@ const compactLabel = (value: string, max = 18) => {
 }
 const normalizeSlotMode = (mode: unknown): SlotMode => (SLOT_MODE_SET.has(String(mode)) ? (mode as SlotMode) : 'empty')
 const normalizeReplaceMode = (mode: unknown): ReplaceMode =>
-  REPLACE_MODES.includes(mode as ReplaceMode) ? (mode as ReplaceMode) : 'merge-replace'
+  REPLACE_MODES.includes(mode as ReplaceMode) ? (mode as ReplaceMode) : 'fill-empty'
 
 function getGroupNameFromPart(part: WardrobePart | null | undefined) {
   if (!part) return ''

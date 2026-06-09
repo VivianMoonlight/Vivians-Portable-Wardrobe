@@ -1,9 +1,9 @@
-import { useMemo, useState, type MouseEvent } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties, type MouseEvent } from 'react'
 import { ActionIcon, Box, Button, Group, Paper, Portal, Stack, Text, TextInput } from '@mantine/core'
 import { useTranslation } from 'react-i18next'
 import { hostWindow } from '@/utils/host-window.js'
 import { ExternalAdapter } from '@/utils/external_adapters.js'
-import { getFs, type FileNode } from '@/stores/hooks'
+import { getFs, useFsSelector, type FileNode } from '@/stores/hooks'
 import { useDialog } from '@/ui/dialog/DialogProvider'
 import { OVERLAY_Z_INDEX } from '@/ui/z-index'
 import { FileThumbnail } from './FileThumbnail'
@@ -44,14 +44,17 @@ function canUseHover(): boolean {
 export function HistoryViewer() {
   const { t } = useTranslation()
   const dialog = useDialog()
-  // History is mutated in-place on the HistoryRecord instance (no top-level
-  // state reassign), so we keep a local copy and refresh manually.
+  const historyVersion = useFsSelector((fs) => fs.historyVersion)
   const [records, setRecords] = useState<HistoryRecord[]>(() => getFs().getHistoryRecords() as HistoryRecord[])
   const [searchQuery, setSearchQuery] = useState('')
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('all')
   const [menu, setMenu] = useState<MenuState>({ visible: false, x: 0, y: 0, record: null })
 
   const refresh = () => setRecords(getFs().getHistoryRecords() as HistoryRecord[])
+
+  useEffect(() => {
+    refresh()
+  }, [historyVersion])
 
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
@@ -174,7 +177,8 @@ export function HistoryViewer() {
           minHeight: 200,
           overflowY: 'auto',
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(136px, 160px))',
+          alignItems: 'start',
           gap: 12,
           padding: 4,
         }}
@@ -184,10 +188,9 @@ export function HistoryViewer() {
             <Paper
               key={`${record.name}-${idx}`}
               withBorder
-              radius="md"
+              radius="sm"
               shadow="xs"
-              p="sm"
-              style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}
+              style={historyCardStyle}
               tabIndex={0}
               onClick={() => onRecordClick(record)}
               onDoubleClick={() => applyRecord(record)}
@@ -197,14 +200,26 @@ export function HistoryViewer() {
             >
               <Box
                 style={{
-                  width: 116,
-                  aspectRatio: '9 / 16',
-                  borderRadius: 10,
+                  position: 'relative',
+                  width: '100%',
+                  paddingTop: '177.78%',
+                  flex: '0 0 auto',
+                  borderRadius: 8,
                   overflow: 'hidden',
                   background: 'var(--mantine-color-default-hover)',
                 }}
               >
-                <FileThumbnail item={record} />
+                <Box
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <FileThumbnail item={record} />
+                </Box>
               </Box>
               <Text size="xs" ta="center" truncate w="100%">
                 {formatTimestamp(record.name)}
@@ -241,4 +256,15 @@ export function HistoryViewer() {
       )}
     </Stack>
   )
+}
+
+const historyCardStyle: CSSProperties = {
+  cursor: 'pointer',
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'stretch',
+  gap: 6,
+  padding: 6,
+  width: '100%',
+  overflow: 'hidden',
 }

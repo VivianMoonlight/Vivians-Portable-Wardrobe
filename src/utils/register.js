@@ -428,7 +428,12 @@ export function hookHistory(modApi, HistoryRecord, getOutfitData) {
         const [C] = args;
         if (C.IsPlayer()) {
             try {
-                HistoryRecord.addRecord(getOutfitData(C));
+                const data = getOutfitData(C);
+                if (typeof HistoryRecord === 'function') {
+                    HistoryRecord(data);
+                } else {
+                    HistoryRecord.addRecord(data);
+                }
             } catch (e) {
                 console.error("[VPW] hookHistory CharacterRefresh failed:", e);
             }

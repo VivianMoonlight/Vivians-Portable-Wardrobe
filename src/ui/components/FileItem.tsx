@@ -7,9 +7,11 @@ import { getFs, useFsSelector, type FileNode } from '@/stores/hooks'
 import { useDialog } from '@/ui/dialog/DialogProvider'
 import { OVERLAY_Z_INDEX } from '@/ui/z-index'
 import { FileThumbnail } from './FileThumbnail'
+import { canMovePayloadToPath, readFileDragPayload, writeFileDragPayload } from './file-dnd'
 
 interface FileItemProps {
   item: FileNode
+  sourcePath: string[]
   viewMode: 'large' | 'small' | 'list'
   onOpenFolder: () => void
   onRemove: () => void
@@ -26,7 +28,7 @@ function canUseHover(): boolean {
   return !!(hostWindow.matchMedia && hostWindow.matchMedia('(hover: hover) and (pointer: fine)').matches)
 }
 
-export const FileItem = memo(function FileItem({ item, viewMode, onOpenFolder, onRemove, onRename }: FileItemProps) {
+export const FileItem = memo(function FileItem({ item, sourcePath, viewMode, onOpenFolder, onRemove, onRename }: FileItemProps) {
   const { t } = useTranslation()
   const dialog = useDialog()
   const isPreviewLocked = useFsSelector((fs) => fs.lockedItem === item)
@@ -122,34 +124,23 @@ export const FileItem = memo(function FileItem({ item, viewMode, onOpenFolder, o
 
   // ---- drag & drop (move into folders / breadcrumb) ----
   const onDragStart = (event: DragEvent) => {
-    const payload = { name: item.name, fromPath: getFs().currentPath, type: item.type || 'file' }
-    try {
-      event.dataTransfer.setData('application/json', JSON.stringify(payload))
-    } catch {
-      event.dataTransfer.setData('text/plain', JSON.stringify(payload))
-    }
+    writeFileDragPayload(event, { name: item.name, fromPath: sourcePath, type: item.type || 'file' })
     event.dataTransfer.effectAllowed = 'move'
   }
   const onDragOver = (event: DragEvent) => {
     if (!isFolder) return
     event.preventDefault()
+    event.stopPropagation()
     event.dataTransfer.dropEffect = 'move'
   }
   const onDrop = (event: DragEvent) => {
     if (!isFolder) return
     event.preventDefault()
-    let payload: { name?: string; fromPath?: string[] } | null = null
-    try {
-      payload = JSON.parse(
-        event.dataTransfer.getData('application/json') || event.dataTransfer.getData('text/plain'),
-      )
-    } catch {
-      return
-    }
-    if (!payload?.name) return
-    const store = getFs()
-    const targetPath = [...store.currentPath, item.name]
-    store.moveFile(payload.name, payload.fromPath ?? store.currentPath, targetPath)
+    event.stopPropagation()
+    const payload = readFileDragPayload(event)
+    const targetPath = [...sourcePath, item.name]
+    if (!canMovePayloadToPath(payload, targetPath)) return
+    getFs().moveFile(payload.name, payload.fromPath, targetPath)
   }
 
   const isList = viewMode === 'list'
@@ -311,7 +302,7 @@ export const FileItem = memo(function FileItem({ item, viewMode, onOpenFolder, o
       )}
     </>
   )
-}, (prev, next) => prev.item === next.item && prev.viewMode === next.viewMode)
+}, (prev, next) => prev.item === next.item && prev.viewMode === next.viewMode && prev.sourcePath === next.sourcePath)
 
 interface ContextMenuProps {
   x: number

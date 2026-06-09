@@ -23,6 +23,9 @@
     "refreshThumbnails": "刷新缩略图",
     "closePanel": "关闭面板",
     "promptNewFolderName": "新建文件夹名",
+    "goUp": "返回上一级",
+    "parentFolder": "上一级",
+    "dropToParentTitle": "拖到这里移到上一级文件夹",
     "searchPlaceholderCurrent": "在当前文件夹搜索...",
     "searchPlaceholderAll": "搜索所有文件夹...",
     "searchAria": "搜索文件",
@@ -509,7 +512,9 @@
   },
   "sidePreview": {
     "ariaLabel": "预览面板",
-    "hint": "悬停可预览，单击可锁定/解锁当前预览"
+    "hint": "悬停可预览，单击可锁定/解锁当前预览",
+    "targetCharacter": "目标角色",
+    "noTargetCharacter": "无可用角色"
   },
   "stackDetail": {
     "ariaLabel": "Stack 详细信息面板",

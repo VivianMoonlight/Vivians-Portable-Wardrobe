@@ -36,7 +36,7 @@ const SLOT_MODE_EMPTY = 'empty'
 const SLOT_MODE_ORIGINAL = 'original'
 const SLOT_MODE_INCOMING = 'incoming'
 
-const DEFAULT_REPLACE_MODE = 'merge-replace'
+const DEFAULT_REPLACE_MODE = 'fill-empty'
 const REPLACE_MODE_PRESERVE = 'preserve'
 const REPLACE_MODE_SET = new Set(['fill-empty', 'merge-replace', 'full-replace', REPLACE_MODE_PRESERVE])
 // Slot has three explicit states only: original (keep character) / incoming
@@ -227,6 +227,7 @@ const fileSystemStoreDefinition = {
     fs: new FileSystem('Home'),
     fileTreeVersion: 0,
     history: new HistoryRecord('History', 100),
+    historyVersion: 0,
     currentPath: ['Home'],
     renderer: new RenderService({ drawCallbacks: RenderApi }),
     thumbnailRefreshVersion: 0,
@@ -436,6 +437,7 @@ const fileSystemStoreDefinition = {
     async initialize(character, options = {}) {
       const target = character || hostWindow.CurrentCharacter || hostWindow.Player || null
       this.setCharacter(target)
+      const preserveSlotControls = options.preserveSlotControls === true
 
       if (options.preInitialize !== false) {
         await this.preInitialize(target)
@@ -461,8 +463,10 @@ const fileSystemStoreDefinition = {
       }
 
       this.previewItem = { data: [] }
-      this._applyReplaceModeToAllSlots(this.defaultReplaceMode)
-      this.updatePreviewItem()
+      if (!preserveSlotControls) {
+        this._applyReplaceModeToAllSlots(this.defaultReplaceMode)
+      }
+      this.updatePreviewItem({ preserveSlotControls })
       this._lastInitializedCharacterKey = characterKey
     },
 
@@ -470,13 +474,15 @@ const fileSystemStoreDefinition = {
     // ----------------------
     // 更新绘画方法
     // ----------------------
-    updatePreviewItem() {
+    updatePreviewItem(options = {}) {
       if (typeof this.renderer.renderPreviewWithItem === 'function') {
         this.previewItem = { data: [] } // 清理旧的
         const characterData = Array.isArray(this.characterItem) ? this.characterItem.slice() : []
         const sourceData = Array.isArray(this.activeItem?.data) ? this.activeItem.data : []
 
-        this._ensureSlotControls(characterData, sourceData)
+        if (options.preserveSlotControls !== true) {
+          this._ensureSlotControls(characterData, sourceData)
+        }
         this.previewItem.data = this._buildBundleBySlotControls(characterData, sourceData)
         this.renderer.renderPreviewWithItem(this.previewItem)
       }
@@ -693,6 +699,7 @@ const fileSystemStoreDefinition = {
           this.storage.saveLocal(localKey, onlineData)
         }
 
+        this.loadHistory()
         this.refreshCloudQuotaStats()
       } catch (e) {
         console.warn('loadAll failed', e)
@@ -1444,7 +1451,9 @@ const fileSystemStoreDefinition = {
     addToHistory(data) {
       if (!data || !Array.isArray(data) || data.length === 0) return
       try {
-        this.history.addRecord(JSON.parse(JSON.stringify(data)))
+        const entry = this.history.addRecord(JSON.parse(JSON.stringify(data)))
+        if (!entry) return
+        this.historyVersion = (this.historyVersion || 0) + 1
         this.saveHistory()
       } catch (e) {
         console.warn('addToHistory failed', e)
@@ -1473,6 +1482,7 @@ const fileSystemStoreDefinition = {
         const idx = root.children.findIndex(r => r === record)
         if (idx === -1) return false
         root.children.splice(idx, 1)
+        this.historyVersion = (this.historyVersion || 0) + 1
         this.saveHistory()
         return true
       } catch (e) {
@@ -1486,7 +1496,11 @@ const fileSystemStoreDefinition = {
      */
     clearHistory() {
       try {
+        const hadRecords = this.getHistoryRecords().length > 0
         this.history.clear()
+        if (hadRecords) {
+          this.historyVersion = (this.historyVersion || 0) + 1
+        }
         this.saveHistory()
       } catch (e) {
         console.warn('clearHistory failed', e)
@@ -1534,6 +1548,7 @@ const fileSystemStoreDefinition = {
         const historyData = this.storage.loadLocal(key)
         if (historyData) {
           this.history.fromJSON(historyData)
+          this.historyVersion = (this.historyVersion || 0) + 1
         }
       } catch (e) {
         console.warn('loadHistory failed', e)

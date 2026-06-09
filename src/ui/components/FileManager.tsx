@@ -1,11 +1,12 @@
-import { useMemo, useState, type CSSProperties } from 'react'
-import { ActionIcon, Box, Breadcrumbs, Button, Group, Menu, Stack, Text, TextInput } from '@mantine/core'
+import { useMemo, useState, type CSSProperties, type DragEvent } from 'react'
+import { ActionIcon, Box, Breadcrumbs, Button, Group, Menu, Paper, Stack, Text, TextInput } from '@mantine/core'
 import { useTranslation } from 'react-i18next'
 import { getFs, getWb, useFsSelector, useWbSelector, type FileNode, type SearchHit } from '@/stores/hooks'
 import { useDialog } from '@/ui/dialog/DialogProvider'
 import { useWardrobeActions } from '@/ui/wardrobe-actions'
 import { OVERLAY_Z_INDEX } from '@/ui/z-index'
 import { FileItem } from './FileItem'
+import { canMovePayloadToPath, readFileDragPayload } from './file-dnd'
 
 export function FileManager() {
   const { t } = useTranslation()
@@ -17,6 +18,7 @@ export function FileManager() {
   const searchScope = useWbSelector((wb) => wb.wardrobeUi.searchScope || 'current')
   const fileViewMode = useWbSelector((wb) => wb.wardrobeUi.fileViewMode || 'large')
   const [searchQuery, setSearchQuery] = useState('')
+  const [parentDropActive, setParentDropActive] = useState(false)
 
   const items: FileNode[] = useMemo(() => {
     return getFs().fs.getNode(currentPath)?.children ?? []
@@ -48,6 +50,29 @@ export function FileManager() {
     if (name) getFs().addFile({ name, type: 'folder', children: [] })
   }
 
+  const parentPath = currentPath.length > 1 ? currentPath.slice(0, -1) : null
+  const pathTitle = currentPath.join(' / ')
+
+  const onParentDragOver = (event: DragEvent) => {
+    if (!parentPath) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+    setParentDropActive(true)
+  }
+
+  const onParentDragLeave = () => {
+    setParentDropActive(false)
+  }
+
+  const onParentDrop = (event: DragEvent) => {
+    if (!parentPath) return
+    event.preventDefault()
+    setParentDropActive(false)
+    const payload = readFileDragPayload(event)
+    if (!canMovePayloadToPath(payload, parentPath)) return
+    getFs().moveFile(payload.name, payload.fromPath, parentPath)
+  }
+
   const gridStyle: CSSProperties =
     fileViewMode === 'list'
       ? { display: 'flex', flexDirection: 'column', gap: 10 }
@@ -64,20 +89,72 @@ export function FileManager() {
 
   return (
     <Stack gap="sm" h="100%" style={{ minHeight: 0 }}>
-      <Breadcrumbs separator="›">
-        {currentPath.map((seg, idx) => (
-          <Text
-            key={`${seg}-${idx}`}
-            size="sm"
-            c={idx === currentPath.length - 1 ? undefined : 'blue'}
-            fw={idx === currentPath.length - 1 ? 600 : 400}
-            style={{ cursor: idx === currentPath.length - 1 ? 'default' : 'pointer' }}
-            onClick={() => getFs().moveTo(currentPath.slice(0, idx + 1))}
+      <Paper withBorder radius="md" p={6} style={{ flex: '0 0 auto' }}>
+        <Group gap={6} wrap="nowrap" align="center">
+          <ActionIcon
+            variant="default"
+            size="md"
+            disabled={!parentPath}
+            title={t('fileManager.goUp')}
+            aria-label={t('fileManager.goUp')}
+            onClick={() => parentPath && getFs().moveTo(parentPath)}
           >
-            {seg}
-          </Text>
-        ))}
-      </Breadcrumbs>
+            ↑
+          </ActionIcon>
+          <Box style={{ flex: 1, minWidth: 0 }} title={pathTitle}>
+            <Breadcrumbs separator="/" styles={{ root: { flexWrap: 'nowrap' }, separator: { marginInline: 4 } }}>
+              {currentPath.map((seg, idx) => {
+                const isCurrent = idx === currentPath.length - 1
+                return (
+                  <Text
+                    key={`${seg}-${idx}`}
+                    size="sm"
+                    c={isCurrent ? undefined : 'blue'}
+                    fw={isCurrent ? 700 : 500}
+                    truncate
+                    maw={idx === 0 ? 120 : 180}
+                    style={{ cursor: isCurrent ? 'default' : 'pointer' }}
+                    onClick={() => {
+                      if (!isCurrent) getFs().moveTo(currentPath.slice(0, idx + 1))
+                    }}
+                  >
+                    {seg}
+                  </Text>
+                )
+              })}
+            </Breadcrumbs>
+          </Box>
+          {parentPath && (
+            <Box
+              role="button"
+              tabIndex={0}
+              title={t('fileManager.dropToParentTitle')}
+              onClick={() => getFs().moveTo(parentPath)}
+              onDragOver={onParentDragOver}
+              onDragLeave={onParentDragLeave}
+              onDrop={onParentDrop}
+              style={{
+                flex: '0 0 auto',
+                minWidth: 118,
+                maxWidth: 170,
+                padding: '6px 10px',
+                borderRadius: 8,
+                border: parentDropActive
+                  ? '1px solid var(--mantine-color-teal-5)'
+                  : '1px dashed var(--mantine-color-default-border)',
+                background: parentDropActive ? 'var(--mantine-color-teal-light)' : 'var(--mantine-color-default-hover)',
+                color: parentDropActive ? 'var(--mantine-color-teal-light-color)' : undefined,
+                cursor: 'pointer',
+                transition: 'background 120ms ease, border-color 120ms ease',
+              }}
+            >
+              <Text size="xs" fw={700} truncate>
+                ↑ {t('fileManager.parentFolder')}
+              </Text>
+            </Box>
+          )}
+        </Group>
+      </Paper>
 
       <Group gap="sm" wrap="nowrap">
         <TextInput
@@ -174,6 +251,7 @@ export function FileManager() {
               <FileItem
                 key={`${entry.path.join('/')}/${entry.item.name}`}
                 item={entry.item}
+                sourcePath={entry.path}
                 viewMode={fileViewMode}
                 onOpenFolder={() => {
                   if (entry.item.type === 'folder') getFs().moveTo([...entry.path, entry.item.name])

@@ -23,6 +23,9 @@
     "refreshThumbnails": "Refresh thumbnails",
     "closePanel": "Close panel",
     "promptNewFolderName": "New folder name",
+    "goUp": "Go to parent folder",
+    "parentFolder": "Parent folder",
+    "dropToParentTitle": "Drop here to move to the parent folder",
     "searchPlaceholderCurrent": "Search in current folder...",
     "searchPlaceholderAll": "Search all folders...",
     "searchAria": "Search files",
@@ -509,7 +512,9 @@
   },
   "sidePreview": {
     "ariaLabel": "Preview panel",
-    "hint": "Hover to preview, click to lock/unlock current preview"
+    "hint": "Hover to preview, click to lock/unlock current preview",
+    "targetCharacter": "Target character",
+    "noTargetCharacter": "No available character"
   },
   "stackDetail": {
     "ariaLabel": "Stack Detail Panel",

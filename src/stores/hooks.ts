@@ -33,6 +33,7 @@ export interface FsCtx {
   // state
   fs: any
   fileTreeVersion: number
+  historyVersion: number
   currentPath: string[]
   renderer: any
   character: any
@@ -53,7 +54,7 @@ export interface FsCtx {
   currentNode: { children?: FileNode[] } | null
   filteredItems: FileNode[]
   // actions
-  initialize: (character?: any, options?: Record<string, unknown>) => Promise<void>
+  initialize: (character?: any, options?: Record<string, unknown> & { preserveSlotControls?: boolean }) => Promise<void>
   moveTo: (path: string[]) => void
   addFile: (file: Partial<FileNode>) => void
   removeFile: (item: FileNode, parentPath?: string[]) => void
@@ -71,6 +72,7 @@ export interface FsCtx {
   setNodeCloudSync: (item: FileNode, enabled: boolean, opts?: { recursive?: boolean }) => boolean
   refreshCloudQuotaStats: (snapshot?: unknown) => unknown
   // history
+  addToHistory: (data: unknown[]) => void
   getHistoryRecords: () => Array<{ name: string; data?: unknown[] }>
   loadHistoryRecord: (record: unknown) => void
   deleteHistoryRecord: (record: unknown) => boolean
