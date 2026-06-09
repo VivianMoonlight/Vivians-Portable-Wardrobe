@@ -3,7 +3,7 @@ import { ActionIcon, Box, Button, Group, Paper, Portal, Stack, Text, TextInput }
 import { useTranslation } from 'react-i18next'
 import { hostWindow } from '@/utils/host-window.js'
 import { ExternalAdapter } from '@/utils/external_adapters.js'
-import { getFs, useFs, type FileNode } from '@/stores/hooks'
+import { getFs, type FileNode } from '@/stores/hooks'
 import { useDialog } from '@/ui/dialog/DialogProvider'
 import { OVERLAY_Z_INDEX } from '@/ui/z-index'
 import { FileThumbnail } from './FileThumbnail'
@@ -44,7 +44,6 @@ function canUseHover(): boolean {
 export function HistoryViewer() {
   const { t } = useTranslation()
   const dialog = useDialog()
-  const fs = useFs()
   // History is mutated in-place on the HistoryRecord instance (no top-level
   // state reassign), so we keep a local copy and refresh manually.
   const [records, setRecords] = useState<HistoryRecord[]>(() => getFs().getHistoryRecords() as HistoryRecord[])
@@ -72,7 +71,7 @@ export function HistoryViewer() {
 
   const applyRecord = (record: HistoryRecord) => {
     if (!Array.isArray(record?.data) || record.data.length === 0) return
-    const target = fs.character || (hostWindow as any).CurrentCharacter || (hostWindow as any).Player
+    const target = getFs().character || (hostWindow as any).CurrentCharacter || (hostWindow as any).Player
     if (!target) return
     try {
       ExternalAdapter.applyOutfitToCharacter(target, record.data)
@@ -82,15 +81,16 @@ export function HistoryViewer() {
   }
 
   const onRecordClick = (record: HistoryRecord) => {
+    const fs = getFs()
     fs.setActiveItem(record)
     fs.loadHistoryRecord(record)
   }
 
   const onRecordEnter = (record: HistoryRecord) => {
-    if (canUseHover()) fs.setActiveItem(record)
+    if (canUseHover()) getFs().setActiveItem(record)
   }
   const onRecordLeave = () => {
-    if (canUseHover()) fs.setActiveItem(-1)
+    if (canUseHover()) getFs().setActiveItem(-1)
   }
 
   const openMenu = (event: MouseEvent, record: HistoryRecord) => {
@@ -110,14 +110,14 @@ export function HistoryViewer() {
   const deleteRecord = async (record: HistoryRecord) => {
     closeMenu()
     if (await dialog.confirm(t('historyViewer.deleteConfirm'))) {
-      fs.deleteHistoryRecord(record)
+      getFs().deleteHistoryRecord(record)
       refresh()
     }
   }
 
   const clearAll = async () => {
     if (await dialog.confirm(t('historyViewer.clearAllConfirm'))) {
-      fs.clearHistory()
+      getFs().clearHistory()
       refresh()
     }
   }

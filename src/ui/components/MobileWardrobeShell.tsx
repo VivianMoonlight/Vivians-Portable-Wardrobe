@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { ActionIcon, Box, Button, Group, SegmentedControl, Stack, Text } from '@mantine/core'
 import { useTranslation } from 'react-i18next'
-import { useWb } from '@/stores/hooks'
+import { getWb, useWbSelector } from '@/stores/hooks'
 import { useTheme } from '@/ui/theme/ThemeProvider'
 import { FileManager } from './FileManager'
 import { HistoryViewer } from './HistoryViewer'
@@ -21,11 +21,11 @@ type Pane = 'preview' | 'list' | 'filter'
  */
 export function MobileWardrobeShell({ onClose }: MobileWardrobeShellProps) {
   const { t } = useTranslation()
-  const wb = useWb()
+  const rawActiveTab = useWbSelector((wb) => wb.activeTab)
   const theme = useTheme()
   const [pane, setPane] = useState<Pane>('list')
 
-  const mainTab = wb.activeTab === 'studio' ? 'wardrobe' : wb.activeTab
+  const mainTab = rawActiveTab === 'studio' ? 'wardrobe' : rawActiveTab
 
   return (
     <Stack gap="xs" h="100%" style={{ minHeight: 0 }} p="xs">
@@ -39,7 +39,7 @@ export function MobileWardrobeShell({ onClose }: MobileWardrobeShellProps) {
       <SegmentedControl
         fullWidth
         value={mainTab}
-        onChange={(v) => wb.setActiveTab(v)}
+        onChange={(v) => getWb().setActiveTab(v)}
         data={[
           { value: 'wardrobe', label: t('fileManagerPanel.tabWardrobe') },
           { value: 'history', label: t('fileManagerPanel.tabHistory') },

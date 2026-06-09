@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPoi
 import { ActionIcon, Box, Button, CloseButton, Divider, Flex, Group, Modal, Paper, Portal, Tabs, Text, Tooltip } from '@mantine/core'
 import { useTranslation } from 'react-i18next'
 import { hostWindow } from '@/utils/host-window.js'
-import { getFs, useWb } from '@/stores/hooks'
+import { getFs, getWb, useWbSelector } from '@/stores/hooks'
 import { useTheme } from '@/ui/theme/ThemeProvider'
 import { useIsMobile } from '@/ui/hooks/useIsMobile'
 import { FileManager } from './FileManager'
@@ -29,7 +29,7 @@ function clamp(value: number, min: number, max: number): number {
 
 export function FileManagerPanel({ opened, onClose }: FileManagerPanelProps) {
   const { t } = useTranslation()
-  const wb = useWb()
+  const rawActiveTab = useWbSelector((wb) => wb.activeTab)
   const theme = useTheme()
   const isMobile = useIsMobile()
   const [showFilters, setShowFilters] = useState(true)
@@ -191,7 +191,7 @@ export function FileManagerPanel({ opened, onClose }: FileManagerPanelProps) {
     hostWindow.addEventListener('pointerup', onPanelPointerUp)
   }
 
-  const activeTab = wb.activeTab === 'studio' ? 'wardrobe' : wb.activeTab
+  const activeTab = rawActiveTab === 'studio' ? 'wardrobe' : rawActiveTab
   const showSidebars = activeTab === 'wardrobe' || activeTab === 'history'
 
   // ---- Mobile: full-screen modal (no drag/resize) ----
@@ -262,7 +262,7 @@ export function FileManagerPanel({ opened, onClose }: FileManagerPanelProps) {
         <Box style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: 'var(--mantine-spacing-md)' }}>
           <Tabs
             value={activeTab}
-            onChange={(value) => value && wb.setActiveTab(value)}
+            onChange={(value) => value && getWb().setActiveTab(value)}
             style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}
           >
             <Group justify="space-between">

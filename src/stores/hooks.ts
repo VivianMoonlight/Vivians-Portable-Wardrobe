@@ -32,6 +32,7 @@ export interface SearchHit {
 export interface FsCtx {
   // state
   fs: any
+  fileTreeVersion: number
   currentPath: string[]
   renderer: any
   character: any
@@ -39,6 +40,7 @@ export interface FsCtx {
   previewItem: { name?: string; data?: unknown[] } | null
   activeItem: { data?: unknown[] } | null
   lockedItem: FileNode | null
+  thumbnailRefreshVersion: number
   activeFilters: string[]
   cloudQuota: {
     usedBytes?: number
@@ -125,4 +127,14 @@ export function getFs(): FsCtx {
 /** Reactive access to the workbench store. */
 export function useWb(): WbCtx {
   return rawWb() as WbCtx
+}
+
+/** Fine-grained reactive access to the workbench store. */
+export function useWbSelector<U>(selector: (ctx: WbCtx) => U): U {
+  return rawWb(selector as any) as U
+}
+
+/** Non-reactive workbench access for event handlers. */
+export function getWb(): WbCtx {
+  return rawWb.getState() as WbCtx
 }

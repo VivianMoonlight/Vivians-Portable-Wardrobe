@@ -1,7 +1,7 @@
 import { useMemo, useState, type CSSProperties } from 'react'
 import { ActionIcon, Box, Breadcrumbs, Button, Group, Menu, Stack, Text, TextInput } from '@mantine/core'
 import { useTranslation } from 'react-i18next'
-import { useFs, useWb, type FileNode, type SearchHit } from '@/stores/hooks'
+import { getFs, getWb, useFsSelector, useWbSelector, type FileNode, type SearchHit } from '@/stores/hooks'
 import { useDialog } from '@/ui/dialog/DialogProvider'
 import { useWardrobeActions } from '@/ui/wardrobe-actions'
 import { OVERLAY_Z_INDEX } from '@/ui/z-index'
@@ -11,19 +11,16 @@ export function FileManager() {
   const { t } = useTranslation()
   const dialog = useDialog()
   const actions = useWardrobeActions()
-  const fs = useFs()
-  const wb = useWb()
+  const currentPath = useFsSelector((fs) => fs.currentPath)
+  const fileTreeVersion = useFsSelector((fs) => fs.fileTreeVersion)
+  const thumbnailRefreshVersion = useFsSelector((fs) => fs.thumbnailRefreshVersion)
+  const searchScope = useWbSelector((wb) => wb.wardrobeUi.searchScope || 'current')
+  const fileViewMode = useWbSelector((wb) => wb.wardrobeUi.fileViewMode || 'large')
   const [searchQuery, setSearchQuery] = useState('')
 
-  const searchScope = wb.wardrobeUi.searchScope || 'current'
-  const fileViewMode = wb.wardrobeUi.fileViewMode || 'large'
-
-  const items: FileNode[] = fs.currentNode?.children ?? []
-  const currentPath = fs.currentPath
-  // FileSystem mutates children arrays in place, so `items` keeps the same
-  // reference after add/delete/rename. The store bumps `__rev` on every action,
-  // so depend on it to recompute the list after those mutations.
-  const fsRev = (fs as any).__rev
+  const items: FileNode[] = useMemo(() => {
+    return getFs().fs.getNode(currentPath)?.children ?? []
+  }, [currentPath, fileTreeVersion])
 
   const displayList: SearchHit[] = useMemo(() => {
     const q = searchQuery.trim()
@@ -37,19 +34,18 @@ export function FileManager() {
         .map((it) => ({ item: it, path: currentPath }))
     } else {
       try {
-        base = fs.searchFiles(q)
+        base = getFs().searchFiles(q)
       } catch {
         base = []
       }
     }
 
     return [...base].reverse()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fsRev, items, currentPath, searchQuery, searchScope])
+  }, [currentPath, fileTreeVersion, items, searchQuery, searchScope, thumbnailRefreshVersion])
 
   const addFolder = async () => {
     const name = await dialog.prompt(t('fileManager.promptNewFolderName'))
-    if (name) fs.addFile({ name, type: 'folder', children: [] })
+    if (name) getFs().addFile({ name, type: 'folder', children: [] })
   }
 
   const gridStyle: CSSProperties =
@@ -76,7 +72,7 @@ export function FileManager() {
             c={idx === currentPath.length - 1 ? undefined : 'blue'}
             fw={idx === currentPath.length - 1 ? 600 : 400}
             style={{ cursor: idx === currentPath.length - 1 ? 'default' : 'pointer' }}
-            onClick={() => fs.moveTo(currentPath.slice(0, idx + 1))}
+            onClick={() => getFs().moveTo(currentPath.slice(0, idx + 1))}
           >
             {seg}
           </Text>
@@ -109,7 +105,7 @@ export function FileManager() {
               ? t('fileManager.switchToGlobalSearch')
               : t('fileManager.switchToCurrentSearch')
           }
-          onClick={() => wb.setWardrobeUi({ searchScope: searchScope === 'current' ? 'all' : 'current' })}
+          onClick={() => getWb().setWardrobeUi({ searchScope: searchScope === 'current' ? 'all' : 'current' })}
         >
           {searchScope === 'current' ? '🔍' : '🌐'}
         </ActionIcon>
@@ -119,7 +115,7 @@ export function FileManager() {
         <Button
           variant="subtle"
           size="xs"
-          onClick={() => fs.refreshThumbnails(displayList.map((entry) => entry.item))}
+          onClick={() => getFs().refreshThumbnails(displayList.map((entry) => entry.item))}
         >
           {t('fileManager.refreshThumbnails')}
         </Button>
@@ -130,7 +126,7 @@ export function FileManager() {
                 key={mode}
                 size="xs"
                 variant={fileViewMode === mode ? 'filled' : 'default'}
-                onClick={() => wb.setWardrobeUi({ fileViewMode: mode })}
+                onClick={() => getWb().setWardrobeUi({ fileViewMode: mode })}
                 title={
                   mode === 'large'
                     ? t('fileManager.viewLarge')
@@ -180,12 +176,12 @@ export function FileManager() {
                 item={entry.item}
                 viewMode={fileViewMode}
                 onOpenFolder={() => {
-                  if (entry.item.type === 'folder') fs.moveTo([...entry.path, entry.item.name])
+                  if (entry.item.type === 'folder') getFs().moveTo([...entry.path, entry.item.name])
                 }}
-                onRemove={() => fs.removeFile(entry.item, entry.path)}
+                onRemove={() => getFs().removeFile(entry.item, entry.path)}
                 onRename={(newName) => {
                   entry.item.name = newName
-                  fs.saveAll()
+                  getFs().saveAll()
                 }}
               />
             ))

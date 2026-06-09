@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { Box, Button, Text } from '@mantine/core'
 import { useTranslation } from 'react-i18next'
 import { hostWindow } from '@/utils/host-window.js'
-import { getFs, useFs } from '@/stores/hooks'
+import { getFs, useFsSelector } from '@/stores/hooks'
 import { useDialog } from '@/ui/dialog/DialogProvider'
 import { drawSourceCentered, sizeCanvasToContainer } from '@/ui/canvas-utils'
 
@@ -22,11 +22,10 @@ interface SidePreviewProps {
  */
 export function SidePreview({ showApply = false }: SidePreviewProps) {
   const { t } = useTranslation()
-  const fs = useFs()
+  const previewItem = useFsSelector((fs) => fs.previewItem)
   const dialog = useDialog()
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
-  const previewItem = fs.previewItem
   const hasItem = !!previewItem
   const itemName = previewItem?.name ?? ''
 

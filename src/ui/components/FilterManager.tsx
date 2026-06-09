@@ -28,7 +28,9 @@ type NameMap = Record<string, string>
 type ScopeStates = Record<SlotMode, ScopeState>
 interface FilterGroupCardProps {
   group: FilterGroup
+  isVisible: boolean
   isCollapsed: boolean
+  showAllSlots: boolean
   hiddenBadge: string
   emptyItemsLabel: string
   applyMode: ReplaceMode
@@ -48,6 +50,22 @@ interface FilterGroupCardProps {
   dotLabels: { inCharacter: string; inHover: string; none: string }
   onToggleCollapsed: (id: string) => void
   onApplyGroupMode: (id: string, mode: SlotMode) => void
+  onSetSlotMode: (key: string, mode: SlotMode) => void
+}
+interface FilterItemRowProps {
+  item: FilterItem
+  isVisible: boolean
+  presence: { inCharacter?: boolean; inHover?: boolean }
+  mode: SlotMode
+  isDefault: boolean
+  characterName: string
+  incomingName: string
+  noItemName: string
+  emptyLabel: string
+  characterLabel: string
+  incomingLabel: string
+  ariaLabel: string
+  dotLabels: { inCharacter: string; inHover: string; none: string }
   onSetSlotMode: (key: string, mode: SlotMode) => void
 }
 
@@ -231,6 +249,7 @@ const ScopeToggles = memo(function ScopeToggles({
 
 const FilterItemRow = memo(function FilterItemRow({
   item,
+  isVisible,
   presence,
   mode,
   isDefault,
@@ -243,21 +262,7 @@ const FilterItemRow = memo(function FilterItemRow({
   ariaLabel,
   dotLabels,
   onSetSlotMode,
-}: {
-  item: FilterItem
-  presence: { inCharacter?: boolean; inHover?: boolean }
-  mode: SlotMode
-  isDefault: boolean
-  characterName: string
-  incomingName: string
-  noItemName: string
-  emptyLabel: string
-  characterLabel: string
-  incomingLabel: string
-  ariaLabel: string
-  dotLabels: { inCharacter: string; inHover: string; none: string }
-  onSetSlotMode: (key: string, mode: SlotMode) => void
-}) {
+}: FilterItemRowProps) {
   const dotColor = presence.inCharacter
     ? DOT_COLORS.inCharacter
     : presence.inHover
@@ -284,6 +289,7 @@ const FilterItemRow = memo(function FilterItemRow({
       px={6}
       py={4}
       style={{
+        display: isVisible ? 'flex' : 'none',
         borderRadius: 6,
         background: isDefault ? undefined : 'var(--mantine-color-blue-light)',
       }}
@@ -313,11 +319,33 @@ const FilterItemRow = memo(function FilterItemRow({
       </Tooltip>
     </Group>
   )
-})
+}, areFilterItemRowPropsEqual)
+
+function areFilterItemRowPropsEqual(prev: FilterItemRowProps, next: FilterItemRowProps) {
+  return (
+    prev.item === next.item &&
+    prev.isVisible === next.isVisible &&
+    prev.mode === next.mode &&
+    prev.isDefault === next.isDefault &&
+    !!prev.presence.inCharacter === !!next.presence.inCharacter &&
+    !!prev.presence.inHover === !!next.presence.inHover &&
+    prev.characterName === next.characterName &&
+    prev.incomingName === next.incomingName &&
+    prev.noItemName === next.noItemName &&
+    prev.emptyLabel === next.emptyLabel &&
+    prev.characterLabel === next.characterLabel &&
+    prev.incomingLabel === next.incomingLabel &&
+    prev.ariaLabel === next.ariaLabel &&
+    prev.dotLabels === next.dotLabels &&
+    prev.onSetSlotMode === next.onSetSlotMode
+  )
+}
 
 const FilterGroupCard = memo(function FilterGroupCard({
   group,
+  isVisible,
   isCollapsed,
+  showAllSlots,
   hiddenBadge,
   emptyItemsLabel,
   applyMode,
@@ -338,7 +366,7 @@ const FilterGroupCard = memo(function FilterGroupCard({
   const applyGroupMode = useCallback((mode: SlotMode) => onApplyGroupMode(group.groupID, mode), [group.groupID, onApplyGroupMode])
 
   return (
-    <Paper withBorder radius="sm" p="xs">
+    <Paper withBorder radius="sm" p="xs" style={{ display: isVisible ? undefined : 'none' }}>
       <Group justify="space-between" wrap="nowrap" gap={4}>
         <Button
           variant="subtle"
@@ -356,10 +384,10 @@ const FilterGroupCard = memo(function FilterGroupCard({
         <ScopeToggles labels={slotLabels} tooltips={slotTooltips} states={scopeStates} onApply={applyGroupMode} />
       </Group>
 
-      {!isCollapsed && (
-        <Stack gap={4} mt="xs">
+      <Stack gap={4} mt="xs" style={{ display: isCollapsed ? 'none' : undefined }}>
           {items.map((item) => {
             const itemPresence = presence[item.key] || EMPTY_PRESENCE
+            const itemVisible = showAllSlots || !!(itemPresence.inCharacter || itemPresence.inHover)
             const mode = slotModeFor(slotControlMap, item.key)
             const isDefault =
               mode === defaultModeFor(applyMode, !!itemPresence.inCharacter, !!itemPresence.inHover)
@@ -367,6 +395,7 @@ const FilterGroupCard = memo(function FilterGroupCard({
               <FilterItemRow
                 key={item.key}
                 item={item}
+                isVisible={itemVisible}
                 presence={itemPresence}
                 mode={mode}
                 isDefault={isDefault}
@@ -388,7 +417,6 @@ const FilterGroupCard = memo(function FilterGroupCard({
             </Text>
           )}
         </Stack>
-      )}
     </Paper>
   )
 }, areFilterGroupCardPropsEqual)
@@ -405,16 +433,33 @@ function areGroupSlotModesEqual(group: FilterGroup, a: SlotControlMap, b: SlotCo
   return true
 }
 
+function areGroupPresenceValuesEqual(group: FilterGroup, a: PresenceMap, b: PresenceMap) {
+  for (const item of group.itemList ?? EMPTY_ITEMS) {
+    if (!item.key) continue
+    const ap = a[item.key] || EMPTY_PRESENCE
+    const bp = b[item.key] || EMPTY_PRESENCE
+    if (!!ap.inCharacter !== !!bp.inCharacter || !!ap.inHover !== !!bp.inHover) return false
+  }
+  return true
+}
+
+function areGroupNameValuesEqual(group: FilterGroup, a: NameMap, b: NameMap) {
+  for (const item of group.itemList ?? EMPTY_ITEMS) {
+    if (!item.key) continue
+    if ((a[item.key] || '') !== (b[item.key] || '')) return false
+  }
+  return true
+}
+
 function areFilterGroupCardPropsEqual(prev: FilterGroupCardProps, next: FilterGroupCardProps) {
   if (
     prev.group !== next.group ||
+    prev.isVisible !== next.isVisible ||
     prev.isCollapsed !== next.isCollapsed ||
+    prev.showAllSlots !== next.showAllSlots ||
     prev.hiddenBadge !== next.hiddenBadge ||
     prev.emptyItemsLabel !== next.emptyItemsLabel ||
     prev.applyMode !== next.applyMode ||
-    prev.presence !== next.presence ||
-    prev.characterPartNameBySlot !== next.characterPartNameBySlot ||
-    prev.incomingPartNameBySlot !== next.incomingPartNameBySlot ||
     prev.slotLabels !== next.slotLabels ||
     prev.slotTooltips !== next.slotTooltips ||
     prev.rowLabels !== next.rowLabels ||
@@ -426,7 +471,12 @@ function areFilterGroupCardPropsEqual(prev: FilterGroupCardProps, next: FilterGr
   ) {
     return false
   }
-  return areGroupSlotModesEqual(next.group, prev.slotControlMap, next.slotControlMap)
+  return (
+    areGroupSlotModesEqual(next.group, prev.slotControlMap, next.slotControlMap) &&
+    areGroupPresenceValuesEqual(next.group, prev.presence, next.presence) &&
+    areGroupNameValuesEqual(next.group, prev.characterPartNameBySlot, next.characterPartNameBySlot) &&
+    areGroupNameValuesEqual(next.group, prev.incomingPartNameBySlot, next.incomingPartNameBySlot)
+  )
 }
 
 export function FilterManager() {
@@ -444,7 +494,6 @@ export function FilterManager() {
 
   const applyMode = normalizeReplaceMode(rawApplyMode)
   const allGroups = (filterSnapshot?.groups as FilterGroup[] | undefined) ?? EMPTY_GROUPS
-  const visibleGroups = (filterSnapshot?.visibleGroups as FilterGroup[] | undefined) ?? EMPTY_GROUPS
   const snapshotItems = (filterSnapshot?.items as FilterItem[] | undefined) ?? EMPTY_ITEMS
 
   const presence = useMemo(() => buildSlotPresenceMap(characterItem, activeItemData), [activeItemData, characterItem])
@@ -490,24 +539,25 @@ export function FilterManager() {
     return map
   }, [allGroups, presenceSets.inCharacter, presenceSets.inIncoming, slotControlMap])
 
-  const displayGroups = useMemo(
-    () =>
-      (showAllSlots ? allGroups : visibleGroups)
-        .map((group) =>
-          showAllSlots
-            ? group
-            : {
-                ...group,
-                itemList: (group.itemList ?? EMPTY_ITEMS).filter((item) => {
-                  if (!item.key) return false
-                  const itemPresence = presence[item.key] || EMPTY_PRESENCE
-                  return !!(itemPresence.inCharacter || itemPresence.inHover)
-                }),
-              },
-        )
-        .filter((group) => showAllSlots || (group.itemList ?? EMPTY_ITEMS).length > 0),
-    [allGroups, presence, showAllSlots, visibleGroups],
-  )
+  const visibleGroupIDs = useMemo(() => {
+    const ids = new Set<string>()
+    for (const group of allGroups) {
+      if (showAllSlots) {
+        ids.add(group.groupID)
+        continue
+      }
+      if (group.isHiddenGroup) continue
+      const hasRelevantItem = (group.itemList ?? EMPTY_ITEMS).some((item) => {
+        if (!item.key) return false
+        const itemPresence = presence[item.key] || EMPTY_PRESENCE
+        return !!(itemPresence.inCharacter || itemPresence.inHover)
+      })
+      if (hasRelevantItem) ids.add(group.groupID)
+    }
+    return ids
+  }, [allGroups, presence, showAllSlots])
+
+  const hasVisibleGroups = visibleGroupIDs.size > 0
 
   const overrideCount = useMemo(() => {
     if (applyMode === 'preserve') return 0
@@ -565,8 +615,8 @@ export function FilterManager() {
     })
   }, [])
   const collapseAllGroups = useCallback(() => {
-    setCollapsed(new Set(displayGroups.map((group) => group.groupID)))
-  }, [displayGroups])
+    setCollapsed(new Set(visibleGroupIDs))
+  }, [visibleGroupIDs])
   const expandAllGroups = useCallback(() => {
     setCollapsed(new Set())
   }, [])
@@ -688,17 +738,23 @@ export function FilterManager() {
       </Collapse>
 
       <Box style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden' }}>
-        {displayGroups.length === 0 ? (
-          <Text c="dimmed" size="sm" ta="center" py="md">
+        <Text
+          c="dimmed"
+          size="sm"
+          ta="center"
+          py="md"
+          style={{ display: hasVisibleGroups ? 'none' : undefined }}
+        >
             {t('filterManager.emptyGroups')}
-          </Text>
-        ) : (
-          <Stack gap="xs">
-            {displayGroups.map((group) => (
+        </Text>
+        <Stack gap="xs">
+            {allGroups.map((group) => (
               <FilterGroupCard
                 key={group.groupID}
                 group={group}
+                isVisible={visibleGroupIDs.has(group.groupID)}
                 isCollapsed={collapsed.has(group.groupID)}
+                showAllSlots={showAllSlots}
                 hiddenBadge={t('filterManager.hiddenBadge')}
                 emptyItemsLabel={t('filterManager.emptyItems')}
                 applyMode={applyMode}
@@ -717,7 +773,6 @@ export function FilterManager() {
               />
             ))}
           </Stack>
-        )}
       </Box>
     </Stack>
   )

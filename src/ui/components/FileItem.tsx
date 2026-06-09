@@ -1,9 +1,9 @@
-import { useRef, useState, type CSSProperties, type DragEvent, type MouseEvent } from 'react'
+import { memo, useRef, useState, type CSSProperties, type DragEvent, type MouseEvent } from 'react'
 import { Box, Button, Paper, Portal, Text, UnstyledButton } from '@mantine/core'
 import { useTranslation } from 'react-i18next'
 import { hostWindow } from '@/utils/host-window.js'
 import { ExternalAdapter } from '@/utils/external_adapters.js'
-import { getFs, useFs, type FileNode } from '@/stores/hooks'
+import { getFs, useFsSelector, type FileNode } from '@/stores/hooks'
 import { useDialog } from '@/ui/dialog/DialogProvider'
 import { OVERLAY_Z_INDEX } from '@/ui/z-index'
 import { FileThumbnail } from './FileThumbnail'
@@ -26,18 +26,17 @@ function canUseHover(): boolean {
   return !!(hostWindow.matchMedia && hostWindow.matchMedia('(hover: hover) and (pointer: fine)').matches)
 }
 
-export function FileItem({ item, viewMode, onOpenFolder, onRemove, onRename }: FileItemProps) {
+export const FileItem = memo(function FileItem({ item, viewMode, onOpenFolder, onRemove, onRename }: FileItemProps) {
   const { t } = useTranslation()
   const dialog = useDialog()
-  const fs = useFs()
+  const isPreviewLocked = useFsSelector((fs) => fs.lockedItem === item)
+  const isCloudSyncEnabled = useFsSelector(() => item.cloudSync !== false)
+  const thumbnailRefresh = useFsSelector(() => item.__thumbRefresh)
   const rootRef = useRef<HTMLDivElement>(null)
   const [menu, setMenu] = useState<MenuState>({ visible: false, x: 0, y: 0 })
+  void thumbnailRefresh
 
   const isFolder = item.type === 'folder'
-  // Read state directly (do NOT call the read-only `isPreviewLockedOn` action
-  // during render).
-  const isPreviewLocked = fs.lockedItem === item
-  const isCloudSyncEnabled = item.cloudSync !== false
 
   const closeMenu = () => setMenu((m) => ({ ...m, visible: false }))
 
@@ -57,7 +56,7 @@ export function FileItem({ item, viewMode, onOpenFolder, onRemove, onRename }: F
       onOpenFolder()
       return
     }
-    fs.togglePreviewLock(item)
+    getFs().togglePreviewLock(item)
   }
 
   const applyToCharacter = () => {
@@ -65,7 +64,7 @@ export function FileItem({ item, viewMode, onOpenFolder, onRemove, onRename }: F
     const data = item.data
     if (!Array.isArray(data) || data.length === 0) return
     try {
-      fs.applyFilteredOutfitToCharacter({ outfitData: data })
+      getFs().applyFilteredOutfitToCharacter({ outfitData: data })
     } catch (e) {
       console.error('apply outfit failed', e)
     }
@@ -80,10 +79,12 @@ export function FileItem({ item, viewMode, onOpenFolder, onRemove, onRename }: F
   }
 
   const handleMouseEnter = () => {
+    const fs = getFs()
     if (fs.lockedItem || !canUseHover()) return
     fs.setActiveItem(item)
   }
   const handleMouseLeave = () => {
+    const fs = getFs()
     if (fs.lockedItem || !canUseHover()) return
     fs.setActiveItem(-1)
   }
@@ -116,7 +117,7 @@ export function FileItem({ item, viewMode, onOpenFolder, onRemove, onRename }: F
 
   const toggleCloudSync = (event: MouseEvent) => {
     event.stopPropagation()
-    fs.setNodeCloudSync(item, !isCloudSyncEnabled, { recursive: isFolder })
+    getFs().setNodeCloudSync(item, !isCloudSyncEnabled, { recursive: isFolder })
   }
 
   // ---- drag & drop (move into folders / breadcrumb) ----
@@ -148,7 +149,7 @@ export function FileItem({ item, viewMode, onOpenFolder, onRemove, onRename }: F
     if (!payload?.name) return
     const store = getFs()
     const targetPath = [...store.currentPath, item.name]
-    fs.moveFile(payload.name, payload.fromPath ?? store.currentPath, targetPath)
+    store.moveFile(payload.name, payload.fromPath ?? store.currentPath, targetPath)
   }
 
   const isList = viewMode === 'list'
@@ -310,7 +311,7 @@ export function FileItem({ item, viewMode, onOpenFolder, onRemove, onRename }: F
       )}
     </>
   )
-}
+}, (prev, next) => prev.item === next.item && prev.viewMode === next.viewMode)
 
 interface ContextMenuProps {
   x: number

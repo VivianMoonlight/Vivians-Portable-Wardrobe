@@ -225,6 +225,7 @@ function identityRaw(value) {
 const fileSystemStoreDefinition = {
   state: () => ({
     fs: new FileSystem('Home'),
+    fileTreeVersion: 0,
     history: new HistoryRecord('History', 100),
     currentPath: ['Home'],
     renderer: new RenderService({ drawCallbacks: RenderApi }),
@@ -641,6 +642,7 @@ const fileSystemStoreDefinition = {
 
     saveAll() {
       try {
+        this.fileTreeVersion = (this.fileTreeVersion || 0) + 1
         const snapshot = this.fs.toJSON()
         const localKey = buildPlayerScopedStorageKey('VPWardrobe_local')
 
@@ -684,8 +686,10 @@ const fileSystemStoreDefinition = {
         // resurrecting locally deleted items when cloud sync is skipped by quota.
         if (localData) {
           this.fs.fromJSON(localData)
+          this.fileTreeVersion = (this.fileTreeVersion || 0) + 1
         } else if (onlineData) {
           this.fs.fromJSON(onlineData)
+          this.fileTreeVersion = (this.fileTreeVersion || 0) + 1
           this.storage.saveLocal(localKey, onlineData)
         }
 
