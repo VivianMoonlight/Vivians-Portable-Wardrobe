@@ -15,6 +15,11 @@ const hosts = [
 ]
 
 export default defineConfig({
+  // Keep routine diagnostics available during development without flooding
+  // the console for production userscript installs.
+  esbuild: {
+    pure: ['console.log', 'console.info', 'console.debug'],
+  },
   plugins: [
     vue(),
     monkey({
@@ -45,6 +50,7 @@ export default defineConfig({
   ],
   build: {
     outDir: 'dist',
+    minify: 'esbuild',
     sourcemap: true,
     // 把所有静态资源尽可能内联，避免生成需要额外请求的文件
     assetsInlineLimit: 10000000,
