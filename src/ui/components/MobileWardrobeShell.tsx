@@ -3,7 +3,7 @@ import { ActionIcon, Box, Button, Group, SegmentedControl, Stack, Text } from '@
 import { useTranslation } from 'react-i18next'
 import { getWb, useWbSelector } from '@/stores/hooks'
 import { useTheme } from '@/ui/theme/ThemeProvider'
-import { FileManager } from './FileManager'
+import { WardrobeWorkspace } from './WardrobeWorkspace'
 import { HistoryViewer } from './HistoryViewer'
 import { FilterManager } from './FilterManager'
 import { SidePreview } from './SidePreview'
@@ -14,11 +14,6 @@ interface MobileWardrobeShellProps {
 
 type Pane = 'preview' | 'list' | 'filter'
 
-/**
- * Mobile layout: main tabs (wardrobe / history / settings) + a pane switcher
- * (preview / list / filter) for the wardrobe & history tabs. Replaces the Vue
- * swipe-pager with tap-based SegmentedControl switching.
- */
 export function MobileWardrobeShell({ onClose }: MobileWardrobeShellProps) {
   const { t } = useTranslation()
   const rawActiveTab = useWbSelector((wb) => wb.activeTab)
@@ -28,7 +23,7 @@ export function MobileWardrobeShell({ onClose }: MobileWardrobeShellProps) {
   const mainTab = rawActiveTab === 'studio' ? 'wardrobe' : rawActiveTab
 
   return (
-    <Stack gap="xs" h="100%" style={{ minHeight: 0 }} p="xs">
+    <Stack gap="xs" style={{ height: '100dvh', minHeight: 0, overflow: 'hidden' }} p="xs">
       <Group justify="space-between">
         <Text fw={700}>{t('fileManagerPanel.title')}</Text>
         <ActionIcon variant="subtle" onClick={onClose} aria-label={t('studio.closeTitle')}>
@@ -47,7 +42,11 @@ export function MobileWardrobeShell({ onClose }: MobileWardrobeShellProps) {
         ]}
       />
 
-      {mainTab === 'settings' ? (
+      <Box style={{ display: mainTab === 'wardrobe' ? 'block' : 'none', flex: 1, minHeight: 0 }}>
+        <WardrobeWorkspace />
+      </Box>
+
+      {mainTab === 'settings' && (
         <Stack gap="sm" pt="md">
           <Text fw={600}>{t('fileManagerPanel.themeSettings')}</Text>
           <Group>
@@ -65,7 +64,8 @@ export function MobileWardrobeShell({ onClose }: MobileWardrobeShellProps) {
             </Button>
           </Group>
         </Stack>
-      ) : (
+      )}
+      {mainTab === 'history' && (
         <>
           <SegmentedControl
             fullWidth
@@ -80,8 +80,8 @@ export function MobileWardrobeShell({ onClose }: MobileWardrobeShellProps) {
           />
 
           <Box style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
-            {pane === 'preview' && <SidePreview showApply={mainTab === 'wardrobe' || mainTab === 'history'} />}
-            {pane === 'list' && (mainTab === 'history' ? <HistoryViewer /> : <FileManager />)}
+            {pane === 'preview' && <SidePreview showApply />}
+            {pane === 'list' && <HistoryViewer />}
             {pane === 'filter' && <FilterManager />}
           </Box>
         </>

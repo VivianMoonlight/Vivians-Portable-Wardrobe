@@ -1,0 +1,2 @@
+# Bundled dependencies retain upstream comment formatting.
+out/*.user.js linguist-generated=true whitespace=-blank-at-eol

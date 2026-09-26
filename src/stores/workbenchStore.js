@@ -4,7 +4,6 @@ import { hostWindow } from '@/utils/host-window.js'
 
 const ACTIVE_TAB_KEY = 'vpw.workbench.activeTab'
 const WARDROBE_UI_KEY = 'vpw.workbench.wardrobeUi'
-const MOBILE_UI_KEY = 'vpw.workbench.mobileUi'
 
 const TABS = ['wardrobe', 'history', 'settings']
 
@@ -43,29 +42,13 @@ const defaultWardrobeUi = {
   rightPanelCollapsed: false
 }
 
-const defaultMobileUi = {
-  mainTab: 'wardrobe',
-  panes: {
-    wardrobe: 'wardrobe',
-    history: 'wardrobe'
-  }
-}
-
 function createInitialState() {
   const persistedTab = safeLoadString(ACTIVE_TAB_KEY, 'wardrobe')
   const activeTab = TABS.includes(persistedTab) ? persistedTab : 'wardrobe'
 
   return {
     activeTab,
-    lastTab: activeTab,
-    tabVisitOrder: [activeTab],
-    tabScrollState: {
-      wardrobe: { x: 0, y: 0 },
-      history: { x: 0, y: 0 },
-      settings: { x: 0, y: 0 }
-    },
-    wardrobeUi: safeLoadJson(WARDROBE_UI_KEY, defaultWardrobeUi),
-    mobileUi: safeLoadJson(MOBILE_UI_KEY, defaultMobileUi)
+    wardrobeUi: safeLoadJson(WARDROBE_UI_KEY, defaultWardrobeUi)
   }
 }
 
@@ -75,48 +58,10 @@ const workbenchApi = createStore((set, get) => ({
   setActiveTab(tab) {
     if (!TABS.includes(tab)) return
 
-    const current = get()
-    if (current.activeTab === tab) return
+    if (get().activeTab === tab) return
 
-    const mobileUi = ['wardrobe', 'history', 'settings'].includes(tab)
-      ? { ...current.mobileUi, mainTab: tab }
-      : current.mobileUi
-
-    set({
-      activeTab: tab,
-      lastTab: current.activeTab,
-      tabVisitOrder: [
-        ...current.tabVisitOrder.filter((t) => t !== tab),
-        tab
-      ].slice(-10),
-      mobileUi
-    })
-
+    set({ activeTab: tab })
     safeSave(ACTIVE_TAB_KEY, tab)
-    if (mobileUi !== current.mobileUi) {
-      safeSave(MOBILE_UI_KEY, JSON.stringify(mobileUi))
-    }
-  },
-
-  switchToNextTab() {
-    const current = get()
-    const idx = TABS.indexOf(current.activeTab)
-    const next = TABS[(idx + 1) % TABS.length]
-    current.setActiveTab(next)
-  },
-
-  setTabScrollState(tab, state) {
-    if (!TABS.includes(tab)) return
-
-    set((current) => ({
-      tabScrollState: {
-        ...current.tabScrollState,
-        [tab]: {
-          x: Number(state?.x) || 0,
-          y: Number(state?.y) || 0
-        }
-      }
-    }))
   },
 
   setWardrobeUi(partial) {
@@ -127,35 +72,6 @@ const workbenchApi = createStore((set, get) => ({
 
     set({ wardrobeUi })
     safeSave(WARDROBE_UI_KEY, JSON.stringify(wardrobeUi))
-  },
-
-  setMobileMainTab(tab) {
-    if (!['wardrobe', 'history', 'settings'].includes(tab)) return
-
-    const mobileUi = {
-      ...get().mobileUi,
-      mainTab: tab
-    }
-
-    set({ mobileUi })
-    get().setActiveTab(tab)
-    safeSave(MOBILE_UI_KEY, JSON.stringify(get().mobileUi))
-  },
-
-  setMobilePane(mainTab, pane) {
-    if (!['wardrobe', 'history'].includes(mainTab)) return
-    if (!['preview', 'wardrobe', 'filter'].includes(pane)) return
-
-    const mobileUi = {
-      ...get().mobileUi,
-      panes: {
-        ...get().mobileUi.panes,
-        [mainTab]: pane
-      }
-    }
-
-    set({ mobileUi })
-    safeSave(MOBILE_UI_KEY, JSON.stringify(mobileUi))
   }
 }))
 

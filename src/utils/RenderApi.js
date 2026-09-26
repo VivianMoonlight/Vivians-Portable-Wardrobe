@@ -1,209 +1,204 @@
-/**
- * Simplified rendering functions for drawing outfit data on canvas elements.
- */
-import { hostWindow } from './host-window.js';
+import { hostWindow } from './host-window.js'
 
-const DEFAULT_WIDTH = 500;
-const DEFAULT_HEIGHT = 1000;
-const MAX_RENDER_CHARACTER_POOL_SIZE = 4;
-const RENDER_CHARACTER_PREFIX = 'VPWRenderCharacter';
+const sessions = new Map()
+let capturing = null
+let hooksActive = false
+let characterId = 0
+const failedImagesByOutfit = new Map()
+const maxFailedOutfits = 32
 
-let renderCharacterId = 0;
-const renderCharacterPool = [];
-
-function getZoom(width, height) {
-    const zoomX = width / DEFAULT_WIDTH;
-    const zoomY = height / DEFAULT_HEIGHT;
-    return Math.min(zoomX, zoomY);
+/** Retry only this outfit's exhausted BC requests, preserving the shared loaders. */
+export function retryFailedImagesForOutfit(data) {
+  if (!Array.isArray(data)) return 0
+  const key = JSON.stringify(data)
+  const images = failedImagesByOutfit.get(key)
+  failedImagesByOutfit.delete(key)
+  let retried = 0
+  for (const image of images || []) {
+    if (imageState(image) !== 'error') continue
+    image.errorcount = 0
+    image.src = image.src
+    retried++
+  }
+  return retried
 }
 
-function getCanvasContext(canvas) {
-    if (!canvas || typeof canvas.getContext !== 'function') return null;
-    try {
-        return canvas.getContext('2d');
-    } catch (e) {
-        console.error("[render_api] Could not get canvas context:", e);
-        return null;
-    }
+function capture(session, draw) {
+  const previous = capturing
+  capturing = session
+  try { return draw() } finally { capturing = previous }
 }
 
-function clearCanvas(ctx, canvas) {
-    ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.restore();
+/** Observe BC's existing caches; do not issue a second image request. */
+export function installRenderHooks(modApi) {
+  if (!modApi?.hookFunction) return () => {}
+  const removers = []
+  const hook = (name, callback) => {
+    if (typeof hostWindow[name] !== 'function') return false
+    removers.push(modApi.hookFunction(name, 0, callback))
+    return true
+  }
+  try {
+    const canvasImages = hook('DrawGetImage', (args, next) => {
+      const image = next(args)
+      capturing?.watchImage(image)
+      return image
+    })
+    const glImages = hook('GLDrawLoadImage', (args, next) => {
+      const texture = next(args)
+      capturing?.watchImage(hostWindow.GLDrawImageCache?.get(args[1]))
+      return texture
+    })
+    hook('CharacterAppearanceBuildCanvas', (args, next) => {
+      const session = sessions.get(args[0])
+      const result = capture(session || null, () => next(args))
+      // The game can rebuild this character itself, e.g. after context recovery.
+      if (session && !session.drawing) session.scheduleDraw(false)
+      return result
+    })
+    hooksActive = canvasImages || glImages
+  } catch (error) {
+    for (const remove of removers.reverse()) remove?.()
+    throw error
+  }
+  let disposed = false
+  return () => {
+    if (disposed) return
+    disposed = true
+    for (const session of [...sessions.values()]) session.dispose()
+    for (const remove of removers.reverse()) remove?.()
+    failedImagesByOutfit.clear()
+    hooksActive = false
+  }
 }
 
-function acquireRenderCharacter() {
-    const pooled = renderCharacterPool.pop();
-    if (pooled) return pooled;
-
-    if (typeof hostWindow.CharacterLoadSimple !== 'function') {
-        console.error("[render_api] CharacterLoadSimple is not available");
-        return null;
-    }
-
-    const character = hostWindow.CharacterLoadSimple(`${RENDER_CHARACTER_PREFIX}${renderCharacterId++}`);
-    if (!character) return null;
-
-    character.MemberNumber = 1000000000 + renderCharacterId;
-    return character;
+function imageState(image) {
+  if (image.complete && image.naturalWidth > 0) return 'ready'
+  // BC owns retries in both the 2D and WebGL loaders (three attempts).
+  return image.errorcount >= 3 ? 'error' : 'loading'
 }
 
-function releaseRenderCharacter(character) {
-    if (!character) return;
-    if (renderCharacterPool.length < MAX_RENDER_CHARACTER_POOL_SIZE) {
-        renderCharacterPool.push(character);
-        return;
-    }
-    if (typeof hostWindow.CharacterDelete === 'function') {
-        hostWindow.CharacterDelete(character);
-    }
-}
+/** One appearance per character, retained until its actual image dependencies settle. */
+export function createRenderSession({ data = [], canvas, width = 500, height = 1000, onUpdate = () => {}, timeout = 20000 } = {}) {
+  const images = new Map()
+  const outfitKey = JSON.stringify(data)
+  let character = null
+  let frame = null
+  let deadline = null
+  let disposed = false
+  let prepared = false
+  let rebuild = false
+  const requestFrame = hostWindow.requestAnimationFrame?.bind(hostWindow)
+    || (callback => hostWindow.setTimeout(callback, 16))
+  const cancelFrame = hostWindow.cancelAnimationFrame?.bind(hostWindow) || hostWindow.clearTimeout.bind(hostWindow)
 
-function prepareRenderCharacter(character, data) {
-    if (!character) return false;
-    if (typeof hostWindow.CharacterNaked !== 'function'
-        || typeof hostWindow.ServerAppearanceLoadFromBundle !== 'function'
-        || typeof hostWindow.CharacterRefresh !== 'function') {
-        console.error("[render_api] Required character rendering functions are not available");
-        return false;
-    }
-
-    hostWindow.CharacterNaked(character);
-    hostWindow.ServerAppearanceLoadFromBundle(
-        character,
-        character.AssetFamily,
-        Array.isArray(data) ? data : [],
-        character.MemberNumber
-    );
-    hostWindow.CharacterRefresh(character);
-    return true;
-}
-
-function drawCharacterToCanvas(character, canvas, ctx, x, y, zoom) {
-    if (typeof hostWindow.DrawCharacter !== 'function') {
-        console.error("[render_api] DrawCharacter is not available");
-        return false;
-    }
-
-    clearCanvas(ctx, canvas);
-    ctx.save();
-    try {
-        hostWindow.DrawCharacter(character, x, y, zoom, true, ctx);
-        return true;
-    } finally {
-        ctx.restore();
-    }
-}
-
-/**
- * Draws a thumbnail-sized character preview.
- * @param {Object} params
- * @param {Array} params.data
- * @param {HTMLCanvasElement|OffscreenCanvas} params.canvas
- * @param {number} params.width
- * @param {number} params.height
- * @returns {boolean}
- */
-export function drawThumb({ data = [], canvas = null, width = DEFAULT_WIDTH, height = DEFAULT_HEIGHT } = {}) {
-    const zoom = getZoom(width, height);
-    return drawDataOnCanvas({
-        data,
-        canvas,
-        options: {
-            zoom,
-            xshift: 0,
-            yshift: 0
+  const emit = status => {
+    if (disposed) return
+    if (status.state === 'ready') failedImagesByOutfit.delete(outfitKey)
+    else if (status.state === 'error') {
+      const failed = [...images.keys()].filter(image => imageState(image) === 'error')
+      if (failed.length) {
+        failedImagesByOutfit.delete(outfitKey)
+        failedImagesByOutfit.set(outfitKey, failed)
+        while (failedImagesByOutfit.size > maxFailedOutfits) {
+          failedImagesByOutfit.delete(failedImagesByOutfit.keys().next().value)
         }
-    });
-}
-
-/**
- * Draws a full-size character preview.
- * @param {Object} params
- * @param {Array} params.data
- * @param {HTMLCanvasElement|OffscreenCanvas} params.canvas
- * @param {number} params.width
- * @param {number} params.height
- * @param {Object} params.character
- * @returns {boolean}
- */
-export function drawPreview({ data = [], canvas = null, width = 1000, height = 2000, character = null } = {}) {
-    const zoom = getZoom(width, height);
-    const ctx = getCanvasContext(canvas);
-    if (!ctx) {
-        console.error("[render_api] drawPreview: Could not get canvas context");
-        return false;
+      }
     }
+    try { onUpdate(canvas, status) } catch (error) { console.warn('[VPW] Preview subscriber failed', error) }
+  }
 
-    if (character) {
+  const session = {
+    drawing: false,
+    watchImage(image) {
+      // Dynamic layers can supply a ready-made canvas instead of an Image.
+      if (disposed || !image || typeof image.complete !== 'boolean'
+        || typeof image.addEventListener !== 'function' || images.has(image)) return
+      const changed = event => {
+        if (event.type === 'error' && imageState(image) === 'loading') return
+        session.scheduleDraw(true)
+      }
+      images.set(image, changed)
+      image.addEventListener('load', changed)
+      image.addEventListener('error', changed)
+    },
+    scheduleDraw(needsRebuild = true) {
+      if (disposed) return
+      rebuild ||= needsRebuild
+      if (frame !== null) return
+      frame = requestFrame(() => {
+        frame = null
+        draw()
+      })
+    },
+    dispose() {
+      if (disposed) return
+      disposed = true
+      if (frame !== null) cancelFrame(frame)
+      if (deadline !== null) hostWindow.clearTimeout(deadline)
+      for (const [image, changed] of images) {
+        image.removeEventListener('load', changed)
+        image.removeEventListener('error', changed)
+      }
+      images.clear()
+      if (character) {
+        sessions.delete(character)
+        // Keep BC's shared image/texture caches, remove only our temporary NPC.
+        hostWindow.CharacterDelete(character, false)
+      }
+    },
+  }
+
+  function draw() {
+    if (disposed) return
+    session.drawing = true
+    try {
+      const ctx = canvas?.getContext('2d')
+      if (!ctx) throw new Error('Preview canvas is unavailable')
+      capture(session, () => {
+        if (!prepared) {
+          hostWindow.CharacterNaked(character, false)
+          hostWindow.ServerAppearanceLoadFromBundle(character, character.AssetFamily, data, character.MemberNumber)
+          hostWindow.CharacterRefresh(character, false, false)
+          prepared = true
+        }
+        if (rebuild) character.MustDraw = true
+        rebuild = false
+        ctx.save()
         try {
-            return drawCharacterToCanvas(character, canvas, ctx, 0, 0, zoom);
-        } catch (e) {
-            console.error("[render_api] drawPreview: Error drawing character:", e);
-            return false;
-        }
-    }
+          ctx.setTransform(1, 0, 0, 1, 0, 0)
+          ctx.clearRect(0, 0, canvas.width, canvas.height)
+          hostWindow.DrawCharacter(character, 0, 0, Math.min(width / 500, height / 1000), true, ctx)
+        } finally { ctx.restore() }
+      })
+      const states = [...images.keys()].map(imageState)
+      if (states.includes('error')) {
+        emit({ state: 'error', error: 'A preview image failed to load after BC retried it' })
+      } else {
+        // A redraw can discover more dependencies through BC's dynamic layers.
+        emit({ state: states.includes('loading') ? 'loading' : 'ready' })
+      }
+    } catch (error) {
+      emit({ state: 'error', error: error instanceof Error ? error.message : String(error) })
+    } finally { session.drawing = false }
+  }
 
-    return drawDataOnCanvas({
-        data,
-        canvas,
-        options: {
-            zoom,
-            xshift: 0,
-            yshift: 0
-        }
-    });
+  try {
+    const required = ['CharacterLoadSimple', 'CharacterNaked', 'ServerAppearanceLoadFromBundle', 'CharacterRefresh', 'CharacterDelete', 'DrawCharacter']
+    if (!hooksActive || required.some(name => typeof hostWindow[name] !== 'function')) {
+      throw new Error('BC preview rendering is not available')
+    }
+    character = hostWindow.CharacterLoadSimple('VPWRenderCharacter' + ++characterId)
+    if (!character) throw new Error('BC could not create a preview character')
+    character.MemberNumber = 1000000000 + characterId
+    sessions.set(character, session)
+    // A stalled request ends with a retryable error, never a cached partial success.
+    deadline = hostWindow.setTimeout(() => emit({ state: 'error', error: 'Preview image loading timed out' }), timeout)
+    draw()
+  } catch (error) {
+    emit({ state: 'error', error: error instanceof Error ? error.message : String(error) })
+  }
+  return session
 }
 
-/**
- * Core rendering function that applies outfit data to a pooled temporary character
- * and draws it to a canvas.
- * @param {Object} params
- * @param {Array} params.data
- * @param {HTMLCanvasElement|OffscreenCanvas} params.canvas
- * @param {Object} params.options
- * @param {number} [params.options.zoom=1]
- * @param {number} [params.options.xshift=0]
- * @param {number} [params.options.yshift=0]
- * @returns {boolean}
- */
-export function drawDataOnCanvas({ data = [], canvas = null, options = {} } = {}) {
-    const zoom = options.zoom || 1;
-    const xshift = options.xshift || 0;
-    const yshift = options.yshift || 0;
-
-    if (!data || !canvas) {
-        console.warn("[render_api] drawDataOnCanvas: data and canvas are required");
-        return false;
-    }
-
-    const ctx = getCanvasContext(canvas);
-    if (!ctx) {
-        console.error("[render_api] drawDataOnCanvas: Could not get canvas context");
-        return false;
-    }
-
-    const displayCharacter = acquireRenderCharacter();
-    if (!displayCharacter) {
-        console.error("[render_api] drawDataOnCanvas: Failed to create display character");
-        return false;
-    }
-
-    try {
-        if (!prepareRenderCharacter(displayCharacter, data)) return false;
-        return drawCharacterToCanvas(displayCharacter, canvas, ctx, xshift, yshift, zoom);
-    } catch (e) {
-        console.error("[render_api] drawDataOnCanvas: Error drawing character on canvas:", e);
-        return false;
-    } finally {
-        releaseRenderCharacter(displayCharacter);
-    }
-}
-
-export const RenderApi = {
-    drawThumb,
-    drawPreview,
-    drawDataOnCanvas
-};
+export const RenderApi = { createRenderSession }

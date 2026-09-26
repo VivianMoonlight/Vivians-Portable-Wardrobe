@@ -1,0 +1,83 @@
+.vpw-filter-manager {
+  min-height: 0;
+  min-width: 0;
+  container-type: inline-size;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.vpw-filter-groups {
+  flex: 1;
+  min-height: 96px;
+  overflow: hidden auto;
+  scrollbar-gutter: stable;
+  padding-right: 2px;
+}
+
+.vpw-filter-manager > :not(.vpw-filter-groups) {
+  flex-shrink: 0;
+}
+
+.vpw-filter-source-buttons {
+  flex: 1;
+  min-width: 0;
+}
+
+.vpw-filter-source {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.vpw-filter-empty-source {
+  flex: 0 0 auto;
+}
+
+.vpw-filter-operation {
+  margin-inline-start: 5px;
+  font-size: 10px;
+  font-weight: 400;
+  opacity: 0.85;
+}
+
+.vpw-filter-slot-row {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  padding: 5px 2px;
+}
+
+.vpw-filter-slot-name,
+.vpw-filter-slot-slider {
+  min-width: 0;
+}
+
+.vpw-filter-presence-dot {
+  flex: 0 0 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.vpw-filter-slot-slider span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@container (max-width: 420px) {
+  .vpw-filter-slot-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 3px;
+  }
+}
+
+@media (pointer: coarse) {
+  .vpw-filter-manager button {
+    min-height: 36px;
+  }
+
+  .vpw-filter-slot-slider label {
+    min-height: 32px;
+  }
+}

@@ -1,386 +1,178 @@
-import { memo, useRef, useState, type CSSProperties, type DragEvent, type MouseEvent } from 'react'
-import { Box, Button, Paper, Portal, Text, UnstyledButton } from '@mantine/core'
+import { memo, useState, type MouseEvent } from 'react'
+import { ActionIcon, Badge, Box, Button, FocusTrap, Group, Paper, Portal, Text, UnstyledButton } from '@mantine/core'
 import { useTranslation } from 'react-i18next'
 import { hostWindow } from '@/utils/host-window.js'
 import { ExternalAdapter } from '@/utils/external_adapters.js'
-import { getFs, useFsSelector, type FileNode } from '@/stores/hooks'
+import { getFs, useFsSelector, type WardrobeOutfit } from '@/stores/hooks'
 import { useDialog } from '@/ui/dialog/DialogProvider'
 import { OVERLAY_Z_INDEX } from '@/ui/z-index'
 import { FileThumbnail } from './FileThumbnail'
-import { canMovePayloadToPath, readFileDragPayload, writeFileDragPayload } from './file-dnd'
 
 interface FileItemProps {
-  item: FileNode
-  sourcePath: string[]
+  item: WardrobeOutfit
+  tagNames: string[]
   viewMode: 'large' | 'small' | 'list'
-  onOpenFolder: () => void
-  onRemove: () => void
-  onRename: (newName: string) => void
+  onEditTags: () => void
+  onSelectOutfit?: (item: WardrobeOutfit) => void
 }
 
 interface MenuState {
-  visible: boolean
   x: number
   y: number
 }
 
-function canUseHover(): boolean {
-  return !!(hostWindow.matchMedia && hostWindow.matchMedia('(hover: hover) and (pointer: fine)').matches)
-}
-
-export const FileItem = memo(function FileItem({ item, sourcePath, viewMode, onOpenFolder, onRemove, onRename }: FileItemProps) {
+export const FileItem = memo(function FileItem({ item, tagNames, viewMode, onEditTags, onSelectOutfit }: FileItemProps) {
   const { t } = useTranslation()
   const dialog = useDialog()
-  const isPreviewLocked = useFsSelector((fs) => fs.lockedItem === item)
+  const isPreviewLocked = useFsSelector((fs) => fs.lockedItem?.id === item.id)
   const isCloudSyncEnabled = useFsSelector(() => item.cloudSync !== false)
   const thumbnailRefresh = useFsSelector(() => item.__thumbRefresh)
-  const rootRef = useRef<HTMLDivElement>(null)
-  const [menu, setMenu] = useState<MenuState>({ visible: false, x: 0, y: 0 })
+  const [menu, setMenu] = useState<MenuState | null>(null)
   void thumbnailRefresh
 
-  const isFolder = item.type === 'folder'
+  const closeMenu = () => setMenu(null)
+  const reportError = (error: unknown) => dialog.alert(t('library.operationFailed', {
+    error: error instanceof Error ? error.message : String(error),
+  }))
 
-  const closeMenu = () => setMenu((m) => ({ ...m, visible: false }))
-
-  const openContextMenu = (event: MouseEvent) => {
+  const openContextMenu = (event: MouseEvent, fromButton = false) => {
     event.preventDefault()
+    event.stopPropagation()
     const padding = 8
     const vw = hostWindow.innerWidth || 1024
     const vh = hostWindow.innerHeight || 768
-    const x = Math.min(event.clientX, vw - 180 - padding)
-    const y = Math.min(event.clientY, vh - 220 - padding)
-    setMenu({ visible: true, x: Math.max(padding, x), y: Math.max(padding, y) })
+    const bounds = event.currentTarget.getBoundingClientRect()
+    const x = Math.min(fromButton ? bounds.left : event.clientX, vw - 196 - padding)
+    const y = Math.min(fromButton ? bounds.bottom : event.clientY, vh - 256 - padding)
+    setMenu({ x: Math.max(padding, x), y: Math.max(padding, y) })
   }
 
-  // ---- interactions ----
   const handleClick = () => {
-    if (isFolder) {
-      onOpenFolder()
-      return
-    }
-    getFs().togglePreviewLock(item)
-  }
-
-  const applyToCharacter = () => {
-    closeMenu()
-    const data = item.data
-    if (!Array.isArray(data) || data.length === 0) return
-    try {
-      getFs().applyFilteredOutfitToCharacter({ outfitData: data })
-    } catch (e) {
-      console.error('apply outfit failed', e)
-    }
-  }
-
-  const handleDoubleClick = () => {
-    if (isFolder) {
-      onOpenFolder()
-      return
-    }
-    applyToCharacter()
-  }
-
-  const handleMouseEnter = () => {
-    const fs = getFs()
-    if (fs.lockedItem || !canUseHover()) return
-    fs.setActiveItem(item)
-  }
-  const handleMouseLeave = () => {
-    const fs = getFs()
-    if (fs.lockedItem || !canUseHover()) return
-    fs.setActiveItem(-1)
+    getFs().selectOutfit(item)
+    onSelectOutfit?.(item)
   }
 
   const renameItem = async () => {
     closeMenu()
-    const next = await dialog.prompt(t('fileItem.promptNewName'), item.name)
-    if (next === null) return
-    const trimmed = next.trim()
-    if (trimmed) onRename(trimmed)
+    const name = (await dialog.prompt(t('fileItem.promptNewName'), item.name))?.trim()
+    if (!name || name === item.name) return
+    try {
+      if (!getFs().updateOutfit(item.id, { name })) await dialog.alert(t('library.itemUnavailable'))
+    } catch (error) { await reportError(error) }
   }
 
   const deleteItem = async () => {
     closeMenu()
-    const ok = await dialog.confirm(t('fileItem.confirmDelete'))
-    if (ok) onRemove()
+    if (!await dialog.confirm(t('library.deleteOutfitConfirm', { name: item.name }))) return
+    try {
+      if (!getFs().removeOutfit(item.id)) await dialog.alert(t('library.itemUnavailable'))
+    } catch (error) { await reportError(error) }
   }
 
   const exportBcx = async () => {
     closeMenu()
-    if (isFolder) return
     try {
-      // Returns the BCX code and copies it to the clipboard.
-      ExternalAdapter.exportOutfitAsBCX(item.name, Array.isArray(item.data) ? item.data : [])
+      ExternalAdapter.exportOutfitAsBCX(item.name, item.data)
       await dialog.alert(t('wardrobeIO.bcxCopied'))
-    } catch (e) {
-      console.error('exportBCX failed', e)
-    }
+    } catch (error) { await reportError(error) }
   }
 
-  const toggleCloudSync = (event: MouseEvent) => {
+  const toggleCloudSync = async (event: MouseEvent) => {
     event.stopPropagation()
-    getFs().setNodeCloudSync(item, !isCloudSyncEnabled, { recursive: isFolder })
-  }
-
-  // ---- drag & drop (move into folders / breadcrumb) ----
-  const onDragStart = (event: DragEvent) => {
-    writeFileDragPayload(event, { name: item.name, fromPath: sourcePath, type: item.type || 'file' })
-    event.dataTransfer.effectAllowed = 'move'
-  }
-  const onDragOver = (event: DragEvent) => {
-    if (!isFolder) return
-    event.preventDefault()
-    event.stopPropagation()
-    event.dataTransfer.dropEffect = 'move'
-  }
-  const onDrop = (event: DragEvent) => {
-    if (!isFolder) return
-    event.preventDefault()
-    event.stopPropagation()
-    const payload = readFileDragPayload(event)
-    const targetPath = [...sourcePath, item.name]
-    if (!canMovePayloadToPath(payload, targetPath)) return
-    getFs().moveFile(payload.name, payload.fromPath, targetPath)
+    try {
+      if (!getFs().setOutfitCloudSync(item.id, !isCloudSyncEnabled)) await dialog.alert(t('library.itemUnavailable'))
+    } catch (error) { await reportError(error) }
   }
 
   const isList = viewMode === 'list'
   const isSmall = viewMode === 'small'
-  const isCard = !isList
-  // Card height is content-driven (thumbnail aspect-ratio + name). Do NOT put
-  // aspect-ratio on the card itself: as a direct grid item it doesn't reliably
-  // contribute to `auto` row sizing and the cards end up overlapping.
-  const cardStyle: CSSProperties = {
-    display: 'flex',
-    flexDirection: isList ? 'row' : 'column',
-    alignItems: isList ? 'center' : 'stretch',
-    gap: isList ? 10 : 6,
-    padding: isList ? '8px 10px' : 6,
-    cursor: 'pointer',
-    borderColor: isPreviewLocked ? 'var(--mantine-color-teal-5)' : undefined,
-    minHeight: isList ? 64 : undefined,
-    width: isCard ? '100%' : undefined,
-    overflow: 'hidden',
-  }
-  const thumbSize = isList ? 44 : undefined
-
-  const thumbInner = isFolder ? (
-    <Text size="xl" aria-hidden>
-      📁
-    </Text>
-  ) : (
-    <FileThumbnail item={item} />
-  )
-
   return (
     <>
-      <Paper
-      ref={rootRef}
-      withBorder
-      radius="md"
-      shadow="xs"
-      style={cardStyle}
-      tabIndex={0}
-      draggable
-      onClick={handleClick}
-      onDoubleClick={handleDoubleClick}
-      onContextMenu={openContextMenu}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-      onDragStart={onDragStart}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
-    >
-      {isList ? (
-        <Box
-          style={{
-            width: thumbSize,
-            aspectRatio: '9 / 16',
-            flex: '0 0 auto',
-            borderRadius: 8,
-            overflow: 'hidden',
-            background: 'var(--mantine-color-default-hover)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          {thumbInner}
-        </Box>
-      ) : (
-        // Card mode: percentage padding-top reserves a 9:16 box. Unlike CSS
-        // `aspect-ratio`, this contributes a reliable height during CSS Grid
-        // auto-row sizing, so cards never overlap their neighbours.
-        <Box
-          style={{
-            position: 'relative',
-            width: '100%',
-            paddingTop: '177.78%',
-            flex: '0 0 auto',
-            borderRadius: 8,
-            overflow: 'hidden',
-            background: 'var(--mantine-color-default-hover)',
-          }}
-        >
-          <Box
-            style={{
-              position: 'absolute',
-              inset: 0,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            {thumbInner}
+      <Paper withBorder radius="md" className="vpw-outfit-card" data-view={viewMode} data-selected={isPreviewLocked || undefined}
+        onContextMenu={(event) => openContextMenu(event)}>
+        <UnstyledButton className="vpw-outfit-select" data-outfit-id={item.id} onClick={handleClick}
+          aria-label={t('library.previewOutfit', { name: item.name })} aria-pressed={isPreviewLocked}>
+        {isList ? (
+          <Box style={{ width: 44, aspectRatio: '9 / 16', flex: '0 0 auto', borderRadius: 8, overflow: 'hidden', background: 'var(--mantine-color-default-hover)' }}>
+            <FileThumbnail item={item} />
           </Box>
-        </Box>
-      )}
-
-      <Box
-        style={{
-          display: 'flex',
-          flexDirection: isList ? 'row' : 'column',
-          alignItems: isList ? 'center' : 'stretch',
-          gap: isList ? 8 : 3,
-          flex: isList ? 1 : '0 0 auto',
-          minWidth: 0,
-          width: '100%',
-          paddingTop: isList ? 0 : 5,
-          textAlign: isList ? 'left' : 'center',
-        }}
-      >
-        <Box style={{ flex: 1, minWidth: 0 }}>
-          <Text
-            size={isSmall ? 'xs' : 'sm'}
-            fw={500}
-            truncate
-            title={item.name}
-            style={{ display: 'block', maxWidth: '100%' }}
-          >
-            {item.name}
+        ) : (
+          <Box className="vpw-outfit-thumbnail">
+            <Box style={{ position: 'absolute', inset: 0 }}><FileThumbnail item={item} /></Box>
+            {isPreviewLocked && <Badge size="sm" variant="filled" color="teal" className="vpw-outfit-selected-badge">
+              {t('library.selected', { defaultValue: 'Selected' })}
+            </Badge>}
+          </Box>
+        )}
+        <Box className="vpw-outfit-caption">
+          <Text size={isSmall ? 'xs' : 'sm'} fw={600} className="vpw-outfit-name">{item.name}</Text>
+          {tagNames.length > 0 ? <Group gap={4} mt={5} aria-label={t('library.tags')}>
+            {tagNames.map((name) => <Text component="span" key={name} className="vpw-outfit-tag">{name}</Text>)}
+          </Group> : <Text size="xs" c="dimmed" mt={4}>{t('library.untagged')}</Text>}
+          <Text size="xs" mt={7} c={isPreviewLocked ? 'teal' : 'dimmed'}>
+            {t(isPreviewLocked ? 'library.adjustSelection' : 'library.previewAndAdjust', {
+              defaultValue: isPreviewLocked ? 'Preview again →' : 'Preview & adjust →',
+            })}
           </Text>
         </Box>
-
-        <UnstyledButton
-          onClick={toggleCloudSync}
-          title={isFolder ? t('fileItem.cloudToggleFolderTitle') : t('fileItem.cloudToggleFileTitle')}
-          style={{
-            alignSelf: isList ? 'auto' : 'center',
-            fontSize: isSmall ? 10 : 11,
-            lineHeight: 1.1,
-            padding: isSmall ? '2px 5px' : '3px 8px',
-            borderRadius: 6,
-            border: '1px solid var(--mantine-color-default-border)',
-            color: isCloudSyncEnabled ? 'var(--mantine-color-teal-6)' : 'var(--mantine-color-dimmed)',
-            maxWidth: '100%',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {isCloudSyncEnabled ? t('fileItem.cloudOn') : t('fileItem.cloudOff')}
         </UnstyledButton>
-      </Box>
-
+          <Group className="vpw-outfit-actions" justify="space-between" gap={4} wrap="nowrap">
+            <UnstyledButton onClick={(event) => void toggleCloudSync(event)} onDoubleClick={(event) => event.stopPropagation()}
+              title={t('library.cloudToggleTitle')} aria-pressed={isCloudSyncEnabled}
+              style={{ fontSize: isSmall ? 10 : 11, lineHeight: 1.2, padding: '7px 6px', borderRadius: 6,
+                border: '1px solid var(--mantine-color-default-border)',
+                color: isCloudSyncEnabled ? 'var(--mantine-color-teal-6)' : 'var(--mantine-color-dimmed)',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {t(isCloudSyncEnabled ? 'library.cloudIncluded' : 'library.localOnly')}
+            </UnstyledButton>
+            <ActionIcon variant="subtle" size="md" onClick={(event) => openContextMenu(event, true)}
+              onDoubleClick={(event) => event.stopPropagation()} aria-label={t('library.outfitActions', { name: item.name })} title={t('library.moreActions')}>
+              ⋯
+            </ActionIcon>
+          </Group>
       </Paper>
-      {menu.visible && (
-        <Portal>
-          <ContextMenu
-            x={menu.x}
-            y={menu.y}
-            isFolder={isFolder}
-            onClose={closeMenu}
-            onOpen={() => {
-              closeMenu()
-              if (isFolder) onOpenFolder()
-            }}
-            onRename={renameItem}
-            onDelete={deleteItem}
-            onApply={applyToCharacter}
-            onExport={exportBcx}
-          />
-        </Portal>
-      )}
+      {menu && <Portal><ContextMenu x={menu.x} y={menu.y} onClose={closeMenu}
+        onRename={() => void renameItem()} onDelete={() => void deleteItem()}
+        onExport={() => void exportBcx()} onEditTags={() => { closeMenu(); onEditTags() }} /></Portal>}
     </>
   )
-}, (prev, next) => prev.item === next.item && prev.viewMode === next.viewMode && prev.sourcePath === next.sourcePath)
+})
 
 interface ContextMenuProps {
   x: number
   y: number
-  isFolder: boolean
   onClose: () => void
-  onOpen: () => void
   onRename: () => void
   onDelete: () => void
-  onApply: () => void
   onExport: () => void
+  onEditTags: () => void
 }
 
 function ContextMenu(props: ContextMenuProps) {
   const { t } = useTranslation()
-  const items: Array<{ key: string; label: string; action: () => void; kind?: 'danger' | 'muted' }> = []
-  if (props.isFolder) items.push({ key: 'open', label: t('fileItem.open'), action: props.onOpen })
-  items.push({ key: 'rename', label: t('fileItem.rename'), action: props.onRename })
-  if (!props.isFolder) {
-    items.push({ key: 'apply', label: t('fileItem.apply'), action: props.onApply })
-    items.push({ key: 'export', label: t('fileItem.exportBCX'), action: props.onExport })
-  }
-  items.push({ key: 'delete', label: t('fileItem.delete'), action: props.onDelete, kind: 'danger' })
-  items.push({ key: 'cancel', label: t('fileItem.cancel'), action: props.onClose, kind: 'muted' })
-
+  const items = [
+    { key: 'tags', label: t('library.editTags'), action: props.onEditTags },
+    { key: 'rename', label: t('fileItem.rename'), action: props.onRename },
+    { key: 'export', label: t('fileItem.exportBCX'), action: props.onExport },
+    { key: 'delete', label: t('fileItem.delete'), action: props.onDelete, color: 'red' },
+    { key: 'cancel', label: t('fileItem.cancel'), action: props.onClose, color: 'gray' },
+  ]
   return (
     <>
-      {/* Backdrop to dismiss on outside click (stops the click from reaching the card) */}
-      <Box
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={(e) => {
-          e.stopPropagation()
-          props.onClose()
-        }}
-        onContextMenu={(e) => {
-          e.preventDefault()
-          e.stopPropagation()
-          props.onClose()
-        }}
-        style={{ position: 'fixed', inset: 0, zIndex: OVERLAY_Z_INDEX }}
-      />
-      <Paper
-        withBorder
-        shadow="md"
-        radius="md"
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={(e) => e.stopPropagation()}
-        onContextMenu={(e) => e.preventDefault()}
-        style={{
-          position: 'fixed',
-          left: props.x,
-          top: props.y,
-          zIndex: OVERLAY_Z_INDEX + 1,
-          minWidth: 188,
-          padding: 6,
-          overflow: 'hidden',
-        }}
-      >
-        {items.map((it) => (
-          <Button
-            key={it.key}
-            variant="subtle"
-            color={it.kind === 'danger' ? 'red' : it.kind === 'muted' ? 'gray' : undefined}
-            size="sm"
-            fullWidth
-            justify="flex-start"
-            radius="sm"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation()
-              it.action()
-            }}
-            styles={{ root: { height: 34, paddingInline: 10 }, label: { fontWeight: 500 } }}
-          >
-            {it.label}
-          </Button>
-        ))}
-      </Paper>
+      <Box onPointerDown={(event) => event.stopPropagation()}
+        onClick={(event) => { event.stopPropagation(); props.onClose() }}
+        onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); props.onClose() }}
+        style={{ position: 'fixed', inset: 0, zIndex: OVERLAY_Z_INDEX }} />
+      <FocusTrap><Paper withBorder shadow="md" radius="md" role="menu"
+        onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}
+        onContextMenu={(event) => event.preventDefault()} onKeyDown={(event) => { if (event.key === 'Escape') props.onClose() }}
+        style={{ position: 'fixed', left: props.x, top: props.y, zIndex: OVERLAY_Z_INDEX + 1, minWidth: 188, padding: 6 }}>
+        {items.map((item) => <Button key={item.key} role="menuitem" variant="subtle" color={item.color} size="sm"
+          fullWidth justify="flex-start" radius="sm" onClick={item.action}
+          styles={{ root: { height: 34, paddingInline: 10 }, label: { fontWeight: 500 } }}>
+          {item.label}
+        </Button>)}
+      </Paper></FocusTrap>
     </>
   )
 }

@@ -7,6 +7,7 @@ import fs from 'fs'
 // Read version from package.json (single source of truth)
 const pkgJson = JSON.parse(fs.readFileSync(new URL('./package.json', import.meta.url)))
 const VERSION = pkgJson.version || '0.0.0'
+const REACT_LOADER_URL = 'https://cdn.jsdelivr.net/gh/VivianMoonlight/Vivians-Portable-Wardrobe@feat%2Fwardrobe-react/ViviansPortableWardrobeReactLoader.user.js'
 
 const hosts = [
   'https://bondageprojects.elementfx.com/*',
@@ -49,11 +50,11 @@ export default defineConfig(({ mode }) => {
               name: 'Vivians Portable Wardrobe',
               namespace: 'http://tampermonkey.net/',
               version: VERSION,
+              author: 'VIVianMoonlight',
               description: 'Portable Wardrobe for Bondage Club (React + Mantine, Shadow DOM isolated)',
               match: hosts,
-              // Tampermonkey auto-update URLs (served via GitHub Pages)
-              updateURL: 'https://vivianmoonlight.github.io/Vivians-Portable-Wardrobe/ViviansPortableWardrobeLoader.user.js',
-              downloadURL: 'https://vivianmoonlight.github.io/Vivians-Portable-Wardrobe/ViviansPortableWardrobeLoader.user.js',
+              updateURL: REACT_LOADER_URL,
+              downloadURL: REACT_LOADER_URL,
               //icon: '/public/icon.png',
               grant: [
                 'GM_setValue', 'GM_getValue', 'GM_deleteValue', 'GM_listValues',
@@ -95,7 +96,7 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       outDir: 'dist',
-      sourcemap: true,
+      sourcemap: isMock,
       // Inline all static assets so the userscript stays a single file (no extra requests).
       assetsInlineLimit: 10000000,
       rollupOptions: {

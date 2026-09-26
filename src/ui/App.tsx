@@ -208,7 +208,7 @@ export function App(_props: AppProps) {
           boxShadow: '0 10px 30px rgba(7, 33, 58, 0.18)',
           zIndex: 2147483647,
           touchAction: 'none',
-          display: 'inline-flex',
+          display: showPanel ? 'none' : 'inline-flex',
           alignItems: 'center',
           justifyContent: 'center',
           overflow: 'hidden',

@@ -5,7 +5,7 @@ import { hostWindow } from '@/utils/host-window.js'
 import { getFs, getWb, useWbSelector } from '@/stores/hooks'
 import { useTheme } from '@/ui/theme/ThemeProvider'
 import { useIsMobile } from '@/ui/hooks/useIsMobile'
-import { FileManager } from './FileManager'
+import { WardrobeWorkspace } from './WardrobeWorkspace'
 import { HistoryViewer } from './HistoryViewer'
 import { FilterManager } from './FilterManager'
 import { SidePreview } from './SidePreview'
@@ -27,15 +27,20 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value))
 }
 
+function fitPanelHeight(value: number, top = PANEL_MARGIN): number {
+  const available = Math.max(1, hostWindow.innerHeight - top - PANEL_MARGIN)
+  return clamp(value, Math.min(PANEL_MIN_HEIGHT, available), available)
+}
+
 export function FileManagerPanel({ opened, onClose }: FileManagerPanelProps) {
   const { t } = useTranslation()
   const rawActiveTab = useWbSelector((wb) => wb.activeTab)
   const theme = useTheme()
   const isMobile = useIsMobile()
-  const [showFilters, setShowFilters] = useState(true)
+  const [showFilters, setShowFilters] = useState(false)
   const [panelRect, setPanelRect] = useState(() => {
     const width = Math.min(1180, Math.max(PANEL_MIN_WIDTH, Math.round((hostWindow.innerWidth || 1280) * 0.82)))
-    const height = Math.min(760, Math.max(PANEL_MIN_HEIGHT, Math.round((hostWindow.innerHeight || 800) * 0.74)))
+    const height = fitPanelHeight(Math.min(760, Math.max(PANEL_MIN_HEIGHT, Math.round((hostWindow.innerHeight || 800) * 0.74))))
     return {
       width,
       height,
@@ -86,7 +91,7 @@ export function FileManagerPanel({ opened, onClose }: FileManagerPanelProps) {
         typeof parsed?.y === 'number'
       ) {
         const width = clamp(parsed.width, PANEL_MIN_WIDTH, Math.max(PANEL_MIN_WIDTH, hostWindow.innerWidth - PANEL_MARGIN * 2))
-        const height = clamp(parsed.height, PANEL_MIN_HEIGHT, Math.max(PANEL_MIN_HEIGHT, hostWindow.innerHeight - PANEL_MARGIN * 2))
+        const height = fitPanelHeight(parsed.height)
         setPanelRect({
           width,
           height,
@@ -104,7 +109,7 @@ export function FileManagerPanel({ opened, onClose }: FileManagerPanelProps) {
     const onResize = () => {
       setPanelRect((rect) => {
         const width = clamp(rect.width, PANEL_MIN_WIDTH, Math.max(PANEL_MIN_WIDTH, hostWindow.innerWidth - PANEL_MARGIN * 2))
-        const height = clamp(rect.height, PANEL_MIN_HEIGHT, Math.max(PANEL_MIN_HEIGHT, hostWindow.innerHeight - PANEL_MARGIN * 2))
+        const height = fitPanelHeight(rect.height)
         return {
           width,
           height,
@@ -117,15 +122,20 @@ export function FileManagerPanel({ opened, onClose }: FileManagerPanelProps) {
     return () => hostWindow.removeEventListener('resize', onResize)
   }, [])
 
-  // Escape closes the (non-modal) window.
+  // Use the original Shadow DOM target so Escape dismisses the innermost layer.
+  // Mantine's window capture handler sees the shadow host as event.target.
   useEffect(() => {
-    if (!opened || isMobile) return
+    if (!opened) return
     const onKey = (e: globalThis.KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key !== 'Escape' || e.defaultPrevented || e.isComposing) return
+      const target = e.composedPath().find((node): node is HTMLElement => node instanceof HTMLElement)
+      const layer = target?.closest('[role="menu"], [role="listbox"], [role="dialog"]')
+      if (layer && !layer.classList.contains('vpw-main-wardrobe-dialog')) return
+      onClose()
     }
     hostWindow.addEventListener('keydown', onKey)
     return () => hostWindow.removeEventListener('keydown', onKey)
-  }, [opened, isMobile, onClose])
+  }, [opened, onClose])
 
   const onPanelPointerMove = useCallback((event: globalThis.PointerEvent) => {
     const el = winRef.current
@@ -142,7 +152,7 @@ export function FileManagerPanel({ opened, onClose }: FileManagerPanelProps) {
       const dx = event.clientX - panelResize.current.startX
       const dy = event.clientY - panelResize.current.startY
       const w = clamp(panelResize.current.baseW + dx, PANEL_MIN_WIDTH, Math.max(PANEL_MIN_WIDTH, hostWindow.innerWidth - r.x - PANEL_MARGIN))
-      const h = clamp(panelResize.current.baseH + dy, PANEL_MIN_HEIGHT, Math.max(PANEL_MIN_HEIGHT, hostWindow.innerHeight - r.y - PANEL_MARGIN))
+      const h = fitPanelHeight(panelResize.current.baseH + dy, r.y)
       panelResize.current.w = w
       panelResize.current.h = h
       if (el) {
@@ -192,12 +202,13 @@ export function FileManagerPanel({ opened, onClose }: FileManagerPanelProps) {
   }
 
   const activeTab = rawActiveTab === 'studio' ? 'wardrobe' : rawActiveTab
-  const showSidebars = activeTab === 'wardrobe' || activeTab === 'history'
+  const showSidebars = activeTab === 'history'
 
   // ---- Mobile: full-screen modal (no drag/resize) ----
   if (isMobile) {
     return (
-      <Modal opened={opened} onClose={onClose} fullScreen radius={0} withCloseButton={false} padding={0}>
+      <Modal opened={opened} onClose={onClose} fullScreen radius={0} withCloseButton={false} padding={0}
+        closeOnEscape={false} classNames={{ content: 'vpw-main-wardrobe-dialog' }}>
         <MobileWardrobeShell onClose={onClose} />
       </Modal>
     )
@@ -296,9 +307,7 @@ export function FileManagerPanel({ opened, onClose }: FileManagerPanelProps) {
             </Group>
 
             <Tabs.Panel value="wardrobe" style={{ flex: 1, minHeight: 0, paddingTop: 12 }}>
-              <ThreeColumn showFilters={showFilters} showApply>
-                <FileManager />
-              </ThreeColumn>
+              <WardrobeWorkspace />
             </Tabs.Panel>
 
             <Tabs.Panel value="history" style={{ flex: 1, minHeight: 0, paddingTop: 12 }}>
@@ -337,8 +346,8 @@ export function FileManagerPanel({ opened, onClose }: FileManagerPanelProps) {
 
 const COL_WEIGHTS_STORAGE_KEY = 'vpw-col-weights-v1'
 const MIN_COL_WEIGHT = 0.4
-// Center preview gets the largest default weight (enlarged middle area).
-const DEFAULT_COL_WEIGHTS: ColWeights = { list: 1, preview: 1.55, filter: 1.1 }
+// Reserve enough room to browse several outfits beside the preview.
+const DEFAULT_COL_WEIGHTS: ColWeights = { list: 1.65, preview: 1, filter: 1 }
 
 type ColKey = 'list' | 'preview' | 'filter'
 type ColWeights = Record<ColKey, number>

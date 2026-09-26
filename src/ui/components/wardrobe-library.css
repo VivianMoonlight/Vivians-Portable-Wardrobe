@@ -1,0 +1,208 @@
+.vpw-library-root {
+  container-type: inline-size;
+  container-name: wardrobe-library;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+}
+
+.vpw-library-search,
+.vpw-library-toolbar,
+.vpw-library-quota {
+  flex: 0 0 auto;
+}
+
+.vpw-library-workspace {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  gap: 14px;
+}
+
+.vpw-library-sidebar {
+  display: none;
+  flex: 0 0 154px;
+  min-width: 0;
+  padding-right: 12px;
+  overflow-y: auto;
+  border-right: 1px solid var(--mantine-color-default-border);
+}
+
+.vpw-library-filter-option {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  padding: 7px 9px;
+  border-radius: 8px;
+}
+
+.vpw-library-filter-name {
+  overflow-wrap: anywhere;
+}
+
+.vpw-library-filter-option:hover {
+  background: var(--mantine-color-default-hover);
+}
+
+.vpw-library-filter-option[aria-pressed='true'] {
+  color: var(--mantine-color-teal-light-color);
+  background: var(--mantine-color-teal-light);
+  font-weight: 600;
+}
+
+.vpw-library-filter-option:focus-visible,
+.vpw-outfit-select:focus-visible {
+  outline: 2px solid var(--mantine-color-teal-5);
+  outline-offset: -2px;
+}
+
+.vpw-library-scroll {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 2px 3px 8px;
+}
+
+/* The scrolling parent owns height; unrestricted columns never spill sideways. */
+.vpw-library-masonry {
+  column-width: 154px;
+  column-gap: 12px;
+}
+
+.vpw-library-masonry[data-view='small'] {
+  column-width: 112px;
+  column-gap: 9px;
+}
+
+.vpw-library-masonry[data-view='list'] {
+  columns: auto;
+}
+
+.vpw-outfit-card {
+  display: block;
+  width: 100%;
+  vertical-align: top;
+  break-inside: avoid;
+  margin-bottom: 12px;
+  overflow: hidden;
+  background: var(--mantine-color-body);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.vpw-outfit-card:hover {
+  border-color: var(--mantine-color-teal-4);
+}
+
+.vpw-outfit-card[data-selected] {
+  border-color: var(--mantine-color-teal-5);
+  box-shadow: 0 0 0 1px var(--mantine-color-teal-5);
+}
+
+.vpw-outfit-select {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  padding: 5px;
+  border-radius: 10px;
+  text-align: left;
+}
+
+.vpw-outfit-thumbnail {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 9 / 16;
+  flex: 0 0 auto;
+  overflow: hidden;
+  border-radius: 8px;
+  background: linear-gradient(150deg, var(--mantine-color-default-hover), var(--mantine-color-body));
+}
+
+.vpw-outfit-selected-badge {
+  position: absolute;
+  inset-inline-start: 6px;
+  top: 6px;
+}
+
+.vpw-outfit-caption {
+  min-width: 0;
+  padding: 9px 6px 5px;
+  width: 100%;
+}
+
+.vpw-outfit-name {
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.vpw-outfit-tag {
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: var(--mantine-color-default-hover);
+  color: var(--mantine-color-dimmed);
+  font-size: 10px;
+  line-height: 1.4;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.vpw-outfit-actions {
+  padding: 5px 10px 9px;
+}
+
+.vpw-outfit-card[data-view='list'] .vpw-outfit-select {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px 0;
+}
+
+.vpw-outfit-card[data-view='list'] .vpw-outfit-caption {
+  flex: 1;
+  padding-top: 0;
+}
+
+.vpw-outfit-card[data-view='list'] .vpw-outfit-actions {
+  padding-left: 70px;
+}
+
+@container wardrobe-library (min-width: 540px) {
+  .vpw-library-sidebar {
+    display: block;
+  }
+
+  .vpw-library-filter-trigger {
+    display: none;
+  }
+}
+
+@media (pointer: coarse) {
+  .vpw-outfit-actions button,
+  .vpw-library-filter-option {
+    min-height: 40px;
+  }
+
+  .vpw-outfit-actions button:last-child {
+    min-width: 40px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vpw-outfit-card {
+    transition: none;
+  }
+}
+
+@media (max-height: 600px) {
+  .vpw-library-quota:not([data-expanded]) .vpw-library-quota-secondary {
+    display: none;
+  }
+}

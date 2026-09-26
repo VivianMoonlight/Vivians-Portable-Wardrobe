@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Box, Button, Select, Text } from '@mantine/core'
+import { Box, Button, Loader, Select, Stack, Text, VisuallyHidden } from '@mantine/core'
 import { useTranslation } from 'react-i18next'
 import { hostWindow } from '@/utils/host-window.js'
 import { ExternalAdapter } from '@/utils/external_adapters.js'
+import { retryFailedImagesForOutfit } from '@/utils/RenderApi.js'
 import { getFs, useFsSelector } from '@/stores/hooks'
 import { useDialog } from '@/ui/dialog/DialogProvider'
 import { OVERLAY_Z_INDEX } from '@/ui/z-index'
@@ -91,22 +92,40 @@ function areCharacterOptionsEqual(a: CharacterOption[], b: CharacterOption[]): b
   ))
 }
 
-/**
- * Character preview canvas for the currently active/previewed outfit.
- * Re-renders on previewItem change and on container resize. Ported from
- * SidePreview.vue.
- *
- * When `showApply` is set, a primary "apply to character" button is rendered
- * here so the core action stays reachable even when the Filter panel (its
- * previous home) is hidden.
- */
+export function ApplyOutfitButton() {
+  const { t } = useTranslation()
+  const dialog = useDialog()
+  const character = useFsSelector((fs) => fs.character)
+  const previewItem = useFsSelector((fs) => fs.previewItem)
+  const [applied, setApplied] = useState<{ name: string; preview: unknown; character: unknown } | null>(null)
+  const target = character || gameWindow.CurrentCharacter || gameWindow.Player
+  const name = target ? getCharacterName(target) : t('sidePreview.noTargetCharacter')
+
+  const applyCurrent = async () => {
+    if (getFs().applyCurrentPreviewToCharacter()) setApplied({ name, preview: getFs().previewItem, character })
+    else await dialog.alert(t('filterManager.applyFailed'))
+  }
+
+  return (
+    <Box w="100%">
+      <Button fullWidth disabled={!target || !Array.isArray(previewItem?.data)} onClick={applyCurrent}>
+        {t('outfitFlow.applyTo', { name })}
+      </Button>
+      {applied?.preview === previewItem && applied.character === character && <Text role="status" size="xs" c="teal" ta="center" mt={3}>{t('outfitFlow.appliedTo', { name: applied.name })}</Text>}
+    </Box>
+  )
+}
+
+/** Visible BC render updates; resizing only fits the cached canvas. */
 export function SidePreview({ showApply = false }: SidePreviewProps) {
   const { t } = useTranslation()
   const previewItem = useFsSelector((fs) => fs.previewItem)
   const selectedCharacter = useFsSelector((fs) => fs.character)
-  const dialog = useDialog()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const previewFrameRef = useRef<HTMLDivElement>(null)
+  const [loading, setLoading] = useState(false)
+  const [renderError, setRenderError] = useState(false)
+  const [renderAttempt, setRenderAttempt] = useState(0)
   const [characterOptions, setCharacterOptions] = useState<CharacterOption[]>(() => getSelectableCharacterOptions())
 
   const hasItem = !!previewItem
@@ -143,46 +162,76 @@ export function SidePreview({ showApply = false }: SidePreviewProps) {
     })
   }
 
-  const applyCurrent = async () => {
-    const ok = getFs().applyCurrentPreviewToCharacter()
-    if (!ok) await dialog.alert(t('filterManager.applyFailed'))
+  const retryPreview = () => {
+    retryFailedImagesForOutfit(previewItem?.data)
+    getFs().renderer.removeCanvas(previewItem)
+    setRenderAttempt((attempt) => attempt + 1)
   }
-  // Re-run the draw effect whenever the preview payload identity changes.
-  const previewData = previewItem?.data
 
   useEffect(() => {
     const store = getFs()
     const canvas = canvasRef.current
-    if (!canvas) return
     const target = previewFrameRef.current
+    if (!canvas || !target) return
 
     let disposed = false
+    let inViewport = false
+    let source: HTMLCanvasElement | null = null
+    let unsubscribe: (() => void) | null = null
+    let subscriptionId = 0
+    canvas.style.display = 'none'
+    setLoading(false)
+    setRenderError(false)
 
-    const update = async () => {
-      const item = store.previewItem
-      if (!item) {
-        canvas.style.display = 'none'
-        return
-      }
-      const renderer = store.renderer
-      if (!renderer) return
+    const draw = () => {
       sizeCanvasToContainer(canvas, target)
-      let src: HTMLCanvasElement | null = null
-      try {
-        renderer.startThumbFor?.(item)
-        if (typeof renderer.getThumbCanvas === 'function') {
-          src = await renderer.getThumbCanvas(item, { timeout: 3000 })
-        } else if (typeof renderer.getCanvas === 'function') {
-          src = await renderer.getCanvas(item, { timeout: 3000 })
-        } else {
-          src = renderer._getCanvas?.(item) ?? null
-        }
-      } catch {
-        src = renderer._getCanvas?.(item) ?? null
-      }
-      if (disposed) return
-      if (src) drawSourceCentered(canvas, src)
+      if (source) drawSourceCentered(canvas, source)
       else canvas.style.display = 'none'
+    }
+
+    const stop = () => {
+      subscriptionId += 1
+      unsubscribe?.()
+      unsubscribe = null
+      source = null
+      canvas.style.display = 'none'
+      canvas.width = 1
+      canvas.height = 1
+      // Recompute the backing size when the preview becomes visible again.
+      delete (canvas as HTMLCanvasElement & { __cssW?: number }).__cssW
+      target.removeAttribute('aria-busy')
+      if (!disposed) setLoading(false)
+    }
+
+    const start = () => {
+      if (disposed || unsubscribe || !previewItem) return
+      const currentId = ++subscriptionId
+      draw()
+      unsubscribe = store.renderer.observe(previewItem, (
+        nextSource: HTMLCanvasElement | null,
+        status: { state: string },
+      ) => {
+        if (disposed || !inViewport || currentId !== subscriptionId) return
+        source = nextSource
+        setLoading(status.state === 'loading')
+        setRenderError(status.state === 'error')
+        target.setAttribute('aria-busy', String(status.state === 'loading'))
+        draw()
+      }, { preview: true })
+    }
+
+    let io: IntersectionObserver | null = null
+    if (typeof hostWindow.IntersectionObserver === 'function') {
+      io = new hostWindow.IntersectionObserver((entries) => {
+        const entry = entries[0]
+        inViewport = !!(entry && (entry.isIntersecting || entry.intersectionRatio > 0))
+        if (inViewport) start()
+        else stop()
+      }, { threshold: 0.01 })
+      io.observe(target)
+    } else {
+      inViewport = true
+      start()
     }
 
     let ro: ResizeObserver | null = null
@@ -194,19 +243,19 @@ export function SidePreview({ showApply = false }: SidePreviewProps) {
         if (rafId) hostWindow.cancelAnimationFrame(rafId)
         rafId = hostWindow.requestAnimationFrame(() => {
           rafId = 0
-          if (sizeCanvasToContainer(canvas, target)) void update()
+          if (inViewport) draw()
         })
       })
       ro.observe(target)
     }
-    void update()
-
     return () => {
       disposed = true
+      stop()
       if (rafId) hostWindow.cancelAnimationFrame(rafId)
+      io?.disconnect()
       ro?.disconnect()
     }
-  }, [previewData])
+  }, [previewItem, renderAttempt])
 
   return (
     <Box
@@ -216,7 +265,7 @@ export function SidePreview({ showApply = false }: SidePreviewProps) {
         alignItems: 'center',
         gap: 8,
         height: '100%',
-        minHeight: 'clamp(180px, 40vh, 320px)',
+        minHeight: 0,
         padding: 8,
       }}
     >
@@ -260,7 +309,7 @@ export function SidePreview({ showApply = false }: SidePreviewProps) {
         style={{
           width: '100%',
           flex: '1 1 auto',
-          minHeight: 180,
+          minHeight: 80,
           minWidth: 0,
           position: 'relative',
           overflow: 'hidden',
@@ -269,6 +318,8 @@ export function SidePreview({ showApply = false }: SidePreviewProps) {
       >
         <canvas
           ref={canvasRef}
+          role="img"
+          aria-label={t('sidePreview.ariaLabel')}
           style={{
             position: 'absolute',
             inset: 0,
@@ -277,6 +328,14 @@ export function SidePreview({ showApply = false }: SidePreviewProps) {
             display: 'block',
           }}
         />
+        {loading && <Box role="status">
+          <VisuallyHidden>{t('sidePreview.loading', { defaultValue: '正在加载预览' })}</VisuallyHidden>
+          <Loader size="sm" aria-hidden style={{ position: 'absolute', right: 12, bottom: 12, pointerEvents: 'none' }} />
+        </Box>}
+        {renderError && <Stack gap="xs" align="center" justify="center" p="sm" style={{ position: 'absolute', inset: 0, overflow: 'auto' }}>
+          <Text role="status" size="xs" c="dimmed" ta="center">{t('sidePreview.renderFailed', { defaultValue: '预览加载失败，请重试' })}</Text>
+          <Button variant="light" size="compact-xs" onClick={retryPreview}>{t('sidePreview.retry', { defaultValue: '重新加载预览' })}</Button>
+        </Stack>}
       </Box>
       {hasItem ? (
         <Text size="sm" fw={600} truncate w="100%" ta="center">
@@ -288,11 +347,7 @@ export function SidePreview({ showApply = false }: SidePreviewProps) {
         </Text>
       )}
 
-      {showApply && (
-        <Button fullWidth disabled={!hasItem} onClick={applyCurrent}>
-          {t('filterManager.applyCurrent')}
-        </Button>
-      )}
+      {showApply && <ApplyOutfitButton />}
     </Box>
   )
 }

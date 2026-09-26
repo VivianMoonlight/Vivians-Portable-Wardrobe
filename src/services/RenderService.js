@@ -1,388 +1,324 @@
-/**
- * Manages thumbnail generation with polling-based updates until rendering stabilizes.
- * Uses image hashing to detect when rendering is complete.
- *
- * Performance note:
- * - We create the small thumbnail canvas's 2D context with { willReadFrequently: true }
- *   because we call getImageData repeatedly for hashing. This avoids repeated expensive
- *   readbacks on some browsers (Chrome warns otherwise).
- * - bigCanvas is used as a higher-resolution render target and we typically don't read it,
- *   so we use a normal context for it.
- */
-import { doc, setTimeoutHost, clearTimeoutHost } from '@/utils/host-window.js';
-import { createCanvas, get2DContext } from '@/utils/canvas.js';
+import { hostWindow, setTimeoutHost, clearTimeoutHost } from '@/utils/host-window.js';
+import { createCanvas } from '@/utils/canvas.js';
 
+/** Visible consumers share event-driven render sessions and a bounded canvas cache. */
 export class RenderService {
-    constructor({ drawCallbacks, thumbwidth = 250, thumbheight = 500, previewwidth = 500, previewheight = 1000, pollInterval = 500 } = {}) {
-        this.drawCallbacks = drawCallbacks;
-        this.thumbwidth = thumbwidth;
-        this.thumbheight = thumbheight;
-        this.pollInterval = pollInterval;
-        this.previewwidth = previewwidth;
-        this.previewheight = previewheight;
-
-        // item -> { canvas, lastHash, stopped, timerId, resolvePromise, promise }
+    constructor({
+        drawCallbacks, thumbwidth = 250, thumbheight = 500,
+        previewwidth = 500, previewheight = 1000,
+        maxCacheBytes = 16 * 1024 * 1024, maxThumbnails = 2, startsPerFrame = 2,
+        canvasFactory = createCanvas,
+        scheduleFrame = (callback) => hostWindow.requestAnimationFrame
+            ? hostWindow.requestAnimationFrame(callback) : setTimeoutHost(callback, 16),
+        cancelFrame = (id) => hostWindow.cancelAnimationFrame
+            ? hostWindow.cancelAnimationFrame(id) : clearTimeoutHost(id),
+    } = {}) {
+        Object.assign(this, {
+            drawCallbacks, thumbwidth, thumbheight, previewwidth, previewheight,
+            canvasFactory, scheduleFrame, cancelFrame,
+        });
+        this.maxCacheBytes = Math.max(0, maxCacheBytes);
+        this.maxThumbnails = Math.max(1, maxThumbnails);
+        this.startsPerFrame = Math.max(1, startsPerFrame);
+        // The weak item lookup contains keys only, never an evicted canvas.
         this.registry = new WeakMap();
-
-        // item -> { promise, resolve, reject, timer }
-        // keep pending waiters for getThumbCanvas()
-        this._pending = new WeakMap();
-
-        // BC drawing uses shared global scratch canvases, so serialize render calls.
-        this._renderQueue = Promise.resolve();
+        this.entries = new Map();
+        this.observers = new Map();
+        this.cache = new Map();
+        this.cacheBytes = 0;
+        this.activeThumbnails = 0;
+        this.activePreviews = 0;
+        this.nextObserver = 0;
+        this.frame = null;
+        this.pumping = false;
+        this.previewKey = null;
     }
 
-    _createThumbCanvas() {
-        return createCanvas(this.thumbwidth, this.thumbheight);
+    _describe(item, preview) {
+        if (!item || !Array.isArray(item.data)) throw new Error('An outfit is required for rendering');
+        const dataKey = JSON.stringify(item.data);
+        const width = preview ? this.previewwidth : this.thumbwidth;
+        const height = preview ? this.previewheight : this.thumbheight;
+        const key = `${width}x${height}:${dataKey}`;
+        let meta = this.registry.get(item);
+        if (!meta) {
+            meta = { keys: new Map(), observers: new Set(), preview: false };
+            this.registry.set(item, meta);
+        }
+        const previousKey = meta.keys.get(preview);
+        if (previousKey && previousKey !== key) {
+            for (const id of [...meta.observers]) {
+                if (this.observers.get(id)?.key === previousKey) this._unsubscribe(id);
+            }
+        }
+        meta.keys.set(preview, key);
+        if (preview) meta.preview = true;
+        return { key, dataKey, width, height, preview, meta };
     }
 
-    _createPreviewCanvas() {
-        return createCanvas(this.previewwidth, this.previewheight);
+    _entry(description) {
+        let entry = this.entries.get(description.key);
+        if (!entry) {
+            entry = {
+                key: description.key, data: JSON.parse(description.dataKey),
+                width: description.width, height: description.height,
+                preview: description.preview, phase: 'queued', canvas: null,
+                observers: new Set(), generation: 0, session: null,
+            };
+            this.entries.set(entry.key, entry);
+        } else if (entry.phase === 'queued' && description.preview) {
+            entry.preview = true;
+        }
+        this._touch(entry.key);
+        return entry;
     }
 
-    /**
-     * Helper to obtain 2D context with graceful fallback.
-     * For canvases where we will frequently call getImageData, request { willReadFrequently: true }.
-     */
-    _get2DContext(canvas, { willReadFrequently = false } = {}) {
-        return get2DContext(canvas, willReadFrequently ? { willReadFrequently: true } : {});
-    }
-
-    _enqueueRender(task) {
-        const run = this._renderQueue.then(task, task);
-        this._renderQueue = run.catch(() => { });
-        return run;
-    }
-
-    _getDataKey(data) {
-        try {
-            return JSON.stringify(Array.isArray(data) ? data : []);
-        } catch {
-            return String(Date.now());
+    _selectPreview(key) {
+        if (this.previewKey === key) return;
+        this.previewKey = key;
+        for (const entry of [...this.entries.values()]) {
+            if (entry.preview && entry.key !== key && entry.phase !== 'ready') {
+                this._drop(entry, { state: 'error', error: new Error('Rendering cancelled') });
+            }
         }
     }
 
-    /**
-     * 返回当前已创建的 canvas（即使还在渲染中也会返回），或 null
-     */
+    /** Mark the latest preview without rendering it until its canvas is visible. */
+    renderPreviewWithItem(item) {
+        if (!item || item.type === 'folder') return;
+        this._selectPreview(this._describe(item, true).key);
+    }
+
+    observe(item, callback, { preview = false } = {}) {
+        let description;
+        try {
+            description = this._describe(item, preview);
+        } catch (error) {
+            this._call(callback, null, { state: 'error', error });
+            return () => {};
+        }
+        if (preview) this._selectPreview(description.key);
+        const entry = this._entry(description);
+        const id = ++this.nextObserver;
+        this.observers.set(id, { key: entry.key, callback, meta: description.meta });
+        description.meta.observers.add(id);
+        entry.observers.add(id);
+        this._call(callback, entry.canvas, { state: entry.phase === 'ready' ? 'ready' : 'loading' });
+        this._requestPump();
+        return () => this._unsubscribe(id);
+    }
+
+    _call(callback, canvas, status) {
+        try { callback(canvas, status); }
+        catch (error) { console.warn('[RenderService] Render observer failed:', error); }
+    }
+
+    _notify(entry, status) {
+        for (const id of [...entry.observers]) {
+            const observer = this.observers.get(id);
+            if (observer) this._call(observer.callback, entry.canvas, status);
+        }
+    }
+
+    _unsubscribe(id) {
+        const observer = this.observers.get(id);
+        if (!observer) return;
+        this.observers.delete(id);
+        observer.meta.observers.delete(id);
+        const entry = this.entries.get(observer.key);
+        if (!entry) return;
+        entry.observers.delete(id);
+        if (!entry.observers.size && entry.phase !== 'ready') this._drop(entry);
+    }
+
+    _next() {
+        const queued = [...this.entries.values()].filter((entry) => entry.phase === 'queued');
+        return (!this.activePreviews && queued.find((entry) => entry.preview))
+            || (this.activeThumbnails < this.maxThumbnails && queued.find((entry) => !entry.preview));
+    }
+
+    _requestPump() {
+        if (this.pumping || this.frame !== null || !this._next()) return;
+        this.frame = this.scheduleFrame(() => {
+            this.frame = null;
+            this.pumping = true;
+            try {
+                for (let count = 0; count < this.startsPerFrame; count++) {
+                    const entry = this._next();
+                    if (!entry) break;
+                    this._start(entry);
+                }
+            } finally {
+                this.pumping = false;
+                this._requestPump();
+            }
+        });
+    }
+
+    _start(entry) {
+        entry.phase = 'active';
+        if (entry.preview) this.activePreviews++;
+        else this.activeThumbnails++;
+        const generation = ++entry.generation;
+        const onUpdate = (canvas, status) => {
+            if (this.entries.get(entry.key) !== entry || entry.generation !== generation || entry.phase !== 'active') return;
+            if (canvas) entry.canvas = canvas;
+            if (status.state === 'error') {
+                this._drop(entry, status);
+                return;
+            }
+            const terminal = status.state === 'ready';
+            if (terminal) {
+                this._releaseSlot(entry);
+                entry.phase = status.state;
+                this._disposeSession(entry);
+            }
+            this._notify(entry, status);
+            if (terminal) {
+                if (status.state === 'ready' && entry.canvas) this._cache(entry);
+                else this._drop(entry);
+                this._requestPump();
+            }
+        };
+        try {
+            entry.canvas ||= this.canvasFactory(entry.width, entry.height);
+            const session = this.drawCallbacks.createRenderSession({
+                data: entry.data, canvas: entry.canvas,
+                width: entry.width, height: entry.height, onUpdate,
+            });
+            // A warm BC image cache can finish during createRenderSession itself.
+            if (entry.phase !== 'active') session?.dispose();
+            else entry.session = session;
+        } catch (error) {
+            onUpdate(entry.canvas, { state: 'error', error });
+        }
+    }
+
+    _releaseSlot(entry) {
+        if (entry.phase !== 'active') return;
+        if (entry.preview) this.activePreviews--;
+        else this.activeThumbnails--;
+    }
+
+    _disposeSession(entry) {
+        const session = entry.session;
+        entry.session = null;
+        try { session?.dispose(); }
+        catch (error) { console.warn('[RenderService] Render cleanup failed:', error); }
+    }
+
+    _touch(key) {
+        if (!this.cache.has(key)) return;
+        const bytes = this.cache.get(key);
+        this.cache.delete(key);
+        this.cache.set(key, bytes);
+    }
+
+    _cache(entry) {
+        // An observer may have cancelled or replaced this generation in its callback.
+        if (this.entries.get(entry.key) !== entry) return;
+        const bytes = entry.width * entry.height * 4;
+        this.cache.set(entry.key, bytes);
+        this.cacheBytes += bytes;
+        while (this.cacheBytes > this.maxCacheBytes) {
+            const key = this.cache.keys().next().value;
+            this._drop(this.entries.get(key));
+        }
+    }
+
+    _drop(entry, status = null) {
+        if (!entry || this.entries.get(entry.key) !== entry) return;
+        const callbacks = status
+            ? [...entry.observers].map((id) => this.observers.get(id)?.callback).filter(Boolean)
+            : [];
+        const canvas = entry.canvas;
+        this.entries.delete(entry.key);
+        entry.generation++;
+        this._releaseSlot(entry);
+        entry.phase = 'disposed';
+        if (this.cache.has(entry.key)) {
+            this.cacheBytes -= this.cache.get(entry.key);
+            this.cache.delete(entry.key);
+        }
+        for (const id of entry.observers) this._unsubscribe(id);
+        entry.observers.clear();
+        entry.canvas = null;
+        this._disposeSession(entry);
+        // A terminal callback may immediately subscribe to a new generation.
+        for (const callback of callbacks) this._call(callback, canvas, status);
+        if (this.frame !== null && !this._next()) {
+            this.cancelFrame(this.frame);
+            this.frame = null;
+        }
+        this._requestPump();
+    }
+
     _getCanvas(item) {
-        const meta = this.registry.get(item);
-        return meta && meta.canvas ? meta.canvas : null;
+        const meta = item && this.registry.get(item);
+        const key = meta?.keys.get(meta.preview);
+        this._touch(key);
+        return this.entries.get(key)?.canvas ?? null;
+    }
+
+    /** Compatibility for callers that await a finished canvas. No polling is used. */
+    getCanvas(item, { timeout = 0, preview = this.registry.get(item)?.preview ?? false } = {}) {
+        if (!item) return Promise.resolve(null);
+        return new Promise((resolve, reject) => {
+            let unsubscribe;
+            let timer;
+            let finished = false;
+            const finish = (canvas, status) => {
+                if (status.state === 'loading') return;
+                finished = true;
+                if (timer) clearTimeoutHost(timer);
+                unsubscribe?.();
+                if (status.state === 'error') reject(status.error);
+                else resolve(canvas);
+            };
+            unsubscribe = this.observe(item, finish, { preview });
+            if (finished) unsubscribe();
+            else if (timeout > 0) {
+                timer = setTimeoutHost(() => {
+                    unsubscribe();
+                    reject(new Error('Thumbnail timeout'));
+                }, timeout);
+            }
+        });
+    }
+
+    startThumbFor(item) {
+        if (!item || item.type === 'folder') return null;
+        const description = this._describe(item, false);
+        const entry = this._entry(description);
+        entry.canvas ||= this.canvasFactory(entry.width, entry.height);
+        let unsubscribe;
+        let finished = false;
+        unsubscribe = this.observe(item, (_canvas, status) => {
+            if (status.state !== 'loading') {
+                finished = true;
+                unsubscribe?.();
+            }
+        });
+        if (finished) unsubscribe();
+        return entry.canvas;
+    }
+
+    stopFor(item) {
+        const meta = item && this.registry.get(item);
+        if (!meta) return;
+        const ids = [...meta.observers];
+        const callbacks = ids.map((id) => this.observers.get(id)?.callback).filter(Boolean);
+        this.registry.delete(item);
+        for (const id of ids) this._unsubscribe(id);
+        const status = { state: 'error', error: new Error('Rendering cancelled') };
+        for (const callback of callbacks) this._call(callback, null, status);
     }
 
     removeCanvas(item) {
-        this.stopFor(item);
-    }
-
-
-    /**
-     * 返回一个 Promise，在渲染稳定（轮询结束）时 resolve canvas。
-     * 如果 canvas 已稳定则立即 resolve。
-     */
-    getCanvas(item, { timeout = 5000 } = {}) {
-        if (!item) return Promise.resolve(null);
-
-        // 如果已经可用并且已经停止（稳定），立即返回已稳定 canvas
-        const meta = this.registry.get(item);
-        if (meta && meta.stopped) return Promise.resolve(meta.canvas);
-
-        // 如果已经存在 pending waiter，返回它
-        if (this._pending.has(item)) return this._pending.get(item).promise;
-
-        // 否则创建一个等待 promise
-        let resolveFn, rejectFn;
-        const promise = new Promise((resolve, reject) => {
-            resolveFn = resolve;
-            rejectFn = reject;
-        });
-        const record = { promise, resolve: resolveFn, reject: rejectFn, timer: null };
-        this._pending.set(item, record);
-
-        // 超时保护
-        if (timeout && timeout > 0) {
-            record.timer = setTimeoutHost(() => {
-                if (this._pending.has(item)) {
-                    this._pending.delete(item);
-                    record.reject(new Error('Thumbnail timeout'));
-                }
-            }, timeout);
-        }
-
-        // 确保 generation 已经启动
-       /*  try {
-            this.startThumbFor(item);
-        } catch (err) {
-            // ignore
-        } */
-
-        return promise;
-    }
-
-
-
-    renderPreviewWithItem(item) {
-        if (item && item.type && item.type === 'folder') {
-            // folders do not have previews
-            return;
-        }
-        if (!item || !item.data){
-            console.error('[RenderService] renderPreviewWithItem: item is required');
-            return;
-        }
-
-        if (!this.drawCallbacks || typeof this.drawCallbacks.drawPreview !== 'function') {
-            console.error('[RenderService] renderPreviewWithItem: drawPreview callback not defined');
-            return;
-        }
-
-        /*  if (!this.previewItem || !this.previewItem.canvas) {
-             const canvas = this._createPreviewCanvas();
-             const meta = {
-                 canvas,
-                 lastHash: null,
-                 stopped: false,
-                 timerId: null
-             };
-             this.previewItem = meta;
-         } */
-
-        const dataKey = this._getDataKey(item.data);
-        if (this.registry.has(item) === false) {
-            const canvas = this._createPreviewCanvas();
-            const meta = {
-                canvas,
-                lastHash: null,
-                stopped: false,
-                timerId: null,
-                dataKey
-            };
-            this.registry.set(item, meta);
-        }
-        const meta = this.registry.get(item);
-        meta.dataKey = dataKey;
-        if (meta.timerId) {
-            clearTimeoutHost(meta.timerId);
-            meta.timerId = null;
-        }
-        const ctx = this._get2DContext(meta.canvas, { willReadFrequently: true });
-        if (!ctx) {
-            console.error('[RenderService] renderPreviewWithItem: Failed to get canvas context');
-            meta.stopped = true;
-            return;
-        }
-        ctx.clearRect(0, 0, meta.canvas.width, meta.canvas.height);
-        try {
-            // I guess this fucntion is not async so we just call it directly
-            this.drawCallbacks.drawPreview({
-                data: item.data,
-                ctx: ctx,
-                canvas: meta.canvas,
-                width: meta.canvas.width,
-                height: meta.canvas.height
-            });
-
-        } catch (e) {
-            console.warn('[RenderService] renderPreviewWithItem: drawCallback error:', e);
-        }
-        meta.stopped = true;
-    }
-
-    /**
-     * 开始为 item 生成缩略图。立即返回 canvas（同步），同时在后台轮询更新该 canvas。
-     * 如果已存在会直接返回已有 canvas（不会重复启动）。
-     */
-    startThumbFor(item, retry = 6 ) {
-        if (!item) {
-            console.error('[RenderService] startThumbFor: item is required');
-            return null;
-        }
-
-        // 若已有启动则返回已有 canvas
-        const dataKey = this._getDataKey(item.data);
-        const existing = this.registry.get(item);
-        if (existing) {
-            if (existing.dataKey === dataKey) return existing.canvas;
-            this.stopFor(item);
-        }
-
-        const canvas = this._createThumbCanvas();
-
-        // 保留元信息
-        let externalResolve;
-        const stablePromise = new Promise(resolve => { externalResolve = resolve; });
-
-        const meta = {
-            canvas,
-            lastHash: null,
-            stopped: false,
-            timerId: null,
-            resolvePromise: externalResolve,
-            promise: stablePromise,
-            dataKey
-        };
-        this.registry.set(item, meta);
-
-        // bigCanvas: 临时高分辨率渲染目标（我们通常不从它读像素）
-        const bigCanvas = doc.createElement('canvas');
-        bigCanvas.width = Math.max(1, this.thumbwidth);
-        bigCanvas.height = Math.max(1, this.thumbheight);
-
-        const bigCtx = this._get2DContext(bigCanvas, { willReadFrequently: false });
-        // thumbnail ctx: we will read pixels frequently to compute hash -> ask for willReadFrequently
-        const ctx = this._get2DContext(canvas, { willReadFrequently: true });
-
-        if (!ctx) {
-            console.error('[RenderService] Failed to get canvas context');
-            meta.stopped = true;
-            // resolve pending waiters if any
-            this._resolvePending(item, canvas);
-            externalResolve(canvas);
-            return canvas;
-        }
-
-        if (item.type === 'folder') {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.font = '40px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText('📁', canvas.width / 2, canvas.height / 2);
-            meta.stopped = true;
-            this._resolvePending(item, canvas);
-            externalResolve(canvas);
-            return canvas;
-        }
-
-        // Hashing helper: sample bytes to reduce work
-        const hashImage = (imgData, { byteStep = 20 } = {}) => {
-            const data = imgData.data;
-            let hash = 0;
-            // only sample every byteStep bytes (reduces CPU and copying cost)
-            for (let i = 0; i < data.length; i += byteStep) {
-                hash = (hash * 31 + data[i]) >>> 0;
-            }
-            return hash;
-        };
-
-        // capture empty image hash
-        let empty;
-        try {
-            empty = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        } catch (e) {
-            // If getImageData fails (cross-origin etc), fallback to a default empty buffer-like object
-            empty = { data: new Uint8ClampedArray(canvas.width * canvas.height * 4) };
-        }
-        const emptyhs = hashImage(empty);
-
-        let lastHashes = [];
-        const maxEmptyRetry = Math.max(retry * 6, 24);
-
-        const loop = async (count = 0) => {
-            if (meta.stopped) return;
-
-            // render into big canvas
-            try {
-                await this._enqueueRender(() => {
-                    if (meta.stopped) return false;
-                    if (bigCtx) bigCtx.clearRect(0, 0, bigCanvas.width, bigCanvas.height);
-                    // drawCallback is expected to draw into provided ctx/canvas
-                    return this.drawCallbacks.drawThumb({
-                        data: item.data,
-                        ctx: bigCtx || /* fallback */ ctx,
-                        canvas: bigCanvas,
-                        width: bigCanvas.width,
-                        height: bigCanvas.height
-                    });
-                });
-            } catch (e) {
-                console.warn('[RenderService] drawCallback error:', e);
-            }
-            if (meta.stopped) return;
-
-            // 将 bigCanvas 缩放绘制到 thumbnail canvas（这一步不会读回像素）
-            try {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                ctx.drawImage(
-                    bigCanvas, 0, 0, bigCanvas.width, bigCanvas.height,
-                    0, 0, canvas.width, canvas.height
-                );
-            } catch (e) {
-                // drawImage occasionally might fail in some environments — ignore to continue loop
-                console.warn('[RenderService] drawImage failed:', e);
-            }
-
-            // 读取像素并哈希（这是性能关键点，willReadFrequently 请求会减轻成本）
-            let img;
-            try {
-                img = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            } catch (e) {
-                // 如果 getImageData 继续失败，则退化为最简单的处理：标记稳定并 resolve
-                console.warn('[RenderService] getImageData failed, aborting hash:', e);
-                meta.stopped = true;
-                meta.timerId = null;
-                externalResolve(canvas);
-                this._resolvePending(item, canvas);
-                return;
-            }
-            const cur = hashImage(img);
-            lastHashes.push(cur);
-            if (lastHashes.length > 2) lastHashes.shift();
-
-            const isStable = lastHashes.length === 2 &&
-                lastHashes[0] === lastHashes[1] &&
-                //lastHashes[1] === lastHashes[2] &&
-                //lastHashes[2] === lastHashes[3] &&
-                meta.lastHash === cur;
-            const isEmpty = cur === emptyhs;
-
-            if (isStable && (!isEmpty || count > maxEmptyRetry)) {
-                meta.stopped = true;
-                meta.timerId = null;
-                // resolve stable promise and pending waiters
-                externalResolve(canvas);
-                this._resolvePending(item, canvas);
-                return;
-            }
-            meta.lastHash = cur;
-
-            // schedule next loop
-            meta.timerId = setTimeoutHost(() => loop(count + 1), this.pollInterval);
-        };
-
-        // defer loop start to next tick
-        meta.timerId = setTimeoutHost(() => loop(0), 0);
-
-        return canvas;
-    }
-
-    /**
-     * 停止并清理 item 的生成（并 reject 未完成的 waiters）
-     */
-    stopFor(item) {
-        if (!item) return;
-        const meta = this.registry.get(item);
-        if (!meta) return;
-        meta.stopped = true;
-        if (meta.timerId) clearTimeoutHost(meta.timerId);
+        const entries = [...(this.registry.get(item)?.keys.values() ?? [])]
+            .map((key) => this.entries.get(key));
         this.registry.delete(item);
-
-        // reject any pending getThumbCanvas waiters
-        const pend = this._pending.get(item);
-        if (pend) {
-            if (pend.timer) clearTimeoutHost(pend.timer);
-            try { pend.reject(new Error('Thumbnail generation stopped')); } catch { }
-            this._pending.delete(item);
-        }
-    }
-
-    /**
-     * 内部：当生成完成或需要 resolve 等待者时调用
-     */
-    _resolvePending(item, canvas) {
-        const pend = this._pending.get(item);
-        if (pend) {
-            if (pend.timer) clearTimeoutHost(pend.timer);
-            try { pend.resolve(canvas); } catch { }
-            this._pending.delete(item);
-        }
+        const status = { state: 'error', error: new Error('Rendering cancelled') };
+        for (const entry of entries) this._drop(entry, status);
     }
 }

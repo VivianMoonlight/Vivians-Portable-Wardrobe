@@ -3,14 +3,18 @@ import { createRoot } from 'react-dom/client'
 import { createShadowHost } from '@/ui/shadow'
 import { Root } from '@/ui/Root'
 import { getFs } from '@/stores/hooks'
+import { useFileSystemStore } from '@/stores/fileSystemStore.js'
 import '@/i18n'
 
-// Seed a couple of sample entries so the file grid (and FileItem cards) are
-// actually exercised in the harness — this is what surfaces render-loop issues.
+// Seed an indexed library once; the mock never contacts a game server.
 try {
+  useFileSystemStore.getState().loadAll()
   const fs = getFs()
-  fs.addFile({ name: 'Sample Folder', type: 'folder', children: [] })
-  fs.addFile({ name: 'Sample Outfit', type: 'file', data: [] })
+  if (fs.outfits.length === 0) {
+    const tagId = fs.createTag('日常 / 夏天')
+    fs.addOutfit({ name: 'Sample Outfit', type: 'outfit', data: [], tagIds: [tagId] })
+    fs.addOutfit({ name: 'Local draft', type: 'outfit', data: [], cloudSync: false })
+  }
 } catch (e) {
   console.warn('[dev] seed failed', e)
 }

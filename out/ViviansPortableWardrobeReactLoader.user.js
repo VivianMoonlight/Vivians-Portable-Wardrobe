@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         Vivians Portable Wardrobe (React Preview Loader)
 // @namespace    https://www.bondageprojects.com/
-// @version      0.10.1-react.1
+// @version      0.10.1-react.2
 // @description  Preview loader for Vivian's Portable Wardrobe React branch
-// @author       VivianMoonlight
+// @author       VIVianMoonlight
 // @match        https://bondageprojects.elementfx.com/*
 // @match        https://www.bondageprojects.elementfx.com/*
 // @match        https://bondage-europe.com/*
@@ -13,16 +13,16 @@
 // @match        http://localhost:*/*
 // @run-at       document-end
 // @grant        none
-// @updateURL    https://cdn.jsdelivr.net/gh/vivianmoonlight/Vivians-Portable-Wardrobe@wardrobe-react/ViviansPortableWardrobeReactLoader.user.js
-// @downloadURL  https://cdn.jsdelivr.net/gh/vivianmoonlight/Vivians-Portable-Wardrobe@wardrobe-react/ViviansPortableWardrobeReactLoader.user.js
+// @updateURL    https://cdn.jsdelivr.net/gh/VivianMoonlight/Vivians-Portable-Wardrobe@feat%2Fwardrobe-react/ViviansPortableWardrobeReactLoader.user.js
+// @downloadURL  https://cdn.jsdelivr.net/gh/VivianMoonlight/Vivians-Portable-Wardrobe@feat%2Fwardrobe-react/ViviansPortableWardrobeReactLoader.user.js
 // ==/UserScript==
 
 (function () {
   'use strict';
 
-  const BRANCH = 'wardrobe-react';
+  const BRANCH = 'feat/wardrobe-react';
   const SCRIPT_URL =
-    `https://cdn.jsdelivr.net/gh/vivianmoonlight/Vivians-Portable-Wardrobe@${BRANCH}/out/Vivians-Portable-Wardrobe.user.js`;
+    `https://cdn.jsdelivr.net/gh/VivianMoonlight/Vivians-Portable-Wardrobe@${encodeURIComponent(BRANCH)}/out/Vivians-Portable-Wardrobe.user.js`;
 
   setTimeout(() => {
     const script = document.createElement('script');

@@ -1,12 +1,24 @@
-import { memo, useCallback, useMemo, useState } from 'react'
-import { Box, Button, Checkbox, Collapse, Group, Paper, SegmentedControl, Stack, Text, Tooltip } from '@mantine/core'
+import { memo, useCallback, useId, useMemo, useState } from 'react'
+import { Box, Button, Checkbox, Collapse, Group, Paper, SegmentedControl, Stack, Text, Tooltip, VisuallyHidden } from '@mantine/core'
 import { useTranslation } from 'react-i18next'
 import { getFs, useFsSelector } from '@/stores/hooks'
 import { AssetApi } from '@/utils/AssetApi'
-
-type SlotMode = 'original' | 'incoming' | 'empty'
-type ReplaceMode = 'preserve' | 'fill-empty' | 'merge-replace' | 'full-replace'
-type ScopeState = 'none' | 'partial' | 'full'
+import { OVERLAY_Z_INDEX } from '@/ui/z-index'
+import {
+  SLOT_MODES,
+  normalizeSlotMode,
+  getGroupNameFromPart,
+  groupPartsBySlot,
+  buildPresenceSets,
+  buildSlotPresenceMap,
+  scopeModeState,
+  type SlotMode,
+  type GroupOperation,
+  type ScopeState,
+  type OutfitPart as WardrobePart,
+  type SlotControlMap,
+} from '@/services/outfit-slot-rules.js'
+import filterStyles from './FilterManager.css?inline'
 
 interface FilterItem {
   key: string
@@ -18,679 +30,341 @@ interface FilterGroup {
   isHiddenGroup?: boolean
   itemList?: FilterItem[]
 }
-interface WardrobePart {
-  Group?: string
-  Asset?: { Group?: { Name?: string; name?: string } }
-}
-type SlotControlMap = Record<string, { mode?: string; locked?: boolean }>
+type SourceOperation = { mode: 'original' | 'incoming'; operation: GroupOperation }
 type PresenceMap = Record<string, { inCharacter?: boolean; inHover?: boolean }>
 type NameMap = Record<string, string>
 type ScopeStates = Record<SlotMode, ScopeState>
-interface FilterGroupCardProps {
-  group: FilterGroup
-  isVisible: boolean
-  isCollapsed: boolean
-  showAllSlots: boolean
-  hiddenBadge: string
-  emptyItemsLabel: string
-  applyMode: ReplaceMode
-  slotControlMap: SlotControlMap
-  presence: PresenceMap
-  characterPartNameBySlot: NameMap
-  incomingPartNameBySlot: NameMap
-  scopeStates: ScopeStates
-  slotLabels: Record<SlotMode, string>
-  slotTooltips: Record<SlotMode, string>
-  rowLabels: {
-    noItemName: string
-    characterItemName: string
-    incomingItemName: string
-    slotModeControlAriaLabel: string
-  }
-  dotLabels: { inCharacter: string; inHover: string; none: string }
-  onToggleCollapsed: (id: string) => void
-  onApplyGroupMode: (id: string, mode: SlotMode) => void
-  onSetSlotMode: (key: string, mode: SlotMode) => void
-}
-interface FilterItemRowProps {
-  item: FilterItem
-  isVisible: boolean
-  presence: { inCharacter?: boolean; inHover?: boolean }
-  mode: SlotMode
-  isDefault: boolean
-  characterName: string
-  incomingName: string
-  noItemName: string
-  emptyLabel: string
-  characterLabel: string
-  incomingLabel: string
-  ariaLabel: string
-  dotLabels: { inCharacter: string; inHover: string; none: string }
-  onSetSlotMode: (key: string, mode: SlotMode) => void
-}
 
-const SLOT_MODES: SlotMode[] = ['original', 'incoming', 'empty']
-const REPLACE_MODES: ReplaceMode[] = ['preserve', 'fill-empty', 'merge-replace', 'full-replace']
-const SLOT_MODE_SET = new Set<string>(SLOT_MODES)
 const EMPTY_GROUPS: FilterGroup[] = []
 const EMPTY_ITEMS: FilterItem[] = []
 const EMPTY_PARTS: WardrobePart[] = []
 const EMPTY_SLOT_CONTROL_MAP: SlotControlMap = {}
-const EMPTY_PRESENCE: { inCharacter?: boolean; inHover?: boolean } = {}
+const EMPTY_GROUP_OPERATIONS: Record<string, SourceOperation> = {}
 const EMPTY_SCOPE_STATES: ScopeStates = { original: 'none', incoming: 'none', empty: 'none' }
 
-const replaceDescKey: Record<ReplaceMode, string> = {
-  preserve: 'replaceDescPreserve',
-  'fill-empty': 'replaceDescFillEmpty',
-  'merge-replace': 'replaceDescMergeReplace',
-  'full-replace': 'replaceDescFullReplace',
-}
-const replaceLabelKey: Record<ReplaceMode, string> = {
-  preserve: 'modePreserve',
-  'fill-empty': 'modeFillEmpty',
-  'merge-replace': 'modeMergeReplace',
-  'full-replace': 'modeFullReplace',
-}
-const tipKey: Record<SlotMode, string> = {
-  original: 'tipKeep',
-  incoming: 'tipOutfit',
-  empty: 'tipEmpty',
-}
-
-const DOT_COLORS = {
-  inCharacter: 'var(--mantine-color-blue-5)',
-  inHover: 'var(--mantine-color-teal-5)',
-  none: 'var(--mantine-color-gray-4)',
-}
-
-const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
-const compactLabel = (value: string, max = 18) => {
-  if (!value) return value
-  return value.length > max ? `${value.slice(0, Math.max(1, max - 1))}...` : value
-}
-const normalizeSlotMode = (mode: unknown): SlotMode => (SLOT_MODE_SET.has(String(mode)) ? (mode as SlotMode) : 'empty')
-const normalizeReplaceMode = (mode: unknown): ReplaceMode =>
-  REPLACE_MODES.includes(mode as ReplaceMode) ? (mode as ReplaceMode) : 'fill-empty'
-
-function getGroupNameFromPart(part: WardrobePart | null | undefined) {
-  if (!part) return ''
-  return part.Group || part.Asset?.Group?.Name || part.Asset?.Group?.name || ''
-}
-
-function defaultModeFor(replaceMode: ReplaceMode, inChar: boolean, inInc: boolean): SlotMode {
-  if (replaceMode === 'preserve') return 'empty'
-  if (replaceMode === 'fill-empty') return inChar ? 'original' : inInc ? 'incoming' : 'empty'
-  if (replaceMode === 'full-replace') return inInc ? 'incoming' : 'empty'
-  return inInc ? 'incoming' : inChar ? 'original' : 'empty'
-}
-
-function buildSlotPresenceMap(characterData: WardrobePart[], incomingData: WardrobePart[]): PresenceMap {
-  const inCharacter = new Set(characterData.map(getGroupNameFromPart).filter(Boolean))
-  const inHover = new Set(incomingData.map(getGroupNameFromPart).filter(Boolean))
-  const keys = new Set([...inCharacter, ...inHover])
-  const map: PresenceMap = {}
-  for (const key of keys) {
-    map[key] = { inCharacter: inCharacter.has(key), inHover: inHover.has(key) }
-  }
-  return map
-}
-
 function buildPartNameMapBySlot(parts: WardrobePart[], character: unknown): NameMap {
-  const grouped = new Map<string, WardrobePart[]>()
-  for (const part of parts) {
-    const slotKey = getGroupNameFromPart(part)
-    if (!slotKey) continue
-    if (!grouped.has(slotKey)) grouped.set(slotKey, [])
-    grouped.get(slotKey)!.push(part)
+  const names: NameMap = {}
+  for (const [slotKey, slotParts] of groupPartsBySlot(parts)) {
+    names[slotKey] = Array.from(new Set(
+      slotParts.map((part) => AssetApi.getPartDisplayName(part, character as any)).filter(Boolean),
+    )).join(', ')
   }
-
-  const map: NameMap = {}
-  for (const [slotKey, slotParts] of grouped.entries()) {
-    const names = slotParts
-      .map((part) => AssetApi.getPartDisplayName(part, character as any))
-      .filter(Boolean)
-    map[slotKey] = Array.from(new Set(names)).join(', ')
-  }
-  return map
+  return names
 }
 
 function buildKnownSlotKeys(
   groups: FilterGroup[],
   snapshotItems: FilterItem[],
-  slotControlMap: SlotControlMap,
+  controls: SlotControlMap,
   characterData: WardrobePart[],
   incomingData: WardrobePart[],
 ) {
-  const keys = new Set(Object.keys(slotControlMap))
-  for (const item of snapshotItems) if (item?.key) keys.add(item.key)
+  const keys = new Set(Object.keys(controls))
+  for (const item of snapshotItems) if (item.key) keys.add(item.key)
   for (const group of groups) {
-    for (const item of group.itemList ?? EMPTY_ITEMS) if (item?.key) keys.add(item.key)
+    for (const item of group.itemList ?? EMPTY_ITEMS) if (item.key) keys.add(item.key)
   }
-  for (const part of characterData) {
-    const key = getGroupNameFromPart(part)
-    if (key) keys.add(key)
-  }
-  for (const part of incomingData) {
+  for (const part of [...characterData, ...incomingData]) {
     const key = getGroupNameFromPart(part)
     if (key) keys.add(key)
   }
   return Array.from(keys)
 }
 
-function slotModeFor(slotControlMap: SlotControlMap, key: string): SlotMode {
-  return normalizeSlotMode(slotControlMap[key]?.mode)
-}
-
-function scopeModeState(
-  keys: string[],
-  targetMode: SlotMode,
-  slotControlMap: SlotControlMap,
-  inCharacter: Set<string>,
-  inIncoming: Set<string>,
-): ScopeState {
-  if (keys.length === 0) return 'none'
-  const isTarget = (key: string) => slotModeFor(slotControlMap, key) === targetMode
-  if (keys.every(isTarget)) return 'full'
-  if (targetMode === 'empty') return 'none'
-  const presence = targetMode === 'original' ? inCharacter : inIncoming
-  const relevant = keys.filter((key) => presence.has(key))
-  if (relevant.length > 0 && relevant.every(isTarget)) return 'partial'
-  return 'none'
-}
-
-function SegmentLabel({ children, kind }: { children: string; kind: 'empty' | 'name' }) {
-  return (
-    <Box
-      component="span"
-      style={{
-        display: 'block',
-        width: kind === 'empty' ? 34 : 108,
-        overflow: 'hidden',
-        textOverflow: 'ellipsis',
-        whiteSpace: 'nowrap',
-      }}
-    >
-      {children}
-    </Box>
-  )
-}
-
-function Dot({ color }: { color: string }) {
-  return <Box style={{ width: 8, height: 8, borderRadius: '50%', flex: '0 0 auto', background: color }} />
-}
-
-const ScopeToggles = memo(function ScopeToggles({
-  labels,
-  tooltips,
+function SourceButtons({
   states,
+  operation,
+  grouped = false,
   onApply,
 }: {
-  labels: Record<SlotMode, string>
-  tooltips: Record<SlotMode, string>
   states: ScopeStates
+  operation?: SourceOperation
+  grouped?: boolean
   onApply: (mode: SlotMode) => void
 }) {
+  const { t } = useTranslation()
+  const labels = {
+    original: t('filterManager.slotModeShortOriginal'),
+    incoming: t('filterManager.slotModeShortIncoming'),
+    empty: t('filterManager.slotModeShortEmpty'),
+  }
+  const operationLabels: Record<GroupOperation, string> = {
+    add: t('filterManager.operationAdd', { defaultValue: '补入' }),
+    replace: t('filterManager.operationReplace', { defaultValue: '覆盖' }),
+    'full-replace': t('filterManager.operationFullReplace', { defaultValue: '完全替换' }),
+  }
+  const groupTip = t('filterManager.groupCycleTooltip', {
+    defaultValue: '连续点击同一个分组来源：补入，保留另一来源已有的部位；覆盖，替换此来源包含的部位；完全替换，同时清空此来源没有的部位。',
+  })
+  const directTips = {
+    original: t('filterManager.restoreOriginalTooltip', { defaultValue: '恢复原角色的全部部位。' }),
+    incoming: t('filterManager.replaceAllTooltip', { defaultValue: '全部使用所选衣物，清空其中没有的部位。' }),
+    empty: t('filterManager.clearScopeTooltip', { defaultValue: '直接将此范围的滑块设为置空。' }),
+  }
+
   return (
-    <Group gap={4} wrap="nowrap" style={{ flex: '0 0 auto' }}>
+    <Group gap={5} wrap="nowrap" className="vpw-filter-source-buttons">
       {SLOT_MODES.map((mode) => {
-        const state = states[mode]
-        const variant = state === 'full' ? 'filled' : state === 'partial' ? 'light' : 'default'
+        const active = operation ? operation.mode === mode : states[mode] === 'full'
+        let phase: GroupOperation | undefined
+        if (grouped && mode !== 'empty') {
+          if (operation?.mode === mode) phase = operation.operation
+          else if (!operation && states[mode] === 'full') phase = 'full-replace'
+        }
+        const variant = active ? 'filled' : states[mode] === 'partial' ? 'light' : 'default'
+        const label = !grouped && mode === 'incoming'
+          ? t('filterManager.replaceAllAction', { defaultValue: '全量替换' })
+          : labels[mode]
         return (
-          <Tooltip key={mode} label={tooltips[mode]} withinPortal multiline w={220}>
-            <Button size="compact-xs" px={8} variant={variant} onClick={() => onApply(mode)}>
-              {labels[mode]}
+          <Tooltip key={mode} label={grouped && mode !== 'empty' ? groupTip : directTips[mode]} withinPortal zIndex={OVERLAY_Z_INDEX} multiline w={270}>
+            <Button
+              size="compact-xs"
+              px={7}
+              variant={variant}
+              aria-pressed={active}
+              data-source={mode}
+              data-operation={phase}
+              onClick={() => onApply(mode)}
+              className={mode === 'empty' ? 'vpw-filter-empty-source' : 'vpw-filter-source'}
+            >
+              <span>{label}</span>
+              {phase && <span className="vpw-filter-operation">{operationLabels[phase]}</span>}
             </Button>
           </Tooltip>
         )
       })}
     </Group>
   )
-})
+}
 
 const FilterItemRow = memo(function FilterItemRow({
   item,
-  isVisible,
-  presence,
+  inCharacter,
+  inIncoming,
   mode,
-  isDefault,
   characterName,
   incomingName,
-  noItemName,
-  emptyLabel,
-  characterLabel,
-  incomingLabel,
-  ariaLabel,
-  dotLabels,
-  onSetSlotMode,
-}: FilterItemRowProps) {
-  const dotColor = presence.inCharacter
-    ? DOT_COLORS.inCharacter
-    : presence.inHover
-      ? DOT_COLORS.inHover
-      : DOT_COLORS.none
-  const dotTitle = presence.inCharacter ? dotLabels.inCharacter : presence.inHover ? dotLabels.inHover : dotLabels.none
-  const safeCharacterName = characterName || noItemName
-  const safeIncomingName = incomingName || noItemName
-  const segmentData = useMemo(
-    () => [
-      { value: 'original', label: <SegmentLabel kind="name">{compactLabel(safeCharacterName, 22)}</SegmentLabel> },
-      { value: 'incoming', label: <SegmentLabel kind="name">{compactLabel(safeIncomingName, 22)}</SegmentLabel> },
-      { value: 'empty', label: <SegmentLabel kind="empty">{emptyLabel}</SegmentLabel> },
-    ],
-    [emptyLabel, safeCharacterName, safeIncomingName],
-  )
-  const tooltip = `${characterLabel}: ${safeCharacterName} / ${incomingLabel}: ${safeIncomingName}`
-
-  return (
-    <Group
-      justify="space-between"
-      wrap="nowrap"
-      gap="xs"
-      px={6}
-      py={4}
-      style={{
-        display: isVisible ? 'flex' : 'none',
-        borderRadius: 6,
-        background: isDefault ? undefined : 'var(--mantine-color-blue-light)',
-      }}
-    >
-      <Group gap={6} wrap="nowrap" style={{ width: 78, flex: '0 0 78px', minWidth: 0 }}>
-        <Box title={dotTitle} style={{ display: 'flex' }}>
-          <Dot color={dotColor} />
-        </Box>
-        <Text size="xs" truncate>
-          {item.data?.Description || item.data?.Name || item.key}
-        </Text>
-      </Group>
-      <Tooltip label={tooltip} withinPortal multiline w={260}>
-        <SegmentedControl
-          size="xs"
-          value={mode}
-          data={segmentData}
-          onChange={(value) => onSetSlotMode(item.key, normalizeSlotMode(value))}
-          aria-label={ariaLabel}
-          style={{ flex: '1 1 auto', minWidth: 0, maxWidth: '100%' }}
-          styles={{
-            root: { overflow: 'hidden' },
-            control: { flex: '0 1 auto', minWidth: 0 },
-            label: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
-          }}
-        />
-      </Tooltip>
-    </Group>
-  )
-}, areFilterItemRowPropsEqual)
-
-function areFilterItemRowPropsEqual(prev: FilterItemRowProps, next: FilterItemRowProps) {
-  return (
-    prev.item === next.item &&
-    prev.isVisible === next.isVisible &&
-    prev.mode === next.mode &&
-    prev.isDefault === next.isDefault &&
-    !!prev.presence.inCharacter === !!next.presence.inCharacter &&
-    !!prev.presence.inHover === !!next.presence.inHover &&
-    prev.characterName === next.characterName &&
-    prev.incomingName === next.incomingName &&
-    prev.noItemName === next.noItemName &&
-    prev.emptyLabel === next.emptyLabel &&
-    prev.characterLabel === next.characterLabel &&
-    prev.incomingLabel === next.incomingLabel &&
-    prev.ariaLabel === next.ariaLabel &&
-    prev.dotLabels === next.dotLabels &&
-    prev.onSetSlotMode === next.onSetSlotMode
-  )
-}
-
-const FilterGroupCard = memo(function FilterGroupCard({
-  group,
-  isVisible,
-  isCollapsed,
-  showAllSlots,
-  hiddenBadge,
-  emptyItemsLabel,
-  applyMode,
-  slotControlMap,
-  presence,
-  characterPartNameBySlot,
-  incomingPartNameBySlot,
-  scopeStates,
-  slotLabels,
-  slotTooltips,
-  rowLabels,
-  dotLabels,
-  onToggleCollapsed,
-  onApplyGroupMode,
-  onSetSlotMode,
-}: FilterGroupCardProps) {
+  onSetMode,
+}: {
+  item: FilterItem
+  inCharacter: boolean
+  inIncoming: boolean
+  mode: SlotMode
+  characterName?: string
+  incomingName?: string
+  onSetMode: (key: string, mode: SlotMode) => void
+}) {
   const { t } = useTranslation()
-  const items = group.itemList ?? EMPTY_ITEMS
-  const groupDisplayName = t(`groupNames.${group.groupID}`, { defaultValue: group.displayName || group.groupID })
-  const applyGroupMode = useCallback((mode: SlotMode) => onApplyGroupMode(group.groupID, mode), [group.groupID, onApplyGroupMode])
+  const name = item.data?.Description || item.data?.Name || item.key
+  const noItemName = t('filterManager.noItemName')
+  const originalName = characterName || noItemName
+  const outfitName = incomingName || noItemName
+  const originalLabel = t('filterManager.slotModeShortOriginal')
+  const incomingLabel = t('filterManager.slotModeShortIncoming')
+  const emptyLabel = t('filterManager.slotModeShortEmpty')
+  const data = [
+    { value: 'original', label: <span title={originalName}><VisuallyHidden>{originalLabel}: </VisuallyHidden>{originalName}</span> },
+    { value: 'incoming', label: <span title={outfitName}><VisuallyHidden>{incomingLabel}: </VisuallyHidden>{outfitName}</span> },
+    { value: 'empty', label: emptyLabel },
+  ]
+  const dotColor = inCharacter ? 'blue' : inIncoming ? 'teal' : 'gray'
+  const presenceText = [
+    inCharacter ? t('filterManager.inCharacter') : '',
+    inIncoming ? t('filterManager.inSelectedOutfit', { defaultValue: '所选衣物中存在' }) : '',
+  ].filter(Boolean).join(' / ') || t('filterManager.dotNone')
 
   return (
-    <Paper withBorder radius="sm" p="xs" style={{ display: isVisible ? undefined : 'none' }}>
-      <Group justify="space-between" wrap="nowrap" gap={4}>
-        <Button
-          variant="subtle"
-          size="compact-xs"
-          onClick={() => onToggleCollapsed(group.groupID)}
-          leftSection={isCollapsed ? '>' : 'v'}
-          style={{ minWidth: 0, flex: 1 }}
-          justify="flex-start"
-        >
-          <Text size="xs" truncate>
-            {groupDisplayName}
-            {group.isHiddenGroup ? ` (${hiddenBadge})` : ''}
-          </Text>
-        </Button>
-        <ScopeToggles labels={slotLabels} tooltips={slotTooltips} states={scopeStates} onApply={applyGroupMode} />
+    <div className="vpw-filter-slot-row" data-slot-key={item.key}>
+      <Group gap={6} wrap="nowrap" className="vpw-filter-slot-name" title={presenceText}>
+        <Box className="vpw-filter-presence-dot" bg={`var(--mantine-color-${dotColor}-5)`} />
+        <Text size="xs" truncate title={name}>{name}</Text>
       </Group>
-
-      <Stack gap={4} mt="xs" style={{ display: isCollapsed ? 'none' : undefined }}>
-          {items.map((item) => {
-            const itemPresence = presence[item.key] || EMPTY_PRESENCE
-            const itemVisible = showAllSlots || !!(itemPresence.inCharacter || itemPresence.inHover)
-            const mode = slotModeFor(slotControlMap, item.key)
-            const isDefault =
-              mode === defaultModeFor(applyMode, !!itemPresence.inCharacter, !!itemPresence.inHover)
-            return (
-              <FilterItemRow
-                key={item.key}
-                item={item}
-                isVisible={itemVisible}
-                presence={itemPresence}
-                mode={mode}
-                isDefault={isDefault}
-                characterName={characterPartNameBySlot[item.key]}
-                incomingName={incomingPartNameBySlot[item.key]}
-                noItemName={rowLabels.noItemName}
-                emptyLabel={slotLabels.empty}
-                characterLabel={rowLabels.characterItemName}
-                incomingLabel={rowLabels.incomingItemName}
-                ariaLabel={rowLabels.slotModeControlAriaLabel}
-                dotLabels={dotLabels}
-                onSetSlotMode={onSetSlotMode}
-              />
-            )
-          })}
-          {items.length === 0 && (
-            <Text size="xs" c="dimmed">
-              {emptyItemsLabel}
-            </Text>
-          )}
-        </Stack>
-    </Paper>
+      <SegmentedControl
+        size="xs"
+        value={mode}
+        data={data}
+        onChange={(value) => onSetMode(item.key, normalizeSlotMode(value))}
+        aria-label={t('filterManager.slotControlLabel', { defaultValue: '{name}：选择来源', name })}
+        className="vpw-filter-slot-slider"
+        styles={{
+          root: { minWidth: 0, maxWidth: '100%' },
+          control: { flex: '1 1 0', minWidth: 0 },
+          label: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingInline: 6 },
+        }}
+      />
+    </div>
   )
-}, areFilterGroupCardPropsEqual)
+})
 
-function areScopeStatesEqual(a: ScopeStates, b: ScopeStates) {
-  return a.original === b.original && a.incoming === b.incoming && a.empty === b.empty
-}
+function FilterGroupCard({
+  group,
+  collapsed,
+  showAllSlots,
+  slotControls,
+  operation,
+  presence,
+  characterNames,
+  incomingNames,
+  scopeStates,
+  onToggle,
+  onApplyGroup,
+  onSetSlot,
+}: {
+  group: FilterGroup
+  collapsed: boolean
+  showAllSlots: boolean
+  slotControls: SlotControlMap
+  operation?: SourceOperation
+  presence: PresenceMap
+  characterNames: NameMap
+  incomingNames: NameMap
+  scopeStates: ScopeStates
+  onToggle: (id: string) => void
+  onApplyGroup: (id: string, mode: SlotMode) => void
+  onSetSlot: (key: string, mode: SlotMode) => void
+}) {
+  const { t } = useTranslation()
+  const name = t(`groupNames.${group.groupID}`, { defaultValue: group.displayName || group.groupID })
+  const items = (group.itemList ?? EMPTY_ITEMS).filter((item) =>
+    showAllSlots || presence[item.key]?.inCharacter || presence[item.key]?.inHover,
+  )
+  const contentID = useId()
 
-function areGroupSlotModesEqual(group: FilterGroup, a: SlotControlMap, b: SlotControlMap) {
-  for (const item of group.itemList ?? EMPTY_ITEMS) {
-    if (!item.key) continue
-    if (normalizeSlotMode(a[item.key]?.mode) !== normalizeSlotMode(b[item.key]?.mode)) return false
-  }
-  return true
-}
-
-function areGroupPresenceValuesEqual(group: FilterGroup, a: PresenceMap, b: PresenceMap) {
-  for (const item of group.itemList ?? EMPTY_ITEMS) {
-    if (!item.key) continue
-    const ap = a[item.key] || EMPTY_PRESENCE
-    const bp = b[item.key] || EMPTY_PRESENCE
-    if (!!ap.inCharacter !== !!bp.inCharacter || !!ap.inHover !== !!bp.inHover) return false
-  }
-  return true
-}
-
-function areGroupNameValuesEqual(group: FilterGroup, a: NameMap, b: NameMap) {
-  for (const item of group.itemList ?? EMPTY_ITEMS) {
-    if (!item.key) continue
-    if ((a[item.key] || '') !== (b[item.key] || '')) return false
-  }
-  return true
-}
-
-function areFilterGroupCardPropsEqual(prev: FilterGroupCardProps, next: FilterGroupCardProps) {
-  if (
-    prev.group !== next.group ||
-    prev.isVisible !== next.isVisible ||
-    prev.isCollapsed !== next.isCollapsed ||
-    prev.showAllSlots !== next.showAllSlots ||
-    prev.hiddenBadge !== next.hiddenBadge ||
-    prev.emptyItemsLabel !== next.emptyItemsLabel ||
-    prev.applyMode !== next.applyMode ||
-    prev.slotLabels !== next.slotLabels ||
-    prev.slotTooltips !== next.slotTooltips ||
-    prev.rowLabels !== next.rowLabels ||
-    prev.dotLabels !== next.dotLabels ||
-    prev.onToggleCollapsed !== next.onToggleCollapsed ||
-    prev.onApplyGroupMode !== next.onApplyGroupMode ||
-    prev.onSetSlotMode !== next.onSetSlotMode ||
-    !areScopeStatesEqual(prev.scopeStates, next.scopeStates)
-  ) {
-    return false
-  }
   return (
-    areGroupSlotModesEqual(next.group, prev.slotControlMap, next.slotControlMap) &&
-    areGroupPresenceValuesEqual(next.group, prev.presence, next.presence) &&
-    areGroupNameValuesEqual(next.group, prev.characterPartNameBySlot, next.characterPartNameBySlot) &&
-    areGroupNameValuesEqual(next.group, prev.incomingPartNameBySlot, next.incomingPartNameBySlot)
+    <Paper withBorder radius="md" p="xs" component="section" aria-label={name} data-group-id={group.groupID}>
+      <Button
+        variant="subtle"
+        size="compact-sm"
+        fullWidth
+        px={2}
+        mb={7}
+        justify="space-between"
+        onClick={() => onToggle(group.groupID)}
+        aria-expanded={!collapsed}
+        aria-controls={contentID}
+        rightSection={<span aria-hidden="true">{collapsed ? '+' : '−'}</span>}
+      >
+        <Text size="sm" fw={600} truncate>
+          {name}
+          {group.isHiddenGroup ? ` · ${t('filterManager.hiddenBadge')}` : ''}
+          <Text span size="xs" c="dimmed" ml={6}>{items.length}</Text>
+        </Text>
+      </Button>
+      <SourceButtons grouped states={scopeStates} operation={operation} onApply={(mode) => onApplyGroup(group.groupID, mode)} />
+      <Stack id={contentID} gap={3} mt="xs" hidden={collapsed}>
+        {!collapsed && items.map((item) => (
+          <FilterItemRow
+            key={item.key}
+            item={item}
+            inCharacter={!!presence[item.key]?.inCharacter}
+            inIncoming={!!presence[item.key]?.inHover}
+            mode={normalizeSlotMode(slotControls[item.key]?.mode)}
+            characterName={characterNames[item.key]}
+            incomingName={incomingNames[item.key]}
+            onSetMode={onSetSlot}
+          />
+        ))}
+        {!collapsed && items.length === 0 && <Text size="xs" c="dimmed">{t('filterManager.emptyItems')}</Text>}
+      </Stack>
+    </Paper>
   )
 }
 
 export function FilterManager() {
   const { t } = useTranslation()
   const filterSnapshot = useFsSelector((fs) => fs.filterSnapshot)
-  const rawApplyMode = useFsSelector((fs) => fs.defaultReplaceMode)
-  const slotControlMap = useFsSelector((fs) => fs.slotControlMap) || EMPTY_SLOT_CONTROL_MAP
+  const slotControls = useFsSelector((fs) => fs.slotControlMap) || EMPTY_SLOT_CONTROL_MAP
+  const groupOperations = useFsSelector((fs) => fs.groupOperations) || EMPTY_GROUP_OPERATIONS
   const characterItem = (useFsSelector((fs) => fs.characterItem) as WardrobePart[]) || EMPTY_PARTS
-  const activeItemData = (useFsSelector((fs) => fs.activeItem?.data) as WardrobePart[]) || EMPTY_PARTS
+  const incomingData = (useFsSelector((fs) => fs.activeItem?.data) as WardrobePart[]) || EMPTY_PARTS
   const character = useFsSelector((fs) => fs.character)
-
   const [legendOpen, setLegendOpen] = useState(false)
   const [showAllSlots, setShowAllSlots] = useState(false)
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
-
-  const applyMode = normalizeReplaceMode(rawApplyMode)
-  const allGroups = (filterSnapshot?.groups as FilterGroup[] | undefined) ?? EMPTY_GROUPS
+  const groups = (filterSnapshot?.groups as FilterGroup[] | undefined) ?? EMPTY_GROUPS
   const snapshotItems = (filterSnapshot?.items as FilterItem[] | undefined) ?? EMPTY_ITEMS
 
-  const presence = useMemo(() => buildSlotPresenceMap(characterItem, activeItemData), [activeItemData, characterItem])
-  const characterPartNameBySlot = useMemo(
-    () => buildPartNameMapBySlot(characterItem, character),
-    [character, characterItem],
+  const presence = useMemo(() => buildSlotPresenceMap(characterItem, incomingData), [characterItem, incomingData])
+  const characterNames = useMemo(() => buildPartNameMapBySlot(characterItem, character), [characterItem, character])
+  const incomingNames = useMemo(() => buildPartNameMapBySlot(incomingData, character), [incomingData, character])
+  const knownKeys = useMemo(
+    () => buildKnownSlotKeys(groups, snapshotItems, slotControls, characterItem, incomingData),
+    [groups, snapshotItems, slotControls, characterItem, incomingData],
   )
-  const incomingPartNameBySlot = useMemo(
-    () => buildPartNameMapBySlot(activeItemData, character),
-    [activeItemData, character],
-  )
-
-  const knownSlotKeys = useMemo(
-    () => buildKnownSlotKeys(allGroups, snapshotItems, slotControlMap, characterItem, activeItemData),
-    [activeItemData, allGroups, characterItem, slotControlMap, snapshotItems],
-  )
-  const presenceSets = useMemo(
-    () => ({
-      inCharacter: new Set(characterItem.map(getGroupNameFromPart).filter(Boolean)),
-      inIncoming: new Set(activeItemData.map(getGroupNameFromPart).filter(Boolean)),
-    }),
-    [activeItemData, characterItem],
-  )
-
-  const globalScopeStates = useMemo(() => {
-    const next = { ...EMPTY_SCOPE_STATES }
-    for (const mode of SLOT_MODES) {
-      next[mode] = scopeModeState(knownSlotKeys, mode, slotControlMap, presenceSets.inCharacter, presenceSets.inIncoming)
-    }
-    return next
-  }, [knownSlotKeys, presenceSets.inCharacter, presenceSets.inIncoming, slotControlMap])
-
-  const groupScopeStates = useMemo(() => {
-    const map = new Map<string, ScopeStates>()
-    for (const group of allGroups) {
-      const keys = (group.itemList ?? EMPTY_ITEMS).map((item) => item.key).filter(Boolean)
-      const states = { ...EMPTY_SCOPE_STATES }
+  const presenceSets = useMemo(() => buildPresenceSets(characterItem, incomingData), [characterItem, incomingData])
+  const scopes = useMemo(() => {
+    const forKeys = (keys: string[]): ScopeStates => {
+      const result = { ...EMPTY_SCOPE_STATES }
       for (const mode of SLOT_MODES) {
-        states[mode] = scopeModeState(keys, mode, slotControlMap, presenceSets.inCharacter, presenceSets.inIncoming)
+        result[mode] = scopeModeState(keys, mode, slotControls, presenceSets.inCharacter, presenceSets.inIncoming)
       }
-      map.set(group.groupID, states)
+      return result
     }
-    return map
-  }, [allGroups, presenceSets.inCharacter, presenceSets.inIncoming, slotControlMap])
-
-  const visibleGroupIDs = useMemo(() => {
-    const ids = new Set<string>()
-    for (const group of allGroups) {
-      if (showAllSlots) {
-        ids.add(group.groupID)
-        continue
-      }
-      if (group.isHiddenGroup) continue
-      const hasRelevantItem = (group.itemList ?? EMPTY_ITEMS).some((item) => {
-        if (!item.key) return false
-        const itemPresence = presence[item.key] || EMPTY_PRESENCE
-        return !!(itemPresence.inCharacter || itemPresence.inHover)
-      })
-      if (hasRelevantItem) ids.add(group.groupID)
+    return {
+      all: forKeys(knownKeys),
+      groups: new Map(groups.map((group) => [
+        group.groupID,
+        forKeys((group.itemList ?? EMPTY_ITEMS).map((item) => item.key)),
+      ])),
     }
-    return ids
-  }, [allGroups, presence, showAllSlots])
-
-  const hasVisibleGroups = visibleGroupIDs.size > 0
-
-  const overrideCount = useMemo(() => {
-    if (applyMode === 'preserve') return 0
-    let count = 0
-    for (const group of allGroups) {
-      for (const item of group.itemList ?? EMPTY_ITEMS) {
-        if (!item.key) continue
-        const itemPresence = presence[item.key] || EMPTY_PRESENCE
-        const mode = slotModeFor(slotControlMap, item.key)
-        if (mode !== defaultModeFor(applyMode, !!itemPresence.inCharacter, !!itemPresence.inHover)) count += 1
-      }
-    }
-    return count
-  }, [allGroups, applyMode, presence, slotControlMap])
-
-  const slotLabels = useMemo(
-    () => ({
-      original: t('filterManager.slotModeShortOriginal'),
-      incoming: t('filterManager.slotModeShortIncoming'),
-      empty: t('filterManager.slotModeShortEmpty'),
-    }),
-    [t],
-  )
-  const slotTooltips = useMemo(
-    () => ({
-      original: t(`filterManager.${tipKey.original}`),
-      incoming: t(`filterManager.${tipKey.incoming}`),
-      empty: t(`filterManager.${tipKey.empty}`),
-    }),
-    [t],
-  )
-  const rowLabels = useMemo(
-    () => ({
-      noItemName: t('filterManager.noItemName'),
-      characterItemName: t('filterManager.characterItemName'),
-      incomingItemName: t('filterManager.incomingItemName'),
-      slotModeControlAriaLabel: t('filterManager.slotModeControlAriaLabel'),
-    }),
-    [t],
-  )
-  const dotLabels = useMemo(
-    () => ({
-      inCharacter: t('filterManager.inCharacter'),
-      inHover: t('filterManager.inHover'),
-      none: t('filterManager.dotNone'),
-    }),
-    [t],
-  )
+  }, [groups, knownKeys, slotControls, presenceSets])
+  const visibleGroups = useMemo(() => groups.filter((group) => {
+    if (showAllSlots) return true
+    if (group.isHiddenGroup) return false
+    return (group.itemList ?? EMPTY_ITEMS).some((item) =>
+      presence[item.key]?.inCharacter || presence[item.key]?.inHover,
+    )
+  }), [groups, presence, showAllSlots])
 
   const toggleCollapsed = useCallback((id: string) => {
-    setCollapsed((prev) => {
-      const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
+    setCollapsed((previous) => {
+      const next = new Set(previous)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
       return next
     })
   }, [])
-  const collapseAllGroups = useCallback(() => {
-    setCollapsed(new Set(visibleGroupIDs))
-  }, [visibleGroupIDs])
-  const expandAllGroups = useCallback(() => {
-    setCollapsed(new Set())
+  const applyAll = useCallback((mode: SlotMode) => { getFs().replaceAllFromSource(mode) }, [])
+  const applyGroup = useCallback((id: string, mode: SlotMode) => {
+    if (mode === 'empty') getFs().setGroupSlotModes(id, mode)
+    else getFs().cycleGroupSource(id, mode)
   }, [])
-  const setDefaultReplaceMode = useCallback((value: string) => {
-    getFs().setDefaultReplaceMode(value)
-  }, [])
-  const applyAllMode = useCallback((mode: SlotMode) => {
-    getFs().smartSetAllMode(mode)
-  }, [])
-  const applyGroupMode = useCallback((groupID: string, mode: SlotMode) => {
-    getFs().smartSetGroupMode(groupID, mode)
-  }, [])
-  const setSlotMode = useCallback((key: string, mode: SlotMode) => {
-    getFs().setSlotMode(key, mode)
-  }, [])
+  const setSlot = useCallback((key: string, mode: SlotMode) => { getFs().setSlotMode(key, mode) }, [])
 
   return (
-    <Stack gap="sm" h="100%" style={{ minHeight: 0 }} aria-label={t('filterManager.ariaLabel')}>
-      <Paper withBorder radius="sm" p="xs">
-        <Text size="xs" fw={600} mb={6}>
-          {t('filterManager.defaultReplaceModeLabel')}
-        </Text>
-        <SegmentedControl
-          fullWidth
-          size="xs"
-          value={applyMode}
-          onChange={setDefaultReplaceMode}
-          data={REPLACE_MODES.map((mode) => ({ value: mode, label: t(`filterManager.${replaceLabelKey[mode]}`) }))}
-        />
-        <Text size="xs" c="dimmed" mt={6}>
-          {t(`filterManager.${replaceDescKey[applyMode]}`)} / {t('filterManager.autoApplyHint')}
-        </Text>
+    <Stack gap="xs" h="100%" className="vpw-filter-manager" aria-label={t('filterManager.ariaLabel')}>
+      <style>{filterStyles}</style>
+      <Paper withBorder radius="md" p="xs">
+        <Group gap={6} grow wrap="nowrap">
+          <Tooltip label={t('filterManager.preserveBodyTooltip', { defaultValue: '单次保留原角色的身体、面容和头发，其余微调保持当前选择。' })} multiline w={250} withinPortal zIndex={OVERLAY_Z_INDEX}>
+            <Button variant="light" size="xs" px={8} onClick={() => getFs().preserveBody()}>
+              {t('filterManager.preserveBody', { defaultValue: '保留原身形' })}
+            </Button>
+          </Tooltip>
+          <Tooltip label={t('filterManager.replaceBodyOnlyTooltip', { defaultValue: '只使用所选衣物的身体、面容和头发，其他部位恢复原角色。' })} multiline w={250} withinPortal zIndex={OVERLAY_Z_INDEX}>
+            <Button variant="default" size="xs" px={8} onClick={() => getFs().replaceBodyOnly()}>
+              {t('filterManager.replaceBodyOnly', { defaultValue: '只替换身形' })}
+            </Button>
+          </Tooltip>
+        </Group>
+        <Group justify="space-between" gap="xs" mt="xs" wrap="nowrap">
+          <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>{t('filterManager.sectionGlobal')}</Text>
+          <SourceButtons states={scopes.all} onApply={applyAll} />
+        </Group>
       </Paper>
 
-      <Group justify="space-between" align="center" wrap="nowrap">
-        <Text size="xs" fw={600}>
-          {t('filterManager.sectionGlobal')}
-        </Text>
-        <ScopeToggles labels={slotLabels} tooltips={slotTooltips} states={globalScopeStates} onApply={applyAllMode} />
-      </Group>
-
-      <Group justify="space-between" wrap="nowrap" gap="xs" style={{ display: 'none' }}>
-        <Group gap={6} wrap="nowrap" style={{ minWidth: 0 }}>
-          <Text size="sm">{t('filterManager.sectionAdvanced')}</Text>
-          {overrideCount > 0 && (
-            <Text size="xs" c="blue">
-              / {t('filterManager.overrideCount', { count: overrideCount })}
-            </Text>
-          )}
-        </Group>
-        {overrideCount > 0 && (
-          <Button
-            variant="subtle"
-            color="gray"
-            size="compact-xs"
-            style={{ flex: '0 0 auto' }}
-            onClick={() => getFs().reapplyDefaultMode()}
-          >
-            {t('filterManager.resetToDefault')}
-          </Button>
-        )}
-      </Group>
-
-      <Group justify="space-between" align="center" wrap="nowrap" gap="xs">
-        <Group gap={4} wrap="nowrap">
-          <Button size="compact-xs" variant="subtle" onClick={() => setLegendOpen((value) => !value)}>
+      <Text size="xs" c="dimmed">
+        {t('filterManager.groupCycleHint', { defaultValue: '分组连点：补入 → 覆盖 → 完全替换。部件滑块直接选择来源。' })}
+      </Text>
+      <Group justify="space-between" gap={4}>
+        <Group gap={2}>
+          <Button size="compact-xs" variant="subtle" onClick={() => setLegendOpen((value) => !value)} aria-expanded={legendOpen}>
             {t('filterManager.legendToggle')}
           </Button>
-          <Button size="compact-xs" variant="subtle" onClick={collapseAllGroups}>
+          <Button size="compact-xs" variant="subtle" onClick={() => setCollapsed(new Set(visibleGroups.map((group) => group.groupID)))}>
             {t('filterManager.collapseAllGroups')}
           </Button>
-          <Button size="compact-xs" variant="subtle" onClick={expandAllGroups}>
+          <Button size="compact-xs" variant="subtle" onClick={() => setCollapsed(new Set())}>
             {t('filterManager.expandAllGroups')}
           </Button>
         </Group>
@@ -701,80 +375,41 @@ export function FilterManager() {
           onChange={(event) => setShowAllSlots(event.currentTarget.checked)}
         />
       </Group>
-
       <Collapse in={legendOpen}>
         <Paper withBorder radius="sm" p="xs" bg="var(--mantine-color-default-hover)">
-          <Stack gap={2}>
-            {SLOT_MODES.map((mode) => (
-              <Text key={mode} size="xs">
-                <Text span fw={600}>
-                  {slotLabels[mode]}
-                </Text>{' '}
-                <Text span c="dimmed">
-                  {t(`filterManager.modeDesc${cap(mode)}`)}
-                </Text>
-              </Text>
-            ))}
-            <Group gap="md" mt={4}>
-              <Group gap={4}>
-                <Dot color={DOT_COLORS.inCharacter} />
-                <Text size="xs" c="dimmed">
-                  {dotLabels.inCharacter}
-                </Text>
-              </Group>
-              <Group gap={4}>
-                <Dot color={DOT_COLORS.inHover} />
-                <Text size="xs" c="dimmed">
-                  {dotLabels.inHover}
-                </Text>
-              </Group>
-              <Group gap={4}>
-                <Dot color={DOT_COLORS.none} />
-                <Text size="xs" c="dimmed">
-                  {dotLabels.none}
-                </Text>
-              </Group>
-            </Group>
+          <Stack gap={4}>
+            <Text size="xs">{t('filterManager.groupCycleTooltip', { defaultValue: '连续点击同一个分组来源：补入，保留另一来源已有的部位；覆盖，替换此来源包含的部位；完全替换，同时清空此来源没有的部位。' })}</Text>
+            <Text size="xs" c="dimmed">
+              {t('filterManager.fullReplaceSourceHint', { defaultValue: '完全替换产生的空部位仍停在所选来源；只有手动选择“置空”才会切到空档。' })}
+            </Text>
+            <Text size="xs" c="dimmed">
+              {t('filterManager.slotSourceHint', { defaultValue: '每行依次为原角色、所选衣物和置空。名称显示该来源的实际部件；蓝点表示原角色有此部位，绿点表示仅所选衣物有此部位。' })}
+            </Text>
           </Stack>
         </Paper>
       </Collapse>
 
-      <Box style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden' }}>
-        <Text
-          c="dimmed"
-          size="sm"
-          ta="center"
-          py="md"
-          style={{ display: hasVisibleGroups ? 'none' : undefined }}
-        >
-            {t('filterManager.emptyGroups')}
-        </Text>
+      <Box className="vpw-filter-groups">
+        {visibleGroups.length === 0 && <Text c="dimmed" size="sm" ta="center" py="md">{t('filterManager.emptyGroups')}</Text>}
         <Stack gap="xs">
-            {allGroups.map((group) => (
-              <FilterGroupCard
-                key={group.groupID}
-                group={group}
-                isVisible={visibleGroupIDs.has(group.groupID)}
-                isCollapsed={collapsed.has(group.groupID)}
-                showAllSlots={showAllSlots}
-                hiddenBadge={t('filterManager.hiddenBadge')}
-                emptyItemsLabel={t('filterManager.emptyItems')}
-                applyMode={applyMode}
-                slotControlMap={slotControlMap}
-                presence={presence}
-                characterPartNameBySlot={characterPartNameBySlot}
-                incomingPartNameBySlot={incomingPartNameBySlot}
-                scopeStates={groupScopeStates.get(group.groupID) ?? EMPTY_SCOPE_STATES}
-                slotLabels={slotLabels}
-                slotTooltips={slotTooltips}
-                rowLabels={rowLabels}
-                dotLabels={dotLabels}
-                onToggleCollapsed={toggleCollapsed}
-                onApplyGroupMode={applyGroupMode}
-                onSetSlotMode={setSlotMode}
-              />
-            ))}
-          </Stack>
+          {visibleGroups.map((group) => (
+            <FilterGroupCard
+              key={group.groupID}
+              group={group}
+              collapsed={collapsed.has(group.groupID)}
+              showAllSlots={showAllSlots}
+              slotControls={slotControls}
+              operation={groupOperations[group.groupID]}
+              presence={presence}
+              characterNames={characterNames}
+              incomingNames={incomingNames}
+              scopeStates={scopes.groups.get(group.groupID) ?? EMPTY_SCOPE_STATES}
+              onToggle={toggleCollapsed}
+              onApplyGroup={applyGroup}
+              onSetSlot={setSlot}
+            />
+          ))}
+        </Stack>
       </Box>
     </Stack>
   )

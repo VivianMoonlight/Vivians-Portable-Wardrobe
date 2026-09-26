@@ -1,9 +1,8 @@
 /**
  * Typed React access to the (JS, loosely-typed) Zustand-backed stores.
  *
- * The large file-system store stays plain JS while it is being migrated from
- * its original options-style shape. These thin wrappers give components a
- * clear, documented contract without re-typing the whole 1.4k-line store.
+ * The wardrobe store stays plain JS. These wrappers document the indexed
+ * library, cloud status, and shared character-preview surface used by the UI.
  *
  * Calling a store hook with no selector subscribes to the store's revision
  * counter and returns the live store context, so reads see current state and
@@ -14,27 +13,58 @@ import { useFileSystemStore as rawFs } from './fileSystemStore.js'
 // @ts-ignore — plain JS store module
 import { useWorkbenchStore as rawWb } from './workbenchStore.js'
 
+/** Minimal appearance shape shared by history records and saved outfits. */
 export interface FileNode {
+  id?: string
   name: string
   type?: string
   data?: unknown[]
-  children?: FileNode[]
   cloudSync?: boolean
   __thumbRefresh?: number
 }
 
-export interface SearchHit {
-  item: FileNode
-  path: string[]
+export interface WardrobeOutfit extends FileNode {
+  id: string
+  type: string
+  data: unknown[]
+  tagIds: string[]
+  cloudSync: boolean
+}
+
+export interface WardrobeTag {
+  id: string
+  name: string
+  aliasIds: string[]
+}
+
+export interface CloudQuota {
+  wardrobeBytes: number
+  otherExtensionsBytes: number
+  totalBytes: number
+  remainingBytes: number
+  limitBytes: number
+  usageRatio: number
+  isWarning: boolean
+  isOverLimit: boolean
+}
+
+export interface WardrobeSyncStatus {
+  state: 'idle' | 'pending' | 'submitted' | 'verified' | 'offline' | 'quota' | 'error'
+  localSaved: boolean
+  lastSubmittedAt: number | null
+  lastVerifiedAt: number | null
+  error: string
+  recoveryAvailable: boolean
 }
 
 /** Subset of the fileSystem store surface consumed by the React UI. */
 export interface FsCtx {
   // state
-  fs: any
+  outfits: WardrobeOutfit[]
+  tags: WardrobeTag[]
+  selectedTagId: string | null
   fileTreeVersion: number
   historyVersion: number
-  currentPath: string[]
   renderer: any
   character: any
   characterItem: unknown[]
@@ -43,33 +73,32 @@ export interface FsCtx {
   lockedItem: FileNode | null
   thumbnailRefreshVersion: number
   activeFilters: string[]
-  cloudQuota: {
-    usedBytes?: number
-    limitBytes?: number
-    usageRatio?: number
-    isWarning?: boolean
-    isOverLimit?: boolean
-  }
-  // getters
-  currentNode: { children?: FileNode[] } | null
-  filteredItems: FileNode[]
+  cloudQuota: CloudQuota
+  syncStatus: WardrobeSyncStatus
   // actions
   initialize: (character?: any, options?: Record<string, unknown> & { preserveSlotControls?: boolean }) => Promise<void>
-  moveTo: (path: string[]) => void
-  addFile: (file: Partial<FileNode>) => void
-  removeFile: (item: FileNode, parentPath?: string[]) => void
-  moveFile: (name: string, fromPath?: string[], toPath?: string[]) => void
-  saveAll: () => void
+  selectTag: (id: string | null) => void
+  createTag: (name: string) => string
+  renameTag: (id: string, name: string) => boolean
+  deleteTag: (id: string) => boolean
+  addOutfit: (outfit: { name: string; type: string; data: unknown[]; tagIds?: string[]; cloudSync?: boolean }) => string
+  updateOutfit: (id: string, changes: Partial<Pick<WardrobeOutfit, 'name' | 'type' | 'data' | 'tagIds' | 'cloudSync'>>) => boolean
+  removeOutfit: (id: string) => boolean
+  setOutfitTags: (id: string, tagIds: string[]) => boolean
+  setOutfitCloudSync: (id: string, enabled: boolean) => boolean
+  exportWardrobe: () => unknown
+  exportRecovery: () => Array<{ key: string; reason: string; data: unknown }>
+  importWardrobe: (parsed: unknown, options?: { tagName?: string }) => { count: number }
+  syncNow: () => boolean
   setActiveItem: (item: FileNode | -1, options?: { ignoreLock?: boolean }) => void
+  selectOutfit: (item: FileNode) => boolean
   togglePreviewLock: (item: FileNode) => boolean
   isPreviewLockedOn: (item: FileNode) => boolean
   clearSelection: () => void
-  applyFilteredOutfitToCharacter: (opts?: { outfitData?: unknown[]; mode?: string }) => boolean
+  applyFilteredOutfitToCharacter: (opts?: { outfitData?: unknown[] }) => boolean
   applyCurrentPreviewToCharacter: () => boolean
   startThumbnailGeneration: (item: FileNode) => void
   refreshThumbnails: (items?: FileNode[] | null) => void
-  searchFiles: (query: string) => SearchHit[]
-  setNodeCloudSync: (item: FileNode, enabled: boolean, opts?: { recursive?: boolean }) => boolean
   refreshCloudQuotaStats: (snapshot?: unknown) => unknown
   // history
   addToHistory: (data: unknown[]) => void
@@ -79,20 +108,19 @@ export interface FsCtx {
   clearHistory: () => void
   // filters / slot controls
   filterSnapshot: { groups?: unknown[]; visibleGroups?: unknown[]; items?: unknown[] }
-  defaultReplaceMode: string
+  groupOperations: Record<string, { mode: 'original' | 'incoming'; operation: 'add' | 'replace' | 'full-replace' }>
   slotControlMap: Record<string, { mode?: string; locked?: boolean }>
   slotPresenceMap: Record<string, { inCharacter?: boolean; inHover?: boolean }>
   getSlotControlState: (key: string) => { mode: string; locked?: boolean }
   setSlotMode: (key: string, mode: string) => boolean
-  setAllSlotModes: (mode: string) => void
-  setGroupSlotModes: (groupID: string, mode: string) => void
-  setDefaultReplaceMode: (mode: string) => void
-  // escalating scope toggles + their tri-state for button styling
-  smartSetAllMode: (mode: string) => boolean
-  smartSetGroupMode: (groupID: string, mode: string) => boolean
+  setAllSlotModes: (mode: string) => boolean
+  setGroupSlotModes: (groupID: string, mode: string) => boolean
+  cycleGroupSource: (groupID: string, mode: string) => 'add' | 'replace' | 'full-replace' | false
+  replaceAllFromSource: (mode: string) => boolean
+  preserveBody: () => boolean
+  replaceBodyOnly: () => boolean
   getAllModeState: (mode: string) => 'none' | 'partial' | 'full'
   getGroupModeState: (groupID: string, mode: string) => 'none' | 'partial' | 'full'
-  reapplyDefaultMode: () => void
 }
 
 export interface WardrobeUi {

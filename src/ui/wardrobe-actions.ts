@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+﻿import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import LZString from 'lz-string'
@@ -7,22 +7,37 @@ import { ExternalAdapter } from '@/utils/external_adapters.js'
 import { getFs, type FsCtx } from '@/stores/hooks'
 import { useDialog, type DialogApi } from '@/ui/dialog/DialogProvider'
 
-/**
- * Wardrobe import/export actions, ported from the Vue FileManagerPanel.
- *
- * Covers: import the player's in-game wardrobe, import a BCX code, import/export
- * a JSON backup, and save the current character outfit to a folder. BCX *export*
- * of an individual outfit lives on the file card (FileItem) via
- * ExternalAdapter.exportOutfitAsBCX.
- */
 function defaultFilename(prefix: string): string {
   return `${prefix}_${new Date().toISOString().replace(/[:.]/g, '-')}`
 }
 
-/**
- * Apply an arbitrary imported payload (full FS backup, single file, raw outfit
- * array, or a `{ fs }` wrapper) into the file system.
- */
+function downloadJson(payload: unknown, prefix: string): void {
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const anchor = doc.createElement('a')
+  try {
+    anchor.href = url
+    anchor.download = `${defaultFilename(prefix)}.json`
+    doc.body.appendChild(anchor)
+    anchor.click()
+  } finally {
+    anchor.remove()
+    URL.revokeObjectURL(url)
+  }
+}
+
+async function reportFailure(error: unknown, dialog: DialogApi, t: TFunction): Promise<void> {
+  console.error('Wardrobe operation failed', error)
+  await dialog.alert(t('library.operationFailed', {
+    error: error instanceof Error ? error.message : String(error),
+  }))
+}
+
+async function reportImported(count: number, dialog: DialogApi, t: TFunction): Promise<void> {
+  await dialog.alert(count > 0 ? t('library.imported', { count }) : t('library.nothingImported'))
+}
+
+/** Import individual outfits into the selected tag; merge backups through the index. */
 async function applyImportedData(
   parsed: any,
   fs: FsCtx,
@@ -34,56 +49,40 @@ async function applyImportedData(
     return
   }
 
-  // 1) Full FileSystem backup (root folder node) -> merge into current tree.
-  if (parsed.type === 'folder' && Array.isArray(parsed.children)) {
-    try {
-      const existing = fs.fs.toJSON()
-      fs.fs.fromMultipleJSON([existing, parsed])
-      fs.saveAll()
-      await dialog.alert(t('wardrobeIO.importMerged'))
-    } catch (e) {
-      console.warn('merge root failed, replacing', e)
-      fs.fs.fromJSON(parsed)
-      fs.saveAll()
-      await dialog.alert(t('wardrobeIO.importReplaced'))
-    }
-    return
-  }
-
-  // 2) Single file object (has type + data) -> add to current folder.
-  if (parsed.type && parsed.data) {
-    fs.addFile(parsed)
-    await dialog.alert(t('wardrobeIO.importedAsFile'))
-    return
-  }
-
-  // 3) Raw outfit array -> prompt for a name and add as a file.
   if (Array.isArray(parsed)) {
-    const name = await dialog.prompt(t('wardrobeIO.importNamePrompt'), defaultFilename('imported'))
-    if (!name) {
-      await dialog.alert(t('wardrobeIO.importCancelled'))
+    if (parsed.length === 0) {
+      await reportImported(0, dialog, t)
       return
     }
-    fs.addFile({ name, type: 'outfit', data: parsed })
-    await dialog.alert(t('wardrobeIO.importedAsFile'))
-    return
+    const name = await dialog.prompt(t('library.saveNamePrompt'), defaultFilename('imported'))
+    if (!name?.trim()) return
+    parsed = { name: name.trim(), type: 'outfit', data: parsed }
   }
 
-  // 4) `{ fs }` wrapper -> restore the embedded file system.
-  if (parsed.fs && typeof parsed.fs === 'object') {
-    fs.fs.fromMultipleJSON([fs.fs.toJSON(), parsed.fs])
-    fs.saveAll()
-    await dialog.alert(t('wardrobeIO.importMerged'))
-    return
+  try {
+    if (parsed.type !== 'folder' && Array.isArray(parsed.data)) {
+      const id = fs.addOutfit({
+        name: typeof parsed.name === 'string' && parsed.name.trim() ? parsed.name.trim() : defaultFilename('imported'),
+        type: typeof parsed.type === 'string' ? parsed.type : 'outfit',
+        data: parsed.data,
+        tagIds: fs.selectedTagId && fs.selectedTagId !== 'untagged' ? [fs.selectedTagId] : [],
+        cloudSync: typeof parsed.cloudSync === 'boolean' ? parsed.cloudSync : undefined,
+      })
+      await reportImported(id ? 1 : 0, dialog, t)
+      return
+    }
+    const { count } = fs.importWardrobe(parsed)
+    await reportImported(count, dialog, t)
+  } catch (error) {
+    await reportFailure(error, dialog, t)
   }
-
-  await dialog.alert(t('wardrobeIO.importUnrecognized'))
 }
 
 export interface WardrobeActions {
   importPlayerWardrobe: () => Promise<void>
   importBCX: () => Promise<void>
   saveBackup: () => void
+  saveRecoveryBackup: () => void
   importBackup: () => void
   saveCharacterToFolder: () => Promise<void>
 }
@@ -93,119 +92,112 @@ export function useWardrobeActions(): WardrobeActions {
   const { t } = useTranslation()
 
   return useMemo<WardrobeActions>(() => {
-    /** Import every non-empty slot of Player.Wardrobe into a timestamped folder. */
     const importPlayerWardrobe = async () => {
-      const fs = getFs()
       const player = (hostWindow as any).Player
-      if (!player?.Wardrobe || !player.WardrobeCharacterNames) {
+      if (!Array.isArray(player?.Wardrobe) || !Array.isArray(player?.WardrobeCharacterNames)) {
         await dialog.alert(t('wardrobeIO.playerWardrobeUnavailable'))
         return
       }
       try {
-        const wardrobe: any[] = player.Wardrobe
-        const names: string[] = player.WardrobeCharacterNames
-        const folderName = `Player_Wardrobe_${new Date().toISOString().replace(/[:.]/g, '-')}`
-
-        fs.fs.addFolder(fs.currentPath, folderName)
-        fs.moveTo([...fs.currentPath, folderName])
-
-        let count = 0
-        for (let i = 0; i < wardrobe.length; i++) {
-          const outfit = wardrobe[i]
-          if (Array.isArray(outfit) && outfit.length > 0) {
-            const name = (names[i] && names[i].trim()) || `Outfit_${i}`
-            fs.addFile({ name, type: 'outfit', data: JSON.parse(JSON.stringify(outfit)) })
-            count++
-          }
-        }
-        await dialog.alert(t('wardrobeIO.playerWardrobeImported', { count, name: folderName }))
-      } catch (e) {
-        console.error('importPlayerWardrobe failed', e)
-        await dialog.alert(t('wardrobeIO.playerWardrobeFailed'))
+        const tagName = defaultFilename('Player_Wardrobe')
+        const outfits = player.Wardrobe.flatMap((data: unknown, index: number) => {
+          if (!Array.isArray(data) || data.length === 0) return []
+          const slotName = player.WardrobeCharacterNames[index]
+          const name = typeof slotName === 'string' && slotName.trim() ? slotName.trim() : `Outfit_${index}`
+          return [{ name, type: 'outfit', data }]
+        })
+        const { count } = getFs().importWardrobe({ type: 'folder', name: tagName, children: outfits }, { tagName })
+        await reportImported(count, dialog, t)
+      } catch (error) {
+        await reportFailure(error, dialog, t)
       }
     }
 
-    /** Decode a pasted BCX code (base64 + LZString) and import it. */
     const importBCX = async () => {
       const code = await dialog.prompt(t('wardrobeIO.bcxImportPrompt'))
-      if (!code) return
+      if (!code?.trim()) return
+      let parsed: unknown
       try {
         const decompressed = LZString.decompressFromBase64(code.trim())
-        if (!decompressed) throw new Error('LZString returned null')
-        await applyImportedData(JSON.parse(decompressed), getFs(), dialog, t)
-      } catch (e) {
-        console.error('importBCX failed', e)
+        if (!decompressed) throw new Error('BCX code could not be decoded')
+        parsed = JSON.parse(decompressed)
+      } catch (error) {
+        console.error('BCX parsing failed', error)
         await dialog.alert(t('wardrobeIO.bcxImportFailed'))
+        return
       }
+      await applyImportedData(parsed, getFs(), dialog, t)
     }
 
-    /** Download the whole file system as a JSON backup. */
     const saveBackup = () => {
       try {
-        const json = JSON.stringify(getFs().fs.toJSON(), null, 2)
-        const blob = new Blob([json], { type: 'application/json' })
-        const url = URL.createObjectURL(blob)
-        const a = doc.createElement('a')
-        a.href = url
-        a.download = `${defaultFilename('vpw-backup')}.json`
-        doc.body.appendChild(a)
-        a.click()
-        a.remove()
-        URL.revokeObjectURL(url)
-      } catch (e) {
-        console.error('saveBackup failed', e)
-        void dialog.alert(t('wardrobeIO.backupSaveFailed'))
+        downloadJson(getFs().exportWardrobe(), 'vpw-backup')
+      } catch (error) {
+        void reportFailure(error, dialog, t)
       }
     }
 
-    /** Load a JSON backup file and merge/apply it. */
+    const saveRecoveryBackup = () => {
+      try {
+        downloadJson(getFs().exportRecovery(), 'vpw-recovery')
+      } catch (error) {
+        void reportFailure(error, dialog, t)
+      }
+    }
+
     const importBackup = () => {
       const input = doc.createElement('input')
       input.type = 'file'
       input.accept = '.json,application/json'
       input.style.display = 'none'
-      input.addEventListener('change', async (ev: any) => {
-        const file = ev.target?.files?.[0]
-        if (!file) {
-          input.remove()
+      input.addEventListener('cancel', () => input.remove(), { once: true })
+      input.addEventListener('change', async () => {
+        const file = input.files?.[0]
+        input.remove()
+        if (!file) return
+        let parsed: unknown
+        try {
+          parsed = JSON.parse(await file.text())
+        } catch (error) {
+          console.error('Backup parsing failed', error)
+          await dialog.alert(t('wardrobeIO.backupParseFailed'))
           return
         }
-        try {
-          await applyImportedData(JSON.parse(await file.text()), getFs(), dialog, t)
-        } catch (e) {
-          console.error('importBackup failed', e)
-          await dialog.alert(t('wardrobeIO.backupParseFailed'))
-        } finally {
-          input.remove()
-        }
-      })
+        await applyImportedData(parsed, getFs(), dialog, t)
+      }, { once: true })
       doc.body.appendChild(input)
       input.click()
     }
 
-    /** Save the character's current outfit as a file in the current folder. */
+    // Keep the action name while existing menu consumers migrate to the library UI.
     const saveCharacterToFolder = async () => {
       const fs = getFs()
-      if (!Array.isArray(fs.characterItem)) {
+      if (!Array.isArray(fs.characterItem) || fs.characterItem.length === 0) {
         await dialog.alert(t('wardrobeIO.saveCharacterEmpty'))
         return
       }
-      const name = await dialog.prompt(t('wardrobeIO.saveCharacterPrompt'), defaultFilename('character'))
-      if (!name) return
+      const name = await dialog.prompt(t('library.saveNamePrompt'), defaultFilename('character'))
+      if (!name?.trim()) return
       try {
-        fs.addFile({ name, type: 'character', data: JSON.parse(JSON.stringify(fs.characterItem)) })
+        const id = fs.addOutfit({
+          name: name.trim(), type: 'character', data: fs.characterItem,
+          tagIds: fs.selectedTagId && fs.selectedTagId !== 'untagged' ? [fs.selectedTagId] : [],
+        })
+        if (!id) {
+          await reportImported(0, dialog, t)
+          return
+        }
         try {
           ExternalAdapter.sendRetriveOutfitNotification(fs.character)
         } catch {
-          /* notification is best-effort */
+          // A game notification failure does not undo the saved outfit.
         }
-        await dialog.alert(t('wardrobeIO.savedToFolder', { name }))
-      } catch (e) {
-        console.error('saveCharacterToFolder failed', e)
-        await dialog.alert(t('wardrobeIO.saveFailed'))
+        await dialog.alert(t('library.saved', { name: name.trim() }))
+      } catch (error) {
+        await reportFailure(error, dialog, t)
       }
     }
 
-    return { importPlayerWardrobe, importBCX, saveBackup, importBackup, saveCharacterToFolder }
+    return { importPlayerWardrobe, importBCX, saveBackup, saveRecoveryBackup, importBackup, saveCharacterToFolder }
   }, [dialog, t])
 }

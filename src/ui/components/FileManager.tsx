@@ -1,284 +1,325 @@
-import { useMemo, useState, type CSSProperties, type DragEvent } from 'react'
-import { ActionIcon, Box, Breadcrumbs, Button, Group, Menu, Paper, Stack, Text, TextInput } from '@mantine/core'
+import { useMemo, useState } from 'react'
+import { ActionIcon, Badge, Box, Button, Collapse, Drawer, Group, Menu, Modal, MultiSelect, Paper, Progress, Select, Stack, Text, TextInput, Tooltip, UnstyledButton } from '@mantine/core'
 import { useTranslation } from 'react-i18next'
-import { getFs, getWb, useFsSelector, useWbSelector, type FileNode, type SearchHit } from '@/stores/hooks'
+import { getFs, getWb, useFsSelector, useWbSelector, type WardrobeOutfit } from '@/stores/hooks'
 import { useDialog } from '@/ui/dialog/DialogProvider'
 import { useWardrobeActions } from '@/ui/wardrobe-actions'
 import { OVERLAY_Z_INDEX } from '@/ui/z-index'
 import { FileItem } from './FileItem'
-import { canMovePayloadToPath, readFileDragPayload } from './file-dnd'
+import libraryStyles from './wardrobe-library.css?inline'
 
-export function FileManager() {
+function formatKB(bytes: number): string {
+  return `${(Math.max(0, bytes) / 1000).toFixed(1)} kB`
+}
+
+interface FileManagerProps {
+  onSelectOutfit?: (item: WardrobeOutfit) => void
+}
+
+export function FileManager({ onSelectOutfit }: FileManagerProps) {
   const { t } = useTranslation()
   const dialog = useDialog()
   const actions = useWardrobeActions()
-  const currentPath = useFsSelector((fs) => fs.currentPath)
-  const fileTreeVersion = useFsSelector((fs) => fs.fileTreeVersion)
-  const thumbnailRefreshVersion = useFsSelector((fs) => fs.thumbnailRefreshVersion)
-  const searchScope = useWbSelector((wb) => wb.wardrobeUi.searchScope || 'current')
+  const outfits = useFsSelector((fs) => fs.outfits)
+  const tags = useFsSelector((fs) => fs.tags)
+  const selectedTagId = useFsSelector((fs) => fs.selectedTagId)
+  const quota = useFsSelector((fs) => fs.cloudQuota)
+  const sync = useFsSelector((fs) => fs.syncStatus)
   const fileViewMode = useWbSelector((wb) => wb.wardrobeUi.fileViewMode || 'large')
   const [searchQuery, setSearchQuery] = useState('')
-  const [parentDropActive, setParentDropActive] = useState(false)
+  const [editingOutfit, setEditingOutfit] = useState<WardrobeOutfit | null>(null)
+  const [editingTagIds, setEditingTagIds] = useState<string[]>([])
+  const [tagPickerOpened, setTagPickerOpened] = useState(false)
+  const [filtersOpened, setFiltersOpened] = useState(false)
+  const [filterTagPickerOpened, setFilterTagPickerOpened] = useState(false)
+  const [tagQuery, setTagQuery] = useState('')
+  const [cloudFilter, setCloudFilter] = useState<'all' | 'cloud' | 'local'>('all')
+  const [quotaDetailsOpened, setQuotaDetailsOpened] = useState(false)
 
-  const items: FileNode[] = useMemo(() => {
-    return getFs().fs.getNode(currentPath)?.children ?? []
-  }, [currentPath, fileTreeVersion])
+  const tagNames = useMemo(() => new Map(tags.flatMap((tag) =>
+    [tag.id, ...tag.aliasIds].map((id) => [id, tag.name] as const))), [tags])
+  const selectedTag = tags.find((tag) => tag.id === selectedTagId)
+  const tagOptions = tags.map((tag) => ({ value: tag.id, label: tag.name }))
+  const filterTags = tags.filter((tag) => tag.name.toLocaleLowerCase().includes(tagQuery.trim().toLocaleLowerCase()))
+  const tagCounts = useMemo(() => new Map(tags.map((tag) => [tag.id,
+    outfits.filter((outfit) => outfit.tagIds.some((id) => id === tag.id || tag.aliasIds.includes(id))).length,
+  ])), [outfits, tags])
+  const untaggedCount = outfits.filter((outfit) => !outfit.tagIds.some((id) => tagNames.has(id))).length
+  const cloudCount = outfits.filter((outfit) => outfit.cloudSync !== false).length
 
-  const displayList: SearchHit[] = useMemo(() => {
-    const q = searchQuery.trim()
-    const ql = q.toLowerCase()
-    let base: SearchHit[]
-    if (!q) {
-      base = items.map((it) => ({ item: it, path: currentPath }))
-    } else if (searchScope === 'current') {
-      base = items
-        .filter((it) => (it.name || '').toLowerCase().includes(ql))
-        .map((it) => ({ item: it, path: currentPath }))
-    } else {
-      try {
-        base = getFs().searchFiles(q)
-      } catch {
-        base = []
+  const displayList = useMemo(() => {
+    const query = searchQuery.trim().toLocaleLowerCase()
+    return outfits.filter((outfit) => {
+      if (cloudFilter === 'cloud' && outfit.cloudSync === false) return false
+      if (cloudFilter === 'local' && outfit.cloudSync !== false) return false
+      const outfitTags = outfit.tagIds.filter((id) => tagNames.has(id))
+      if (selectedTagId === 'untagged' && outfitTags.length > 0) return false
+      if (selectedTag && !outfitTags.some((id) => id === selectedTag.id || selectedTag.aliasIds.includes(id))) return false
+      return !query || [outfit.name, ...outfitTags.map((id) => tagNames.get(id))]
+        .some((value) => value?.toLocaleLowerCase().includes(query))
+    }).reverse()
+  }, [outfits, tagNames, selectedTagId, selectedTag, searchQuery, cloudFilter])
+
+  const reportError = (error: unknown) => dialog.alert(t('library.operationFailed', {
+    error: error instanceof Error ? error.message : String(error),
+  }))
+
+  const createTag = async () => {
+    const name = await dialog.prompt(t('library.newTagPrompt'))
+    if (!name?.trim()) return
+    try {
+      const id = getFs().createTag(name.trim())
+      if (id) getFs().selectTag(id)
+      else await dialog.alert(t('library.tagNameInvalid'))
+    } catch (error) { await reportError(error) }
+  }
+
+  const renameTag = async () => {
+    if (!selectedTag) return
+    const name = await dialog.prompt(t('library.renameTagPrompt'), selectedTag.name)
+    if (!name?.trim() || name.trim() === selectedTag.name) return
+    try {
+      if (!getFs().renameTag(selectedTag.id, name.trim())) await dialog.alert(t('library.tagNameInvalid'))
+    } catch (error) { await reportError(error) }
+  }
+
+  const deleteTag = async () => {
+    if (!selectedTag || !await dialog.confirm(t('library.deleteTagConfirm', { name: selectedTag.name }))) return
+    try {
+      if (!getFs().deleteTag(selectedTag.id)) await dialog.alert(t('library.itemUnavailable'))
+    } catch (error) { await reportError(error) }
+  }
+
+  const editTags = (outfit: WardrobeOutfit) => {
+    setTagPickerOpened(false)
+    setEditingOutfit(outfit)
+    setEditingTagIds(tags.filter((tag) => outfit.tagIds.some((id) => id === tag.id || tag.aliasIds.includes(id))).map((tag) => tag.id))
+  }
+
+  const saveTags = async () => {
+    if (!editingOutfit) return
+    try {
+      const current = getFs().outfits.find((outfit) => outfit.id === editingOutfit.id)
+      if (!current) {
+        setEditingOutfit(null)
+        await dialog.alert(t('library.itemUnavailable'))
+        return
       }
-    }
-
-    return [...base].reverse()
-  }, [currentPath, fileTreeVersion, items, searchQuery, searchScope, thumbnailRefreshVersion])
-
-  const addFolder = async () => {
-    const name = await dialog.prompt(t('fileManager.promptNewFolderName'))
-    if (name) getFs().addFile({ name, type: 'folder', children: [] })
+      const currentTags = tags.filter((tag) => current.tagIds.some((id) => id === tag.id || tag.aliasIds.includes(id))).map((tag) => tag.id)
+      if (currentTags.length === editingTagIds.length && currentTags.every((id) => editingTagIds.includes(id))) {
+        setEditingOutfit(null)
+        return
+      }
+      if (!getFs().setOutfitTags(editingOutfit.id, editingTagIds)) {
+        await dialog.alert(t('library.itemUnavailable'))
+        return
+      }
+      setEditingOutfit(null)
+    } catch (error) { await reportError(error) }
   }
 
-  const parentPath = currentPath.length > 1 ? currentPath.slice(0, -1) : null
-  const pathTitle = currentPath.join(' / ')
-
-  const onParentDragOver = (event: DragEvent) => {
-    if (!parentPath) return
-    event.preventDefault()
-    event.dataTransfer.dropEffect = 'move'
-    setParentDropActive(true)
+  const retrySync = async () => {
+    try { getFs().syncNow() } catch (error) { await reportError(error) }
   }
 
-  const onParentDragLeave = () => {
-    setParentDropActive(false)
-  }
+  const quotaColor = quota.isOverLimit ? 'red' : quota.isWarning ? 'orange' : 'teal'
+  const syncColor = sync.state === 'verified' ? 'teal' : ['error', 'quota'].includes(sync.state) ? 'red' : 'gray'
+  const activeFilterCount = Number(!!selectedTagId) + Number(cloudFilter !== 'all')
+  const clearFilters = () => { setSearchQuery(''); getFs().selectTag(null); setCloudFilter('all') }
+  const showQuotaDetails = quotaDetailsOpened || sync.state === 'quota' || sync.state === 'error'
 
-  const onParentDrop = (event: DragEvent) => {
-    if (!parentPath) return
-    event.preventDefault()
-    setParentDropActive(false)
-    const payload = readFileDragPayload(event)
-    if (!canMovePayloadToPath(payload, parentPath)) return
-    getFs().moveFile(payload.name, payload.fromPath, parentPath)
-  }
+  const tagFilterButton = (id: string | null, label: string, count: number) => (
+    <UnstyledButton key={id ?? 'all'} className="vpw-library-filter-option" aria-pressed={selectedTagId === id}
+      onClick={() => getFs().selectTag(id)}>
+      <Text component="span" size="sm" className="vpw-library-filter-name">{label}</Text>
+      <Text component="span" size="xs" c="dimmed">{count}</Text>
+    </UnstyledButton>
+  )
 
-  const gridStyle: CSSProperties =
-    fileViewMode === 'list'
-      ? { display: 'flex', flexDirection: 'column', gap: 10 }
-      : {
-          display: 'grid',
-          gridTemplateColumns:
-            fileViewMode === 'small'
-              ? 'repeat(auto-fill, minmax(112px, 128px))'
-              : 'repeat(auto-fill, minmax(160px, 180px))',
-          gridAutoRows: 'max-content',
-          alignItems: 'start',
-          gap: fileViewMode === 'small' ? 8 : 12,
-        }
+  const filterList = (
+    <Stack gap="md">
+      <Stack gap={3} role="group" aria-label={t('library.browseLibrary', { defaultValue: 'Browse wardrobe' })}>
+        <Text size="xs" fw={700} c="dimmed" mb={3}>{t('library.browseLibrary', { defaultValue: 'Browse wardrobe' })}</Text>
+        {tagFilterButton(null, t('library.allOutfits'), outfits.length)}
+        {tagFilterButton('untagged', t('library.untagged'), untaggedCount)}
+      </Stack>
+      <Stack gap={5} role="group" aria-label={t('library.tags')}>
+        <Text size="xs" fw={700} c="dimmed">{t('library.tags')}</Text>
+        <TextInput size="xs" value={tagQuery} onChange={(event) => setTagQuery(event.currentTarget.value)}
+          placeholder={t('library.findTag', { defaultValue: 'Find a tag…' })}
+          aria-label={t('library.findTag', { defaultValue: 'Find a tag…' })} />
+        {filterTags.map((tag) => tagFilterButton(tag.id, tag.name, tagCounts.get(tag.id) ?? 0))}
+        {filterTags.length === 0 && <Text size="xs" c="dimmed">{t('library.noTags')}</Text>}
+      </Stack>
+      <Stack gap={3} role="group" aria-label={t('library.storageFilter', { defaultValue: 'Cloud inclusion' })}>
+        <Text size="xs" fw={700} c="dimmed" mb={3}>{t('library.storageFilter', { defaultValue: 'Cloud inclusion' })}</Text>
+        {([
+          { value: 'all', label: t('library.allOutfits'), count: outfits.length },
+          { value: 'cloud', label: t('library.cloudIncluded'), count: cloudCount },
+          { value: 'local', label: t('library.localOnly'), count: outfits.length - cloudCount },
+        ] as const).map((option) => <UnstyledButton key={option.value} className="vpw-library-filter-option"
+          aria-pressed={cloudFilter === option.value} onClick={() => setCloudFilter(option.value)}>
+          <Text component="span" size="sm" className="vpw-library-filter-name">{option.label}</Text>
+          <Text component="span" size="xs" c="dimmed">{option.count}</Text>
+        </UnstyledButton>)}
+      </Stack>
+      {activeFilterCount > 0 && <Button variant="subtle" size="xs" onClick={clearFilters}>{t('library.clearFilters')}</Button>}
+    </Stack>
+  )
 
   return (
-    <Stack gap="sm" h="100%" style={{ minHeight: 0 }}>
-      <Paper withBorder radius="md" p={6} style={{ flex: '0 0 auto' }}>
-        <Group gap={6} wrap="nowrap" align="center">
-          <ActionIcon
-            variant="default"
-            size="md"
-            disabled={!parentPath}
-            title={t('fileManager.goUp')}
-            aria-label={t('fileManager.goUp')}
-            onClick={() => parentPath && getFs().moveTo(parentPath)}
-          >
-            ↑
-          </ActionIcon>
-          <Box style={{ flex: 1, minWidth: 0 }} title={pathTitle}>
-            <Breadcrumbs separator="/" styles={{ root: { flexWrap: 'nowrap' }, separator: { marginInline: 4 } }}>
-              {currentPath.map((seg, idx) => {
-                const isCurrent = idx === currentPath.length - 1
-                return (
-                  <Text
-                    key={`${seg}-${idx}`}
-                    size="sm"
-                    c={isCurrent ? undefined : 'blue'}
-                    fw={isCurrent ? 700 : 500}
-                    truncate
-                    maw={idx === 0 ? 120 : 180}
-                    style={{ cursor: isCurrent ? 'default' : 'pointer' }}
-                    onClick={() => {
-                      if (!isCurrent) getFs().moveTo(currentPath.slice(0, idx + 1))
-                    }}
-                  >
-                    {seg}
-                  </Text>
-                )
-              })}
-            </Breadcrumbs>
-          </Box>
-          {parentPath && (
-            <Box
-              role="button"
-              tabIndex={0}
-              title={t('fileManager.dropToParentTitle')}
-              onClick={() => getFs().moveTo(parentPath)}
-              onDragOver={onParentDragOver}
-              onDragLeave={onParentDragLeave}
-              onDrop={onParentDrop}
-              style={{
-                flex: '0 0 auto',
-                minWidth: 118,
-                maxWidth: 170,
-                padding: '6px 10px',
-                borderRadius: 8,
-                border: parentDropActive
-                  ? '1px solid var(--mantine-color-teal-5)'
-                  : '1px dashed var(--mantine-color-default-border)',
-                background: parentDropActive ? 'var(--mantine-color-teal-light)' : 'var(--mantine-color-default-hover)',
-                color: parentDropActive ? 'var(--mantine-color-teal-light-color)' : undefined,
-                cursor: 'pointer',
-                transition: 'background 120ms ease, border-color 120ms ease',
-              }}
-            >
-              <Text size="xs" fw={700} truncate>
-                ↑ {t('fileManager.parentFolder')}
-              </Text>
-            </Box>
-          )}
-        </Group>
-      </Paper>
-
-      <Group gap="sm" wrap="nowrap">
-        <TextInput
-          flex={1}
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.currentTarget.value)}
-          placeholder={
-            searchScope === 'current'
-              ? t('fileManager.searchPlaceholderCurrent')
-              : t('fileManager.searchPlaceholderAll')
-          }
-          rightSection={
-            searchQuery ? (
-              <ActionIcon variant="subtle" onClick={() => setSearchQuery('')} aria-label={t('fileManager.clearSearch')}>
-                ✕
-              </ActionIcon>
-            ) : null
-          }
-        />
-        <ActionIcon
-          variant="default"
-          size="lg"
-          title={
-            searchScope === 'current'
-              ? t('fileManager.switchToGlobalSearch')
-              : t('fileManager.switchToCurrentSearch')
-          }
-          onClick={() => getWb().setWardrobeUi({ searchScope: searchScope === 'current' ? 'all' : 'current' })}
-        >
-          {searchScope === 'current' ? '🔍' : '🌐'}
-        </ActionIcon>
+    <Box className="vpw-library-root">
+      <style>{libraryStyles}</style>
+      <Group gap={8} wrap="nowrap" className="vpw-library-search">
+        <TextInput style={{ flex: 1, minWidth: 0 }} value={searchQuery} onChange={(event) => setSearchQuery(event.currentTarget.value)}
+          placeholder={t('library.searchPlaceholder')} aria-label={t('library.searchPlaceholder')}
+          leftSection={<Text c="dimmed" aria-hidden>⌕</Text>}
+          rightSection={searchQuery ? <ActionIcon variant="subtle" onClick={() => setSearchQuery('')} aria-label={t('fileManager.clearSearch')}>×</ActionIcon> : null} />
+        <Button className="vpw-library-filter-trigger" variant={activeFilterCount ? 'light' : 'default'} onClick={() => setFiltersOpened(true)}
+          rightSection={activeFilterCount ? <Badge size="xs" circle>{activeFilterCount}</Badge> : undefined}>
+          {t('library.filters', { defaultValue: 'Filters' })}
+        </Button>
       </Group>
 
-      <Group justify="space-between" wrap="nowrap">
-        <Button
-          variant="subtle"
-          size="xs"
-          onClick={() => getFs().refreshThumbnails(displayList.map((entry) => entry.item))}
-        >
-          {t('fileManager.refreshThumbnails')}
-        </Button>
-        <Group gap="xs" wrap="nowrap">
+      <Group className="vpw-library-toolbar" justify="space-between" gap={6}>
+        <Text size="xs" c="dimmed" role="status">{t('library.outfitCount', { count: displayList.length, total: outfits.length })}</Text>
+        <Group gap={6}>
           <Button.Group>
             {(['large', 'small', 'list'] as const).map((mode) => (
-              <Button
-                key={mode}
-                size="xs"
-                variant={fileViewMode === mode ? 'filled' : 'default'}
+              <Button key={mode} size="compact-xs" variant={fileViewMode === mode ? 'light' : 'default'}
                 onClick={() => getWb().setWardrobeUi({ fileViewMode: mode })}
-                title={
-                  mode === 'large'
-                    ? t('fileManager.viewLarge')
-                    : mode === 'small'
-                      ? t('fileManager.viewSmall')
-                      : t('fileManager.viewList')
-                }
-              >
-                {mode === 'large' ? '▦' : mode === 'small' ? '▢' : '☰'}
+                title={t(`fileManager.view${mode[0].toUpperCase()}${mode.slice(1)}`)}
+                aria-label={t(`fileManager.view${mode[0].toUpperCase()}${mode.slice(1)}`)} aria-pressed={fileViewMode === mode}>
+                {mode === 'large' ? '▣' : mode === 'small' ? '▦' : '☷'}
               </Button>
             ))}
           </Button.Group>
-          <Button variant="default" size="xs" onClick={addFolder}>
-            {t('fileManager.newFolderTitle')}
-          </Button>
-          <Menu position="bottom-end" withinPortal shadow="md" width={240} zIndex={OVERLAY_Z_INDEX}>
-            <Menu.Target>
-              <Button variant="default" size="xs">
-                {t('wardrobeIO.menuLabel')}
-              </Button>
-            </Menu.Target>
+          <Menu position="bottom-end" withinPortal shadow="md" zIndex={OVERLAY_Z_INDEX}>
+            <Menu.Target><Button variant="default" size="compact-xs">{t('library.manageTags')}</Button></Menu.Target>
             <Menu.Dropdown>
-              <Menu.Label>{t('fileManagerPanel.tabWardrobe')}</Menu.Label>
-              <Menu.Item onClick={() => void actions.importPlayerWardrobe()}>
-                {t('fileManagerPanel.importPlayerWardrobe')}
-              </Menu.Item>
-              <Menu.Item onClick={() => void actions.importBCX()}>
-                {t('fileManagerPanel.importBCX')}
-              </Menu.Item>
-              <Menu.Item onClick={() => void actions.saveCharacterToFolder()}>
-                {t('fileManagerPanel.saveCharacter')}
-              </Menu.Item>
+              <Menu.Item onClick={() => void createTag()}>{t('library.newTag')}</Menu.Item>
+              <Menu.Item disabled={!selectedTag} onClick={() => void renameTag()}>{t('library.renameTag')}</Menu.Item>
+              <Menu.Item disabled={!selectedTag} color="red" onClick={() => void deleteTag()}>{t('library.deleteTag')}</Menu.Item>
+            </Menu.Dropdown>
+          </Menu>
+          <Menu position="bottom-end" withinPortal shadow="md" width={240} zIndex={OVERLAY_Z_INDEX}>
+            <Menu.Target><Button variant="default" size="compact-xs">{t('wardrobeIO.menuLabel')}</Button></Menu.Target>
+            <Menu.Dropdown>
+              <Menu.Item onClick={() => void actions.saveCharacterToFolder()}>{t('library.saveCharacter')}</Menu.Item>
+              <Menu.Item onClick={() => void actions.importPlayerWardrobe()}>{t('fileManagerPanel.importPlayerWardrobe')}</Menu.Item>
+              <Menu.Item onClick={() => void actions.importBCX()}>{t('fileManagerPanel.importBCX')}</Menu.Item>
               <Menu.Divider />
               <Menu.Item onClick={actions.saveBackup}>{t('fileManagerPanel.saveBackup')}</Menu.Item>
               <Menu.Item onClick={actions.importBackup}>{t('fileManagerPanel.importBackup')}</Menu.Item>
+              <Menu.Divider />
+              <Menu.Item onClick={() => getFs().refreshThumbnails(displayList)}>{t('fileManager.refreshThumbnails')}</Menu.Item>
             </Menu.Dropdown>
           </Menu>
         </Group>
       </Group>
 
-      <Box style={{ overflowY: 'auto', flex: 1, minHeight: 200, padding: 4 }}>
-        <Box style={gridStyle}>
-          {displayList.length > 0 ? (
-            displayList.map((entry) => (
-              <FileItem
-                key={`${entry.path.join('/')}/${entry.item.name}`}
-                item={entry.item}
-                sourcePath={entry.path}
-                viewMode={fileViewMode}
-                onOpenFolder={() => {
-                  if (entry.item.type === 'folder') getFs().moveTo([...entry.path, entry.item.name])
-                }}
-                onRemove={() => getFs().removeFile(entry.item, entry.path)}
-                onRename={(newName) => {
-                  entry.item.name = newName
-                  getFs().saveAll()
-                }}
-              />
-            ))
-          ) : (
-            <Stack align="center" py="xl" style={{ gridColumn: '1 / -1' }}>
-              <Text c="dimmed">{t('fileManager.emptyTip')}</Text>
-              {searchQuery ? (
-                <Button variant="light" size="xs" onClick={() => setSearchQuery('')}>
-                  {t('fileManager.clearSearch')}
-                </Button>
-              ) : (
-                <Button variant="light" size="xs" onClick={addFolder}>
-                  {t('fileManager.newFolderTitle')}
-                </Button>
-              )}
+      <Box className="vpw-library-workspace">
+        <Box component="aside" className="vpw-library-sidebar" aria-label={t('library.filters', { defaultValue: 'Filters' })}>
+          {filterList}
+        </Box>
+        <Box className="vpw-library-scroll">
+          {(selectedTagId || cloudFilter !== 'all') && <Group gap={5} mb={10}>
+            {selectedTagId && <Badge variant="light">{selectedTag?.name ?? t('library.untagged')}</Badge>}
+            {cloudFilter !== 'all' && <Badge variant="light" color="gray">{t(cloudFilter === 'cloud' ? 'library.cloudIncluded' : 'library.localOnly')}</Badge>}
+            <Button size="compact-xs" variant="subtle" onClick={clearFilters}>{t('library.clearFilters')}</Button>
+          </Group>}
+          {displayList.length > 0 ? <Box className="vpw-library-masonry" data-view={fileViewMode}>
+            {displayList.map((item) => (
+              <FileItem key={item.id} item={item} viewMode={fileViewMode} onSelectOutfit={onSelectOutfit}
+                tagNames={[...new Set(item.tagIds.map((id) => tagNames.get(id)).filter((name): name is string => !!name))]}
+                onEditTags={() => editTags(item)} />
+            ))}
+          </Box> : (
+            <Stack align="center" py="xl">
+              <Text c="dimmed">{t('library.empty')}</Text>
+              {searchQuery || activeFilterCount ? <Button variant="light" size="xs" onClick={clearFilters}>{t('library.clearFilters')}</Button>
+                : <Button variant="light" size="xs" onClick={() => void actions.saveCharacterToFolder()}>{t('library.saveCharacter')}</Button>}
             </Stack>
           )}
         </Box>
       </Box>
-    </Stack>
+
+      <Paper withBorder radius="md" p={8} className="vpw-library-quota" data-expanded={showQuotaDetails || undefined}>
+        <Stack gap={4}>
+          <Group justify="space-between" gap={4}>
+            <Group gap={4} wrap="nowrap">
+              <Text size="xs" fw={600}>{t('library.cloudStorage')}</Text>
+              <Tooltip label={t('library.sharedQuotaHint')} multiline w={270} withArrow zIndex={OVERLAY_Z_INDEX}
+                events={{ hover: true, focus: true, touch: true }}>
+                <ActionIcon variant="subtle" color="gray" size="xs" aria-label={t('library.sharedQuotaInfo')}>ⓘ</ActionIcon>
+              </Tooltip>
+            </Group>
+            <Group gap={5}>
+              <Badge size="sm" color={syncColor} variant="light">{t(`library.sync.${sync.state}`)}</Badge>
+              <ActionIcon variant="subtle" size="xs" onClick={() => setQuotaDetailsOpened((opened) => !opened)}
+                aria-label={t('library.storageDetails', { defaultValue: 'Storage details' })} aria-expanded={showQuotaDetails}>
+                {showQuotaDetails ? '⌄' : '⌃'}
+              </ActionIcon>
+            </Group>
+          </Group>
+          <Progress value={Math.min(100, Math.max(0, quota.usageRatio * 100))} color={quotaColor} size={4}
+            aria-label={t('library.quotaAria', { used: formatKB(quota.totalBytes), limit: formatKB(quota.limitBytes) })} />
+          <Group justify="space-between" gap={4}>
+            <Text size="xs">VPW {formatKB(quota.wardrobeBytes)}</Text>
+            <Text size="xs" c="dimmed" className="vpw-library-quota-secondary">{t('library.otherExtensions')} {formatKB(quota.otherExtensionsBytes)}</Text>
+            <Text size="xs" fw={600} c={quotaColor}>{formatKB(quota.totalBytes)} / {formatKB(quota.limitBytes)}</Text>
+          </Group>
+          <Group justify="space-between" gap={4} className="vpw-library-quota-secondary">
+            <Text size="xs" c={sync.localSaved ? 'dimmed' : 'red'}>{t(sync.localSaved ? 'library.localSaved' : 'library.localUnsaved')}</Text>
+            <Button variant="subtle" size="compact-xs" onClick={() => void retrySync()}>{t('library.retrySync')}</Button>
+          </Group>
+          <Collapse in={showQuotaDetails}>
+            <Stack gap={4}>
+              <Text size="xs" c="dimmed">{t('library.remainingCapacity', { amount: formatKB(quota.remainingBytes) })}</Text>
+              {sync.recoveryAvailable && <Button variant="subtle" size="compact-xs" onClick={actions.saveRecoveryBackup}>{t('library.exportRecovery')}</Button>}
+            </Stack>
+          </Collapse>
+          {quota.isWarning && !quota.isOverLimit && <Text size="xs" c="orange">{t('library.quotaWarning')}</Text>}
+          {sync.state === 'quota' && <Text size="xs" c="red">{t('library.quotaBlocked')}</Text>}
+          {sync.error && sync.state !== 'quota' && <Text size="xs" c="red" style={{ overflowWrap: 'anywhere' }}>{sync.error}</Text>}
+        </Stack>
+      </Paper>
+
+      <Drawer opened={filtersOpened} onClose={() => setFiltersOpened(false)} position="left" size="min(340px, 88vw)"
+        closeOnEscape={!filterTagPickerOpened}
+        title={t('library.filters', { defaultValue: 'Filters' })} zIndex={OVERLAY_Z_INDEX}
+        styles={{ content: { display: 'flex', flexDirection: 'column' }, body: { flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex' } }}>
+        <Stack style={{ flex: 1, minHeight: 0 }}>
+          <Box style={{ flex: 1, minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain' }}>
+          <Select value={selectedTagId ?? 'all'} label={t('library.filterByTag')}
+            mb="md"
+            data={[{ value: 'all', label: t('library.allOutfits') }, { value: 'untagged', label: t('library.untagged') }, ...tagOptions]}
+            onChange={(value) => getFs().selectTag(value === 'all' ? null : value)} searchable allowDeselect={false}
+            dropdownOpened={filterTagPickerOpened} onDropdownOpen={() => setFilterTagPickerOpened(true)}
+            onDropdownClose={() => setFilterTagPickerOpened(false)} onOptionSubmit={() => setFilterTagPickerOpened(false)}
+            comboboxProps={{ zIndex: OVERLAY_Z_INDEX + 1 }} />
+          {filterList}
+          </Box>
+          <Button style={{ flexShrink: 0 }} onClick={() => setFiltersOpened(false)}>{t('library.showResults', { count: displayList.length, defaultValue: 'Show {count} outfits' })}</Button>
+        </Stack>
+      </Drawer>
+
+      <Modal opened={editingOutfit !== null} onClose={() => setEditingOutfit(null)} centered zIndex={OVERLAY_Z_INDEX}
+        closeOnEscape={!tagPickerOpened}
+        title={t('library.editOutfitTags', { name: editingOutfit?.name })}>
+        <Stack>
+          <MultiSelect label={t('library.tags')} placeholder={t('library.selectTags')} searchable clearable
+            data={tagOptions} value={editingTagIds} onChange={setEditingTagIds} nothingFoundMessage={t('library.noTags')}
+            dropdownOpened={tagPickerOpened} onDropdownOpen={() => setTagPickerOpened(true)}
+            onDropdownClose={() => setTagPickerOpened(false)} onOptionSubmit={() => setTagPickerOpened(false)}
+            comboboxProps={{ zIndex: OVERLAY_Z_INDEX + 1 }} />
+          <Text size="xs" c="dimmed">{t('library.multipleTagsHint')}</Text>
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setEditingOutfit(null)}>{t('dialog.cancel')}</Button>
+            <Button onClick={() => void saveTags()}>{t('library.saveTags')}</Button>
+          </Group>
+        </Stack>
+      </Modal>
+    </Box>
   )
 }
