@@ -133,14 +133,16 @@ export function FileManager({ onSelectOutfit }: FileManagerProps) {
     try { getFs().syncNow() } catch (error) { await reportError(error) }
   }
 
-  const observedQuota = quota.observed
+  const localStorageQuotaError = sync.errorCode === 'local-storage-quota'
+  const observedQuota = localStorageQuotaError && quota.observedSource !== 'login-response'
+    ? undefined : quota.observed
   const observedColor = observedQuota?.isOverLimit ? 'red' : observedQuota?.isWarning ? 'orange' : 'teal'
   const proposedColor = quota.isOverLimit ? 'red' : quota.isWarning ? 'orange' : 'teal'
   const syncColor = ['submitted', 'verified'].includes(sync.state) ? 'teal' : sync.state === 'conflict' ? 'orange'
     : ['error', 'quota'].includes(sync.state) ? 'red' : 'gray'
   const activeFilterCount = Number(!!selectedTagId) + Number(cloudFilter !== 'all')
   const clearFilters = () => { setSearchQuery(''); getFs().selectTag(null); setCloudFilter('all') }
-  const showQuotaDetails = quotaDetailsOpened || sync.state === 'quota' || sync.state === 'error'
+  const showQuotaDetails = quotaDetailsOpened || sync.state === 'quota' || (sync.state === 'error' && !localStorageQuotaError)
 
   const tagFilterButton = (id: string | null, label: string, count: number) => (
     <UnstyledButton key={id ?? 'all'} className="vpw-library-filter-option" aria-pressed={selectedTagId === id}
@@ -268,6 +270,17 @@ export function FileManager({ onSelectOutfit }: FileManagerProps) {
         </Box>
       </Box>
 
+      {localStorageQuotaError && <Paper withBorder radius="md" p="sm" role="alert" style={{ flexShrink: 0 }}>
+        <Stack gap="xs">
+          <Text size="sm" fw={700} c="red">{t('library.localStorageQuotaTitle')}</Text>
+          <Text size="xs">{t('library.localStorageQuotaHelp')}</Text>
+          <Group gap="xs">
+            <Button size="compact-sm" color="red" onClick={actions.saveBackup}>{t('library.exportLocalBackup')}</Button>
+            <Button size="compact-sm" color="red" variant="light" onClick={() => void retrySync()}>{t('library.retryLocalSave')}</Button>
+          </Group>
+        </Stack>
+      </Paper>}
+
       <Paper withBorder radius="md" p={8} className="vpw-library-quota" data-expanded={showQuotaDetails || undefined}>
         <Stack gap={4}>
           <Group justify="space-between" gap={4}>
@@ -279,16 +292,16 @@ export function FileManager({ onSelectOutfit }: FileManagerProps) {
               </Tooltip>
             </Group>
             <Group gap={5}>
-              <Badge size="sm" color={syncColor} variant="light">{t(`library.sync.${sync.state}`)}</Badge>
+              {!localStorageQuotaError && <Badge size="sm" color={syncColor} variant="light">{t(`library.sync.${sync.state}`)}</Badge>}
               <ActionIcon variant="subtle" size="xs" onClick={() => setQuotaDetailsOpened((opened) => !opened)}
                 aria-label={t('library.storageDetails', { defaultValue: 'Storage details' })} aria-expanded={showQuotaDetails}>
                 {showQuotaDetails ? '⌄' : '⌃'}
               </ActionIcon>
             </Group>
           </Group>
-          <Text size="xs" c="dimmed">{t(quota.observedSource === 'login-response'
-            ? 'library.quotaObservedLogin' : 'library.quotaObservedCache')}</Text>
           {observedQuota ? <>
+            <Text size="xs" c="dimmed">{t(quota.observedSource === 'login-response'
+              ? 'library.quotaObservedLogin' : 'library.quotaObservedCache')}</Text>
             <Progress value={Math.min(100, Math.max(0, observedQuota.usageRatio * 100))} color={observedColor} size={4}
               aria-label={t('library.quotaAria', { used: formatKB(observedQuota.totalBytes), limit: formatKB(observedQuota.limitBytes),
                 source: t(quota.observedSource === 'login-response' ? 'library.quotaObservedLogin' : 'library.quotaObservedCache') })} />
@@ -298,7 +311,7 @@ export function FileManager({ onSelectOutfit }: FileManagerProps) {
               <Text size="xs" fw={600} c={observedColor}>{formatKB(observedQuota.totalBytes)} / {formatKB(observedQuota.limitBytes)}</Text>
             </Group>
           </> : <Text size="xs" c="dimmed">{t('library.quotaObservedUnavailable')}</Text>}
-          <Group justify="space-between" gap={4} className="vpw-library-quota-secondary">
+          {!localStorageQuotaError && <Group justify="space-between" gap={4} className="vpw-library-quota-secondary">
             <Text size="xs" c={sync.localSaved ? 'dimmed' : 'red'}>{t(sync.localSaved ? 'library.localSaved' : 'library.localUnsaved')}</Text>
             {conflicts.length > 0
               ? <Button variant="light" color="orange" size="compact-xs" onClick={() => setConflictReviewOpened(true)}>
@@ -307,11 +320,11 @@ export function FileManager({ onSelectOutfit }: FileManagerProps) {
               : sync.errorCode === 'device-limit'
                 ? <Button variant="subtle" size="compact-xs" onClick={actions.saveBackup}>{t('library.exportLocalBackup')}</Button>
                 : <Button variant="subtle" size="compact-xs" onClick={() => void retrySync()}>{t('library.retrySync')}</Button>}
-          </Group>
+          </Group>}
           <Collapse in={showQuotaDetails}>
             <Stack gap={4}>
               {observedQuota && <Text size="xs" c="dimmed">{t('library.observedRemaining', { amount: formatKB(observedQuota.remainingBytes) })}</Text>}
-              {quota.proposalAvailable !== false && <>
+              {!localStorageQuotaError && quota.proposalAvailable === true && <>
               <Text size="xs" fw={600}>{t('library.proposedUpload')}</Text>
               <Group justify="space-between" gap={4}>
                 <Text size="xs">VPW {formatKB(quota.wardrobeBytes)}</Text>
@@ -323,11 +336,11 @@ export function FileManager({ onSelectOutfit }: FileManagerProps) {
               {sync.recoveryAvailable && <Button variant="subtle" size="compact-xs" onClick={actions.saveRecoveryBackup}>{t('library.exportRecovery')}</Button>}
             </Stack>
           </Collapse>
-          {quota.isWarning && !quota.isOverLimit && <Text size="xs" c="orange">{t('library.quotaWarning')}</Text>}
+          {!localStorageQuotaError && quota.isWarning && !quota.isOverLimit && <Text size="xs" c="orange">{t('library.quotaWarning')}</Text>}
           {conflicts.length > 0 && <Text size="xs" c="orange">{t('library.conflict.paused')}</Text>}
           {sync.state === 'quota' && <Text size="xs" c="red">{t('library.quotaBlocked')}</Text>}
           {sync.errorCode === 'device-limit' && <Text size="xs" c="red">{t('library.deviceLimit')}</Text>}
-          {sync.error && sync.errorCode !== 'device-limit' && sync.state !== 'quota' && sync.state !== 'conflict'
+          {sync.error && !localStorageQuotaError && sync.errorCode !== 'device-limit' && sync.state !== 'quota' && sync.state !== 'conflict'
             && <Text size="xs" c="red" style={{ overflowWrap: 'anywhere' }}>{sync.error}</Text>}
         </Stack>
       </Paper>

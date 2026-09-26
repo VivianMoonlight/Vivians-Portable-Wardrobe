@@ -21,6 +21,12 @@ const equal = (left, right) => JSON.stringify(canonical(left)) === JSON.stringif
 const own = (object, key) => Object.prototype.hasOwnProperty.call(object || {}, key)
 const V4_PROTOCOL = 'VPW4'
 
+function storageError(error) {
+  if (error?.name !== 'QuotaExceededError' && error?.code !== 22 && error?.code !== 1014) return error
+  return Object.assign(new Error('Browser local storage is full; export a backup before clearing site data'),
+    { code: 'local-storage-quota', cause: error })
+}
+
 function maxAppliedSequences(base, extra) {
   const result = { ...base }
   for (const [id, sequence] of Object.entries(extra || {})) {
@@ -157,8 +163,12 @@ export class WardrobeRepository {
 
   writeDocument(index, changes = {}) {
     const document = { ...this.document, ...changes, index }
-    const result = this.local.setItem(this.key, encode(document))
-    if (result === false) throw new Error('Local wardrobe could not be saved')
+    const encoded = encode(document)
+    if (this.local.getItem(this.key) !== encoded) {
+      let result
+      try { result = this.local.setItem(this.key, encoded) } catch (error) { throw storageError(error) }
+      if (result === false) throw new Error('Local wardrobe could not be saved')
+    }
     this.document = document
     this.index = index
   }
@@ -189,7 +199,10 @@ export class WardrobeRepository {
       key = `${baseKey}_${++suffix}`
     }
     if (!this.local.getItem(key)) {
-      if (this.local.setItem(key, encode({ reason, data, createdAt: Date.now() })) === false) {
+      let result
+      try { result = this.local.setItem(key, encode({ reason, data, createdAt: Date.now() })) }
+      catch (error) { throw storageError(error) }
+      if (result === false) {
         throw new Error('Migration backup could not be saved')
       }
     }
@@ -236,16 +249,24 @@ export class WardrobeRepository {
     let committed = false
     try {
       this.member = accountId(this.getPlayer())
-      this.deviceId = getOrCreateWardrobeDeviceId(this.local, Number(this.member))
-      this.markerKey = markerKeyForDevice(this.deviceId)
+      if (extensionSettings != null) {
+        try {
+          const observed = measureObservedExtensionQuota(extensionSettings)
+          this.quota = { ...observed, observed, observedSource: fresh ? 'login-response' : 'player-cache',
+            packetBytes: 0, proposalAvailable: false }
+        } catch { /* A malformed cloud setting must not hide the saved local index. */ }
+      }
       const stored = this.readDocument()
-      const raw = extensionSettings?.VPWardrobe
-      let online = null
-      try { online = cloudSnapshot(raw) } catch (error) { this.remoteError = error }
       if (stored) {
         this.document = stored
         this.index = stored.index
-      } else {
+      }
+      this.deviceId = getOrCreateWardrobeDeviceId(this.local, Number(this.member))
+      this.markerKey = markerKeyForDevice(this.deviceId)
+      const raw = extensionSettings?.VPWardrobe
+      let online = null
+      try { online = cloudSnapshot(raw) } catch (error) { this.remoteError = error }
+      if (!stored) {
         const legacy = this.legacyLocalSources()
         if (online?.kind === 'v4' || online?.kind === 'v3') this.index = online.index
         else if (legacy.length) this.index = migrateLegacyWardrobe(legacy[0].value)
@@ -276,7 +297,8 @@ export class WardrobeRepository {
       if (fresh && !this.remoteError) return this.receiveCloud({ extensionSettings, fresh: true })
       return true
     } catch (error) {
-      this.emit({ state: 'error', error: error.message, errorCode: error.code || null,
+      const reported = storageError(error)
+      this.emit({ state: 'error', error: reported.message, errorCode: reported.code || null,
         localSaved: committed })
       return committed
     }
@@ -523,7 +545,13 @@ export class WardrobeRepository {
       const proposal = this.proposal()
       const { payload, markerValue } = proposal
       if (!force && payload === this.submittedRaw) {
-        this.emit({ state: 'submitted', localSaved: true, error: '' })
+        if (this.document.submission?.submittedAt == null) {
+          const time = Date.now()
+          this.writeDocument(this.index, { lastSubmittedPayload: payload, lastSubmittedAt: time,
+            submission: { ...proposal, submittedAt: time } })
+        }
+        this.emit({ state: 'submitted', localSaved: true, error: '',
+          lastSubmittedAt: this.document.lastSubmittedAt || null })
         return true
       }
       const player = this.getPlayer()

@@ -30,6 +30,7 @@ function client(server = { settings: {} }, { saved = new Map(), member = 42, rep
     getItem: (key) => saved.get(key) ?? null,
     setItem(key, value) {
       if (localFailure === 'throw') throw new Error('Local storage is full')
+      if (localFailure === 'quota') throw Object.assign(new Error('Storage quota exceeded'), { name: 'QuotaExceededError' })
       if (localFailure === 'false') return false
       saved.set(key, value)
     },
@@ -270,13 +271,70 @@ for (const failure of ['false', 'throw']) {
     const beforeDocument = device.saved.get(device.repo.key)
     device.failLocal(failure)
     assert.throws(() => device.repo.apply([put('not-durable')]))
-    assert.equal(device.repo.flush(), false)
+    assert.equal(device.repo.flush(), true, 'An unchanged persisted submission needs no new local write')
     assert.equal(device.sendCount(), beforeSends)
     assert.equal(device.server.settings.VPWardrobe, beforeCloud)
     assert.equal(device.saved.get(device.repo.key), beforeDocument)
     assert.equal(device.repo.index.outfits['not-durable'], undefined)
   })
 }
+
+test('a full browser store still opens an unchanged saved wardrobe without rewriting it', () => {
+  const first = seed()
+  const reopened = client(first.server, { saved: first.saved })
+  reopened.failLocal('quota')
+  assert.equal(reopened.repo.open(), true)
+  assert.deepEqual(names(reopened.repo.index), ['Keep me', 'Original'])
+  assert.equal(reopened.repo.status.localSaved, true)
+  assert.equal(reopened.sendCount(), 0)
+})
+
+test('a full browser store keeps an existing wardrobe readable when its device ID cannot be saved', () => {
+  const first = seed()
+  const reopened = client(first.server, { saved: first.saved })
+  reopened.saved.delete('VPW4_device_42')
+  reopened.failLocal('quota')
+  assert.equal(reopened.repo.open(), false)
+  assert.equal(reopened.repo.status.errorCode, 'local-storage-quota')
+  assert.deepEqual(names(reopened.repo.index), ['Keep me', 'Original'])
+  assert.equal(reopened.sendCount(), 0)
+})
+
+test('browser storage quota failure preserves a real BC usage reading without inventing an upload estimate', () => {
+  const device = client({ settings: { OtherPlugin: 'saved on BC' } })
+  device.failLocal('quota')
+  assert.equal(device.repo.open(), false)
+  assert.equal(device.repo.status.errorCode, 'local-storage-quota')
+  assert.equal(device.repo.status.localSaved, false)
+  assert.ok(device.repo.quota.observed.otherExtensionsBytes > 0)
+  assert.equal(device.repo.quota.proposalAvailable, false)
+  assert.equal(device.sendCount(), 0)
+})
+
+test('a full browser store after sending can finalize locally without sending again', () => {
+  const device = seed()
+  device.repo.apply([put('later')])
+  const send = device.repo.send
+  const setItem = device.repo.local.setItem
+  let sent = false
+  device.repo.send = fields => { const result = send(fields); sent = true; return result }
+  device.repo.local.setItem = (key, value) => {
+    if (sent && key === device.repo.key) {
+      throw Object.assign(new Error('Storage quota exceeded'), { name: 'QuotaExceededError' })
+    }
+    return setItem(key, value)
+  }
+  const before = device.sendCount()
+  assert.equal(device.repo.flush(), false)
+  assert.equal(device.repo.status.errorCode, 'local-storage-quota')
+  assert.equal(device.sendCount(), before + 1)
+  assert.equal(device.document().submission.submittedAt, null)
+  device.repo.local.setItem = setItem
+  assert.equal(device.repo.flush(), true)
+  assert.equal(device.sendCount(), before + 1)
+  assert.ok(device.document().submission.submittedAt > 0)
+  assert.equal(device.repo.status.state, 'submitted')
+})
 
 test('switching accounts cancels the old edit instead of writing old clothes into the new account', () => {
   const device = seed()

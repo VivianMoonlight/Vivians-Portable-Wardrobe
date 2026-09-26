@@ -41,6 +41,8 @@ For your own character, **Settings → Outfit controls → Allow force apply to 
   本机保存与云端进度分别显示，每件衣物可选择 **参与云同步** 或 **仅保存在本机**。
 - All extensions share a **180000-byte (180 kB)** settings budget. The storage panel shows VPW's share and other extensions' usage. Uploads pause when over the limit; saved local outfits remain available.
   所有扩展共享 **180000 字节（180 kB）** 设置容量。面板显示 VPW 与其他扩展的占用，超限会暂停上传，已保存的本机衣物仍可使用。
+- A `VPWardrobe_index_*` `QuotaExceededError` concerns this browser's `localStorage`, a separate limit from BC's 180 kB cloud budget. A panel showing VPW 0.0 kB and other extensions 0.0 kB does not show free local space. Export and check a readable JSON backup before removing only other site data you know is unnecessary, then use **Retry local save**. Do not clear all site data.
+  `VPWardrobe_index_*` 的 `QuotaExceededError` 是浏览器 `localStorage` 写入失败，与 BC 云端 180 kB 限额不同。云端 VPW 和其他扩展都显示 0.0 kB，也不表示本机有可用空间。先导出并核对可读取的 JSON 备份，再只清理确认不需要的其他站点数据，点击 **重试本机保存**；不要直接清除整个站点数据。
 - BC does not acknowledge each `AccountUpdate`. After a successful send call, VPW shows the upload as assumed saved; the next full login reads cloud data to detect discrepancies or conflicts. Export a JSON backup before switching devices.
   BC 不会逐次回执 `AccountUpdate`。提交调用成功后，VPW 默认显示同步成功；下次完整登录回读云端数据，用于发现差异或冲突。换设备前请导出 JSON 备份。
 

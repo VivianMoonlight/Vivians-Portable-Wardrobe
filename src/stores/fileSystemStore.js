@@ -146,6 +146,7 @@ const fileSystemStoreDefinition = {
 
     // initialization lifecycle
     _persistedLoaded: false,
+    _persistedAttemptedMember: null,
     _corePrewarmed: false,
     _corePrewarmPromise: null,
     _historyFilterInitPromise: null,
@@ -208,7 +209,7 @@ const fileSystemStoreDefinition = {
 
     _loadPersistedDataOnce() {
       const member = String(hostWindow.Player?.MemberNumber)
-      if (this._persistedLoaded === member && this.syncStatus.localSaved) return
+      if (this._persistedAttemptedMember === member) return
       this.loadAll()
     },
 

@@ -14,16 +14,20 @@ const canonical = value => Array.isArray(value) ? value.map(canonical)
     : value
 const sameRecord = (left, right) => JSON.stringify(canonical(left)) === JSON.stringify(canonical(right))
 
+function unavailableCloudQuota() {
+  return {
+    limitBytes: EXTENSION_QUOTA_BYTES, wardrobeBytes: 0, otherExtensionsBytes: 0,
+    totalBytes: 0, remainingBytes: EXTENSION_QUOTA_BYTES, usageRatio: 0,
+    isWarning: false, isOverLimit: false, proposalAvailable: false,
+  }
+}
+
 export function createLibraryState() {
   return {
     wardrobeIndex: createWardrobeIndex(), outfits: [], tags: [], selectedTagId: null,
     _repository: null, _activeLibraryMember: null,
     syncStatus: { state: 'idle', localSaved: false, error: '', recoveryAvailable: false, conflicts: [] },
-    cloudQuota: {
-      limitBytes: EXTENSION_QUOTA_BYTES, wardrobeBytes: 0, otherExtensionsBytes: 0,
-      totalBytes: 0, remainingBytes: EXTENSION_QUOTA_BYTES, usageRatio: 0,
-      isWarning: false, isOverLimit: false,
-    },
+    cloudQuota: unavailableCloudQuota(),
   }
 }
 
@@ -58,6 +62,7 @@ export const wardrobeLibraryActions = {
 
   _acceptLibrarySnapshot({ index, status, quota }) {
     const member = this._repository?.member
+    if (member !== null) this._persistedAttemptedMember = member
     if (member !== null && member !== this._activeLibraryMember) {
       this._activeLibraryMember = member
       this._persistedLoaded = status.localSaved ? member : false
@@ -99,11 +104,12 @@ export const wardrobeLibraryActions = {
       this.fileTreeVersion++
     }
     this.syncStatus = status
-    if (quota) this.cloudQuota = quota
+    this.cloudQuota = quota || unavailableCloudQuota()
   },
 
   loadAll() {
     const member = String(hostWindow.Player?.MemberNumber)
+    this._persistedAttemptedMember = member
     const loaded = this._getRepository().open()
     this._persistedLoaded = loaded ? member : false
     this.loadHistory()
@@ -119,7 +125,11 @@ export const wardrobeLibraryActions = {
     return received
   },
 
-  syncNow() { return this._getRepository().flush({ force: true }) },
+  syncNow() {
+    if (!this.syncStatus.localSaved) return this.loadAll()
+    if (this.syncStatus.errorCode === 'local-storage-quota') return this._getRepository().flush()
+    return this._getRepository().flush({ force: true })
+  },
   resolveSyncConflict(resolutions) { return this._getRepository().resolveSyncConflict(resolutions) },
   refreshCloudQuotaStats() {
     this.cloudQuota = this._getRepository().measure()
