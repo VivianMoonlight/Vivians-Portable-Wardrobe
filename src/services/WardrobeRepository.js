@@ -142,6 +142,12 @@ export class WardrobeRepository {
 
   get key() { return `VPWardrobe_index_${this.member}` }
 
+  hasSubmittedCurrentIndex() {
+    const submission = this.document?.submission
+    return submission?.submittedAt != null && submission.payload === this.document.lastSubmittedPayload
+      && submission.projectionJson === JSON.stringify(canonical(projectWardrobeCloudIndex(this.index)))
+  }
+
   emit(patch = {}) {
     if (patch.state && patch.state !== 'error') patch.errorCode = null
     this.status = { ...this.status, ...patch,
@@ -265,7 +271,7 @@ export class WardrobeRepository {
       this.emit({ localSaved: true, lastSubmittedAt: this.document.lastSubmittedAt || null,
         lastVerifiedAt: this.document.lastVerifiedAt || null,
         state: this.remoteError ? 'error' : this.document.conflicts?.length ? 'conflict'
-          : this.quota.isOverLimit ? 'quota' : 'pending',
+          : this.quota.isOverLimit ? 'quota' : this.hasSubmittedCurrentIndex() ? 'submitted' : 'pending',
         conflicts: this.document.conflicts || [], error: this.remoteError?.message || '' })
       if (fresh && !this.remoteError) return this.receiveCloud({ extensionSettings, fresh: true })
       return true

@@ -136,7 +136,7 @@ export function FileManager({ onSelectOutfit }: FileManagerProps) {
   const observedQuota = quota.observed
   const observedColor = observedQuota?.isOverLimit ? 'red' : observedQuota?.isWarning ? 'orange' : 'teal'
   const proposedColor = quota.isOverLimit ? 'red' : quota.isWarning ? 'orange' : 'teal'
-  const syncColor = sync.state === 'verified' ? 'teal' : sync.state === 'conflict' ? 'orange'
+  const syncColor = ['submitted', 'verified'].includes(sync.state) ? 'teal' : sync.state === 'conflict' ? 'orange'
     : ['error', 'quota'].includes(sync.state) ? 'red' : 'gray'
   const activeFilterCount = Number(!!selectedTagId) + Number(cloudFilter !== 'all')
   const clearFilters = () => { setSearchQuery(''); getFs().selectTag(null); setCloudFilter('all') }

@@ -378,6 +378,19 @@ test('only a fresh matching server response verifies a submission', () => {
   assert.equal(device.document().pending, false)
 })
 
+test('reopening preserves the assumed-success status without treating it as a cloud receipt', () => {
+  const first = seed()
+  const reopened = client(first.server, { saved: first.saved })
+  assert.equal(reopened.repo.open(), true)
+  assert.equal(reopened.repo.status.state, 'submitted')
+  assert.equal(reopened.repo.status.lastVerifiedAt, null)
+  assert.equal(reopened.document().pending, true)
+  assert.equal(reopened.repo.flush({ force: true }), false)
+  assert.equal(reopened.sendCount(), 0)
+  reopened.repo.apply([put('new-local')])
+  assert.equal(reopened.repo.status.state, 'pending')
+})
+
 test('a verified relog stays verified when Player still contains the older cloud value', () => {
   const a = seed()
   const b = client(a.server, { replicaId: 'device-b' })

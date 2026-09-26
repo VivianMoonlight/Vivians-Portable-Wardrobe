@@ -41,8 +41,8 @@ For your own character, **Settings → Outfit controls → Allow force apply to 
   本机保存与云端进度分别显示，每件衣物可选择 **参与云同步** 或 **仅保存在本机**。
 - All extensions share a **180000-byte (180 kB)** settings budget. The storage panel shows VPW's share and other extensions' usage. Uploads pause when over the limit; saved local outfits remain available.
   所有扩展共享 **180000 字节（180 kB）** 设置容量。面板显示 VPW 与其他扩展的占用，超限会暂停上传，已保存的本机衣物仍可使用。
-- Cloud verification requires fresh data returned on login or reconnect. A submitted upload has not yet been verified. Export a JSON backup before switching devices.
-  云端核验依赖登录或重连返回的新数据；提交上传后仍需等待核验。换设备前请导出 JSON 备份。
+- BC does not acknowledge each `AccountUpdate`. After a successful send call, VPW shows the upload as assumed saved; the next full login reads cloud data to detect discrepancies or conflicts. Export a JSON backup before switching devices.
+  BC 不会逐次回执 `AccountUpdate`。提交调用成功后，VPW 默认显示同步成功；下次完整登录回读云端数据，用于发现差异或冲突。换设备前请导出 JSON 备份。
 
 See the [user guide](USER_GUIDE.md), [中文快速开始](docs/user-docs/01-quick-start.md), [core workflows / 核心工作流](docs/user-docs/02-core-workflows.md) and [sync & storage / 云同步与容量](docs/user-docs/06-sync-and-storage.md).
 

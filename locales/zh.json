@@ -105,8 +105,8 @@
     },
     "sync": {
       "idle": "云同步就绪",
-      "pending": "待上传或核对",
-      "submitted": "已发送，待云端核对",
+      "pending": "本机已保存",
+      "submitted": "已提交（默认成功）",
       "verified": "已与云端核对",
       "offline": "离线，等待重试",
       "quota": "容量超限，上传暂停",

@@ -105,8 +105,8 @@
     },
     "sync": {
       "idle": "Cloud ready",
-      "pending": "Waiting to upload or check",
-      "submitted": "Sent · awaiting cloud check",
+      "pending": "Saved locally",
+      "submitted": "Sent (assumed saved)",
       "verified": "Verified against cloud data",
       "offline": "Offline · waiting to retry",
       "quota": "Upload paused · over limit",
