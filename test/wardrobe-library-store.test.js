@@ -12,7 +12,7 @@ const wardrobe = children => ({ name: 'Home', type: 'folder', children })
 function setup({ local = null, cloud = null } = {}) {
   const fixture = loadFileSystemStore()
   const { fs, hostWindow } = fixture
-  hostWindow.ServerPlayerExtensionSettingsSync = () => true
+  hostWindow.ServerSend = () => {}
   hostWindow.navigator = { onLine: true }
   if (local) hostWindow.localStorage.setItem('VPWardrobe_VPWardrobe_local_42', JSON.stringify(local))
   if (cloud) hostWindow.Player.ExtensionSettings.VPWardrobe = JSON.stringify(cloud)
@@ -47,7 +47,7 @@ test('an initial matching login snapshot initializes and durably saves the curre
   assert.equal(fs._repository.member, '42')
   assert.equal(fs._persistedLoaded, '42')
   assert.equal(fs.syncStatus.localSaved, true)
-  assert.equal(fs.syncStatus.state, 'verified')
+  assert.equal(fs.syncStatus.state, 'pending')
   assert.deepEqual(Array.from(fs.outfits, item => item.id), ['current'])
   const saved = decodeWardrobePayload(hostWindow.localStorage.getItem('VPWardrobe_index_42'))
   assert.equal(saved.index.outfits.current.name, 'Current account outfit')
@@ -242,6 +242,19 @@ test('an account change detected during an action rejects that action and clears
   assert.equal(fs.tags.length, 0)
   assert.equal(fs.history.getAllRecords().length, 0)
   assert.equal(fs.previewItem.data.some(item => item.Name === 'Old account dress'), false)
+})
+
+test('an old account lock cannot upload after Player switches accounts without a login callback', () => {
+  const { fs, hostWindow } = setup()
+  const sent = []
+  hostWindow.ServerSend = (event, fields) => sent.push([event, fields])
+  hostWindow.Player = { MemberNumber: 43, ExtensionSettings: {} }
+  assert.throws(() => fs.createTag('Account change'), /Account changed/)
+  assert.equal(fs.receiveCloud({ extensionSettings: {}, memberNumber: 43 }), true)
+  fs.addOutfit(outfit('New account draft'))
+  assert.equal(fs.syncNow(), false)
+  assert.equal(sent.length, 0)
+  assert.equal(fs.outfits.length, 1)
 })
 
 test('a selected tag follows the canonical alias when a same-name remote tag sorts before it', () => {

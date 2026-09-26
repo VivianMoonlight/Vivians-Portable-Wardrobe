@@ -47,15 +47,46 @@ export interface CloudQuota {
   usageRatio: number
   isWarning: boolean
   isOverLimit: boolean
+  proposalAvailable?: boolean
+  observed?: {
+    wardrobeBytes: number
+    otherExtensionsBytes: number
+    totalBytes: number
+    remainingBytes: number
+    limitBytes: number
+    usageRatio: number
+    isWarning: boolean
+    isOverLimit: boolean
+  }
+  observedSource?: 'login-response' | 'player-cache'
 }
 
 export interface WardrobeSyncStatus {
-  state: 'idle' | 'pending' | 'submitted' | 'verified' | 'offline' | 'quota' | 'error'
+  state: 'idle' | 'pending' | 'submitted' | 'verified' | 'offline' | 'quota' | 'error' | 'conflict'
   localSaved: boolean
   lastSubmittedAt: number | null
   lastVerifiedAt: number | null
   error: string
+  errorCode?: string | null
   recoveryAvailable: boolean
+  conflicts?: WardrobeSyncConflict[]
+}
+
+export interface WardrobeSyncConflict {
+  kind: string
+  id: string
+  field: string
+  type: string
+  base: unknown
+  local: unknown
+  remote: unknown
+}
+
+export interface WardrobeConflictResolution {
+  kind: string
+  id: string
+  field: string
+  choice: 'local' | 'cloud' | 'discard'
 }
 
 /** Subset of the fileSystem store surface consumed by the React UI. */
@@ -91,6 +122,7 @@ export interface FsCtx {
   exportRecovery: () => Array<{ key: string; reason: string; data: unknown }>
   importWardrobe: (parsed: unknown, options?: { tagName?: string }) => { count: number }
   syncNow: () => boolean
+  resolveSyncConflict: (resolutions: WardrobeConflictResolution[]) => unknown
   setActiveItem: (item: FileNode | -1, options?: { ignoreLock?: boolean }) => void
   selectOutfit: (item: FileNode) => boolean
   togglePreviewLock: (item: FileNode) => boolean

@@ -8,12 +8,17 @@ import { EXTENSION_QUOTA_BYTES } from '@/services/extension-quota.js'
 
 const clone = value => JSON.parse(JSON.stringify(value))
 const newId = () => globalThis.crypto.randomUUID()
+const canonical = value => Array.isArray(value) ? value.map(canonical)
+  : value && typeof value === 'object'
+    ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])]))
+    : value
+const sameRecord = (left, right) => JSON.stringify(canonical(left)) === JSON.stringify(canonical(right))
 
 export function createLibraryState() {
   return {
     wardrobeIndex: createWardrobeIndex(), outfits: [], tags: [], selectedTagId: null,
     _repository: null, _activeLibraryMember: null,
-    syncStatus: { state: 'idle', localSaved: false, error: '', recoveryAvailable: false },
+    syncStatus: { state: 'idle', localSaved: false, error: '', recoveryAvailable: false, conflicts: [] },
     cloudQuota: {
       limitBytes: EXTENSION_QUOTA_BYTES, wardrobeBytes: 0, otherExtensionsBytes: 0,
       totalBytes: 0, remainingBytes: EXTENSION_QUOTA_BYTES, usageRatio: 0,
@@ -28,9 +33,21 @@ export const wardrobeLibraryActions = {
       this._repository = new WardrobeRepository({
         getPlayer: () => hostWindow.Player,
         localStorage: hostWindow.localStorage,
-        send: () => typeof hostWindow.ServerPlayerExtensionSettingsSync === 'function'
-          ? hostWindow.ServerPlayerExtensionSettingsSync('VPWardrobe') : false,
-        isOnline: () => hostWindow.navigator?.onLine !== false && hostWindow.ServerSocket?.connected !== false,
+        send: fields => {
+          if (hostWindow.__VPW_WARDROBE_LOCK_OWNER !== true
+            || hostWindow.__VPW_WARDROBE_LOCK_MEMBER !== String(hostWindow.Player?.MemberNumber)) return false
+          if (typeof hostWindow.ServerSend !== 'function') return false
+          const keys = Object.keys(fields || {})
+          if (keys.length !== 2 || !keys.includes('ExtensionSettings.VPWardrobe')
+            || !keys.some(key => /^ExtensionSettings\.VPW4_M_[0-9a-f]{32}$/.test(key))) {
+            throw new Error('Wardrobe sync must update its snapshot and device marker together')
+          }
+          hostWindow.ServerSend('AccountUpdate', fields)
+          return true
+        },
+        isOnline: () => hostWindow.__VPW_WARDROBE_LOCK_OWNER === true
+          && hostWindow.__VPW_WARDROBE_LOCK_MEMBER === String(hostWindow.Player?.MemberNumber)
+          && hostWindow.navigator?.onLine !== false && hostWindow.ServerSocket?.connected !== false,
         setTimeout: (fn, delay) => hostWindow.setTimeout(fn, delay),
         clearTimeout: id => hostWindow.clearTimeout(id),
         onChange: snapshot => this._acceptLibrarySnapshot(snapshot),
@@ -67,7 +84,7 @@ export const wardrobeLibraryActions = {
         const old = previous.get(record.id)
         const cloudSync = index.cloudState[record.id]?.enabled !== false
         if (old && old.cloudSync === cloudSync
-          && JSON.stringify(previousRecords[record.id]) === JSON.stringify(record)) return old
+          && sameRecord(previousRecords[record.id], record)) return old
         return { ...record, cloudSync }
       })
       this.tags = listWardrobeTags(index)
@@ -103,6 +120,7 @@ export const wardrobeLibraryActions = {
   },
 
   syncNow() { return this._getRepository().flush({ force: true }) },
+  resolveSyncConflict(resolutions) { return this._getRepository().resolveSyncConflict(resolutions) },
   refreshCloudQuotaStats() {
     this.cloudQuota = this._getRepository().measure()
     return this.cloudQuota

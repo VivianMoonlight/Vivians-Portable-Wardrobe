@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vivians Portable Wardrobe (React Preview Loader)
 // @namespace    https://www.bondageprojects.com/
-// @version      0.10.1-react.3
+// @version      0.10.1-react.4
 // @description  Preview loader for Vivian's Portable Wardrobe React branch
 // @author       VIVianMoonlight
 // @match        https://bondageprojects.elementfx.com/*

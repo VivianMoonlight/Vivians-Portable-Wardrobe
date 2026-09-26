@@ -12,6 +12,7 @@ interface FileItemProps {
   item: WardrobeOutfit
   tagNames: string[]
   viewMode: 'card' | 'list'
+  cloudEnableBlocked?: boolean
   onEditTags: () => void
   onSelectOutfit?: (item: WardrobeOutfit) => void
 }
@@ -21,7 +22,7 @@ interface MenuState {
   y: number
 }
 
-export const FileItem = memo(function FileItem({ item, tagNames, viewMode, onEditTags, onSelectOutfit }: FileItemProps) {
+export const FileItem = memo(function FileItem({ item, tagNames, viewMode, cloudEnableBlocked = false, onEditTags, onSelectOutfit }: FileItemProps) {
   const { t } = useTranslation()
   const dialog = useDialog()
   const isPreviewLocked = useFsSelector((fs) => fs.lockedItem?.id === item.id)
@@ -82,6 +83,7 @@ export const FileItem = memo(function FileItem({ item, tagNames, viewMode, onEdi
 
   const toggleCloudSync = async (event: MouseEvent) => {
     event.stopPropagation()
+    if (cloudEnableBlocked && !isCloudSyncEnabled) return
     try {
       if (!getFs().setOutfitCloudSync(item.id, !isCloudSyncEnabled)) await dialog.alert(t('library.itemUnavailable'))
     } catch (error) { await reportError(error) }
@@ -123,7 +125,9 @@ export const FileItem = memo(function FileItem({ item, tagNames, viewMode, onEdi
         </UnstyledButton>
           <Group className="vpw-outfit-actions" justify="space-between" gap={4} wrap="nowrap">
             <UnstyledButton onClick={(event) => void toggleCloudSync(event)} onDoubleClick={(event) => event.stopPropagation()}
-              title={t('library.cloudToggleTitle')} aria-pressed={isCloudSyncEnabled}
+              disabled={cloudEnableBlocked && !isCloudSyncEnabled}
+              title={t(cloudEnableBlocked && !isCloudSyncEnabled ? 'library.conflict.cloudEnablePaused' : 'library.cloudToggleTitle')}
+              aria-pressed={isCloudSyncEnabled}
               style={{ fontSize: 11, lineHeight: 1.2, padding: '7px 6px', borderRadius: 6,
                 border: '1px solid var(--vpw-color-default-border)',
                 color: isCloudSyncEnabled ? 'var(--vpw-color-teal-6)' : 'var(--vpw-color-dimmed)',

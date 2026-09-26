@@ -54,7 +54,7 @@ test('rename and deletion survive reload; total extension quota pauses upload wi
   await expect(page.getByLabel('Actions for Renamed outfit', { exact: true })).toHaveCount(0)
   await page.evaluate(() => { window.Player.ExtensionSettings.OtherPlugin = 'x'.repeat(180000) })
   await page.getByRole('button', { name: 'Retry upload', exact: true }).click()
-  await expect(page.getByText(/Upload paused: shared storage is full/)).toBeVisible()
+  await expect(page.getByText(/Upload paused: the proposed update exceeds/)).toBeVisible()
   await expect(page.getByLabel('Actions for Local draft', { exact: true })).toBeVisible()
   expect(errors).toEqual([])
 })

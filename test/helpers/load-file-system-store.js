@@ -32,6 +32,8 @@ export function loadFileSystemStore() {
   const clearTimeout = (id) => timers.delete(id)
   const hostWindow = {
     Player: { MemberNumber: 42, ExtensionSettings: {} },
+    __VPW_WARDROBE_LOCK_OWNER: true,
+    __VPW_WARDROBE_LOCK_MEMBER: '42',
     localStorage: {
       getItem: (key) => saved.get(key) ?? null,
       setItem(key, value) {

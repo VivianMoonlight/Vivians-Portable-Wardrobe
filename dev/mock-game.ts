@@ -29,7 +29,10 @@ w.bcModSdk = w.bcModSdk || {
   }),
 }
 
-w.ServerPlayerExtensionSettingsSync = w.ServerPlayerExtensionSettingsSync || (() => {})
+w.ServerSend = w.ServerSend || ((event: string, data: unknown) => {
+  if (event === 'AccountUpdate') (w.__vpwMockAccountUpdates ||= []).push(data)
+})
+w.LoginResponse = w.LoginResponse || (() => {})
 w.AssetGet = w.AssetGet || (() => null)
 w.DrawCharacter = w.DrawCharacter || (() => {})
 w.ItemColorLoad = w.ItemColorLoad || (() => {})

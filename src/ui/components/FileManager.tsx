@@ -1,11 +1,13 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ActionIcon, Badge, Box, Button, Collapse, Drawer, Group, Menu, Modal, MultiSelect, Paper, Progress, Select, Stack, Text, TextInput, Tooltip, UnstyledButton } from '@mantine/core'
 import { useTranslation } from 'react-i18next'
 import { getFs, getWb, useFsSelector, useWbSelector, type WardrobeOutfit } from '@/stores/hooks'
 import { useDialog } from '@/ui/dialog/DialogProvider'
+import { useIsMobile } from '@/ui/hooks/useIsMobile'
 import { useWardrobeActions } from '@/ui/wardrobe-actions'
 import { OVERLAY_Z_INDEX } from '@/ui/z-index'
 import { FileItem } from './FileItem'
+import { SyncConflictReview } from './SyncConflictReview'
 import libraryStyles from './wardrobe-library.css?inline'
 
 function formatKB(bytes: number): string {
@@ -19,6 +21,7 @@ interface FileManagerProps {
 export function FileManager({ onSelectOutfit }: FileManagerProps) {
   const { t } = useTranslation()
   const dialog = useDialog()
+  const isMobile = useIsMobile()
   const actions = useWardrobeActions()
   const outfits = useFsSelector((fs) => fs.outfits)
   const tags = useFsSelector((fs) => fs.tags)
@@ -35,6 +38,14 @@ export function FileManager({ onSelectOutfit }: FileManagerProps) {
   const [tagQuery, setTagQuery] = useState('')
   const [cloudFilter, setCloudFilter] = useState<'all' | 'cloud' | 'local'>('all')
   const [quotaDetailsOpened, setQuotaDetailsOpened] = useState(false)
+  const [conflictReviewOpened, setConflictReviewOpened] = useState(false)
+  const conflicts = sync.conflicts ?? []
+  const cloudQuarantined = conflicts.some((conflict) => conflict.type === 'missing-device')
+  const reviewingConflicts = conflictReviewOpened && conflicts.length > 0
+
+  useEffect(() => {
+    if (conflicts.length === 0) setConflictReviewOpened(false)
+  }, [conflicts.length])
 
   const tagNames = useMemo(() => new Map(tags.flatMap((tag) =>
     [tag.id, ...tag.aliasIds].map((id) => [id, tag.name] as const))), [tags])
@@ -122,8 +133,11 @@ export function FileManager({ onSelectOutfit }: FileManagerProps) {
     try { getFs().syncNow() } catch (error) { await reportError(error) }
   }
 
-  const quotaColor = quota.isOverLimit ? 'red' : quota.isWarning ? 'orange' : 'teal'
-  const syncColor = sync.state === 'verified' ? 'teal' : ['error', 'quota'].includes(sync.state) ? 'red' : 'gray'
+  const observedQuota = quota.observed
+  const observedColor = observedQuota?.isOverLimit ? 'red' : observedQuota?.isWarning ? 'orange' : 'teal'
+  const proposedColor = quota.isOverLimit ? 'red' : quota.isWarning ? 'orange' : 'teal'
+  const syncColor = sync.state === 'verified' ? 'teal' : sync.state === 'conflict' ? 'orange'
+    : ['error', 'quota'].includes(sync.state) ? 'red' : 'gray'
   const activeFilterCount = Number(!!selectedTagId) + Number(cloudFilter !== 'all')
   const clearFilters = () => { setSearchQuery(''); getFs().selectTag(null); setCloudFilter('all') }
   const showQuotaDetails = quotaDetailsOpened || sync.state === 'quota' || sync.state === 'error'
@@ -167,6 +181,11 @@ export function FileManager({ onSelectOutfit }: FileManagerProps) {
     </Stack>
   )
 
+  if (isMobile && reviewingConflicts) return <Box className="vpw-library-root">
+    <style>{libraryStyles}</style>
+    <SyncConflictReview conflicts={conflicts} mobile onBack={() => setConflictReviewOpened(false)} />
+  </Box>
+
   return (
     <Box className="vpw-library-root">
       <style>{libraryStyles}</style>
@@ -180,6 +199,8 @@ export function FileManager({ onSelectOutfit }: FileManagerProps) {
           {t('library.filters', { defaultValue: 'Filters' })}
         </Button>
       </Group>
+
+      {cloudQuarantined && <Text size="xs" c="orange" role="status">{t('library.conflict.quarantined')}</Text>}
 
       <Group className="vpw-library-toolbar" justify="space-between" gap={6}>
         <Text size="xs" c="dimmed" role="status">{t('library.outfitCount', { count: displayList.length, total: outfits.length })}</Text>
@@ -205,12 +226,12 @@ export function FileManager({ onSelectOutfit }: FileManagerProps) {
           <Menu position="bottom-end" withinPortal shadow="md" width={240} zIndex={OVERLAY_Z_INDEX}>
             <Menu.Target><Button variant="default" size="compact-xs">{t('wardrobeIO.menuLabel')}</Button></Menu.Target>
             <Menu.Dropdown>
-              <Menu.Item onClick={() => void actions.saveCharacterToFolder()}>{t('library.saveCharacter')}</Menu.Item>
-              <Menu.Item onClick={() => void actions.importPlayerWardrobe()}>{t('fileManagerPanel.importPlayerWardrobe')}</Menu.Item>
-              <Menu.Item onClick={() => void actions.importBCX()}>{t('fileManagerPanel.importBCX')}</Menu.Item>
+              <Menu.Item disabled={cloudQuarantined} onClick={() => void actions.saveCharacterToFolder()}>{t('library.saveCharacter')}</Menu.Item>
+              <Menu.Item disabled={cloudQuarantined} onClick={() => void actions.importPlayerWardrobe()}>{t('fileManagerPanel.importPlayerWardrobe')}</Menu.Item>
+              <Menu.Item disabled={cloudQuarantined} onClick={() => void actions.importBCX()}>{t('fileManagerPanel.importBCX')}</Menu.Item>
               <Menu.Divider />
               <Menu.Item onClick={actions.saveBackup}>{t('fileManagerPanel.saveBackup')}</Menu.Item>
-              <Menu.Item onClick={actions.importBackup}>{t('fileManagerPanel.importBackup')}</Menu.Item>
+              <Menu.Item disabled={cloudQuarantined} onClick={actions.importBackup}>{t('fileManagerPanel.importBackup')}</Menu.Item>
               <Menu.Divider />
               <Menu.Item onClick={() => getFs().refreshThumbnails(displayList)}>{t('fileManager.refreshThumbnails')}</Menu.Item>
             </Menu.Dropdown>
@@ -230,15 +251,18 @@ export function FileManager({ onSelectOutfit }: FileManagerProps) {
           </Group>}
           {displayList.length > 0 ? <Box className="vpw-library-masonry" data-view={fileViewMode}>
             {displayList.map((item) => (
-              <FileItem key={item.id} item={item} viewMode={fileViewMode} onSelectOutfit={onSelectOutfit}
+              <FileItem key={item.id} item={item} viewMode={fileViewMode} cloudEnableBlocked={cloudQuarantined} onSelectOutfit={onSelectOutfit}
                 tagNames={[...new Set(item.tagIds.map((id) => tagNames.get(id)).filter((name): name is string => !!name))]}
                 onEditTags={() => editTags(item)} />
             ))}
           </Box> : (
             <Stack align="center" py="xl">
-              <Text c="dimmed">{t(outfits.length ? 'library.noMatches' : 'library.empty')}</Text>
+              <Text c="dimmed">{t(cloudQuarantined && !outfits.length ? 'library.conflict.hiddenEmpty'
+                : outfits.length ? 'library.noMatches' : 'library.empty')}</Text>
               {searchQuery || activeFilterCount ? <Button variant="light" size="xs" onClick={clearFilters}>{t('library.clearFilters')}</Button>
-                : <Button variant="light" size="xs" onClick={() => void actions.saveCharacterToFolder()}>{t('library.saveCharacter')}</Button>}
+                : cloudQuarantined ? <Button variant="light" size="xs" onClick={() => setConflictReviewOpened(true)}>
+                  {t('library.conflict.review', { count: conflicts.length })}
+                </Button> : <Button variant="light" size="xs" onClick={() => void actions.saveCharacterToFolder()}>{t('library.saveCharacter')}</Button>}
             </Stack>
           )}
         </Box>
@@ -262,26 +286,49 @@ export function FileManager({ onSelectOutfit }: FileManagerProps) {
               </ActionIcon>
             </Group>
           </Group>
-          <Progress value={Math.min(100, Math.max(0, quota.usageRatio * 100))} color={quotaColor} size={4}
-            aria-label={t('library.quotaAria', { used: formatKB(quota.totalBytes), limit: formatKB(quota.limitBytes) })} />
-          <Group justify="space-between" gap={4}>
-            <Text size="xs">VPW {formatKB(quota.wardrobeBytes)}</Text>
-            <Text size="xs" c="dimmed" className="vpw-library-quota-secondary">{t('library.otherExtensions')} {formatKB(quota.otherExtensionsBytes)}</Text>
-            <Text size="xs" fw={600} c={quotaColor}>{formatKB(quota.totalBytes)} / {formatKB(quota.limitBytes)}</Text>
-          </Group>
+          <Text size="xs" c="dimmed">{t(quota.observedSource === 'login-response'
+            ? 'library.quotaObservedLogin' : 'library.quotaObservedCache')}</Text>
+          {observedQuota ? <>
+            <Progress value={Math.min(100, Math.max(0, observedQuota.usageRatio * 100))} color={observedColor} size={4}
+              aria-label={t('library.quotaAria', { used: formatKB(observedQuota.totalBytes), limit: formatKB(observedQuota.limitBytes),
+                source: t(quota.observedSource === 'login-response' ? 'library.quotaObservedLogin' : 'library.quotaObservedCache') })} />
+            <Group justify="space-between" gap={4}>
+              <Text size="xs">VPW {formatKB(observedQuota.wardrobeBytes)}</Text>
+              <Text size="xs" c="dimmed" className="vpw-library-quota-secondary">{t('library.otherExtensions')} {formatKB(observedQuota.otherExtensionsBytes)}</Text>
+              <Text size="xs" fw={600} c={observedColor}>{formatKB(observedQuota.totalBytes)} / {formatKB(observedQuota.limitBytes)}</Text>
+            </Group>
+          </> : <Text size="xs" c="dimmed">{t('library.quotaObservedUnavailable')}</Text>}
           <Group justify="space-between" gap={4} className="vpw-library-quota-secondary">
             <Text size="xs" c={sync.localSaved ? 'dimmed' : 'red'}>{t(sync.localSaved ? 'library.localSaved' : 'library.localUnsaved')}</Text>
-            <Button variant="subtle" size="compact-xs" onClick={() => void retrySync()}>{t('library.retrySync')}</Button>
+            {conflicts.length > 0
+              ? <Button variant="light" color="orange" size="compact-xs" onClick={() => setConflictReviewOpened(true)}>
+                {t('library.conflict.review', { count: conflicts.length })}
+              </Button>
+              : sync.errorCode === 'device-limit'
+                ? <Button variant="subtle" size="compact-xs" onClick={actions.saveBackup}>{t('library.exportLocalBackup')}</Button>
+                : <Button variant="subtle" size="compact-xs" onClick={() => void retrySync()}>{t('library.retrySync')}</Button>}
           </Group>
           <Collapse in={showQuotaDetails}>
             <Stack gap={4}>
-              <Text size="xs" c="dimmed">{t('library.remainingCapacity', { amount: formatKB(quota.remainingBytes) })}</Text>
+              {observedQuota && <Text size="xs" c="dimmed">{t('library.observedRemaining', { amount: formatKB(observedQuota.remainingBytes) })}</Text>}
+              {quota.proposalAvailable !== false && <>
+              <Text size="xs" fw={600}>{t('library.proposedUpload')}</Text>
+              <Group justify="space-between" gap={4}>
+                <Text size="xs">VPW {formatKB(quota.wardrobeBytes)}</Text>
+                <Text size="xs" c="dimmed" className="vpw-library-quota-secondary">{t('library.otherExtensions')} {formatKB(quota.otherExtensionsBytes)}</Text>
+                <Text size="xs" fw={600} c={proposedColor}>{formatKB(quota.totalBytes)} / {formatKB(quota.limitBytes)}</Text>
+              </Group>
+              <Text size="xs" c="dimmed">{t('library.proposedRemaining', { amount: formatKB(quota.remainingBytes) })}</Text>
+              </>}
               {sync.recoveryAvailable && <Button variant="subtle" size="compact-xs" onClick={actions.saveRecoveryBackup}>{t('library.exportRecovery')}</Button>}
             </Stack>
           </Collapse>
           {quota.isWarning && !quota.isOverLimit && <Text size="xs" c="orange">{t('library.quotaWarning')}</Text>}
+          {conflicts.length > 0 && <Text size="xs" c="orange">{t('library.conflict.paused')}</Text>}
           {sync.state === 'quota' && <Text size="xs" c="red">{t('library.quotaBlocked')}</Text>}
-          {sync.error && sync.state !== 'quota' && <Text size="xs" c="red" style={{ overflowWrap: 'anywhere' }}>{sync.error}</Text>}
+          {sync.errorCode === 'device-limit' && <Text size="xs" c="red">{t('library.deviceLimit')}</Text>}
+          {sync.error && sync.errorCode !== 'device-limit' && sync.state !== 'quota' && sync.state !== 'conflict'
+            && <Text size="xs" c="red" style={{ overflowWrap: 'anywhere' }}>{sync.error}</Text>}
         </Stack>
       </Paper>
 
@@ -319,6 +366,11 @@ export function FileManager({ onSelectOutfit }: FileManagerProps) {
             <Button onClick={() => void saveTags()}>{t('library.saveTags')}</Button>
           </Group>
         </Stack>
+      </Modal>
+
+      <Modal opened={reviewingConflicts && !isMobile} onClose={() => setConflictReviewOpened(false)} centered
+        zIndex={OVERLAY_Z_INDEX} lockScroll={false} size="lg" title={t('library.conflict.title')}>
+        <SyncConflictReview conflicts={conflicts} mobile={false} onBack={() => setConflictReviewOpened(false)} />
       </Modal>
     </Box>
   )

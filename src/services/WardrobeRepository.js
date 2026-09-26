@@ -4,12 +4,65 @@ import {
   mergeWardrobeIndexes, projectWardrobeCloudIndex, applyWardrobeOperations,
 } from './wardrobe-index.js'
 import { isLegacyWardrobe, migrateLegacyWardrobe } from './wardrobe-migration.js'
-import { measureExtensionQuota } from './extension-quota.js'
+import { measureExtensionQuota, measureObservedExtensionQuota } from './extension-quota.js'
+import {
+  getOrCreateWardrobeDeviceId, markerKeyForDevice, createWardrobeSyncMarker,
+  encodeWardrobeSyncMarker, decodeWardrobeSyncMarker, readWardrobeSyncMarkers,
+  findUnappliedWardrobeMarkers, MAX_WARDROBE_DEVICE_MARKERS,
+} from './wardrobe-sync-marker.js'
+import { mergeWardrobeIndexesThreeWay, resolveWardrobeConflicts } from './wardrobe-three-way.js'
 
 const clone = value => JSON.parse(JSON.stringify(value))
 const encode = value => LZString.compressToBase64(JSON.stringify(value))
-const equal = (left, right) => JSON.stringify(left) === JSON.stringify(right)
+const canonical = value => Array.isArray(value) ? value.map(canonical)
+  : value && typeof value === 'object'
+    ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value
+const equal = (left, right) => JSON.stringify(canonical(left)) === JSON.stringify(canonical(right))
 const own = (object, key) => Object.prototype.hasOwnProperty.call(object || {}, key)
+const V4_PROTOCOL = 'VPW4'
+
+function maxAppliedSequences(base, extra) {
+  const result = { ...base }
+  for (const [id, sequence] of Object.entries(extra || {})) {
+    result[id] = Math.max(result[id] || 0, sequence)
+  }
+  return result
+}
+
+function markerSignature(settings) {
+  return JSON.stringify(Object.entries(settings || {})
+    .filter(([key]) => key.startsWith('VPW4_M_'))
+    .sort(([left], [right]) => left.localeCompare(right)))
+}
+
+function cloudEnvelope(index, applied = {}) {
+  return { protocol: V4_PROTOCOL, index: projectWardrobeCloudIndex(index), a: { ...applied } }
+}
+
+function cloudSnapshot(raw) {
+  const decoded = decodeWardrobePayload(raw)
+  if (decoded === null) return { kind: 'empty', index: createWardrobeIndex(), a: {} }
+  if (decoded.protocol === V4_PROTOCOL) {
+    validateWardrobeIndex(decoded.index)
+    if (!decoded.a || typeof decoded.a !== 'object' || Array.isArray(decoded.a)) {
+      throw new Error('Invalid wardrobe cloud receipts')
+    }
+    return { kind: 'v4', index: projectWardrobeCloudIndex(decoded.index), a: decoded.a }
+  }
+  if (isWardrobeIndex(decoded)) return { kind: 'v3', index: projectWardrobeCloudIndex(decoded), a: {} }
+  if (isLegacyWardrobe(decoded)) return { kind: 'legacy', index: migrateLegacyWardrobe(decoded), a: {} }
+  throw new Error('Unrecognized cloud wardrobe; automatic upload stopped')
+}
+
+function quarantineCloudContent(merged, local) {
+  const result = clone(merged)
+  result.outfits = Object.fromEntries(Object.entries(result.outfits)
+    .filter(([id]) => local.cloudState[id]?.enabled === false))
+  const privateTagIds = new Set(Object.values(result.outfits).flatMap(outfit => outfit.tagIds))
+  result.tags = Object.fromEntries(Object.entries(result.tags)
+    .filter(([id]) => privateTagIds.has(id)))
+  return result
+}
 
 function requireObject(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Wardrobe payload must be an object')
@@ -61,6 +114,8 @@ export class WardrobeRepository {
     this.cancel = cancel
     this.random = random
     this.replicaId = replicaId || globalThis.crypto?.randomUUID?.() || `device-${Date.now()}-${Math.random()}`
+    this.deviceId = null
+    this.markerKey = null
     this.index = createWardrobeIndex()
     this.member = null
     this.timer = null
@@ -68,6 +123,7 @@ export class WardrobeRepository {
     this.document = null
     this.remoteRaw = undefined
     this.lastObservedHostRaw = undefined
+    this.lastObservedMarkerSignature = '[]'
     this.freshRemoteRaw = undefined
     this.freshCloudObserved = false
     this.verifiedPayloadInSession = null
@@ -75,17 +131,19 @@ export class WardrobeRepository {
     this.sessionLocalEdit = false
     this.submittedRaw = null
     this.freshSettings = null
+    this.lastFreshSettings = null
     this.pendingRemote = null
     this.hostSettingSignatures = new Map()
     this.remoteError = null
     this.quota = null
-    this.status = { state: 'idle', localSaved: false, error: '', recoveryAvailable: false,
+    this.status = { state: 'idle', localSaved: false, error: '', conflicts: [], recoveryAvailable: false,
       lastSubmittedAt: null, lastVerifiedAt: null }
   }
 
   get key() { return `VPWardrobe_index_${this.member}` }
 
   emit(patch = {}) {
+    if (patch.state && patch.state !== 'error') patch.errorCode = null
     this.status = { ...this.status, ...patch,
       recoveryAvailable: (this.document?.recoveryKeys?.length || 0) > 0 }
     this.onChange({ index: this.index, status: this.status, quota: this.quota })
@@ -104,6 +162,13 @@ export class WardrobeRepository {
     if (!raw) return null
     const document = decodeWardrobePayload(raw)
     validateWardrobeIndex(document?.index)
+    if (document.baseCloudIndex) validateWardrobeIndex(document.baseCloudIndex)
+    for (const entry of document.submittedVersions || []) {
+      if (!Number.isSafeInteger(entry.sequence) || entry.sequence < 0) {
+        throw new Error('Invalid local wardrobe submission sequence')
+      }
+      validateWardrobeIndex(entry.index)
+    }
     return document
   }
 
@@ -139,10 +204,15 @@ export class WardrobeRepository {
   open({ extensionSettings = this.getPlayer()?.ExtensionSettings, fresh = false } = {}) {
     this.cancelPending()
     this.member = null
+    this.deviceId = null
+    this.markerKey = null
     this.index = createWardrobeIndex()
-    this.document = { index: this.index, pending: false, recoveryKeys: [] }
+    this.document = { index: this.index, pending: false, recoveryKeys: [],
+      baseCloudIndex: null, baseCloudSequence: 0, baseAppliedSeq: {}, submittedVersions: [],
+      conflicts: [] }
     this.remoteRaw = undefined
     this.lastObservedHostRaw = this.getPlayer()?.ExtensionSettings?.VPWardrobe
+    this.lastObservedMarkerSignature = markerSignature(this.getPlayer()?.ExtensionSettings)
     this.freshRemoteRaw = undefined
     this.freshCloudObserved = false
     this.verifiedPayloadInSession = null
@@ -150,59 +220,58 @@ export class WardrobeRepository {
     this.sessionLocalEdit = false
     this.submittedRaw = null
     this.freshSettings = null
+    this.lastFreshSettings = null
     this.pendingRemote = null
     this.hostSettingSignatures = new Map()
     this.remoteError = null
     this.quota = null
-    this.status = { state: 'idle', localSaved: false, error: '', recoveryAvailable: false,
+    this.status = { state: 'idle', localSaved: false, error: '', conflicts: [], recoveryAvailable: false,
       lastSubmittedAt: null, lastVerifiedAt: null }
     let committed = false
     try {
       this.member = accountId(this.getPlayer())
+      this.deviceId = getOrCreateWardrobeDeviceId(this.local, Number(this.member))
+      this.markerKey = markerKeyForDevice(this.deviceId)
       const stored = this.readDocument()
       const raw = extensionSettings?.VPWardrobe
       let online = null
-      try { online = decodeWardrobePayload(raw) } catch (error) { this.remoteError = error }
-      if (online !== null && !isWardrobeIndex(online) && !isLegacyWardrobe(online)) {
-        this.remoteError = new Error('Unrecognized cloud wardrobe; automatic upload stopped')
-        online = null
-      }
+      try { online = cloudSnapshot(raw) } catch (error) { this.remoteError = error }
       if (stored) {
         this.document = stored
         this.index = stored.index
       } else {
         const legacy = this.legacyLocalSources()
-        // Once the account has an indexed cloud replica, stale unversioned
-        // trees are recovery material, never new additions to that index.
-        if (isWardrobeIndex(online)) this.index = mergeWardrobeIndexes(createWardrobeIndex(), online)
+        if (online?.kind === 'v4' || online?.kind === 'v3') this.index = online.index
         else if (legacy.length) this.index = migrateLegacyWardrobe(legacy[0].value)
-        else if (isLegacyWardrobe(online)) this.index = migrateLegacyWardrobe(online)
-        if (legacy.length || isLegacyWardrobe(online)) {
-          this.archive('before-index-migration', { local: legacy, online, onlineRaw: raw })
+        else if (online?.kind === 'legacy') this.index = online.index
+        if (legacy.length || online?.kind === 'legacy' || online?.kind === 'v3') {
+          this.archive('before-v4-migration', { local: legacy, onlineRaw: raw })
         }
+        this.document.baseCloudIndex = online?.index || null
+        this.document.baseAppliedSeq = online?.a || {}
+        this.document.baseCloudSequence = online?.a?.[this.deviceId] || 0
       }
-      if (isWardrobeIndex(online)) this.index = mergeWardrobeIndexes(this.index, online)
-      else if (stored && isLegacyWardrobe(online)) this.archive('older-client-cloud-snapshot', { online, onlineRaw: raw })
+      if (stored?.protocolVersion === 4 && online && online.kind !== 'v4' && online.kind !== 'empty') {
+        this.archive('older-client-cloud-snapshot', { onlineRaw: raw })
+        this.remoteError = new Error('Older client replaced the v4 cloud snapshot; automatic upload stopped')
+      }
       this.remoteRaw = raw
-      if (!fresh && isWardrobeIndex(online)) this.provisionalCloudPayload = encode(projectWardrobeCloudIndex(online))
+      if (!fresh && online) this.provisionalCloudPayload = raw
       this.observeSettings(extensionSettings, fresh)
-      const verified = fresh && isWardrobeIndex(online)
-        && equal(projectWardrobeCloudIndex(this.index), projectWardrobeCloudIndex(online))
-      this.writeDocument(this.index, { pending: !verified,
-        lastVerifiedAt: verified ? Date.now() : this.document.lastVerifiedAt,
-        lastVerifiedPayload: verified ? encode(projectWardrobeCloudIndex(this.index)) : this.document.lastVerifiedPayload })
+      this.writeDocument(this.index, { pending: this.document.pending || online?.kind !== 'v4',
+        protocolVersion: this.document.protocolVersion || (online?.kind === 'v4' ? 4 : undefined) })
       committed = true
-      this.freshCloudObserved = fresh && !this.remoteError
-      if (verified) this.verifiedPayloadInSession = encode(projectWardrobeCloudIndex(this.index))
       this.measure()
       this.emit({ localSaved: true, lastSubmittedAt: this.document.lastSubmittedAt || null,
         lastVerifiedAt: this.document.lastVerifiedAt || null,
-        state: this.remoteError ? 'error' : this.quota.isOverLimit ? 'quota' : verified ? 'verified' : 'pending',
-        error: this.remoteError?.message || '' })
-      if (fresh && !verified && !this.remoteError && !this.quota.isOverLimit) this.queue()
+        state: this.remoteError ? 'error' : this.document.conflicts?.length ? 'conflict'
+          : this.quota.isOverLimit ? 'quota' : 'pending',
+        conflicts: this.document.conflicts || [], error: this.remoteError?.message || '' })
+      if (fresh && !this.remoteError) return this.receiveCloud({ extensionSettings, fresh: true })
       return true
     } catch (error) {
-      this.emit({ state: 'error', error: error.message, localSaved: committed })
+      this.emit({ state: 'error', error: error.message, errorCode: error.code || null,
+        localSaved: committed })
       return committed
     }
   }
@@ -239,32 +308,62 @@ export class WardrobeRepository {
         // available. Never treat the unreadable replica as an empty wardrobe.
         this.cancelPending()
       }
-      const next = applyWardrobeOperations(this.index, operations, { replicaId: this.replicaId })
-      this.writeDocument(next, { pending: true })
+      const context = this.document.conflictContext
+      const local = context
+        ? applyWardrobeOperations(context.local, operations, { replicaId: this.replicaId })
+        : null
+      const rawResult = context
+        ? mergeWardrobeIndexesThreeWay(context.base, local, context.guardedRemote,
+          { replicaId: this.replicaId }) : null
+      const editedIds = new Set(operations.map(operation => operation.id).filter(Boolean))
+      const resolvedChoices = (context?.resolvedChoices || [])
+        .filter(choice => !editedIds.has(choice.id)
+          && rawResult.conflicts.some(conflict => conflict.kind === choice.kind
+            && conflict.id === choice.id && conflict.field === choice.field))
+      const result = rawResult && resolvedChoices.length
+        ? resolveWardrobeConflicts(rawResult, resolvedChoices, { replicaId: this.replicaId })
+        : rawResult
+      const conflicts = context
+        ? [...result.conflicts, ...this.document.conflicts.filter(conflict => conflict.type === 'missing-device')]
+        : this.document.conflicts || []
+      const next = result ? clone(result.merged)
+        : applyWardrobeOperations(this.index, operations, { replicaId: this.replicaId })
+      const visible = conflicts.some(conflict => conflict.type === 'missing-device')
+        ? quarantineCloudContent(next, local) : next
+      const pending = this.document.pending || !equal(projectWardrobeCloudIndex(next),
+        projectWardrobeCloudIndex(this.index))
+      this.writeDocument(visible, { pending, conflicts,
+        conflictContext: context ? { ...context, local, result, resolvedChoices } : null })
       committed = true
       this.sessionLocalEdit = true
       this.measure()
-      this.emit({ state: this.remoteError ? 'error' : this.quota.isOverLimit ? 'quota' : 'pending',
-        localSaved: true, error: this.remoteError?.message || '' })
-      if (!this.remoteError && !this.quota.isOverLimit) this.queue()
-      return next
+      this.emit({ state: this.remoteError ? 'error' : this.document.conflicts?.length ? 'conflict'
+        : this.quota.isOverLimit ? 'quota'
+          : pending ? 'pending' : this.freshCloudObserved ? 'verified' : 'pending',
+        conflicts: this.document.conflicts || [], localSaved: true, error: this.remoteError?.message || '' })
+      if (pending && !this.remoteError && !this.document.conflicts?.length && !this.quota.isOverLimit) this.queue()
+      return visible
     } catch (error) {
       this.cancelPending()
       if (committed) {
-        this.emit({ state: 'error', error: error.message, localSaved: true })
+        this.emit({ state: 'error', error: error.message, errorCode: error.code || null,
+          localSaved: true })
         return this.index
       }
       this.index = this.document?.index || before
-      this.emit({ state: 'error', error: error.message })
+      this.emit({ state: 'error', error: error.message, errorCode: error.code || null })
       throw error
     }
   }
 
   observeSettings(extensionSettings, fresh) {
     this.lastObservedHostRaw = this.getPlayer()?.ExtensionSettings?.VPWardrobe
+    this.lastObservedMarkerSignature = markerSignature(this.getPlayer()?.ExtensionSettings)
     if (!fresh) return
     this.freshRemoteRaw = extensionSettings?.VPWardrobe
-    this.freshSettings = extensionSettings == null ? {} : extensionSettings
+    try { this.lastFreshSettings = extensionSettings == null ? {} : clone(extensionSettings) }
+    catch { this.lastFreshSettings = extensionSettings }
+    this.freshSettings = this.lastFreshSettings
     if (typeof this.freshSettings === 'object' && !Array.isArray(this.freshSettings)) {
       this.freshSettings = { ...this.freshSettings }
     }
@@ -284,14 +383,47 @@ export class WardrobeRepository {
       this.hostSettingSignatures = hostSignatures
     }
     const settings = this.getPlayer()?.ExtensionSettings
-    if (settings?.VPWardrobe === this.lastObservedHostRaw) return
+    if (settings?.VPWardrobe === this.lastObservedHostRaw
+      && markerSignature(settings) === this.lastObservedMarkerSignature) return
     this.receiveCloud({ extensionSettings: settings, fresh: false, schedule: false })
   }
 
+  proposal(settings = this.freshSettings || this.getPlayer()?.ExtensionSettings || {}) {
+    const projection = projectWardrobeCloudIndex(this.index)
+    const projectionJson = JSON.stringify(canonical(projection))
+    const baseJson = JSON.stringify(canonical(this.document.baseCloudIndex || createWardrobeIndex()))
+    const appliedJson = JSON.stringify(canonical(this.document.baseAppliedSeq || {}))
+    const markers = readWardrobeSyncMarkers(settings)
+    const registered = new Set([...markers.keys(), ...Object.keys(this.document.baseAppliedSeq || {})])
+    if (registered.size > MAX_WARDROBE_DEVICE_MARKERS
+      || (!registered.has(this.deviceId) && registered.size >= MAX_WARDROBE_DEVICE_MARKERS)) {
+      throw Object.assign(new Error(`Cloud wardrobe has reached its ${MAX_WARDROBE_DEVICE_MARKERS}-device marker limit`),
+        { code: 'device-limit' })
+    }
+    const prior = this.document.submission
+    if (prior && prior.projectionJson === projectionJson && prior.baseJson === baseJson
+      && prior.appliedJson === appliedJson
+      && prior.marker?.s >= (markers.get(this.deviceId)?.s || 0)) {
+      return { ...prior, marker: decodeWardrobeSyncMarker(prior.markerValue) }
+    }
+    const existing = markers.get(this.deviceId) || createWardrobeSyncMarker()
+    const sequence = Math.max(existing.s, this.document.markerSequence || 0,
+      this.document.baseAppliedSeq?.[this.deviceId] || 0) + 1
+    const marker = createWardrobeSyncMarker({ sequence })
+    const markerValue = encodeWardrobeSyncMarker(marker)
+    const applied = { ...(this.document.baseAppliedSeq || {}), [this.deviceId]: sequence }
+    const payload = encode(cloudEnvelope(this.index, applied))
+    return { payload, markerValue, marker, projectionJson, baseJson, appliedJson }
+  }
+
   measure(extensionSettings = this.getPlayer()?.ExtensionSettings) {
-    this.quota = null
-    const payload = encode(projectWardrobeCloudIndex(this.index))
-    const hostQuota = measureExtensionQuota(extensionSettings, payload)
+    const observed = measureObservedExtensionQuota(this.lastFreshSettings ?? extensionSettings)
+    const observedSource = this.lastFreshSettings === null ? 'player-cache' : 'login-response'
+    this.quota = { ...observed, packetBytes: 0, isWarning: false, isOverLimit: false,
+      observed, observedSource, proposalAvailable: false }
+    const { payload, markerValue } = this.proposal()
+    const options = { markerKey: this.markerKey, markerValue }
+    const hostQuota = measureExtensionQuota(extensionSettings, payload, options)
     let conservativeSettings = this.freshSettings
     const signatures = settingSignatures(extensionSettings)
     if (conservativeSettings !== null) {
@@ -312,9 +444,12 @@ export class WardrobeRepository {
         }
         else delete conservativeSettings[key]
       }
-      const freshQuota = measureExtensionQuota(conservativeSettings, payload)
+      const freshQuota = measureExtensionQuota(conservativeSettings, payload, options)
       this.quota = freshQuota.totalBytes > hostQuota.totalBytes ? freshQuota : hostQuota
     } else this.quota = hostQuota
+    this.quota.observed = observed
+    this.quota.observedSource = observedSource
+    this.quota.proposalAvailable = true
     this.freshSettings = conservativeSettings
     this.hostSettingSignatures = signatures
     return this.quota
@@ -324,6 +459,15 @@ export class WardrobeRepository {
     if (this.timer !== null) this.cancel(this.timer)
     this.timer = null
     if (resetAttempts) this.attempt = 0
+  }
+
+  invalidateFreshness() {
+    this.cancelPending()
+    this.freshCloudObserved = false
+    this.verifiedPayloadInSession = null
+    this.submittedRaw = null
+    const state = ['verified', 'submitted'].includes(this.status.state) ? 'pending' : this.status.state
+    this.emit({ state })
   }
 
   queue(delay = 800, { retry = false } = {}) {
@@ -348,6 +492,10 @@ export class WardrobeRepository {
       this.mergeStored()
       this.observeHostChanges()
       if (this.remoteError) throw this.remoteError
+      if (this.document.conflicts?.length) {
+        this.emit({ state: 'conflict', conflicts: this.document.conflicts, error: '' })
+        return false
+      }
       this.writeDocument(this.index)
       this.measure()
       if (this.quota.isOverLimit) {
@@ -358,45 +506,58 @@ export class WardrobeRepository {
         this.emit({ state: 'offline', error: '' })
         return false
       }
-      const payload = encode(projectWardrobeCloudIndex(this.index))
-      if (!this.freshCloudObserved && (payload === this.provisionalCloudPayload
-        || (!this.sessionLocalEdit && (!force || this.provisionalCloudPayload === null)))) {
+      if (!this.freshCloudObserved) {
         this.emit({ state: 'pending', localSaved: true, error: '' })
         return false
       }
-      if (!force && !this.document.pending && payload === this.verifiedPayloadInSession) {
+      if (!this.document.pending && this.verifiedPayloadInSession === this.freshRemoteRaw) {
         this.emit({ state: 'verified', localSaved: true, error: '' })
         return true
       }
+      const proposal = this.proposal()
+      const { payload, markerValue } = proposal
       if (!force && payload === this.submittedRaw) {
         this.emit({ state: 'submitted', localSaved: true, error: '' })
         return true
       }
       const player = this.getPlayer()
       const settings = player.ExtensionSettings || (player.ExtensionSettings = {})
-      const hadValue = Object.prototype.hasOwnProperty.call(settings, 'VPWardrobe')
+      const hadValue = own(settings, 'VPWardrobe')
+      const hadMarker = own(settings, this.markerKey)
       const previous = settings.VPWardrobe
+      const previousMarker = settings[this.markerKey]
+      const submittedVersions = [...(this.document.submittedVersions || [])
+        .filter(entry => entry.sequence !== proposal.marker.s),
+      { sequence: proposal.marker.s, index: projectWardrobeCloudIndex(this.index) }].slice(-8)
+      this.writeDocument(this.index, { pending: true, protocolVersion: 4,
+        markerSequence: proposal.marker.s, submittedVersions,
+        submission: { ...proposal, submittedAt: null } })
       settings.VPWardrobe = payload
+      settings[this.markerKey] = markerValue
       try {
-        if (this.send() === false) throw new Error('The game did not accept the upload')
+        const fields = { 'ExtensionSettings.VPWardrobe': payload,
+          [`ExtensionSettings.${this.markerKey}`]: markerValue }
+        if (this.send(fields) === false) throw new Error('The game did not accept the upload')
       } catch (error) {
         if (hadValue) settings.VPWardrobe = previous
         else delete settings.VPWardrobe
+        if (hadMarker) settings[this.markerKey] = previousMarker
+        else delete settings[this.markerKey]
         transportFailed = true
         throw error
       }
       this.remoteRaw = payload
       this.lastObservedHostRaw = payload
+      this.lastObservedMarkerSignature = markerSignature(settings)
       this.submittedRaw = payload
       this.attempt = 0
       const time = Date.now()
-      // No server acknowledgment exists. Keep the durable outbox pending until
-      // a fresh login response verifies it; avoid requeueing the same payload.
-      this.writeDocument(this.index, { lastSubmittedPayload: payload, lastSubmittedAt: time })
+      this.writeDocument(this.index, { lastSubmittedPayload: payload, lastSubmittedAt: time,
+        submission: { ...proposal, submittedAt: time } })
       this.emit({ state: 'submitted', localSaved: true, error: '', lastSubmittedAt: time })
       return true
     } catch (error) {
-      this.emit({ state: 'error', error: error.message })
+      this.emit({ state: 'error', error: error.message, errorCode: error.code || null })
       if (transportFailed) this.retrySend()
       return false
     }
@@ -410,50 +571,96 @@ export class WardrobeRepository {
       if (String(memberNumber) !== this.member) return this.open({ extensionSettings, fresh })
       this.cancelPending()
       const raw = extensionSettings?.VPWardrobe
+      const previousMarkerSignature = this.lastObservedMarkerSignature
       this.observeSettings(extensionSettings, fresh)
-      let online
-      try {
-        online = decodeWardrobePayload(raw)
-        if (online !== null && !isWardrobeIndex(online) && !isLegacyWardrobe(online)) {
-          throw new Error('Unrecognized cloud wardrobe; automatic upload stopped')
+      if (!fresh) {
+        if ((raw !== this.submittedRaw && raw !== this.freshRemoteRaw)
+          || markerSignature(extensionSettings) !== previousMarkerSignature) {
+          this.freshCloudObserved = false
+          this.verifiedPayloadInSession = null
+          this.submittedRaw = null
+          this.emit({ state: 'pending', error: '' })
         }
-      } catch (error) {
-        this.pendingRemote = null
-        this.remoteError = error
-        throw error
+        this.provisionalCloudPayload = raw
+        this.remoteRaw = raw
+        return true
+      }
+      const online = cloudSnapshot(raw)
+      const markers = readWardrobeSyncMarkers(extensionSettings || {})
+      const settled = maxAppliedSequences(online.a, this.document.discardedSeqByDevice)
+      const missing = findUnappliedWardrobeMarkers(markers, settled)
+      if (this.document.protocolVersion === 4 && online.kind !== 'v4'
+        && !(online.kind === 'empty' && !this.document.lastVerifiedPayload)) {
+        this.archive('older-client-cloud-snapshot', { onlineRaw: raw })
+        throw new Error('Older client replaced the v4 cloud snapshot; automatic upload stopped')
       }
       this.remoteError = null
       this.pendingRemote = { extensionSettings: { ...extensionSettings }, fresh, memberNumber }
       this.mergeStored()
       beforeRemote = { index: this.index, document: { ...this.document } }
-      if (isWardrobeIndex(online)) this.index = mergeWardrobeIndexes(this.index, online)
-      else if (isLegacyWardrobe(online)) this.archive('older-client-cloud-snapshot', { online, onlineRaw: raw })
+      const cloudSequence = online.a[this.deviceId] || 0
+      const knownVersion = (this.document.submittedVersions || [])
+        .find(entry => entry.sequence === cloudSequence)
+      const baselineKnown = cloudSequence === 0 || !!knownVersion
+        || this.document.baseCloudSequence === cloudSequence
+      const base = this.document.conflictContext?.base || knownVersion?.index
+        || this.document.baseCloudIndex || createWardrobeIndex()
+      const local = this.document.conflictContext?.local || this.index
+      const remote = online.index
+      const rawResult = mergeWardrobeIndexesThreeWay(base, local, remote, { replicaId: this.replicaId })
+      const resolvedChoices = equal(remote, this.document.conflictContext?.remote)
+        ? (this.document.conflictContext?.resolvedChoices || []).filter(choice =>
+          rawResult.conflicts.some(conflict => conflict.kind === choice.kind
+            && conflict.id === choice.id && conflict.field === choice.field)) : []
+      const result = resolvedChoices.length
+        ? resolveWardrobeConflicts(rawResult, resolvedChoices, { replicaId: this.replicaId })
+        : rawResult
+      const missingConflicts = missing.filter(item => {
+        if (item.deviceId !== this.deviceId) return true
+        const version = (this.document.submittedVersions || [])
+          .find(entry => entry.sequence === item.marker.s)
+        return !baselineKnown || !version
+          || !(this.document.submission?.markerValue === extensionSettings?.[this.markerKey]
+          || (this.document.baseCloudSequence === item.marker.s
+            && equal(this.document.baseCloudIndex, version.index)))
+      })
+        .map(item => ({ kind: 'device', id: item.deviceId, field: 'sequence', type: 'missing-device',
+          sequence: item.marker.s, appliedSequence: item.appliedSequence, local: null, remote: null }))
+      const conflicts = [...result.conflicts, ...missingConflicts]
+      const conflictContext = conflicts.length ? { base, local,
+        remote: online.index, guardedRemote: remote, result, missing, resolvedChoices } : null
+      const merged = missingConflicts.length
+        ? quarantineCloudContent(result.merged, local) : clone(result.merged)
+      const sameCloud = equal(projectWardrobeCloudIndex(merged), online.index)
+      const discardsPublished = Object.entries(this.document.discardedSeqByDevice || {})
+        .every(([id, sequence]) => (online.a[id] || 0) >= sequence)
+      const verified = online.kind === 'v4' && conflicts.length === 0 && sameCloud
+        && discardsPublished
+        && (!this.document.submission || (online.a[this.deviceId] || 0) >= this.document.submission.marker.s)
       this.remoteRaw = raw
-      const payload = encode(projectWardrobeCloudIndex(this.index))
-      const freshMatch = fresh && isWardrobeIndex(online)
-        && equal(projectWardrobeCloudIndex(this.index), projectWardrobeCloudIndex(online))
-      const verified = freshMatch || (!fresh && !this.document.pending && payload === this.verifiedPayloadInSession)
-      // A fresh mismatch is evidence that an unacknowledged earlier send was
-      // lost. It permits retransmission even if the local payload is unchanged.
-      if (fresh && !freshMatch) this.submittedRaw = null
-      this.writeDocument(this.index, { pending: !verified,
-        lastVerifiedAt: freshMatch ? Date.now() : this.document.lastVerifiedAt,
-        lastVerifiedPayload: freshMatch ? payload : this.document.lastVerifiedPayload })
+      if (!verified) this.submittedRaw = null
+      this.writeDocument(merged, { pending: !verified, conflicts, conflictContext,
+        baseCloudIndex: conflicts.length ? base : online.index,
+        baseCloudSequence: conflicts.length ? this.document.baseCloudSequence : cloudSequence,
+        baseAppliedSeq: settled, protocolVersion: online.kind === 'v4' ? 4 : this.document.protocolVersion,
+        submittedVersions: verified
+          ? [...(this.document.submittedVersions || [])
+            .filter(entry => entry.sequence !== cloudSequence),
+          { sequence: cloudSequence, index: online.index }].slice(-8)
+          : this.document.submittedVersions,
+        submission: verified ? null : this.document.submission,
+        lastVerifiedAt: verified ? Date.now() : this.document.lastVerifiedAt,
+        lastVerifiedPayload: verified ? raw : this.document.lastVerifiedPayload })
       committed = true
-      if (fresh) {
-        this.freshCloudObserved = true
-        this.verifiedPayloadInSession = freshMatch ? payload : null
-      } else if (isWardrobeIndex(online)) {
-        this.provisionalCloudPayload = encode(projectWardrobeCloudIndex(online))
-      }
+      this.freshCloudObserved = true
+      this.verifiedPayloadInSession = verified ? raw : null
       this.pendingRemote = null
       this.measure()
-      let state = verified ? 'verified' : 'pending'
-      if (!verified && payload === this.submittedRaw) state = 'submitted'
-      if (this.quota.isOverLimit) state = 'quota'
-      this.emit({ state, localSaved: true, error: '',
+      const state = conflicts.length ? 'conflict' : this.quota.isOverLimit ? 'quota'
+        : verified ? 'verified' : 'pending'
+      this.emit({ state, conflicts, localSaved: true, error: '',
         lastVerifiedAt: this.document.lastVerifiedAt || null })
-      if (schedule && !verified && payload !== this.submittedRaw && !this.quota.isOverLimit) this.queue()
+      if (schedule && !verified && !conflicts.length && !this.quota.isOverLimit) this.queue()
       return true
     } catch (error) {
       this.cancelPending()
@@ -461,10 +668,66 @@ export class WardrobeRepository {
         this.index = beforeRemote.index
         this.document = beforeRemote.document
       }
-      this.emit({ state: 'error', error: error.message,
+      if (!beforeRemote || !committed) this.remoteError = error
+      this.emit({ state: 'error', error: error.message, errorCode: error.code || null,
         localSaved: committed || this.status.localSaved })
       return committed
     }
+  }
+
+  resolveSyncConflict(resolutions) {
+    this.ensureAccount()
+    if (!Array.isArray(resolutions) || !resolutions.length) {
+      throw new Error('Choose a sync conflict to resolve')
+    }
+    const context = this.document.conflictContext
+    if (!context || !this.document.conflicts?.length) {
+      throw new Error('No sync conflict needs a decision')
+    }
+    const missingChoices = resolutions.filter(choice => choice.kind === 'device')
+    const mergeChoices = resolutions.filter(choice => choice.kind !== 'device')
+    for (const choice of missingChoices) {
+      if (choice.field !== 'sequence' || choice.choice !== 'discard'
+        || !this.document.conflicts.some(conflict => conflict.type === 'missing-device'
+          && conflict.id === choice.id)) {
+        throw new Error('Unknown device changes can only be explicitly discarded')
+      }
+    }
+    const discarded = { ...(this.document.discardedSeqByDevice || {}) }
+    for (const choice of missingChoices) {
+      const entry = context.missing.find(item => item.deviceId === choice.id)
+      if (!entry) throw new Error('Missing device marker was not found')
+      discarded[choice.id] = entry.marker.s
+    }
+    const activeMissing = context.missing.filter(item => (discarded[item.deviceId] || 0) < item.marker.s)
+    const recalculated = mergeWardrobeIndexesThreeWay(context.base, context.local,
+      context.remote, { replicaId: this.replicaId })
+    const allChoices = [...(context.resolvedChoices || []), ...mergeChoices]
+      .filter(choice => recalculated.conflicts.some(conflict => conflict.kind === choice.kind
+        && conflict.id === choice.id && conflict.field === choice.field))
+    const updated = allChoices.length
+      ? resolveWardrobeConflicts(recalculated, allChoices, { replicaId: this.replicaId })
+      : recalculated
+    const remainingDevice = this.document.conflicts.filter(conflict => conflict.type === 'missing-device'
+      && !missingChoices.some(choice => choice.id === conflict.id))
+    const conflicts = [...updated.conflicts, ...remainingDevice]
+    const next = remainingDevice.length
+      ? quarantineCloudContent(updated.merged, context.local) : clone(updated.merged)
+    // Recovery records preserve both candidates and the explicit decision.
+    this.archive('sync-conflict-decision', { resolutions, conflicts: this.document.conflicts,
+      local: context.local, remote: context.remote, missing: context.missing })
+    const baseAppliedSeq = maxAppliedSequences(this.document.baseAppliedSeq, discarded)
+    this.writeDocument(next, { pending: true, conflicts,
+      conflictContext: conflicts.length ? { ...context, result: updated,
+        guardedRemote: context.remote, missing: activeMissing, resolvedChoices: allChoices } : null,
+      baseCloudIndex: conflicts.length ? context.base : context.remote,
+      baseAppliedSeq, discardedSeqByDevice: discarded, submission: null })
+    this.submittedRaw = null
+    this.measure()
+    this.emit({ state: conflicts.length ? 'conflict' : this.quota.isOverLimit ? 'quota' : 'pending',
+      conflicts, localSaved: true, error: '' })
+    if (!conflicts.length && !this.quota.isOverLimit) this.queue()
+    return next
   }
 
   exportRecovery() {

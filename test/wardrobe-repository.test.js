@@ -3,15 +3,21 @@ import { test } from 'node:test'
 import LZString from 'lz-string'
 import { WardrobeRepository, decodeWardrobePayload } from '../src/services/WardrobeRepository.js'
 import { applyWardrobeOperations, createWardrobeIndex, projectWardrobeCloudIndex } from '../src/services/wardrobe-index.js'
+import { decodeWardrobeSyncMarker } from '../src/services/wardrobe-sync-marker.js'
 
 const copy = (value) => JSON.parse(JSON.stringify(value))
 const encode = (value) => LZString.compressToBase64(JSON.stringify(value))
 const put = (id, name = id, changes = {}) => ({ type: 'put-outfit', id, changes: { name, data: [{ Group: 'Cloth', Name: 'Shirt' }], ...changes } })
 const names = (index) => Object.values(index.outfits).map((item) => item.name).sort()
-const cloudIndex = (server) => decodeWardrobePayload(server.settings.VPWardrobe)
+const cloudEnvelope = (server) => decodeWardrobePayload(server.settings.VPWardrobe)
+const cloudIndex = (server) => cloudEnvelope(server)?.index ?? cloudEnvelope(server)
+const markerFor = (server, device) => decodeWardrobeSyncMarker(server.settings[device.repo.markerKey])
 
 /** Independent device storage and game memory; only successful sends touch the server. */
 function client(server = { settings: {} }, { saved = new Map(), member = 42, replicaId = 'device-a' } = {}) {
+  const deviceKey = `VPW4_device_${member}`
+  if (!saved.has(deviceKey)) saved.set(deviceKey,
+    Buffer.from(replicaId).toString('hex').padEnd(32, '0').slice(0, 32))
   let player = { MemberNumber: member, ExtensionSettings: copy(server.settings) }
   let connected = true
   let localFailure = null
@@ -33,11 +39,14 @@ function client(server = { settings: {} }, { saved = new Map(), member = 42, rep
     localStorage,
     replicaId,
     isOnline: () => connected,
-    send() {
+    send(fields) {
       sendCount++
       if (sendFailure === 'throw') throw new Error('Disconnected while submitting')
       if (sendFailure === 'false') return false
-      server.settings.VPWardrobe = player.ExtensionSettings.VPWardrobe
+      for (const [path, value] of Object.entries(fields)) {
+        assert.match(path, /^ExtensionSettings\.(VPWardrobe|VPW4_M_[0-9a-f]{32})$/)
+        server.settings[path.slice('ExtensionSettings.'.length)] = value
+      }
       // The game transport supplies no server acknowledgment.
       return undefined
     },
@@ -69,6 +78,7 @@ function client(server = { settings: {} }, { saved = new Map(), member = 42, rep
 function seed(server = { settings: {} }) {
   const device = client(server)
   assert.equal(device.repo.open(), true)
+  assert.equal(device.login(), true)
   device.repo.apply([put('outfit-1', 'Original'), put('outfit-2', 'Keep me')])
   assert.equal(device.repo.flush(), true)
   return device
@@ -107,6 +117,78 @@ test('rename keeps the same ID and wins over an older device cache after relog',
   assert.equal(Object.keys(cloudIndex(a.server).outfits).length, 3)
 })
 
+test('a stale device overwrite is detected by the earlier device marker and quarantines a deletion', () => {
+  const a = seed()
+  const b = client(a.server, { replicaId: 'device-b' })
+  assert.equal(b.repo.open(), true)
+  assert.equal(b.login(), true)
+
+  a.repo.apply([{ type: 'delete-outfit', id: 'outfit-1' }])
+  assert.equal(a.repo.flush(), true)
+  const deletionSequence = markerFor(a.server, a).s
+  assert.equal(cloudIndex(a.server).outfits['outfit-1'], undefined)
+
+  b.repo.apply([put('outfit-3', 'B from stale snapshot')])
+  assert.equal(b.repo.flush(), true)
+  assert.ok(cloudIndex(a.server).outfits['outfit-1'], 'BC accepts the stale whole-snapshot overwrite')
+  assert.ok(cloudEnvelope(a.server).a[a.repo.deviceId] < deletionSequence)
+  assert.equal(markerFor(a.server, a).s, deletionSequence, 'B cannot overwrite A’s independent marker')
+
+  const c = client(a.server, { replicaId: 'device-c' })
+  assert.equal(c.repo.open(), true)
+  assert.equal(c.login(), true)
+  assert.equal(c.repo.status.state, 'conflict')
+  assert.ok(c.repo.status.conflicts.some(conflict => conflict.type === 'missing-device'
+    && conflict.id === a.repo.deviceId))
+  assert.equal(c.repo.index.outfits['outfit-1'], undefined, 'Do not show a deleted outfit again')
+  assert.deepEqual(names(c.repo.index), [], 'A sequence-only marker quarantines the whole cloud snapshot')
+  assert.equal(c.repo.flush(), false)
+  assert.equal(c.sendCount(), 0)
+
+  c.repo.resolveSyncConflict([{ kind: 'device', id: a.repo.deviceId,
+    field: 'sequence', choice: 'discard' }])
+  assert.equal(c.repo.status.state, 'pending')
+  assert.equal(c.repo.flush(), true)
+  assert.deepEqual(names(cloudIndex(a.server)), ['B from stale snapshot', 'Keep me', 'Original'],
+    'Explicit discard accepts the stale cloud candidate')
+  assert.equal(cloudEnvelope(a.server).a[a.repo.deviceId], deletionSequence)
+  assert.equal(c.login(), true)
+  assert.equal(c.repo.status.state, 'verified')
+})
+
+test('a marker reveals an overwritten rename; the device holding the edit can repair it', () => {
+  const a = seed()
+  assert.equal(a.login(), true)
+  const b = client(a.server, { replicaId: 'device-b' })
+  assert.equal(b.repo.open(), true)
+  assert.equal(b.login(), true)
+
+  a.repo.apply([{ type: 'put-outfit', id: 'outfit-1', changes: { name: 'Name from A' } }])
+  assert.equal(a.repo.flush(), true)
+  const renameSequence = markerFor(a.server, a).s
+  b.repo.apply([put('outfit-3', 'Name from B')])
+  assert.equal(b.repo.flush(), true)
+  assert.equal(cloudIndex(a.server).outfits['outfit-1'].name, 'Original')
+  assert.ok(cloudEnvelope(a.server).a[a.repo.deviceId] < renameSequence)
+
+  const c = client(a.server, { replicaId: 'device-c' })
+  assert.equal(c.repo.open(), true)
+  assert.equal(c.login(), true)
+  assert.equal(c.repo.status.state, 'conflict')
+  assert.deepEqual(names(c.repo.index), [],
+    'The marker cannot reconstruct the missing rename, so cloud content stays quarantined')
+  assert.equal(c.repo.flush(), false)
+
+  assert.equal(a.login(), true)
+  assert.equal(a.repo.status.state, 'pending')
+  assert.equal(a.repo.index.outfits['outfit-1'].name, 'Name from A')
+  assert.equal(a.repo.flush(), true)
+  assert.deepEqual(names(cloudIndex(a.server)), ['Keep me', 'Name from A', 'Name from B'])
+  assert.ok(cloudEnvelope(a.server).a[a.repo.deviceId] >= renameSequence)
+  assert.equal(c.login(), true)
+  assert.equal(c.repo.status.state, 'verified')
+})
+
 test('different IDs with the same name remain separate outfits and survive reload', () => {
   const device = client()
   device.repo.open()
@@ -122,6 +204,7 @@ test('different IDs with the same name remain separate outfits and survive reloa
 test('shared quota blocks cloud but keeps the full local document, then remeasures other plugins', () => {
   const device = client({ settings: { Other: 'x'.repeat(179900), VPWardrobe: encode(createWardrobeIndex()) } })
   assert.equal(device.repo.open(), true)
+  assert.equal(device.login(), true)
   device.repo.apply([put('one')])
   assert.equal(device.repo.flush(), false)
   assert.equal(device.repo.status.state, 'quota')
@@ -141,6 +224,7 @@ test('shared quota blocks cloud but keeps the full local document, then remeasur
 test('offline edits stay durable and pending, and submit once connection resumes', () => {
   const device = client()
   device.repo.open()
+  device.login()
   device.setOnline(false)
   device.repo.apply([put('offline')])
   assert.equal(device.repo.flush(), false)
@@ -162,6 +246,7 @@ for (const failure of ['false', 'throw']) {
       const server = { settings: hadValue ? { VPWardrobe: encode(createWardrobeIndex()), Other: 'untouched' } : { Other: 'untouched' } }
       const device = client(server)
       device.repo.open()
+      device.login()
       device.repo.apply([put('pending')])
       const previous = copy(device.player().ExtensionSettings)
       device.failSend(failure)
@@ -203,6 +288,8 @@ test('switching accounts cancels the old edit instead of writing old clothes int
   assert.deepEqual(names(device.repo.index), [])
   assert.equal(device.saved.get('VPWardrobe_index_42'), oldDocument)
   assert.equal(device.sendCount(), beforeSends)
+  device.server.settings = {}
+  assert.equal(device.login(), true)
   device.repo.apply([put('account-84', 'New account outfit')])
   device.repo.flush()
   assert.deepEqual(names(cloudIndex(device.server)), ['New account outfit'])
@@ -230,7 +317,7 @@ test('migration prefers the React local key, backs up old sources, and never rei
   assert.ok(backups.length > 0)
   assert.match(JSON.stringify(backups), /Current React local/)
   assert.match(JSON.stringify(backups), /Old buggy local/)
-  assert.match(JSON.stringify(backups), /Stale cloud tree/)
+  assert.equal(decodeWardrobePayload(backups[0].data.onlineRaw).children[0].name, 'Stale cloud tree')
   assert.equal(backups[0].data.local.find((source) => source.key === 'VPWardrobe_VPWardrobe_local_42').raw,
     saved.get('VPWardrobe_VPWardrobe_local_42'))
   assert.equal(backups[0].data.onlineRaw, server.settings.VPWardrobe)
@@ -244,7 +331,8 @@ test('migration prefers the React local key, backs up old sources, and never rei
   assert.equal(reopened.repo.open(), true)
   assert.deepEqual(names(reopened.repo.index), [])
   assert.ok(reopened.repo.index.tombstones.outfits[id])
-  assert.match(JSON.stringify(reopened.repo.exportRecovery()), /Stale cloud tree/)
+  assert.ok(reopened.repo.exportRecovery().some(backup =>
+    decodeWardrobePayload(backup.data.onlineRaw).children[0].name === 'Stale cloud tree'))
   assert.ok(reopened.repo.exportRecovery().some((backup) => backup.data.onlineRaw === server.settings.VPWardrobe))
   assert.ok(saved.has('VPWardrobe_VPWardrobe_local_42'), 'Migration keeps the original backup source')
 })
@@ -339,18 +427,17 @@ test('unchanged submitted data does not flood the unacknowledged transport', () 
   assert.deepEqual(cloudIndex(device.server), projection)
 })
 
-test('a fresh server response missing an earlier submission triggers resubmission of the same durable payload', () => {
+test('a fresh response missing an entire earlier AccountUpdate retries durable local work', () => {
   const device = seed()
-  const previousPayload = device.server.settings.VPWardrobe
   const count = device.sendCount()
-  // A queued send can be lost without an acknowledgment; a later login is the
-  // first evidence that it did not reach durable server storage.
-  device.server.settings.VPWardrobe = encode(createWardrobeIndex())
+  // The wardrobe body and marker are one BC AccountUpdate; a lost send loses both.
+  device.server.settings = {}
   assert.equal(device.login(), true)
   assert.equal(device.repo.status.state, 'pending')
   assert.equal(device.repo.flush(), true)
   assert.equal(device.sendCount(), count + 1)
-  assert.equal(device.server.settings.VPWardrobe, previousPayload)
+  assert.deepEqual(names(cloudIndex(device.server)), ['Keep me', 'Original'])
+  assert.equal(cloudEnvelope(device.server).a[device.repo.deviceId], markerFor(device.server, device).s)
   assert.equal(device.document().pending, true)
 })
 
@@ -372,8 +459,9 @@ test('local-only outfit content stays private across submission and another devi
   assert.equal(newcomer.repo.index.outfits['outfit-1'], undefined)
 })
 
-test('two devices keep private edits local when the first device re-enables cloud', () => {
+test('re-enabling cloud elsewhere preserves private edits locally and asks the user to resolve them', () => {
   const a = seed()
+  assert.equal(a.login(), true)
   a.repo.apply([
     { type: 'put-tag', id: 'tag-a', name: '日常' },
     { type: 'put-outfit', id: 'outfit-1', changes: { tagIds: ['tag-a'] } },
@@ -391,39 +479,36 @@ test('two devices keep private edits local when the first device re-enables clou
 
   a.repo.apply([{ type: 'set-cloud', id: 'outfit-1', enabled: true }])
   a.repo.flush()
-  b.login()
-  const fork = Object.values(b.repo.index.outfits).find(record => record.vpwLocalFork?.sourceId === 'outfit-1')
-  assert.ok(fork)
-  assert.equal(fork.name, 'Original')
-  assert.deepEqual(fork.tagIds, ['tag-a'])
-  assert.equal(fork.data[0].Name, 'PrivateDress')
-  assert.equal(b.repo.index.cloudState[fork.id].enabled, false)
-  assert.equal(b.repo.index.outfits['outfit-1'].data[0].Name, 'Shirt')
   assert.equal(b.login(), true)
-  assert.equal(Object.values(b.repo.index.outfits).filter(record => record.vpwLocalFork?.sourceId === 'outfit-1').length, 1)
+  assert.equal(b.repo.status.state, 'conflict')
+  assert.ok(b.repo.status.conflicts.some(conflict => conflict.type === 'privacy'))
+  assert.equal(b.repo.index.outfits['outfit-1'].data[0].Name, 'PrivateDress')
+  assert.equal(b.repo.index.cloudState['outfit-1'].enabled, false)
 
   b.repo.apply([put('unrelated')])
-  b.repo.flush()
+  assert.equal(b.repo.flush(), false)
   const cloud = cloudIndex(a.server)
   assert.equal(cloud.outfits['outfit-1'].data[0].Name, 'Shirt')
-  assert.equal(cloud.outfits[fork.id], undefined)
-  assert.equal(cloud.cloudState[fork.id], undefined)
   assert.equal(JSON.stringify(cloud).includes('PrivateDress'), false)
-  assert.equal(b.document().index.outfits[fork.id].data[0].Name, 'PrivateDress')
+  assert.equal(b.document().index.outfits['outfit-1'].data[0].Name, 'PrivateDress')
 })
 
-test('an edit observes a newer host cloud revision before allocating its own revision', () => {
-  const device = seed()
-  let latest = cloudIndex(device.server)
+test('an edit after a fresh cloud read advances beyond the remote revision', () => {
+  const a = seed()
+  assert.equal(a.login(), true)
+  const b = client(a.server, { replicaId: 'other-device' })
+  assert.equal(b.repo.open(), true)
+  assert.equal(b.login(), true)
   for (let step = 0; step < 10; step++) {
-    latest = applyWardrobeOperations(latest, [{ type: 'put-outfit', id: 'outfit-1', changes: { name: `Remote ${step}` } }], { replicaId: 'other-device' })
+    b.repo.apply([{ type: 'put-outfit', id: 'outfit-1', changes: { name: `Remote ${step}` } }])
   }
-  device.server.settings.VPWardrobe = encode(latest)
-  device.player().ExtensionSettings.VPWardrobe = encode(latest)
-  device.repo.apply([{ type: 'put-outfit', id: 'outfit-1', changes: { name: 'My subsequent edit' } }])
-  assert.ok(device.repo.index.outfits['outfit-1'].rev[0] > latest.clock)
-  assert.equal(device.repo.flush(), true)
-  assert.equal(cloudIndex(device.server).outfits['outfit-1'].name, 'My subsequent edit')
+  assert.equal(b.repo.flush(), true)
+  const latest = cloudIndex(a.server)
+  assert.equal(a.login(), true)
+  a.repo.apply([{ type: 'put-outfit', id: 'outfit-1', changes: { name: 'My subsequent edit' } }])
+  assert.ok(a.repo.index.outfits['outfit-1'].rev[0] > latest.clock)
+  assert.equal(a.repo.flush(), true)
+  assert.equal(cloudIndex(a.server).outfits['outfit-1'].name, 'My subsequent edit')
 })
 
 test('another tab sharing local storage preserves newer private content when making an unrelated edit', () => {
@@ -462,6 +547,7 @@ test('first indexed cloud load cannot import content whose cloud state says priv
 test('a failed send is retried from durable state with a bounded scheduled delay', () => {
   const device = client()
   device.repo.open()
+  device.login()
   device.repo.apply([put('retry')])
   device.failSend('throw')
   assert.equal(device.repo.flush(), false)
@@ -496,7 +582,7 @@ test('open while logged out returns an error state without throwing or writing',
   assert.equal(opened, false)
   assert.equal(device.repo.status.state, 'error')
   assert.equal(device.repo.status.localSaved, false)
-  assert.equal(device.saved.size, 0)
+  assert.equal(device.saved.has(device.repo.key), false)
   assert.equal(device.sendCount(), 0)
   assert.equal(device.timers.size, 0)
 })
@@ -560,6 +646,8 @@ test('receiveCloud retains newly saved remote changes when subsequent quota meas
   assert.equal(b.timers.size, 0)
   assert.equal(b.repo.flush(), false)
   b.player().ExtensionSettings.Other = 'repaired'
+  assert.equal(b.repo.flush(), false, 'The malformed login snapshot stays untrusted until another login')
+  assert.equal(b.login(), true)
   assert.equal(b.repo.flush(), true)
   assert.equal(cloudIndex(a.server).outfits['outfit-1'].name, 'Fresh rename')
 })
@@ -567,6 +655,7 @@ test('receiveCloud retains newly saved remote changes when subsequent quota meas
 test('transport retry stops after five growing automatic delays instead of retrying forever', () => {
   const device = client()
   device.repo.open()
+  device.login()
   device.repo.apply([put('retry-limit')])
   device.failSend('throw')
   assert.equal(device.repo.flush(), false)

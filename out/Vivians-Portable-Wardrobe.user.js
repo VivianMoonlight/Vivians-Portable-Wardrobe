@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vivians Portable Wardrobe
 // @namespace    http://tampermonkey.net/
-// @version      0.10.1-react.3
+// @version      0.10.1-react.4
 // @author       VIVianMoonlight
 // @description  Portable Wardrobe for Bondage Club (React + Mantine, Shadow DOM isolated)
 // @downloadURL  https://cdn.jsdelivr.net/gh/VivianMoonlight/Vivians-Portable-Wardrobe@wardrobe-react/ViviansPortableWardrobeReactLoader.user.js
@@ -32,7 +32,7 @@
     return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
   };
   var require_main_001 = __commonJS({
-    "main-DLVlvFEy.js"(exports) {
+    "main-OFfbYjdD.js"(exports) {
       function _mergeNamespaces(n, m) {
         for (var i = 0; i < m.length; i++) {
           const e = m[i];
@@ -8662,7 +8662,7 @@
           this.store.addResource(languages[0], namespace, key, fallbackValue);
         }
       }
-      const get = () => ({
+      const get$1 = () => ({
         debug: false,
         initAsync: true,
         ns: ["translation"],
@@ -8798,7 +8798,7 @@
               options2.defaultNS = options2.ns[0];
             }
           }
-          const defOpts = get();
+          const defOpts = get$1();
           this.options = {
             ...defOpts,
             ...this.options,
@@ -9187,7 +9187,7 @@
           } catch (e) {
           }
           const rtlLngs = ["ar", "shu", "sqr", "ssh", "xaa", "yhd", "yud", "aao", "abh", "abv", "acm", "acq", "acw", "acx", "acy", "adf", "ads", "aeb", "aec", "afb", "ajp", "apc", "apd", "arb", "arq", "ars", "ary", "arz", "auz", "avl", "ayh", "ayl", "ayn", "ayp", "bbz", "pga", "he", "iw", "ps", "pbt", "pbu", "pst", "prp", "prd", "ug", "ur", "ydd", "yds", "yih", "ji", "yi", "hbo", "men", "xmn", "fa", "jpr", "peo", "pes", "prs", "dv", "sam", "ckb"];
-          const languageUtils = this.services?.languageUtils || new LanguageUtil(get());
+          const languageUtils = this.services?.languageUtils || new LanguageUtil(get$1());
           if (lng.toLowerCase().indexOf("-latn") > 1) return "ltr";
           return rtlLngs.indexOf(languageUtils.getLanguagePartFromCode(lng)) > -1 || lng.toLowerCase().indexOf("-arab") > 1 ? "rtl" : "ltr";
         }
@@ -9237,7 +9237,7 @@
             clone2.services.resourceStore = clone2.store;
           }
           if (options2.interpolation) {
-            const defOpts = get();
+            const defOpts = get$1();
             const mergedInterpolation = {
               ...defOpts.interpolation,
               ...this.options.interpolation,
@@ -9285,7 +9285,7 @@
       instance.hasLoadedNamespace;
       instance.loadNamespaces;
       instance.loadLanguages;
-      const version = "0.10.1-react.3";
+      const version = "0.10.1-react.4";
       var _unsafeWindow = /* @__PURE__ */ (() => typeof unsafeWindow != "undefined" ? unsafeWindow : void 0)();
       const hostWindow = typeof _unsafeWindow !== "undefined" ? _unsafeWindow : window;
       const doc = hostWindow.document;
@@ -9306,8 +9306,8 @@
           return !!val && typeof val === "object" && !Array.isArray(val);
         }
         function unique(arr) {
-          const set = /* @__PURE__ */ new Set();
-          return arr.filter((x) => !set.has(x) && set.add(x));
+          const set2 = /* @__PURE__ */ new Set();
+          return arr.filter((x) => !set2.has(x) && set2.add(x));
         }
         const functionMap = /* @__PURE__ */ new Map();
         const warned = /* @__PURE__ */ new Set();
@@ -9689,6 +9689,8 @@ One of mods you are using is using an old version of SDK. It will work for now b
           }
           return next(args);
         });
+      }
+      function hookDrawCharacter(modApi) {
       }
       function deepClone(v) {
         if (v === null || v === void 0) return v;
@@ -11372,21 +11374,21 @@ One of mods you are using is using an old version of SDK. It will work for now b
       const LZString$1 = /* @__PURE__ */ getDefaultExportFromCjs(lzStringExports);
       const WARDROBE_INDEX_VERSION = 3;
       const hasOwn = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
-      const isObject$3 = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+      const isObject$4 = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
       const validId = (value) => typeof value === "string" && value.trim().length > 0;
-      const compareText = (left, right) => left < right ? -1 : left > right ? 1 : 0;
-      function clone$2(value) {
-        if (Array.isArray(value)) return value.map(clone$2);
-        if (!isObject$3(value)) return value;
-        return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, clone$2(child)]));
+      const compareText$1 = (left, right) => left < right ? -1 : left > right ? 1 : 0;
+      function clone$3(value) {
+        if (Array.isArray(value)) return value.map(clone$3);
+        if (!isObject$4(value)) return value;
+        return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, clone$3(child)]));
       }
-      function canonical(value) {
-        if (Array.isArray(value)) return value.map(canonical);
-        if (!isObject$3(value)) return value;
-        return Object.fromEntries(Object.keys(value).sort(compareText).map((key) => [key, canonical(value[key])]));
+      function canonical$3(value) {
+        if (Array.isArray(value)) return value.map(canonical$3);
+        if (!isObject$4(value)) return value;
+        return Object.fromEntries(Object.keys(value).sort(compareText$1).map((key) => [key, canonical$3(value[key])]));
       }
       function sameValue(left, right) {
-        return JSON.stringify(canonical(left)) === JSON.stringify(canonical(right));
+        return JSON.stringify(canonical$3(left)) === JSON.stringify(canonical$3(right));
       }
       function sameOutfitContent(left, right) {
         const leftContent = { ...left };
@@ -11396,7 +11398,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
         return sameValue(leftContent, rightContent);
       }
       function hasPrivateRevision(outfit, disabledState) {
-        return compareRevision(outfit.rev, disabledState.rev) > 0 || outfit.rev[1] !== disabledState.rev[1];
+        return compareRevision$1(outfit.rev, disabledState.rev) > 0 || outfit.rev[1] !== disabledState.rev[1];
       }
       function assert(condition, message) {
         if (!condition) throw new Error(`Invalid wardrobe index: ${message}`);
@@ -11404,18 +11406,18 @@ One of mods you are using is using an old version of SDK. It will work for now b
       function isRevision(value) {
         return Array.isArray(value) && value.length === 2 && Number.isSafeInteger(value[0]) && value[0] >= 0 && validId(value[1]);
       }
-      function compareRevision(left, right) {
+      function compareRevision$1(left, right) {
         if (left[0] !== right[0]) return left[0] - right[0];
-        return compareText(left[1], right[1]);
+        return compareText$1(left[1], right[1]);
       }
       function newest(left, right) {
         if (!left) return right;
         if (!right) return left;
-        const order = compareRevision(left.rev, right.rev);
+        const order = compareRevision$1(left.rev, right.rev);
         if (order !== 0) return order > 0 ? left : right;
-        return compareText(JSON.stringify(canonical(left)), JSON.stringify(canonical(right))) >= 0 ? left : right;
+        return compareText$1(JSON.stringify(canonical$3(left)), JSON.stringify(canonical$3(right))) >= 0 ? left : right;
       }
-      function maximumClock(index2) {
+      function maximumClock$1(index2) {
         let clock = index2.clock;
         for (const table of [index2.outfits, index2.tags, index2.cloudState]) {
           for (const record of Object.values(table)) clock = Math.max(clock, record.rev[0]);
@@ -11431,7 +11433,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
         if (!name) throw new Error("Tag name cannot be empty");
         return name;
       }
-      function allocateId(kind) {
+      function allocateId$1(kind) {
         if (typeof globalThis.crypto?.randomUUID === "function") return `${kind}_${globalThis.crypto.randomUUID()}`;
         if (typeof globalThis.crypto?.getRandomValues !== "function") throw new Error("Secure wardrobe ID generation is unavailable");
         const bytes = globalThis.crypto.getRandomValues(new Uint8Array(16));
@@ -11450,7 +11452,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
           if (fork?.sourceId === sourceId && sameValue(fork.sourceRev, sourceRev)) return;
           id = `${baseId}_${suffix++}`;
         }
-        setRecord(index2.outfits, id, { ...clone$2(outfit), id, vpwLocalFork: { sourceId, sourceRev: [...sourceRev] } });
+        setRecord(index2.outfits, id, { ...clone$3(outfit), id, vpwLocalFork: { sourceId, sourceRev: [...sourceRev] } });
         setRecord(index2.cloudState, id, { enabled: false, rev: [...sourceRev], localOnly: true });
       }
       function createWardrobeIndex() {
@@ -11464,13 +11466,13 @@ One of mods you are using is using an old version of SDK. It will work for now b
         };
       }
       function validateWardrobeIndex(value) {
-        assert(isObject$3(value) && value.schemaVersion === WARDROBE_INDEX_VERSION, "unsupported schema version");
+        assert(isObject$4(value) && value.schemaVersion === WARDROBE_INDEX_VERSION, "unsupported schema version");
         assert(Number.isSafeInteger(value.clock) && value.clock >= 0, "clock must be a nonnegative safe integer");
-        assert(isObject$3(value.tombstones), "tombstones must be an object");
+        assert(isObject$4(value.tombstones), "tombstones must be an object");
         for (const kind of ["outfits", "tags"]) {
-          assert(isObject$3(value[kind]) && isObject$3(value.tombstones[kind]), `${kind} tables must be objects`);
+          assert(isObject$4(value[kind]) && isObject$4(value.tombstones[kind]), `${kind} tables must be objects`);
           for (const [id, record] of Object.entries(value[kind])) {
-            assert(validId(id) && isObject$3(record) && record.id === id, `${kind} record ID does not match its key`);
+            assert(validId(id) && isObject$4(record) && record.id === id, `${kind} record ID does not match its key`);
             assert(typeof record.name === "string", `${kind} record name must be a string`);
             assert(isRevision(record.rev), `${kind} record revision is invalid`);
             if (kind === "outfits") {
@@ -11484,9 +11486,9 @@ One of mods you are using is using an old version of SDK. It will work for now b
             assert(validId(id) && isRevision(revision), `${kind} tombstone is invalid`);
           }
         }
-        assert(isObject$3(value.cloudState), "cloudState must be an object");
+        assert(isObject$4(value.cloudState), "cloudState must be an object");
         for (const [id, state] of Object.entries(value.cloudState)) {
-          assert(validId(id) && isObject$3(state) && typeof state.enabled === "boolean" && isRevision(state.rev), "cloud state is invalid");
+          assert(validId(id) && isObject$4(state) && typeof state.enabled === "boolean" && isRevision(state.rev), "cloud state is invalid");
         }
         return value;
       }
@@ -11499,22 +11501,22 @@ One of mods you are using is using an old version of SDK. It will work for now b
         }
       }
       function mergeTable(left, right, choose) {
-        return Object.fromEntries(Array.from(/* @__PURE__ */ new Set([...Object.keys(left), ...Object.keys(right)])).sort(compareText).map((id) => [id, clone$2(choose(hasOwn(left, id) ? left[id] : null, hasOwn(right, id) ? right[id] : null))]));
+        return Object.fromEntries(Array.from(/* @__PURE__ */ new Set([...Object.keys(left), ...Object.keys(right)])).sort(compareText$1).map((id) => [id, clone$3(choose(hasOwn(left, id) ? left[id] : null, hasOwn(right, id) ? right[id] : null))]));
       }
       function mergeWardrobeIndexes(local, remote, { bothLocal = false } = {}) {
         validateWardrobeIndex(local);
         validateWardrobeIndex(remote);
         const merged = createWardrobeIndex();
-        merged.clock = Math.max(maximumClock(local), maximumClock(remote));
+        merged.clock = Math.max(maximumClock$1(local), maximumClock$1(remote));
         for (const kind of ["outfits", "tags"]) {
           merged.tombstones[kind] = mergeTable(local.tombstones[kind], remote.tombstones[kind], (left, right) => {
             if (!left) return right;
             if (!right) return left;
-            return compareRevision(left, right) >= 0 ? left : right;
+            return compareRevision$1(left, right) >= 0 ? left : right;
           });
         }
         merged.cloudState = mergeTable(local.cloudState, remote.cloudState, (left, right) => {
-          if (left && right && compareRevision(left.rev, right.rev) === 0 && left.enabled !== right.enabled) {
+          if (left && right && compareRevision$1(left.rev, right.rev) === 0 && left.enabled !== right.enabled) {
             return left.enabled ? right : left;
           }
           return newest(left, right);
@@ -11527,7 +11529,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
         for (const id of Object.keys(merged.tombstones.outfits)) delete merged.cloudState[id];
         for (const [id, state] of Object.entries(merged.cloudState)) {
           if (state.enabled || hasOwn(merged.tombstones.outfits, id)) continue;
-          if (hasOwn(local.outfits, id)) setRecord(merged.outfits, id, clone$2(local.outfits[id]));
+          if (hasOwn(local.outfits, id)) setRecord(merged.outfits, id, clone$3(local.outfits[id]));
           else delete merged.outfits[id];
         }
         for (const [id, state] of Object.entries(merged.cloudState)) {
@@ -11543,7 +11545,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
               preservePrivateFork(merged, id, privateOutfit);
             }
           }
-          if (publicOutfit) setRecord(merged.outfits, id, clone$2(publicOutfit));
+          if (publicOutfit) setRecord(merged.outfits, id, clone$3(publicOutfit));
           else delete merged.outfits[id];
         }
         return merged;
@@ -11557,7 +11559,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
             if (state.localOnly) delete projected.cloudState[id];
           }
         }
-        projected.clock = maximumClock({ ...projected, clock: 0 });
+        projected.clock = maximumClock$1({ ...projected, clock: 0 });
         return projected;
       }
       function listWardrobeOutfits(index2) {
@@ -11574,9 +11576,9 @@ One of mods you are using is using an old version of SDK. It will work for now b
           groups.get(name).push(tag);
         }
         return Array.from(groups.entries()).map(([name, tags]) => {
-          tags.sort((left, right) => compareText(left.id, right.id));
+          tags.sort((left, right) => compareText$1(left.id, right.id));
           return { ...tags[0], name, aliasIds: tags.map((tag) => tag.id) };
-        }).sort((left, right) => compareText(left.name, right.name) || compareText(left.id, right.id));
+        }).sort((left, right) => compareText$1(left.name, right.name) || compareText$1(left.id, right.id));
       }
       function applyWardrobeOperations(index2, operations, { replicaId } = {}) {
         validateWardrobeIndex(index2);
@@ -11589,17 +11591,17 @@ One of mods you are using is using an old version of SDK. It will work for now b
           return [next.clock, replicaId];
         };
         for (const operation of operations) {
-          if (!isObject$3(operation)) throw new Error("Invalid wardrobe operation");
+          if (!isObject$4(operation)) throw new Error("Invalid wardrobe operation");
           let id = operation.id;
-          if (id == null && operation.type === "put-tag") id = allocateId("tag");
-          if (id == null && operation.type === "put-outfit") id = allocateId("outfit");
+          if (id == null && operation.type === "put-tag") id = allocateId$1("tag");
+          if (id == null && operation.type === "put-outfit") id = allocateId$1("outfit");
           if (!validId(id)) throw new Error("Wardrobe operation ID is required");
           switch (operation.type) {
             case "put-outfit": {
               if (hasOwn(next.tombstones.outfits, id)) throw new Error("Deleted outfits require a new ID to restore");
-              if (!isObject$3(operation.changes)) throw new Error("Outfit changes must be an object");
+              if (!isObject$4(operation.changes)) throw new Error("Outfit changes must be an object");
               const previous = hasOwn(next.outfits, id) ? next.outfits[id] : null;
-              const changes = clone$2(operation.changes);
+              const changes = clone$3(operation.changes);
               delete changes.id;
               delete changes.rev;
               const outfit = { name: "Untitled", type: "outfit", data: [], tagIds: [], ...previous, ...changes, id };
@@ -11659,24 +11661,24 @@ One of mods you are using is using an old version of SDK. It will work for now b
       const NODE_ID = "__vpwNodeId";
       const RUNTIME_FIELDS = /* @__PURE__ */ new Set(["thumbCanvas", "isThumbGenerated", "__thumbRefresh"]);
       const SYNC_FIELDS = /* @__PURE__ */ new Set([NODE_ID, "__vpwSync", "__vpwPersistedAt", "__vpwRev", "__vpwParentId", "__vpwOrder"]);
-      function isObject$2(value) {
+      function isObject$3(value) {
         return !!value && typeof value === "object" && !Array.isArray(value);
       }
-      function own$1(object, key) {
+      function own$3(object, key) {
         return Object.prototype.hasOwnProperty.call(object, key);
       }
       function put(object, key, value) {
         Object.defineProperty(object, key, { value, enumerable: true, configurable: true, writable: true });
       }
       function nodeId(node) {
-        return own$1(node, NODE_ID) && typeof node[NODE_ID] === "string" && node[NODE_ID].trim() ? node[NODE_ID].trim() : null;
+        return own$3(node, NODE_ID) && typeof node[NODE_ID] === "string" && node[NODE_ID].trim() ? node[NODE_ID].trim() : null;
       }
       function compare(left, right) {
         return left < right ? -1 : left > right ? 1 : 0;
       }
       function stableStringify(value) {
         if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
-        if (!isObject$2(value)) return JSON.stringify(value);
+        if (!isObject$3(value)) return JSON.stringify(value);
         return `{${Object.keys(value).sort(compare).map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(",")}}`;
       }
       function hash(value) {
@@ -11699,13 +11701,13 @@ One of mods you are using is using an old version of SDK. It will work for now b
         return result;
       }
       function isLegacyWardrobe(value) {
-        return isObject$2(value) && !own$1(value, "schemaVersion") && Array.isArray(value.children) && (value.type === void 0 || value.type === "folder");
+        return isObject$3(value) && !own$3(value, "schemaVersion") && Array.isArray(value.children) && (value.type === void 0 || value.type === "folder");
       }
       function describeTree(tree) {
         const descriptors = [];
         const visiting = /* @__PURE__ */ new WeakSet();
         const walk = (node, parent, path) => {
-          if (!isObject$2(node)) throw new TypeError("Legacy wardrobe contains a non-object node");
+          if (!isObject$3(node)) throw new TypeError("Legacy wardrobe contains a non-object node");
           if (visiting.has(node)) throw new TypeError("Legacy wardrobe contains a folder cycle");
           visiting.add(node);
           const folder = !parent || node.type === "folder" || Array.isArray(node.children);
@@ -11814,20 +11816,20 @@ One of mods you are using is using an old version of SDK. It will work for now b
         return [counter, typeof replica === "string" && replica.trim() ? replica : fallbackReplica];
       }
       function readLegacySync(tree, replicaId) {
-        const sync = own$1(tree, "__vpwSync") ? tree.__vpwSync : null;
-        if (sync != null && (!isObject$2(sync) || ![1, 2].includes(Number(sync.version)))) {
+        const sync = own$3(tree, "__vpwSync") ? tree.__vpwSync : null;
+        if (sync != null && (!isObject$3(sync) || ![1, 2].includes(Number(sync.version)))) {
           throw new TypeError("Unsupported legacy wardrobe sync metadata");
         }
         if (sync?.counter !== void 0 && (!Number.isSafeInteger(sync.counter) || sync.counter < 0)) {
           throw new TypeError("Legacy wardrobe revision counter is invalid");
         }
-        if (sync?.records !== void 0 && !isObject$2(sync.records)) {
+        if (sync?.records !== void 0 && !isObject$3(sync.records)) {
           throw new TypeError("Legacy wardrobe records must be an object");
         }
         let clock = oldRevision({ counter: sync?.counter }, replicaId)?.[0] ?? 0;
         const deletions = /* @__PURE__ */ new Map();
         const tombstones = sync?.tombstones;
-        if (tombstones !== void 0 && !isObject$2(tombstones)) {
+        if (tombstones !== void 0 && !isObject$3(tombstones)) {
           throw new TypeError("Legacy tombstones must be an object");
         }
         for (const [id, tombstone] of Object.entries(tombstones || {})) {
@@ -11848,13 +11850,13 @@ One of mods you are using is using an old version of SDK. It will work for now b
         const result = { ...payload };
         const displaced = {};
         for (const [key, value] of Object.entries(fields)) {
-          if (own$1(result, key) && stableStringify(result[key]) !== stableStringify(value)) {
+          if (own$3(result, key) && stableStringify(result[key]) !== stableStringify(value)) {
             put(displaced, key, result[key]);
           }
           put(result, key, value);
         }
         if (Object.keys(displaced).length) {
-          if (own$1(result, "legacyFields")) put(displaced, "legacyFields", result.legacyFields);
+          if (own$3(result, "legacyFields")) put(displaced, "legacyFields", result.legacyFields);
           put(result, "legacyFields", displaced);
         }
         return result;
@@ -11902,7 +11904,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
               rev: [...revision],
               order: order++
             });
-            if (!own$1(outfit, "data")) outfit.data = [];
+            if (!own$3(outfit, "data")) outfit.data = [];
             put(result.outfits, descriptor.id, outfit);
             put(result.cloudState, descriptor.id, { enabled, rev: [...revision] });
           }
@@ -11913,51 +11915,577 @@ One of mods you are using is using an old version of SDK. It will work for now b
       }
       const EXTENSION_QUOTA_BYTES = 18e4;
       const WARDROBE_KEY = "VPWardrobe";
+      const WARDROBE_MARKER_PREFIX$1 = "VPW4_M_";
+      function isWardrobeKey(key) {
+        return key === WARDROBE_KEY || key.startsWith(WARDROBE_MARKER_PREFIX$1);
+      }
       function jsonBytes(value) {
         const serialized = JSON.stringify(value);
         if (typeof serialized !== "string") throw new TypeError("Extension settings cannot be serialized");
         return new TextEncoder().encode(serialized).byteLength;
       }
-      function measureExtensionQuota(extensionSettings, encodedVpwPayload, {
-        limitBytes = EXTENSION_QUOTA_BYTES,
-        warnRatio = 0.8
-      } = {}) {
-        if (typeof encodedVpwPayload !== "string") {
-          throw new TypeError("The wardrobe payload must be an encoded string");
-        }
+      function validateSettings(extensionSettings, limitBytes, warnRatio) {
         if (extensionSettings != null && (typeof extensionSettings !== "object" || Array.isArray(extensionSettings))) {
           throw new TypeError("Extension settings must be an object");
         }
         if (!Number.isFinite(limitBytes) || limitBytes <= 0 || !Number.isFinite(warnRatio) || warnRatio < 0 || warnRatio > 1) {
           throw new RangeError("Invalid extension storage budget");
         }
-        const others = { ...extensionSettings };
-        delete others[WARDROBE_KEY];
-        const proposed = { ...others, [WARDROBE_KEY]: encodedVpwPayload };
+      }
+      function settingsUsage(extensionSettings, { limitBytes = EXTENSION_QUOTA_BYTES, warnRatio = 0.8 } = {}) {
+        validateSettings(extensionSettings, limitBytes, warnRatio);
+        const current = { ...extensionSettings };
+        const others = Object.fromEntries(Object.entries(current).filter(([key]) => !isWardrobeKey(key)));
         const otherExtensionsBytes = jsonBytes(others);
-        const totalBytes = jsonBytes(proposed);
+        const totalBytes = jsonBytes(current);
         const wardrobeBytes = totalBytes - otherExtensionsBytes;
-        const packet = ["AccountUpdate", { [`ExtensionSettings.${WARDROBE_KEY}`]: encodedVpwPayload }];
-        const packetBytes = jsonBytes(packet) + 2;
         const usageRatio = totalBytes / limitBytes;
-        const isOverLimit = totalBytes > limitBytes || packetBytes > limitBytes;
+        const isOverLimit = totalBytes > limitBytes;
         return {
           limitBytes,
           warnRatio,
           wardrobeBytes,
           otherExtensionsBytes,
           totalBytes,
-          packetBytes,
           remainingBytes: Math.max(0, limitBytes - totalBytes),
           usageRatio,
           isOverLimit,
           isWarning: !isOverLimit && usageRatio >= warnRatio
         };
       }
+      function measureObservedExtensionQuota(extensionSettings, options2) {
+        return settingsUsage(extensionSettings, options2);
+      }
+      function measureExtensionQuota(extensionSettings, encodedVpwPayload, {
+        limitBytes = EXTENSION_QUOTA_BYTES,
+        warnRatio = 0.8,
+        markerKey,
+        markerValue
+      } = {}) {
+        if (typeof encodedVpwPayload !== "string") {
+          throw new TypeError("The wardrobe payload must be an encoded string");
+        }
+        validateSettings(extensionSettings, limitBytes, warnRatio);
+        if (markerKey === void 0 ? markerValue !== void 0 : typeof markerKey !== "string" || !/^VPW4_M_[0-9a-f]{32}$/.test(markerKey) || markerValue === void 0) {
+          throw new TypeError("A device marker requires a safe key and serializable value");
+        }
+        if (markerKey !== void 0) jsonBytes(markerValue);
+        const current = { ...extensionSettings };
+        const proposed = { ...current, [WARDROBE_KEY]: encodedVpwPayload };
+        if (markerKey !== void 0) proposed[markerKey] = markerValue;
+        const quota = settingsUsage(proposed, { limitBytes, warnRatio });
+        const update = { [`ExtensionSettings.${WARDROBE_KEY}`]: encodedVpwPayload };
+        if (markerKey !== void 0) update[`ExtensionSettings.${markerKey}`] = markerValue;
+        const packet = ["AccountUpdate", update];
+        const packetBytes = jsonBytes(packet) + 2;
+        return {
+          ...quota,
+          packetBytes,
+          isOverLimit: quota.isOverLimit || packetBytes > limitBytes,
+          isWarning: !quota.isOverLimit && packetBytes <= limitBytes && quota.usageRatio >= warnRatio
+        };
+      }
+      const WARDROBE_MARKER_PREFIX = "VPW4_M_";
+      const WARDROBE_MARKER_VERSION = 1;
+      const MAX_WARDROBE_DEVICE_MARKERS = 16;
+      const DEVICE_ID = /^[0-9a-f]{32}$/;
+      const MARKER_FIELDS = /* @__PURE__ */ new Set(["v", "s"]);
+      const own$2 = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
+      const isObject$2 = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+      const validSequence = (value) => Number.isSafeInteger(value) && value >= 0;
+      function assertDeviceId(deviceId) {
+        if (!DEVICE_ID.test(deviceId)) throw new Error("Invalid wardrobe device ID");
+        return deviceId;
+      }
+      function canonicalMarker(value) {
+        if (!isObject$2(value) || Object.keys(value).some((key) => !MARKER_FIELDS.has(key))) {
+          throw new Error("Invalid wardrobe sync marker");
+        }
+        if (value.v !== WARDROBE_MARKER_VERSION || !validSequence(value.s)) {
+          throw new Error("Invalid wardrobe marker version or sequence");
+        }
+        return { v: WARDROBE_MARKER_VERSION, s: value.s };
+      }
+      function generateWardrobeDeviceId(cryptoProvider = globalThis.crypto) {
+        if (typeof cryptoProvider?.getRandomValues !== "function") {
+          throw new Error("Secure wardrobe device ID generation is unavailable");
+        }
+        const bytes = cryptoProvider.getRandomValues(new Uint8Array(16));
+        if (!(bytes instanceof Uint8Array) || bytes.length !== 16) {
+          throw new Error("Secure wardrobe device ID generation failed");
+        }
+        return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+      }
+      function getOrCreateWardrobeDeviceId(storage, memberNumber, cryptoProvider = globalThis.crypto) {
+        if (!Number.isSafeInteger(memberNumber) || memberNumber < 0) {
+          throw new Error("A BC account is required for wardrobe device ID");
+        }
+        const key = `VPW4_device_${memberNumber}`;
+        const existing = storage.getItem(key);
+        if (existing !== null) return assertDeviceId(existing);
+        const deviceId = generateWardrobeDeviceId(cryptoProvider);
+        if (storage.setItem(key, deviceId) === false || storage.getItem(key) !== deviceId) {
+          throw new Error("Wardrobe device ID could not be saved locally");
+        }
+        return deviceId;
+      }
+      function markerKeyForDevice(deviceId) {
+        return WARDROBE_MARKER_PREFIX + assertDeviceId(deviceId);
+      }
+      function createWardrobeSyncMarker(options2 = {}) {
+        if (!isObject$2(options2) || Object.keys(options2).some((key) => key !== "sequence")) {
+          throw new Error("Invalid wardrobe marker options");
+        }
+        return canonicalMarker({ v: WARDROBE_MARKER_VERSION, s: options2.sequence ?? 0 });
+      }
+      function encodeWardrobeSyncMarker(marker) {
+        return JSON.stringify(canonicalMarker(marker));
+      }
+      function decodeWardrobeSyncMarker(raw) {
+        if (typeof raw !== "string") throw new Error("Wardrobe sync marker must be a string");
+        if (raw.length > 28) throw new Error("Wardrobe sync marker exceeds its fixed size");
+        let value;
+        try {
+          value = JSON.parse(raw);
+        } catch {
+          throw new Error("Wardrobe sync marker could not be decoded");
+        }
+        const marker = canonicalMarker(value);
+        if (raw !== encodeWardrobeSyncMarker(marker)) throw new Error("Wardrobe sync marker is not canonical");
+        return marker;
+      }
+      function readWardrobeSyncMarkers(extensionSettings) {
+        if (!isObject$2(extensionSettings)) throw new Error("ExtensionSettings must be an object");
+        const markers = /* @__PURE__ */ new Map();
+        for (const [key, raw] of Object.entries(extensionSettings)) {
+          if (!key.startsWith(WARDROBE_MARKER_PREFIX)) continue;
+          if (markers.size >= MAX_WARDROBE_DEVICE_MARKERS) {
+            throw new Error("Wardrobe device marker limit reached");
+          }
+          const deviceId = assertDeviceId(key.slice(WARDROBE_MARKER_PREFIX.length));
+          markers.set(deviceId, decodeWardrobeSyncMarker(raw));
+        }
+        return markers;
+      }
+      function findUnappliedWardrobeMarkers(markers, appliedSeqByDevice = {}) {
+        if (!(markers instanceof Map) || !isObject$2(appliedSeqByDevice)) {
+          throw new Error("Invalid wardrobe synchronization receipts");
+        }
+        if (markers.size > MAX_WARDROBE_DEVICE_MARKERS || Object.keys(appliedSeqByDevice).length > MAX_WARDROBE_DEVICE_MARKERS) {
+          throw new Error("Wardrobe device marker limit reached");
+        }
+        for (const [deviceId, sequence] of Object.entries(appliedSeqByDevice)) {
+          assertDeviceId(deviceId);
+          if (!validSequence(sequence)) throw new Error("Invalid applied wardrobe sequence");
+          if (sequence > 0 && !markers.has(deviceId)) {
+            throw new Error("Wardrobe snapshot references a missing device marker");
+          }
+        }
+        const missing = [];
+        for (const [deviceId, marker] of markers) {
+          assertDeviceId(deviceId);
+          const receipt = canonicalMarker(marker);
+          const appliedSequence = own$2(appliedSeqByDevice, deviceId) ? appliedSeqByDevice[deviceId] : 0;
+          if (receipt.s > appliedSequence) missing.push({ deviceId, marker: receipt, appliedSequence });
+          else if (receipt.s < appliedSequence) {
+            throw new Error("Wardrobe device marker is older than the cloud snapshot");
+          }
+        }
+        return missing.sort((left, right) => left.deviceId.localeCompare(right.deviceId));
+      }
+      const absent = /* @__PURE__ */ Symbol("absent");
+      const own$1 = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
+      const compareText = (left, right) => left < right ? -1 : left > right ? 1 : 0;
+      function clone$2(value) {
+        if (Array.isArray(value)) return value.map(clone$2);
+        if (value === null || typeof value !== "object") return value;
+        return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, clone$2(child)]));
+      }
+      function canonical$2(value) {
+        if (Array.isArray(value)) return value.map(canonical$2);
+        if (value === null || typeof value !== "object") return value;
+        return Object.fromEntries(Object.keys(value).sort(compareText).map((key) => [key, canonical$2(value[key])]));
+      }
+      function same(left, right) {
+        if (left === absent || right === absent) return left === right;
+        return JSON.stringify(canonical$2(left)) === JSON.stringify(canonical$2(right));
+      }
+      function set(table, id, value) {
+        Object.defineProperty(table, id, { value, enumerable: true, configurable: true, writable: true });
+      }
+      function get(table, id) {
+        return own$1(table, id) ? table[id] : null;
+      }
+      function field(record, key) {
+        return record && own$1(record, key) ? record[key] : absent;
+      }
+      function content(record) {
+        if (!record) return absent;
+        const value = clone$2(record);
+        delete value.id;
+        delete value.rev;
+        return value;
+      }
+      function maximumClock(index2) {
+        let clock = index2.clock;
+        for (const table of [index2.outfits, index2.tags, index2.cloudState]) {
+          for (const record of Object.values(table)) clock = Math.max(clock, record.rev[0]);
+        }
+        for (const table of Object.values(index2.tombstones)) {
+          for (const revision of Object.values(table)) clock = Math.max(clock, revision[0]);
+        }
+        return clock;
+      }
+      function compareRevision(left, right) {
+        return left[0] - right[0] || compareText(left[1], right[1]);
+      }
+      function newestRevision(...revisions) {
+        return revisions.filter(Boolean).sort(compareRevision).at(-1);
+      }
+      function nextRevision(index2, replicaId) {
+        if (index2.clock >= Number.MAX_SAFE_INTEGER) throw new Error("Wardrobe revision counter exhausted");
+        return [++index2.clock, replicaId];
+      }
+      function ids(...tables) {
+        return [...new Set(tables.flatMap((table) => Object.keys(table)))].sort(compareText);
+      }
+      function conflictValue(value) {
+        return value === absent ? null : clone$2(value);
+      }
+      function addConflict(conflicts, { kind, id, field: name, type, base, local, remote, ...extra }) {
+        conflicts.push({
+          kind,
+          id,
+          field: name,
+          type,
+          base: conflictValue(base),
+          local: conflictValue(local),
+          remote: conflictValue(remote),
+          present: { base: base !== absent, local: local !== absent, remote: remote !== absent },
+          ...extra
+        });
+      }
+      function chooseField(base, local, remote, details, conflicts) {
+        if (same(local, remote)) return local;
+        if (same(local, base)) return remote;
+        if (same(remote, base)) return local;
+        addConflict(conflicts, { ...details, type: "concurrent-edit", base, local, remote });
+        return local;
+      }
+      function mergeTagIds(base, local, remote) {
+        const original = new Set(base === absent ? [] : base);
+        const left = new Set(local === absent ? [] : local);
+        const right = new Set(remote === absent ? [] : remote);
+        return [.../* @__PURE__ */ new Set([...original, ...left, ...right])].filter((id) => original.has(id) ? left.has(id) && right.has(id) : left.has(id) || right.has(id)).sort(compareText);
+      }
+      function mergedRevision(index2, merged, candidates, replicaId) {
+        const matching = candidates.filter((candidate) => candidate && same(content(candidate), content(merged)));
+        if (matching.length) return clone$2(newestRevision(...matching.map((candidate) => candidate.rev)));
+        return nextRevision(index2, replicaId);
+      }
+      function mergeRecord(index2, kind, id, baseRecord, localRecord, remoteRecord, conflicts, replicaId) {
+        const local = localRecord || baseRecord;
+        const remote = remoteRecord || baseRecord;
+        if (!local && !remote) return null;
+        if (!local) return clone$2(remote);
+        if (!remote) return clone$2(local);
+        const merged = { id };
+        for (const key of ids(baseRecord || {}, local, remote)) {
+          if (key === "id" || key === "rev") continue;
+          const baseValue = field(baseRecord, key);
+          const localValue = field(local, key);
+          const remoteValue = field(remote, key);
+          const value = kind === "outfit" && key === "tagIds" ? mergeTagIds(baseValue, localValue, remoteValue) : chooseField(
+            baseValue,
+            localValue,
+            remoteValue,
+            { kind, id, field: key },
+            conflicts
+          );
+          if (value !== absent) merged[key] = clone$2(value);
+        }
+        merged.rev = mergedRevision(index2, merged, [baseRecord, localRecord, remoteRecord], replicaId);
+        return merged;
+      }
+      function changedSince(baseRecord, candidate) {
+        return !!candidate && !same(content(baseRecord), content(candidate));
+      }
+      function mergeCloudState(index2, id, baseState, localState, remoteState, conflicts, replicaId) {
+        const local = localState || baseState;
+        const remote = remoteState || baseState;
+        if (!local && !remote) return null;
+        if (!local) return clone$2(remote);
+        if (!remote) return clone$2(local);
+        const merged = {};
+        for (const key of ids(baseState || {}, local, remote)) {
+          if (key === "rev" || key === "localOnly") continue;
+          const value = chooseField(
+            field(baseState, key),
+            field(local, key),
+            field(remote, key),
+            { kind: "cloud-state", id, field: key },
+            conflicts
+          );
+          if (value !== absent) merged[key] = clone$2(value);
+        }
+        if (!merged.enabled && (localState?.localOnly || remoteState?.localOnly)) merged.localOnly = true;
+        merged.rev = mergedRevision(index2, merged, [baseState, localState, remoteState], replicaId);
+        return merged;
+      }
+      function mergeWardrobeIndexesThreeWay(base, local, remote, { replicaId = "vpw-merge" } = {}) {
+        validateWardrobeIndex(base);
+        validateWardrobeIndex(local);
+        validateWardrobeIndex(remote);
+        if (typeof replicaId !== "string" || !replicaId.trim()) throw new Error("Wardrobe replicaId is required");
+        const merged = createWardrobeIndex();
+        merged.clock = Math.max(maximumClock(base), maximumClock(local), maximumClock(remote));
+        const conflicts = [];
+        for (const table of ["outfits", "tags"]) {
+          const kind = table === "outfits" ? "outfit" : "tag";
+          for (const id of ids(
+            base[table],
+            local[table],
+            remote[table],
+            base.tombstones[table],
+            local.tombstones[table],
+            remote.tombstones[table]
+          )) {
+            const baseRecord = get(base[table], id);
+            const localRecord = get(local[table], id);
+            const remoteRecord = table === "outfits" && get(remote.cloudState, id)?.enabled === false ? null : get(remote[table], id);
+            const tombstone = newestRevision(
+              get(base.tombstones[table], id),
+              get(local.tombstones[table], id),
+              get(remote.tombstones[table], id)
+            );
+            if (tombstone) {
+              set(merged.tombstones[table], id, clone$2(tombstone));
+              const localDeleted = !!get(local.tombstones[table], id);
+              const remoteDeleted = !!get(remote.tombstones[table], id);
+              if (localDeleted && !remoteDeleted && changedSince(baseRecord, remoteRecord) || remoteDeleted && !localDeleted && changedSince(baseRecord, localRecord)) {
+                addConflict(conflicts, {
+                  kind,
+                  id,
+                  field: "$record",
+                  type: "delete-edit",
+                  base: baseRecord || absent,
+                  local: localDeleted ? absent : localRecord || absent,
+                  remote: remoteDeleted ? absent : remoteRecord || absent,
+                  localCloudState: kind === "outfit" ? clone$2(get(local.cloudState, id)) : null,
+                  remoteCloudState: kind === "outfit" ? clone$2(get(remote.cloudState, id)) : null
+                });
+              }
+              continue;
+            }
+            if (table === "outfits" && get(local.cloudState, id)?.enabled === false) {
+              if (localRecord) set(merged.outfits, id, clone$2(localRecord));
+              continue;
+            }
+            const record = mergeRecord(
+              merged,
+              kind,
+              id,
+              baseRecord,
+              localRecord,
+              remoteRecord,
+              conflicts,
+              replicaId
+            );
+            if (record) set(merged[table], id, record);
+          }
+        }
+        for (const id of ids(base.cloudState, local.cloudState, remote.cloudState)) {
+          if (own$1(merged.tombstones.outfits, id)) continue;
+          const baseState = get(base.cloudState, id);
+          const localState = get(local.cloudState, id);
+          const remoteState = get(remote.cloudState, id);
+          const state = mergeCloudState(
+            merged,
+            id,
+            baseState,
+            localState,
+            remoteState,
+            conflicts,
+            replicaId
+          );
+          if (!state) continue;
+          const localPrivate = localState?.enabled === false;
+          const remotePublic = remoteState?.enabled === true;
+          const remoteChanged = changedSince(get(base.outfits, id), get(remote.outfits, id));
+          if (localPrivate && remotePublic && (state.enabled || remoteChanged)) {
+            state.enabled = false;
+            if (localState.localOnly) state.localOnly = true;
+            else delete state.localOnly;
+            state.rev = clone$2(newestRevision(state.rev, localState.rev));
+            if (get(local.outfits, id)) set(merged.outfits, id, clone$2(local.outfits[id]));
+            else delete merged.outfits[id];
+            if (!conflicts.some((conflict) => conflict.kind === "cloud-state" && conflict.id === id && conflict.field === "enabled")) {
+              addConflict(conflicts, {
+                kind: "cloud-state",
+                id,
+                field: "enabled",
+                type: "privacy",
+                base: baseState ? baseState.enabled : absent,
+                local: localState.enabled,
+                remote: remoteState.enabled,
+                localOutfit: clone$2(get(local.outfits, id)),
+                remoteOutfit: clone$2(get(remote.outfits, id))
+              });
+            }
+          }
+          if (remoteState?.enabled === false) {
+            if (get(local.outfits, id)) set(merged.outfits, id, clone$2(local.outfits[id]));
+            else delete merged.outfits[id];
+            if (state.enabled && !get(local.outfits, id)) {
+              state.enabled = false;
+              addConflict(conflicts, {
+                kind: "cloud-state",
+                id,
+                field: "enabled",
+                type: "privacy",
+                base: baseState ? baseState.enabled : absent,
+                local: localState ? localState.enabled : absent,
+                remote: remoteState.enabled,
+                localOutfit: null,
+                remoteOutfit: null
+              });
+            }
+          }
+          for (const conflict of conflicts) {
+            if (conflict.kind === "cloud-state" && conflict.id === id && conflict.field === "enabled") {
+              conflict.baseOutfit ??= clone$2(get(base.outfits, id));
+              conflict.localOutfit ??= clone$2(get(local.outfits, id));
+              conflict.remoteOutfit ??= remoteState?.enabled === true ? clone$2(get(remote.outfits, id)) : null;
+            }
+          }
+          set(merged.cloudState, id, state);
+        }
+        return { merged: validateWardrobeIndex(merged), conflicts, canUpload: conflicts.length === 0 };
+      }
+      function allocateId(kind, index2) {
+        let id;
+        do {
+          if (typeof globalThis.crypto?.randomUUID === "function") {
+            id = `${kind}_${globalThis.crypto.randomUUID()}`;
+          } else if (typeof globalThis.crypto?.getRandomValues === "function") {
+            const bytes = globalThis.crypto.getRandomValues(new Uint8Array(16));
+            id = `${kind}_${Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+          } else throw new Error("Secure wardrobe ID generation is unavailable");
+        } while (own$1(index2[`${kind}s`], id) || own$1(index2.tombstones[`${kind}s`], id));
+        return id;
+      }
+      function chosenValue(conflict, choice) {
+        const side = choice === "cloud" ? "remote" : choice === "discard" ? "base" : "local";
+        return conflict.present[side] ? clone$2(conflict[side]) : absent;
+      }
+      function resolveWardrobeConflicts(result, choices, { replicaId = "vpw-resolution" } = {}) {
+        if (!result || !Array.isArray(result.conflicts) || !Array.isArray(choices)) {
+          throw new Error("Wardrobe conflicts and choices are required");
+        }
+        if (typeof replicaId !== "string" || !replicaId.trim()) throw new Error("Wardrobe replicaId is required");
+        const merged = clone$2(validateWardrobeIndex(result.merged));
+        const remaining = result.conflicts.map(clone$2);
+        for (const resolution of choices) {
+          if (!["local", "cloud", "discard"].includes(resolution.choice)) {
+            throw new Error("Choose local, cloud, or discard for a wardrobe conflict");
+          }
+          const position = remaining.findIndex((conflict2) => conflict2.kind === resolution.kind && conflict2.id === resolution.id && conflict2.field === resolution.field);
+          if (position < 0) throw new Error("Wardrobe conflict was not found");
+          const [conflict] = remaining.splice(position, 1);
+          if (conflict.type === "delete-edit") {
+            const selected = resolution.choice === "discard" ? absent : chosenValue(conflict, resolution.choice);
+            if (selected !== absent) {
+              const table2 = `${conflict.kind}s`;
+              const id = resolution.newId || allocateId(conflict.kind, merged);
+              if (typeof id !== "string" || !id.trim() || own$1(merged[table2], id) || own$1(merged.tombstones[table2], id)) throw new Error("Restored wardrobe ID must be new");
+              selected.id = id;
+              selected.rev = nextRevision(merged, replicaId);
+              set(merged[table2], id, selected);
+              if (conflict.kind === "outfit") {
+                const source = resolution.choice === "cloud" ? conflict.remoteCloudState : conflict.localCloudState;
+                set(merged.cloudState, id, {
+                  enabled: source?.enabled !== false,
+                  rev: clone$2(selected.rev),
+                  ...source?.localOnly ? { localOnly: true } : {}
+                });
+              } else {
+                for (const outfit of Object.values(merged.outfits)) {
+                  if (!outfit.tagIds.includes(conflict.id)) continue;
+                  outfit.tagIds = [...new Set(outfit.tagIds.map((tagId) => tagId === conflict.id ? id : tagId))];
+                  outfit.rev = nextRevision(merged, replicaId);
+                }
+              }
+            }
+            continue;
+          }
+          if (conflict.kind === "cloud-state" && conflict.field === "enabled") {
+            const value2 = chosenValue(conflict, resolution.choice);
+            if (value2 === absent) throw new Error("Cloud state cannot be removed by this choice");
+            const state = merged.cloudState[conflict.id];
+            if (!state) throw new Error("Wardrobe cloud state was not found");
+            state.enabled = value2;
+            if (value2) {
+              delete state.localOnly;
+              const chosenOutfit = resolution.choice === "cloud" ? conflict.remoteOutfit : resolution.choice === "local" ? conflict.localOutfit : conflict.baseOutfit;
+              if (!chosenOutfit) throw new Error("Public outfit is unavailable for this choice");
+              const publicOutfit = clone$2(chosenOutfit);
+              publicOutfit.rev = nextRevision(merged, replicaId);
+              set(merged.outfits, conflict.id, publicOutfit);
+            }
+            state.rev = nextRevision(merged, replicaId);
+            continue;
+          }
+          const table = conflict.kind === "outfit" ? merged.outfits : conflict.kind === "tag" ? merged.tags : merged.cloudState;
+          const record = get(table, conflict.id);
+          if (!record) throw new Error("Wardrobe conflict record was not found");
+          const value = chosenValue(conflict, resolution.choice);
+          if (value === absent) delete record[conflict.field];
+          else record[conflict.field] = value;
+          record.rev = nextRevision(merged, replicaId);
+        }
+        validateWardrobeIndex(merged);
+        return { merged, conflicts: remaining, canUpload: remaining.length === 0 };
+      }
       const clone$1 = (value) => JSON.parse(JSON.stringify(value));
       const encode = (value) => LZString$1.compressToBase64(JSON.stringify(value));
-      const equal = (left, right) => JSON.stringify(left) === JSON.stringify(right);
+      const canonical$1 = (value) => Array.isArray(value) ? value.map(canonical$1) : value && typeof value === "object" ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical$1(value[key])])) : value;
+      const equal = (left, right) => JSON.stringify(canonical$1(left)) === JSON.stringify(canonical$1(right));
       const own = (object, key) => Object.prototype.hasOwnProperty.call(object || {}, key);
+      const V4_PROTOCOL = "VPW4";
+      function maxAppliedSequences(base, extra) {
+        const result = { ...base };
+        for (const [id, sequence] of Object.entries(extra || {})) {
+          result[id] = Math.max(result[id] || 0, sequence);
+        }
+        return result;
+      }
+      function markerSignature(settings) {
+        return JSON.stringify(Object.entries(settings || {}).filter(([key]) => key.startsWith("VPW4_M_")).sort(([left], [right]) => left.localeCompare(right)));
+      }
+      function cloudEnvelope(index2, applied = {}) {
+        return { protocol: V4_PROTOCOL, index: projectWardrobeCloudIndex(index2), a: { ...applied } };
+      }
+      function cloudSnapshot(raw) {
+        const decoded = decodeWardrobePayload(raw);
+        if (decoded === null) return { kind: "empty", index: createWardrobeIndex(), a: {} };
+        if (decoded.protocol === V4_PROTOCOL) {
+          validateWardrobeIndex(decoded.index);
+          if (!decoded.a || typeof decoded.a !== "object" || Array.isArray(decoded.a)) {
+            throw new Error("Invalid wardrobe cloud receipts");
+          }
+          return { kind: "v4", index: projectWardrobeCloudIndex(decoded.index), a: decoded.a };
+        }
+        if (isWardrobeIndex(decoded)) return { kind: "v3", index: projectWardrobeCloudIndex(decoded), a: {} };
+        if (isLegacyWardrobe(decoded)) return { kind: "legacy", index: migrateLegacyWardrobe(decoded), a: {} };
+        throw new Error("Unrecognized cloud wardrobe; automatic upload stopped");
+      }
+      function quarantineCloudContent(merged, local) {
+        const result = clone$1(merged);
+        result.outfits = Object.fromEntries(Object.entries(result.outfits).filter(([id]) => local.cloudState[id]?.enabled === false));
+        const privateTagIds = new Set(Object.values(result.outfits).flatMap((outfit) => outfit.tagIds));
+        result.tags = Object.fromEntries(Object.entries(result.tags).filter(([id]) => privateTagIds.has(id)));
+        return result;
+      }
       function requireObject(value) {
         if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Wardrobe payload must be an object");
         return value;
@@ -12018,6 +12546,8 @@ One of mods you are using is using an old version of SDK. It will work for now b
           this.cancel = cancel;
           this.random = random;
           this.replicaId = replicaId || globalThis.crypto?.randomUUID?.() || `device-${Date.now()}-${Math.random()}`;
+          this.deviceId = null;
+          this.markerKey = null;
           this.index = createWardrobeIndex();
           this.member = null;
           this.timer = null;
@@ -12025,6 +12555,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
           this.document = null;
           this.remoteRaw = void 0;
           this.lastObservedHostRaw = void 0;
+          this.lastObservedMarkerSignature = "[]";
           this.freshRemoteRaw = void 0;
           this.freshCloudObserved = false;
           this.verifiedPayloadInSession = null;
@@ -12032,6 +12563,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
           this.sessionLocalEdit = false;
           this.submittedRaw = null;
           this.freshSettings = null;
+          this.lastFreshSettings = null;
           this.pendingRemote = null;
           this.hostSettingSignatures = /* @__PURE__ */ new Map();
           this.remoteError = null;
@@ -12040,6 +12572,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
             state: "idle",
             localSaved: false,
             error: "",
+            conflicts: [],
             recoveryAvailable: false,
             lastSubmittedAt: null,
             lastVerifiedAt: null
@@ -12049,6 +12582,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
           return `VPWardrobe_index_${this.member}`;
         }
         emit(patch = {}) {
+          if (patch.state && patch.state !== "error") patch.errorCode = null;
           this.status = {
             ...this.status,
             ...patch,
@@ -12068,6 +12602,13 @@ One of mods you are using is using an old version of SDK. It will work for now b
           if (!raw) return null;
           const document2 = decodeWardrobePayload(raw);
           validateWardrobeIndex(document2?.index);
+          if (document2.baseCloudIndex) validateWardrobeIndex(document2.baseCloudIndex);
+          for (const entry of document2.submittedVersions || []) {
+            if (!Number.isSafeInteger(entry.sequence) || entry.sequence < 0) {
+              throw new Error("Invalid local wardrobe submission sequence");
+            }
+            validateWardrobeIndex(entry.index);
+          }
           return document2;
         }
         archive(reason, data) {
@@ -12099,10 +12640,22 @@ One of mods you are using is using an old version of SDK. It will work for now b
         open({ extensionSettings = this.getPlayer()?.ExtensionSettings, fresh = false } = {}) {
           this.cancelPending();
           this.member = null;
+          this.deviceId = null;
+          this.markerKey = null;
           this.index = createWardrobeIndex();
-          this.document = { index: this.index, pending: false, recoveryKeys: [] };
+          this.document = {
+            index: this.index,
+            pending: false,
+            recoveryKeys: [],
+            baseCloudIndex: null,
+            baseCloudSequence: 0,
+            baseAppliedSeq: {},
+            submittedVersions: [],
+            conflicts: []
+          };
           this.remoteRaw = void 0;
           this.lastObservedHostRaw = this.getPlayer()?.ExtensionSettings?.VPWardrobe;
+          this.lastObservedMarkerSignature = markerSignature(this.getPlayer()?.ExtensionSettings);
           this.freshRemoteRaw = void 0;
           this.freshCloudObserved = false;
           this.verifiedPayloadInSession = null;
@@ -12110,6 +12663,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
           this.sessionLocalEdit = false;
           this.submittedRaw = null;
           this.freshSettings = null;
+          this.lastFreshSettings = null;
           this.pendingRemote = null;
           this.hostSettingSignatures = /* @__PURE__ */ new Map();
           this.remoteError = null;
@@ -12118,6 +12672,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
             state: "idle",
             localSaved: false,
             error: "",
+            conflicts: [],
             recoveryAvailable: false,
             lastSubmittedAt: null,
             lastVerifiedAt: null
@@ -12125,56 +12680,61 @@ One of mods you are using is using an old version of SDK. It will work for now b
           let committed = false;
           try {
             this.member = accountId(this.getPlayer());
+            this.deviceId = getOrCreateWardrobeDeviceId(this.local, Number(this.member));
+            this.markerKey = markerKeyForDevice(this.deviceId);
             const stored = this.readDocument();
             const raw = extensionSettings?.VPWardrobe;
             let online = null;
             try {
-              online = decodeWardrobePayload(raw);
+              online = cloudSnapshot(raw);
             } catch (error) {
               this.remoteError = error;
-            }
-            if (online !== null && !isWardrobeIndex(online) && !isLegacyWardrobe(online)) {
-              this.remoteError = new Error("Unrecognized cloud wardrobe; automatic upload stopped");
-              online = null;
             }
             if (stored) {
               this.document = stored;
               this.index = stored.index;
             } else {
               const legacy = this.legacyLocalSources();
-              if (isWardrobeIndex(online)) this.index = mergeWardrobeIndexes(createWardrobeIndex(), online);
+              if (online?.kind === "v4" || online?.kind === "v3") this.index = online.index;
               else if (legacy.length) this.index = migrateLegacyWardrobe(legacy[0].value);
-              else if (isLegacyWardrobe(online)) this.index = migrateLegacyWardrobe(online);
-              if (legacy.length || isLegacyWardrobe(online)) {
-                this.archive("before-index-migration", { local: legacy, online, onlineRaw: raw });
+              else if (online?.kind === "legacy") this.index = online.index;
+              if (legacy.length || online?.kind === "legacy" || online?.kind === "v3") {
+                this.archive("before-v4-migration", { local: legacy, onlineRaw: raw });
               }
+              this.document.baseCloudIndex = online?.index || null;
+              this.document.baseAppliedSeq = online?.a || {};
+              this.document.baseCloudSequence = online?.a?.[this.deviceId] || 0;
             }
-            if (isWardrobeIndex(online)) this.index = mergeWardrobeIndexes(this.index, online);
-            else if (stored && isLegacyWardrobe(online)) this.archive("older-client-cloud-snapshot", { online, onlineRaw: raw });
+            if (stored?.protocolVersion === 4 && online && online.kind !== "v4" && online.kind !== "empty") {
+              this.archive("older-client-cloud-snapshot", { onlineRaw: raw });
+              this.remoteError = new Error("Older client replaced the v4 cloud snapshot; automatic upload stopped");
+            }
             this.remoteRaw = raw;
-            if (!fresh && isWardrobeIndex(online)) this.provisionalCloudPayload = encode(projectWardrobeCloudIndex(online));
+            if (!fresh && online) this.provisionalCloudPayload = raw;
             this.observeSettings(extensionSettings, fresh);
-            const verified = fresh && isWardrobeIndex(online) && equal(projectWardrobeCloudIndex(this.index), projectWardrobeCloudIndex(online));
             this.writeDocument(this.index, {
-              pending: !verified,
-              lastVerifiedAt: verified ? Date.now() : this.document.lastVerifiedAt,
-              lastVerifiedPayload: verified ? encode(projectWardrobeCloudIndex(this.index)) : this.document.lastVerifiedPayload
+              pending: this.document.pending || online?.kind !== "v4",
+              protocolVersion: this.document.protocolVersion || (online?.kind === "v4" ? 4 : void 0)
             });
             committed = true;
-            this.freshCloudObserved = fresh && !this.remoteError;
-            if (verified) this.verifiedPayloadInSession = encode(projectWardrobeCloudIndex(this.index));
             this.measure();
             this.emit({
               localSaved: true,
               lastSubmittedAt: this.document.lastSubmittedAt || null,
               lastVerifiedAt: this.document.lastVerifiedAt || null,
-              state: this.remoteError ? "error" : this.quota.isOverLimit ? "quota" : verified ? "verified" : "pending",
+              state: this.remoteError ? "error" : this.document.conflicts?.length ? "conflict" : this.quota.isOverLimit ? "quota" : "pending",
+              conflicts: this.document.conflicts || [],
               error: this.remoteError?.message || ""
             });
-            if (fresh && !verified && !this.remoteError && !this.quota.isOverLimit) this.queue();
+            if (fresh && !this.remoteError) return this.receiveCloud({ extensionSettings, fresh: true });
             return true;
           } catch (error) {
-            this.emit({ state: "error", error: error.message, localSaved: committed });
+            this.emit({
+              state: "error",
+              error: error.message,
+              errorCode: error.code || null,
+              localSaved: committed
+            });
             return committed;
           }
         }
@@ -12204,34 +12764,67 @@ One of mods you are using is using an old version of SDK. It will work for now b
             if (this.remoteError) {
               this.cancelPending();
             }
-            const next = applyWardrobeOperations(this.index, operations, { replicaId: this.replicaId });
-            this.writeDocument(next, { pending: true });
+            const context = this.document.conflictContext;
+            const local = context ? applyWardrobeOperations(context.local, operations, { replicaId: this.replicaId }) : null;
+            const rawResult = context ? mergeWardrobeIndexesThreeWay(
+              context.base,
+              local,
+              context.guardedRemote,
+              { replicaId: this.replicaId }
+            ) : null;
+            const editedIds = new Set(operations.map((operation) => operation.id).filter(Boolean));
+            const resolvedChoices = (context?.resolvedChoices || []).filter((choice) => !editedIds.has(choice.id) && rawResult.conflicts.some((conflict) => conflict.kind === choice.kind && conflict.id === choice.id && conflict.field === choice.field));
+            const result = rawResult && resolvedChoices.length ? resolveWardrobeConflicts(rawResult, resolvedChoices, { replicaId: this.replicaId }) : rawResult;
+            const conflicts = context ? [...result.conflicts, ...this.document.conflicts.filter((conflict) => conflict.type === "missing-device")] : this.document.conflicts || [];
+            const next = result ? clone$1(result.merged) : applyWardrobeOperations(this.index, operations, { replicaId: this.replicaId });
+            const visible2 = conflicts.some((conflict) => conflict.type === "missing-device") ? quarantineCloudContent(next, local) : next;
+            const pending = this.document.pending || !equal(
+              projectWardrobeCloudIndex(next),
+              projectWardrobeCloudIndex(this.index)
+            );
+            this.writeDocument(visible2, {
+              pending,
+              conflicts,
+              conflictContext: context ? { ...context, local, result, resolvedChoices } : null
+            });
             committed = true;
             this.sessionLocalEdit = true;
             this.measure();
             this.emit({
-              state: this.remoteError ? "error" : this.quota.isOverLimit ? "quota" : "pending",
+              state: this.remoteError ? "error" : this.document.conflicts?.length ? "conflict" : this.quota.isOverLimit ? "quota" : pending ? "pending" : this.freshCloudObserved ? "verified" : "pending",
+              conflicts: this.document.conflicts || [],
               localSaved: true,
               error: this.remoteError?.message || ""
             });
-            if (!this.remoteError && !this.quota.isOverLimit) this.queue();
-            return next;
+            if (pending && !this.remoteError && !this.document.conflicts?.length && !this.quota.isOverLimit) this.queue();
+            return visible2;
           } catch (error) {
             this.cancelPending();
             if (committed) {
-              this.emit({ state: "error", error: error.message, localSaved: true });
+              this.emit({
+                state: "error",
+                error: error.message,
+                errorCode: error.code || null,
+                localSaved: true
+              });
               return this.index;
             }
             this.index = this.document?.index || before;
-            this.emit({ state: "error", error: error.message });
+            this.emit({ state: "error", error: error.message, errorCode: error.code || null });
             throw error;
           }
         }
         observeSettings(extensionSettings, fresh) {
           this.lastObservedHostRaw = this.getPlayer()?.ExtensionSettings?.VPWardrobe;
+          this.lastObservedMarkerSignature = markerSignature(this.getPlayer()?.ExtensionSettings);
           if (!fresh) return;
           this.freshRemoteRaw = extensionSettings?.VPWardrobe;
-          this.freshSettings = extensionSettings == null ? {} : extensionSettings;
+          try {
+            this.lastFreshSettings = extensionSettings == null ? {} : clone$1(extensionSettings);
+          } catch {
+            this.lastFreshSettings = extensionSettings;
+          }
+          this.freshSettings = this.lastFreshSettings;
           if (typeof this.freshSettings === "object" && !Array.isArray(this.freshSettings)) {
             this.freshSettings = { ...this.freshSettings };
           }
@@ -12248,13 +12841,53 @@ One of mods you are using is using an old version of SDK. It will work for now b
             this.hostSettingSignatures = hostSignatures;
           }
           const settings = this.getPlayer()?.ExtensionSettings;
-          if (settings?.VPWardrobe === this.lastObservedHostRaw) return;
+          if (settings?.VPWardrobe === this.lastObservedHostRaw && markerSignature(settings) === this.lastObservedMarkerSignature) return;
           this.receiveCloud({ extensionSettings: settings, fresh: false, schedule: false });
         }
+        proposal(settings = this.freshSettings || this.getPlayer()?.ExtensionSettings || {}) {
+          const projection = projectWardrobeCloudIndex(this.index);
+          const projectionJson = JSON.stringify(canonical$1(projection));
+          const baseJson = JSON.stringify(canonical$1(this.document.baseCloudIndex || createWardrobeIndex()));
+          const appliedJson = JSON.stringify(canonical$1(this.document.baseAppliedSeq || {}));
+          const markers = readWardrobeSyncMarkers(settings);
+          const registered = /* @__PURE__ */ new Set([...markers.keys(), ...Object.keys(this.document.baseAppliedSeq || {})]);
+          if (registered.size > MAX_WARDROBE_DEVICE_MARKERS || !registered.has(this.deviceId) && registered.size >= MAX_WARDROBE_DEVICE_MARKERS) {
+            throw Object.assign(
+              new Error(`Cloud wardrobe has reached its ${MAX_WARDROBE_DEVICE_MARKERS}-device marker limit`),
+              { code: "device-limit" }
+            );
+          }
+          const prior = this.document.submission;
+          if (prior && prior.projectionJson === projectionJson && prior.baseJson === baseJson && prior.appliedJson === appliedJson && prior.marker?.s >= (markers.get(this.deviceId)?.s || 0)) {
+            return { ...prior, marker: decodeWardrobeSyncMarker(prior.markerValue) };
+          }
+          const existing = markers.get(this.deviceId) || createWardrobeSyncMarker();
+          const sequence = Math.max(
+            existing.s,
+            this.document.markerSequence || 0,
+            this.document.baseAppliedSeq?.[this.deviceId] || 0
+          ) + 1;
+          const marker = createWardrobeSyncMarker({ sequence });
+          const markerValue = encodeWardrobeSyncMarker(marker);
+          const applied = { ...this.document.baseAppliedSeq || {}, [this.deviceId]: sequence };
+          const payload = encode(cloudEnvelope(this.index, applied));
+          return { payload, markerValue, marker, projectionJson, baseJson, appliedJson };
+        }
         measure(extensionSettings = this.getPlayer()?.ExtensionSettings) {
-          this.quota = null;
-          const payload = encode(projectWardrobeCloudIndex(this.index));
-          const hostQuota = measureExtensionQuota(extensionSettings, payload);
+          const observed = measureObservedExtensionQuota(this.lastFreshSettings ?? extensionSettings);
+          const observedSource = this.lastFreshSettings === null ? "player-cache" : "login-response";
+          this.quota = {
+            ...observed,
+            packetBytes: 0,
+            isWarning: false,
+            isOverLimit: false,
+            observed,
+            observedSource,
+            proposalAvailable: false
+          };
+          const { payload, markerValue } = this.proposal();
+          const options2 = { markerKey: this.markerKey, markerValue };
+          const hostQuota = measureExtensionQuota(extensionSettings, payload, options2);
           let conservativeSettings = this.freshSettings;
           const signatures = settingSignatures(extensionSettings);
           if (conservativeSettings !== null) {
@@ -12274,9 +12907,12 @@ One of mods you are using is using an old version of SDK. It will work for now b
                 });
               } else delete conservativeSettings[key];
             }
-            const freshQuota = measureExtensionQuota(conservativeSettings, payload);
+            const freshQuota = measureExtensionQuota(conservativeSettings, payload, options2);
             this.quota = freshQuota.totalBytes > hostQuota.totalBytes ? freshQuota : hostQuota;
           } else this.quota = hostQuota;
+          this.quota.observed = observed;
+          this.quota.observedSource = observedSource;
+          this.quota.proposalAvailable = true;
           this.freshSettings = conservativeSettings;
           this.hostSettingSignatures = signatures;
           return this.quota;
@@ -12285,6 +12921,14 @@ One of mods you are using is using an old version of SDK. It will work for now b
           if (this.timer !== null) this.cancel(this.timer);
           this.timer = null;
           if (resetAttempts) this.attempt = 0;
+        }
+        invalidateFreshness() {
+          this.cancelPending();
+          this.freshCloudObserved = false;
+          this.verifiedPayloadInSession = null;
+          this.submittedRaw = null;
+          const state = ["verified", "submitted"].includes(this.status.state) ? "pending" : this.status.state;
+          this.emit({ state });
         }
         queue(delay = 800, { retry = false } = {}) {
           if (this.timer !== null) this.cancel(this.timer);
@@ -12309,6 +12953,10 @@ One of mods you are using is using an old version of SDK. It will work for now b
             this.mergeStored();
             this.observeHostChanges();
             if (this.remoteError) throw this.remoteError;
+            if (this.document.conflicts?.length) {
+              this.emit({ state: "conflict", conflicts: this.document.conflicts, error: "" });
+              return false;
+            }
             this.writeDocument(this.index);
             this.measure();
             if (this.quota.isOverLimit) {
@@ -12319,42 +12967,68 @@ One of mods you are using is using an old version of SDK. It will work for now b
               this.emit({ state: "offline", error: "" });
               return false;
             }
-            const payload = encode(projectWardrobeCloudIndex(this.index));
-            if (!this.freshCloudObserved && (payload === this.provisionalCloudPayload || !this.sessionLocalEdit && (!force || this.provisionalCloudPayload === null))) {
+            if (!this.freshCloudObserved) {
               this.emit({ state: "pending", localSaved: true, error: "" });
               return false;
             }
-            if (!force && !this.document.pending && payload === this.verifiedPayloadInSession) {
+            if (!this.document.pending && this.verifiedPayloadInSession === this.freshRemoteRaw) {
               this.emit({ state: "verified", localSaved: true, error: "" });
               return true;
             }
+            const proposal = this.proposal();
+            const { payload, markerValue } = proposal;
             if (!force && payload === this.submittedRaw) {
               this.emit({ state: "submitted", localSaved: true, error: "" });
               return true;
             }
             const player = this.getPlayer();
             const settings = player.ExtensionSettings || (player.ExtensionSettings = {});
-            const hadValue = Object.prototype.hasOwnProperty.call(settings, "VPWardrobe");
+            const hadValue = own(settings, "VPWardrobe");
+            const hadMarker = own(settings, this.markerKey);
             const previous = settings.VPWardrobe;
+            const previousMarker = settings[this.markerKey];
+            const submittedVersions = [
+              ...(this.document.submittedVersions || []).filter((entry) => entry.sequence !== proposal.marker.s),
+              { sequence: proposal.marker.s, index: projectWardrobeCloudIndex(this.index) }
+            ].slice(-8);
+            this.writeDocument(this.index, {
+              pending: true,
+              protocolVersion: 4,
+              markerSequence: proposal.marker.s,
+              submittedVersions,
+              submission: { ...proposal, submittedAt: null }
+            });
             settings.VPWardrobe = payload;
+            settings[this.markerKey] = markerValue;
             try {
-              if (this.send() === false) throw new Error("The game did not accept the upload");
+              const fields = {
+                "ExtensionSettings.VPWardrobe": payload,
+                [`ExtensionSettings.${this.markerKey}`]: markerValue
+              };
+              if (this.send(fields) === false) throw new Error("The game did not accept the upload");
             } catch (error) {
               if (hadValue) settings.VPWardrobe = previous;
               else delete settings.VPWardrobe;
+              if (hadMarker) settings[this.markerKey] = previousMarker;
+              else delete settings[this.markerKey];
               transportFailed = true;
               throw error;
             }
             this.remoteRaw = payload;
             this.lastObservedHostRaw = payload;
+            this.lastObservedMarkerSignature = markerSignature(settings);
             this.submittedRaw = payload;
             this.attempt = 0;
             const time = Date.now();
-            this.writeDocument(this.index, { lastSubmittedPayload: payload, lastSubmittedAt: time });
+            this.writeDocument(this.index, {
+              lastSubmittedPayload: payload,
+              lastSubmittedAt: time,
+              submission: { ...proposal, submittedAt: time }
+            });
             this.emit({ state: "submitted", localSaved: true, error: "", lastSubmittedAt: time });
             return true;
           } catch (error) {
-            this.emit({ state: "error", error: error.message });
+            this.emit({ state: "error", error: error.message, errorCode: error.code || null });
             if (transportFailed) this.retrySend();
             return false;
           }
@@ -12367,53 +13041,100 @@ One of mods you are using is using an old version of SDK. It will work for now b
             if (String(memberNumber) !== this.member) return this.open({ extensionSettings, fresh });
             this.cancelPending();
             const raw = extensionSettings?.VPWardrobe;
+            const previousMarkerSignature = this.lastObservedMarkerSignature;
             this.observeSettings(extensionSettings, fresh);
-            let online;
-            try {
-              online = decodeWardrobePayload(raw);
-              if (online !== null && !isWardrobeIndex(online) && !isLegacyWardrobe(online)) {
-                throw new Error("Unrecognized cloud wardrobe; automatic upload stopped");
+            if (!fresh) {
+              if (raw !== this.submittedRaw && raw !== this.freshRemoteRaw || markerSignature(extensionSettings) !== previousMarkerSignature) {
+                this.freshCloudObserved = false;
+                this.verifiedPayloadInSession = null;
+                this.submittedRaw = null;
+                this.emit({ state: "pending", error: "" });
               }
-            } catch (error) {
-              this.pendingRemote = null;
-              this.remoteError = error;
-              throw error;
+              this.provisionalCloudPayload = raw;
+              this.remoteRaw = raw;
+              return true;
+            }
+            const online = cloudSnapshot(raw);
+            const markers = readWardrobeSyncMarkers(extensionSettings || {});
+            const settled = maxAppliedSequences(online.a, this.document.discardedSeqByDevice);
+            const missing = findUnappliedWardrobeMarkers(markers, settled);
+            if (this.document.protocolVersion === 4 && online.kind !== "v4" && !(online.kind === "empty" && !this.document.lastVerifiedPayload)) {
+              this.archive("older-client-cloud-snapshot", { onlineRaw: raw });
+              throw new Error("Older client replaced the v4 cloud snapshot; automatic upload stopped");
             }
             this.remoteError = null;
             this.pendingRemote = { extensionSettings: { ...extensionSettings }, fresh, memberNumber };
             this.mergeStored();
             beforeRemote = { index: this.index, document: { ...this.document } };
-            if (isWardrobeIndex(online)) this.index = mergeWardrobeIndexes(this.index, online);
-            else if (isLegacyWardrobe(online)) this.archive("older-client-cloud-snapshot", { online, onlineRaw: raw });
+            const cloudSequence = online.a[this.deviceId] || 0;
+            const knownVersion = (this.document.submittedVersions || []).find((entry) => entry.sequence === cloudSequence);
+            const baselineKnown = cloudSequence === 0 || !!knownVersion || this.document.baseCloudSequence === cloudSequence;
+            const base = this.document.conflictContext?.base || knownVersion?.index || this.document.baseCloudIndex || createWardrobeIndex();
+            const local = this.document.conflictContext?.local || this.index;
+            const remote = online.index;
+            const rawResult = mergeWardrobeIndexesThreeWay(base, local, remote, { replicaId: this.replicaId });
+            const resolvedChoices = equal(remote, this.document.conflictContext?.remote) ? (this.document.conflictContext?.resolvedChoices || []).filter((choice) => rawResult.conflicts.some((conflict) => conflict.kind === choice.kind && conflict.id === choice.id && conflict.field === choice.field)) : [];
+            const result = resolvedChoices.length ? resolveWardrobeConflicts(rawResult, resolvedChoices, { replicaId: this.replicaId }) : rawResult;
+            const missingConflicts = missing.filter((item) => {
+              if (item.deviceId !== this.deviceId) return true;
+              const version2 = (this.document.submittedVersions || []).find((entry) => entry.sequence === item.marker.s);
+              return !baselineKnown || !version2 || !(this.document.submission?.markerValue === extensionSettings?.[this.markerKey] || this.document.baseCloudSequence === item.marker.s && equal(this.document.baseCloudIndex, version2.index));
+            }).map((item) => ({
+              kind: "device",
+              id: item.deviceId,
+              field: "sequence",
+              type: "missing-device",
+              sequence: item.marker.s,
+              appliedSequence: item.appliedSequence,
+              local: null,
+              remote: null
+            }));
+            const conflicts = [...result.conflicts, ...missingConflicts];
+            const conflictContext = conflicts.length ? {
+              base,
+              local,
+              remote: online.index,
+              guardedRemote: remote,
+              result,
+              missing,
+              resolvedChoices
+            } : null;
+            const merged = missingConflicts.length ? quarantineCloudContent(result.merged, local) : clone$1(result.merged);
+            const sameCloud = equal(projectWardrobeCloudIndex(merged), online.index);
+            const discardsPublished = Object.entries(this.document.discardedSeqByDevice || {}).every(([id, sequence]) => (online.a[id] || 0) >= sequence);
+            const verified = online.kind === "v4" && conflicts.length === 0 && sameCloud && discardsPublished && (!this.document.submission || (online.a[this.deviceId] || 0) >= this.document.submission.marker.s);
             this.remoteRaw = raw;
-            const payload = encode(projectWardrobeCloudIndex(this.index));
-            const freshMatch = fresh && isWardrobeIndex(online) && equal(projectWardrobeCloudIndex(this.index), projectWardrobeCloudIndex(online));
-            const verified = freshMatch || !fresh && !this.document.pending && payload === this.verifiedPayloadInSession;
-            if (fresh && !freshMatch) this.submittedRaw = null;
-            this.writeDocument(this.index, {
+            if (!verified) this.submittedRaw = null;
+            this.writeDocument(merged, {
               pending: !verified,
-              lastVerifiedAt: freshMatch ? Date.now() : this.document.lastVerifiedAt,
-              lastVerifiedPayload: freshMatch ? payload : this.document.lastVerifiedPayload
+              conflicts,
+              conflictContext,
+              baseCloudIndex: conflicts.length ? base : online.index,
+              baseCloudSequence: conflicts.length ? this.document.baseCloudSequence : cloudSequence,
+              baseAppliedSeq: settled,
+              protocolVersion: online.kind === "v4" ? 4 : this.document.protocolVersion,
+              submittedVersions: verified ? [
+                ...(this.document.submittedVersions || []).filter((entry) => entry.sequence !== cloudSequence),
+                { sequence: cloudSequence, index: online.index }
+              ].slice(-8) : this.document.submittedVersions,
+              submission: verified ? null : this.document.submission,
+              lastVerifiedAt: verified ? Date.now() : this.document.lastVerifiedAt,
+              lastVerifiedPayload: verified ? raw : this.document.lastVerifiedPayload
             });
             committed = true;
-            if (fresh) {
-              this.freshCloudObserved = true;
-              this.verifiedPayloadInSession = freshMatch ? payload : null;
-            } else if (isWardrobeIndex(online)) {
-              this.provisionalCloudPayload = encode(projectWardrobeCloudIndex(online));
-            }
+            this.freshCloudObserved = true;
+            this.verifiedPayloadInSession = verified ? raw : null;
             this.pendingRemote = null;
             this.measure();
-            let state = verified ? "verified" : "pending";
-            if (!verified && payload === this.submittedRaw) state = "submitted";
-            if (this.quota.isOverLimit) state = "quota";
+            const state = conflicts.length ? "conflict" : this.quota.isOverLimit ? "quota" : verified ? "verified" : "pending";
             this.emit({
               state,
+              conflicts,
               localSaved: true,
               error: "",
               lastVerifiedAt: this.document.lastVerifiedAt || null
             });
-            if (schedule && !verified && payload !== this.submittedRaw && !this.quota.isOverLimit) this.queue();
+            if (schedule && !verified && !conflicts.length && !this.quota.isOverLimit) this.queue();
             return true;
           } catch (error) {
             this.cancelPending();
@@ -12421,13 +13142,83 @@ One of mods you are using is using an old version of SDK. It will work for now b
               this.index = beforeRemote.index;
               this.document = beforeRemote.document;
             }
+            if (!beforeRemote || !committed) this.remoteError = error;
             this.emit({
               state: "error",
               error: error.message,
+              errorCode: error.code || null,
               localSaved: committed || this.status.localSaved
             });
             return committed;
           }
+        }
+        resolveSyncConflict(resolutions) {
+          this.ensureAccount();
+          if (!Array.isArray(resolutions) || !resolutions.length) {
+            throw new Error("Choose a sync conflict to resolve");
+          }
+          const context = this.document.conflictContext;
+          if (!context || !this.document.conflicts?.length) {
+            throw new Error("No sync conflict needs a decision");
+          }
+          const missingChoices = resolutions.filter((choice) => choice.kind === "device");
+          const mergeChoices = resolutions.filter((choice) => choice.kind !== "device");
+          for (const choice of missingChoices) {
+            if (choice.field !== "sequence" || choice.choice !== "discard" || !this.document.conflicts.some((conflict) => conflict.type === "missing-device" && conflict.id === choice.id)) {
+              throw new Error("Unknown device changes can only be explicitly discarded");
+            }
+          }
+          const discarded = { ...this.document.discardedSeqByDevice || {} };
+          for (const choice of missingChoices) {
+            const entry = context.missing.find((item) => item.deviceId === choice.id);
+            if (!entry) throw new Error("Missing device marker was not found");
+            discarded[choice.id] = entry.marker.s;
+          }
+          const activeMissing = context.missing.filter((item) => (discarded[item.deviceId] || 0) < item.marker.s);
+          const recalculated = mergeWardrobeIndexesThreeWay(
+            context.base,
+            context.local,
+            context.remote,
+            { replicaId: this.replicaId }
+          );
+          const allChoices = [...context.resolvedChoices || [], ...mergeChoices].filter((choice) => recalculated.conflicts.some((conflict) => conflict.kind === choice.kind && conflict.id === choice.id && conflict.field === choice.field));
+          const updated = allChoices.length ? resolveWardrobeConflicts(recalculated, allChoices, { replicaId: this.replicaId }) : recalculated;
+          const remainingDevice = this.document.conflicts.filter((conflict) => conflict.type === "missing-device" && !missingChoices.some((choice) => choice.id === conflict.id));
+          const conflicts = [...updated.conflicts, ...remainingDevice];
+          const next = remainingDevice.length ? quarantineCloudContent(updated.merged, context.local) : clone$1(updated.merged);
+          this.archive("sync-conflict-decision", {
+            resolutions,
+            conflicts: this.document.conflicts,
+            local: context.local,
+            remote: context.remote,
+            missing: context.missing
+          });
+          const baseAppliedSeq = maxAppliedSequences(this.document.baseAppliedSeq, discarded);
+          this.writeDocument(next, {
+            pending: true,
+            conflicts,
+            conflictContext: conflicts.length ? {
+              ...context,
+              result: updated,
+              guardedRemote: context.remote,
+              missing: activeMissing,
+              resolvedChoices: allChoices
+            } : null,
+            baseCloudIndex: conflicts.length ? context.base : context.remote,
+            baseAppliedSeq,
+            discardedSeqByDevice: discarded,
+            submission: null
+          });
+          this.submittedRaw = null;
+          this.measure();
+          this.emit({
+            state: conflicts.length ? "conflict" : this.quota.isOverLimit ? "quota" : "pending",
+            conflicts,
+            localSaved: true,
+            error: ""
+          });
+          if (!conflicts.length && !this.quota.isOverLimit) this.queue();
+          return next;
         }
         exportRecovery() {
           return (this.document?.recoveryKeys || []).map((key) => ({ key, ...decodeWardrobePayload(this.local.getItem(key)) }));
@@ -12435,6 +13226,8 @@ One of mods you are using is using an old version of SDK. It will work for now b
       }
       const clone = (value) => JSON.parse(JSON.stringify(value));
       const newId = () => globalThis.crypto.randomUUID();
+      const canonical = (value) => Array.isArray(value) ? value.map(canonical) : value && typeof value === "object" ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical(value[key])])) : value;
+      const sameRecord = (left, right) => JSON.stringify(canonical(left)) === JSON.stringify(canonical(right));
       function createLibraryState() {
         return {
           wardrobeIndex: createWardrobeIndex(),
@@ -12443,7 +13236,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
           selectedTagId: null,
           _repository: null,
           _activeLibraryMember: null,
-          syncStatus: { state: "idle", localSaved: false, error: "", recoveryAvailable: false },
+          syncStatus: { state: "idle", localSaved: false, error: "", recoveryAvailable: false, conflicts: [] },
           cloudQuota: {
             limitBytes: EXTENSION_QUOTA_BYTES,
             wardrobeBytes: 0,
@@ -12462,8 +13255,17 @@ One of mods you are using is using an old version of SDK. It will work for now b
             this._repository = new WardrobeRepository({
               getPlayer: () => hostWindow.Player,
               localStorage: hostWindow.localStorage,
-              send: () => typeof hostWindow.ServerPlayerExtensionSettingsSync === "function" ? hostWindow.ServerPlayerExtensionSettingsSync("VPWardrobe") : false,
-              isOnline: () => hostWindow.navigator?.onLine !== false && hostWindow.ServerSocket?.connected !== false,
+              send: (fields) => {
+                if (hostWindow.__VPW_WARDROBE_LOCK_OWNER !== true || hostWindow.__VPW_WARDROBE_LOCK_MEMBER !== String(hostWindow.Player?.MemberNumber)) return false;
+                if (typeof hostWindow.ServerSend !== "function") return false;
+                const keys2 = Object.keys(fields || {});
+                if (keys2.length !== 2 || !keys2.includes("ExtensionSettings.VPWardrobe") || !keys2.some((key) => /^ExtensionSettings\.VPW4_M_[0-9a-f]{32}$/.test(key))) {
+                  throw new Error("Wardrobe sync must update its snapshot and device marker together");
+                }
+                hostWindow.ServerSend("AccountUpdate", fields);
+                return true;
+              },
+              isOnline: () => hostWindow.__VPW_WARDROBE_LOCK_OWNER === true && hostWindow.__VPW_WARDROBE_LOCK_MEMBER === String(hostWindow.Player?.MemberNumber) && hostWindow.navigator?.onLine !== false && hostWindow.ServerSocket?.connected !== false,
               setTimeout: (fn, delay) => hostWindow.setTimeout(fn, delay),
               clearTimeout: (id) => hostWindow.clearTimeout(id),
               onChange: (snapshot) => this._acceptLibrarySnapshot(snapshot)
@@ -12502,7 +13304,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
             this.outfits = listWardrobeOutfits(index2).map((record) => {
               const old = previous.get(record.id);
               const cloudSync = index2.cloudState[record.id]?.enabled !== false;
-              if (old && old.cloudSync === cloudSync && JSON.stringify(previousRecords[record.id]) === JSON.stringify(record)) return old;
+              if (old && old.cloudSync === cloudSync && sameRecord(previousRecords[record.id], record)) return old;
               return { ...record, cloudSync };
             });
             this.tags = listWardrobeTags(index2);
@@ -12537,6 +13339,9 @@ One of mods you are using is using an old version of SDK. It will work for now b
         syncNow() {
           return this._getRepository().flush({ force: true });
         },
+        resolveSyncConflict(resolutions) {
+          return this._getRepository().resolveSyncConflict(resolutions);
+        },
         refreshCloudQuotaStats() {
           this.cloudQuota = this._getRepository().measure();
           return this.cloudQuota;
@@ -12554,8 +13359,8 @@ One of mods you are using is using an old version of SDK. It will work for now b
           return true;
         },
         deleteTag(id) {
-          const ids = this.tags.find((tag) => tag.aliasIds.includes(id))?.aliasIds || [id];
-          this._getRepository().apply(ids.map((id2) => ({ type: "delete-tag", id: id2 })));
+          const ids2 = this.tags.find((tag) => tag.aliasIds.includes(id))?.aliasIds || [id];
+          this._getRepository().apply(ids2.map((id2) => ({ type: "delete-tag", id: id2 })));
           return true;
         },
         addOutfit(file) {
@@ -12934,10 +13739,10 @@ One of mods you are using is using an old version of SDK. It will work for now b
         stopFor(item) {
           const meta = item && this.registry.get(item);
           if (!meta) return;
-          const ids = [...meta.observers];
-          const callbacks = ids.map((id) => this.observers.get(id)?.callback).filter(Boolean);
+          const ids2 = [...meta.observers];
+          const callbacks = ids2.map((id) => this.observers.get(id)?.callback).filter(Boolean);
           this.registry.delete(item);
-          for (const id of ids) this._unsubscribe(id);
+          for (const id of ids2) this._unsubscribe(id);
           const status = { state: "error", error: new Error("Rendering cancelled") };
           for (const callback of callbacks) this._call(callback, null, status);
         }
@@ -13410,17 +14215,17 @@ One of mods you are using is using an old version of SDK. It will work for now b
           });
         }
         // getters
-        getActiveSet(field = "Name") {
+        getActiveSet(field2 = "Name") {
           const s = /* @__PURE__ */ new Set();
           this.items.forEach((item) => {
-            if (item.active) s.add(item.data[field] ?? item.data.name ?? item.key);
+            if (item.active) s.add(item.data[field2] ?? item.data.name ?? item.key);
           });
           return s;
         }
-        getFullSet(field = "Name") {
+        getFullSet(field2 = "Name") {
           const s = /* @__PURE__ */ new Set();
           this.items.forEach((item) => {
-            s.add(item.data[field] ?? item.data.name ?? item.key);
+            s.add(item.data[field2] ?? item.data.name ?? item.key);
           });
           return s;
         }
@@ -15450,6 +16255,121 @@ One of mods you are using is using an old version of SDK. It will work for now b
             unhookLogin?.();
           } catch (error) {
             reportError2(error);
+          }
+        };
+      }
+      function createWardrobeTabLock({ locks = null, onChange = () => {
+      } } = {}) {
+        const supported = typeof locks?.request === "function";
+        let generation = 0;
+        let owner = null;
+        let pending = null;
+        let abortWaiting = null;
+        let releaseHeld = null;
+        let disposed = false;
+        const setOwner = (member) => {
+          if (owner === member) return;
+          owner = member;
+          onChange(member !== null, member);
+        };
+        const release = () => {
+          generation++;
+          abortWaiting?.abort();
+          abortWaiting = null;
+          const done = releaseHeld;
+          releaseHeld = null;
+          pending?.settle(false);
+          pending = null;
+          setOwner(null);
+          done?.();
+        };
+        const acquire = (memberNumber) => {
+          const member = String(memberNumber);
+          if (disposed || !supported || !/^(?:\d+|origin)$/.test(member)) return Promise.resolve(false);
+          if (owner === member) return Promise.resolve(true);
+          if (pending?.member === member) return pending.promise;
+          release();
+          const ticket = generation;
+          const controller = new AbortController();
+          abortWaiting = controller;
+          let settle;
+          const acquired = new Promise((resolve) => {
+            settle = resolve;
+          });
+          pending = { member, promise: acquired, settle };
+          Promise.resolve().then(() => locks.request(
+            `VPW:wardrobe:${member}`,
+            { mode: "exclusive", signal: controller.signal },
+            async (lock) => {
+              if (ticket !== generation || disposed || !lock) {
+                settle(false);
+                return;
+              }
+              abortWaiting = null;
+              const held = new Promise((resolve) => {
+                releaseHeld = resolve;
+              });
+              setOwner(member);
+              settle(true);
+              await held;
+            }
+          )).catch(() => {
+            if (ticket === generation) settle(false);
+          }).finally(() => {
+            if (ticket !== generation) return;
+            abortWaiting = null;
+            releaseHeld = null;
+            pending = null;
+            setOwner(null);
+            settle(false);
+          });
+          return acquired;
+        };
+        return {
+          supported,
+          acquire,
+          isHeldFor: (memberNumber) => owner === String(memberNumber),
+          token: () => generation,
+          release,
+          dispose: () => {
+            disposed = true;
+            release();
+          }
+        };
+      }
+      function createWardrobeLoginCapture() {
+        let requests = [];
+        let completedRequestToken = null;
+        let latest = null;
+        return {
+          markRequest(lockToken) {
+            requests.push(lockToken);
+            completedRequestToken = null;
+          },
+          noteResponse() {
+            completedRequestToken = requests.length === 1 ? requests[0] : null;
+            requests = [];
+          },
+          record(event, player, lockToken) {
+            latest = {
+              event,
+              player,
+              member: String(event.memberNumber),
+              requestToken: completedRequestToken,
+              responseToken: lockToken
+            };
+            completedRequestToken = null;
+          },
+          clear() {
+            requests = [];
+            completedRequestToken = null;
+            latest = null;
+          },
+          take({ member, player, lockToken }) {
+            const captured = latest;
+            latest = null;
+            if (!captured || captured.member !== String(member) || captured.player !== player) return null;
+            return captured.requestToken !== null && captured.requestToken === lockToken && captured.responseToken === lockToken ? captured.event : null;
           }
         };
       }
@@ -23042,7 +23962,7 @@ ${lightForced}`;
         );
         const [scrollArea, setScrollArea] = reactExports.useState(null);
         const [viewport, setViewport] = reactExports.useState(null);
-        const [content, setContent] = reactExports.useState(null);
+        const [content2, setContent] = reactExports.useState(null);
         const [scrollbarX, setScrollbarX] = reactExports.useState(null);
         const [scrollbarY, setScrollbarY] = reactExports.useState(null);
         const [cornerWidth, setCornerWidth] = reactExports.useState(0);
@@ -23059,7 +23979,7 @@ ${lightForced}`;
               scrollArea,
               viewport,
               onViewportChange: setViewport,
-              content,
+              content: content2,
               onContentChange: setContent,
               scrollbarX,
               onScrollbarXChange: setScrollbarX,
@@ -26257,7 +27177,7 @@ ${lightForced}`;
           },
           error
         );
-        const content = inputWrapperOrder.map((part) => {
+        const content2 = inputWrapperOrder.map((part) => {
           switch (part) {
             case "label":
               return _label;
@@ -26290,7 +27210,7 @@ ${lightForced}`;
                 mod: [{ error: !!error }, mod],
                 ...getStyles2("root"),
                 ...others,
-                children: content
+                children: content2
               }
             )
           }
@@ -31704,7 +32624,7 @@ ${lightForced}`;
         const { children, className, value, classNames, styles: styles2, style, mod, keepMounted, ...others } = props;
         const ctx = useTabsContext();
         const active = ctx.value === value;
-        const content = ctx.keepMounted || keepMounted ? children : active ? children : null;
+        const content2 = ctx.keepMounted || keepMounted ? children : active ? children : null;
         return /* @__PURE__ */ jsxRuntimeExports.jsx(
           Box,
           {
@@ -31721,7 +32641,7 @@ ${lightForced}`;
             id: ctx.getPanelId(value),
             "aria-labelledby": ctx.getTabId(value),
             ...others,
-            children: content
+            children: content2
           }
         );
       });
@@ -32283,7 +33203,7 @@ ${lightForced}`;
           value
         }, children);
       }
-      const library$1 = { "searchPlaceholder": "Search outfits or tags…", "allOutfits": "All outfits", "untagged": "Untagged", "filterByTag": "Filter by tag", "manageTags": "Manage tags", "newTag": "New tag", "newTagPrompt": "Enter a unique tag name:", "renameTag": "Rename selected tag", "renameTagPrompt": "New tag name:", "deleteTag": "Delete selected tag", "deleteTagConfirm": 'Delete tag "{name}"? Your outfits will stay in the wardrobe.', "tagNameInvalid": "Enter a tag name that is different from your existing tags.", "editTags": "Edit tags", "editOutfitTags": "Tags for {name}", "tags": "Tags", "selectTags": "Select one or more tags", "noTags": "No matching tags. Create tags from Manage tags.", "multipleTagsHint": "An outfit can have multiple tags. Removing a tag does not delete the outfit.", "saveTags": "Save tags", "outfitCount": "{count} / {total} outfits", "empty": "Your wardrobe is empty", "noMatches": "No matching outfits", "clearFilters": "Clear all filters", "saveCharacter": "Save current outfit", "saveNamePrompt": "Name this outfit:", "saved": 'Saved "{name}" to this device. Check cloud status for sync progress.', "imported": "Imported {count} outfits to this device. Check cloud status for sync progress.", "nothingImported": "No outfits to import. Check that the imported data contains outfits.", "operationFailed": "The operation could not be completed: {error}", "itemUnavailable": "This outfit or tag is no longer available. Refresh your selection and try again.", "deleteOutfitConfirm": 'Delete "{name}"? It will be removed from this device, and the deletion will sync.', "previewOutfit": "Preview {name}", "outfitActions": "Actions for {name}", "moreActions": "More actions", "cloudIncluded": "Cloud enabled", "localOnly": "This device only", "localFork": "Saved local copy", "localForkHint": "Another device re-enabled cloud sync, so this device's edited version was kept as a local copy. It will not upload automatically. You can turn on cloud sync for this copy.", "cloudToggleTitle": "Include or exclude this outfit from cloud sync. Local copies are retained.", "cloudStorage": "Shared cloud storage", "otherExtensions": "Other extensions", "remainingCapacity": "Available: {amount}", "quotaAria": "Shared cloud storage: {used} of {limit}", "sharedQuotaInfo": "About shared cloud capacity", "sharedQuotaHint": "All extensions share 180 kB (180000 bytes). Tag names still sync when an outfit is kept on this device only.", "quotaWarning": "Shared storage is nearly full. Keep some outfits on this device only to free cloud space.", "quotaBlocked": "Upload paused: shared storage is full. Saved local outfits remain available. Turn off cloud sync for some outfits, then retry.", "localSaved": "Saved on this device", "localUnsaved": "Not saved on this device", "retrySync": "Retry upload", "exportRecovery": "Export pre-migration backup", "sync": { "idle": "Cloud ready", "pending": "Awaiting cloud check", "submitted": "Submitted · awaiting verification", "verified": "Verified against cloud data", "offline": "Offline · waiting to retry", "quota": "Upload paused · over limit", "error": "Sync needs attention" }, "selected": "Selected", "browseLibrary": "Browse wardrobe", "findTag": "Find a tag…", "storageFilter": "Cloud sync", "filters": "Filters", "storageDetails": "Storage details", "showResults": "Show {count} outfits" };
+      const library$1 = { "searchPlaceholder": "Search outfits or tags…", "allOutfits": "All outfits", "untagged": "Untagged", "filterByTag": "Filter by tag", "manageTags": "Manage tags", "newTag": "New tag", "newTagPrompt": "Enter a unique tag name:", "renameTag": "Rename selected tag", "renameTagPrompt": "New tag name:", "deleteTag": "Delete selected tag", "deleteTagConfirm": 'Delete tag "{name}"? Your outfits will stay in the wardrobe.', "tagNameInvalid": "Enter a tag name that is different from your existing tags.", "editTags": "Edit tags", "editOutfitTags": "Tags for {name}", "tags": "Tags", "selectTags": "Select one or more tags", "noTags": "No matching tags. Create tags from Manage tags.", "multipleTagsHint": "An outfit can have multiple tags. Removing a tag does not delete the outfit.", "saveTags": "Save tags", "outfitCount": "{count} / {total} outfits", "empty": "Your wardrobe is empty", "noMatches": "No matching outfits", "clearFilters": "Clear all filters", "saveCharacter": "Save current outfit", "saveNamePrompt": "Name this outfit:", "saved": 'Saved "{name}" to this device. Check cloud status for sync progress.', "imported": "Imported {count} outfits to this device. Check cloud status for sync progress.", "nothingImported": "No outfits to import. Check that the imported data contains outfits.", "operationFailed": "The operation could not be completed: {error}", "itemUnavailable": "This outfit or tag is no longer available. Refresh your selection and try again.", "deleteOutfitConfirm": 'Delete "{name}"? It will be removed from this device, and the deletion will sync.', "previewOutfit": "Preview {name}", "outfitActions": "Actions for {name}", "moreActions": "More actions", "cloudIncluded": "Cloud enabled", "localOnly": "This device only", "localFork": "Saved local copy", "localForkHint": "Another device re-enabled cloud sync, so this device's edited version was kept as a local copy. It will not upload automatically. You can turn on cloud sync for this copy.", "cloudToggleTitle": "Include or exclude this outfit from cloud sync. Local copies are retained.", "cloudStorage": "Shared cloud storage", "otherExtensions": "Other extensions", "remainingCapacity": "Available: {amount}", "quotaAria": "{source}: {used} of {limit}", "quotaObservedLogin": "Last read from BC at login", "quotaObservedCache": "BC local cache estimate · not yet checked", "quotaObservedUnavailable": "Cloud usage has not been read yet", "observedRemaining": "Available at last read: {amount}", "proposedUpload": "Estimated next upload · not uploaded yet", "proposedRemaining": "Estimated available after upload: {amount}", "sharedQuotaInfo": "About shared cloud capacity", "sharedQuotaHint": "The wardrobe limits all extension settings to 180 kB (180000 bytes). The main figures show last-read usage; expand for the estimated next upload. VPW includes outfits and device markers.", "quotaWarning": "The estimated next upload is near the limit. Keep some outfits on this device only to reduce cloud use.", "quotaBlocked": "Upload paused: the proposed update exceeds the shared 180 kB or single-packet limit. Local outfits remain available. Reduce cloud-synced outfits, then retry.", "localSaved": "Saved on this device", "localUnsaved": "Not saved on this device", "retrySync": "Retry upload", "exportLocalBackup": "Export local backup", "deviceLimit": "Cloud sync has 16 registered installations. This new installation can still save locally and export a backup; registered installations can continue syncing. Old registrations are not removed automatically.", "exportRecovery": "Export pre-migration backup", "conflict": { "review": "Review {count} conflicts", "title": "Review sync conflicts", "back": "Back to wardrobe", "intro": "Cloud uploads are paused until you choose what to keep. Your changes remain saved on this device.", "quarantineIntro": "A device change is missing from the cloud copy. Synced outfits are temporarily hidden and uploads are paused. Reopen the original device or explicitly discard the missing change.", "quarantined": "Synced outfits are temporarily hidden and cannot be previewed or applied. This-device-only outfits remain available. Saving, importing, and enabling cloud sync are paused until you resolve the missing change.", "hiddenEmpty": "Synced outfits are temporarily hidden. No this-device-only outfits are available.", "cloudEnablePaused": "Resolve the missing change before enabling cloud sync.", "paused": "Cloud upload paused. Review conflicting changes to continue.", "itemTitle": "{name} · {field}", "unnamed": "Item", "changed": "Changed", "deleted": "Deleted", "partCount": "{count} parts", "tagCount": "{count} tags", "thisDevice": "This device", "cloud": "Cloud copy", "chooseExplanation": "These versions changed separately. Choose which one to keep.", "deleteEditExplanation": "One device deleted this item while another edited it. Restoring the edit creates a new item.", "privacyExplanation": "One device kept this outfit locally while another enabled cloud sync. Choose which storage choice and outfit to keep.", "keepLocal": "Keep this device's version", "keepCloud": "Keep cloud version", "keepDeletion": "Keep deletion", "restoreAsNewOutfit": "Restore as new outfit", "restoreAsNewTag": "Restore as new tag", "missingTitle": "A reported change is missing", "missingExplanation": "A device reported a change, but its content is missing from the cloud copy. Reopen the wardrobe on the original device to recover it, or discard the missing change.", "waitForDevice": "Wait for original device", "discardMissing": "Discard missing change", "discardConfirm": "Stop waiting for this missing change? The cloud cannot restore its content. If the original device still has a local copy, you may recover it there.", "resolveFailed": "This conflict could not be resolved. Your local changes are still saved. Try again.", "fields": { "name": "Name", "data": "Outfit", "tagIds": "Tags", "cloudSync": "Cloud sync", "enabled": "Cloud sync", "$record": "Deletion and edit", "sequence": "Change record", "record": "Item", "deleted": "Deletion" } }, "sync": { "idle": "Cloud ready", "pending": "Waiting to upload or check", "submitted": "Sent · awaiting cloud check", "verified": "Verified against cloud data", "offline": "Offline · waiting to retry", "quota": "Upload paused · over limit", "error": "Sync needs attention", "conflict": "Conflict · upload paused" }, "selected": "Selected", "browseLibrary": "Browse wardrobe", "findTag": "Find a tag…", "storageFilter": "Cloud sync", "filters": "Filters", "storageDetails": "Storage details", "showResults": "Show {count} outfits" };
       const fileItem$1 = { "open": "Open", "rename": "Rename", "delete": "Delete", "apply": "Apply to Character", "sendToStudio": "Send to Studio", "cancel": "Cancel", "promptNewName": "New name", "confirmDelete": "Are you sure you want to delete this item?", "elementDefaultName": "Element", "sendError": "Send to Studio failed", "exportBCX": "Export as BCX", "cloudOn": "Cloud On", "cloudOff": "Cloud Off", "cloudToggleFileTitle": "Toggle cloud sync for this file", "cloudToggleFolderTitle": "Toggle cloud sync for this folder and its children" };
       const fileManager$1 = { "title": "Wardrobe", "newFolderTitle": "New folder", "restoreTitle": "Restore", "refreshThumbnails": "Refresh thumbnails", "closePanel": "Close panel", "promptNewFolderName": "New folder name", "goUp": "Go to parent folder", "parentFolder": "Parent folder", "dropToParentTitle": "Drop here to move to the parent folder", "searchPlaceholderCurrent": "Search in current folder...", "searchPlaceholderAll": "Search all folders...", "searchAria": "Search files", "clearSearch": "Clear search", "switchToGlobalSearch": "Switch to global search", "switchToCurrentSearch": "Switch to current-folder search", "emptyTip": "No matching files or folders", "scopeCurrent": "Current folder", "scopeAll": "Global", "sortBy": "Sort by", "sortToggle": "Sort", "sortToggleAria": "Cycle sort mode", "viewMode": "View mode", "viewCard": "Cards", "viewList": "List", "sortRecent": "Recent", "sortName": "Name", "sortType": "Type", "cloudUsageTitle": "Cloud Usage", "cloudUsageAria": "Cloud storage usage", "cloudUsageOk": "Within limit", "cloudUsageWarn": "Approaching limit", "cloudUsageOver": "Over 180KB limit", "filterAll": "All", "filterFolder": "Folders", "filterOutfit": "Outfits", "filterCharacter": "Character snapshots" };
       const filterManager$1 = { "ariaLabel": "Outfit adjustments", "inCharacter": "On character", "applyFailed": "Could not apply. Check that the selected character currently allows outfit changes.", "hiddenBadge": "Hidden", "emptyItems": "No items in this group", "emptyGroups": "No slots to adjust", "legendToggle": "How it works", "slotModeShortOriginal": "Original", "slotModeShortIncoming": "Outfit", "slotModeShortEmpty": "Empty", "dotNone": "None", "noItemName": "None", "showAllSlots": "Show all slots", "collapseAllGroups": "Collapse all", "expandAllGroups": "Expand all", "sectionGlobal": "All slots", "operationAdd": "Add", "operationReplace": "Replace", "operationFullReplace": "Full replace", "groupProgressTooltip": "The next action depends on your preview: Add fills empty slots. Once filled, Replace overwrites this source's slots. Once matched, Full replace clears slots missing from this source. It stays complete after that.", "operationComplete": "Fully replaced", "restoreOriginalTooltip": "Restore every slot from the original character.", "replaceAllTooltip": "Use the selected outfit for every slot, clearing slots it does not contain.", "clearScopeTooltip": "Clear every slot in this range.", "replaceAllAction": "Replace all", "inSelectedOutfit": "In selected outfit", "slotControlLabel": "{name}: choose source", "preserveBodyTooltip": "Restore the original body, face, hairstyle and hair color for this preview. Keep all other slot choices.", "preserveBody": "Keep original body", "replaceBodyOnlyTooltip": "Use only the selected outfit's body, face, hairstyle and hair color. Restore all other slots from the original character.", "replaceBodyOnly": "Replace body only", "groupProgressHint": "Group buttons show the next action. Individual sliders choose a source directly.", "fullReplaceSourceHint": "Full replace clears slots missing from the source. Their sliders keep that source selected. Choose Empty to clear a slot manually.", "slotSourceHint": "Each row shows Original, Outfit, then Empty. Names identify the actual items. Blue dots mark original items; green dots mark slots only in the selected outfit." };
@@ -32339,7 +33259,7 @@ ${lightForced}`;
         wardrobeIO: wardrobeIO$1,
         outfitFlow: outfitFlow$1
       };
-      const library = { "searchPlaceholder": "搜索衣物或标签…", "allOutfits": "全部衣物", "untagged": "未加标签", "filterByTag": "按标签筛选", "manageTags": "管理标签", "newTag": "新建标签", "newTagPrompt": "输入唯一的标签名称：", "renameTag": "重命名当前标签", "renameTagPrompt": "新的标签名称：", "deleteTag": "删除当前标签", "deleteTagConfirm": "删除标签「{name}」？衣物会保留在衣橱中。", "tagNameInvalid": "请输入标签名称，并使用与现有标签不同的名称。", "editTags": "编辑标签", "editOutfitTags": "「{name}」的标签", "tags": "标签", "selectTags": "选择一个或多个标签", "noTags": "没有匹配标签，可在「管理标签」中新建。", "multipleTagsHint": "每件衣物可添加多个标签。移除标签不会删除衣物。", "saveTags": "保存标签", "outfitCount": "{count} / {total} 件衣物", "empty": "衣橱里还没有衣物", "noMatches": "没有符合条件的衣物", "clearFilters": "清除所有筛选", "saveCharacter": "保存当前穿着", "saveNamePrompt": "衣物名称：", "saved": "已将「{name}」保存到本机衣橱，云端进度请查看同步状态。", "imported": "已将 {count} 件衣物导入本机衣橱，云端进度请查看同步状态。", "nothingImported": "没有可导入的衣物。请检查导入内容是否为空。", "operationFailed": "操作未完成：{error}", "itemUnavailable": "这件衣物或标签已不可用，请重新选择后再试。", "deleteOutfitConfirm": "删除「{name}」？本机衣橱会删除它，并同步这次删除。", "previewOutfit": "预览「{name}」", "outfitActions": "「{name}」的操作", "moreActions": "更多操作", "cloudIncluded": "参与云同步", "localOnly": "仅保存在本机", "localFork": "保留的本机副本", "localForkHint": "另一台设备重新开启云同步时，这台设备修改过的版本被保留为本机副本。此副本不会自动上传，可手动开启云同步。", "cloudToggleTitle": "开启或关闭这件衣物的云同步，本机副本会保留。", "cloudStorage": "共享云端容量", "otherExtensions": "其他扩展", "remainingCapacity": "可用：{amount}", "quotaAria": "共享云端容量：已用 {used}，上限 {limit}", "sharedQuotaInfo": "共享云端容量说明", "sharedQuotaHint": "180 kB（180000 字节）由所有扩展共享。衣物可设为仅保存在本机，标签名称仍会同步。", "quotaWarning": "共享容量即将用满，可将部分衣物设为仅保存在本机以减少云端用量。", "quotaBlocked": "上传已暂停：共享容量超限。已保存的本机衣物仍可使用，请关闭部分衣物的云同步后重试。", "localSaved": "已保存到本机", "localUnsaved": "尚未保存到本机", "retrySync": "重试上传", "exportRecovery": "导出迁移前备份", "sync": { "idle": "云同步就绪", "pending": "等待云端核对", "submitted": "已提交，等待核验", "verified": "已与云端核对", "offline": "离线，等待重试", "quota": "容量超限，上传暂停", "error": "同步需要处理" }, "selected": "已选择", "browseLibrary": "浏览衣橱", "findTag": "搜索标签…", "storageFilter": "云同步范围", "filters": "筛选", "storageDetails": "容量明细", "showResults": "查看 {count} 件衣物" };
+      const library = { "searchPlaceholder": "搜索衣物或标签…", "allOutfits": "全部衣物", "untagged": "未加标签", "filterByTag": "按标签筛选", "manageTags": "管理标签", "newTag": "新建标签", "newTagPrompt": "输入唯一的标签名称：", "renameTag": "重命名当前标签", "renameTagPrompt": "新的标签名称：", "deleteTag": "删除当前标签", "deleteTagConfirm": "删除标签「{name}」？衣物会保留在衣橱中。", "tagNameInvalid": "请输入标签名称，并使用与现有标签不同的名称。", "editTags": "编辑标签", "editOutfitTags": "「{name}」的标签", "tags": "标签", "selectTags": "选择一个或多个标签", "noTags": "没有匹配标签，可在「管理标签」中新建。", "multipleTagsHint": "每件衣物可添加多个标签。移除标签不会删除衣物。", "saveTags": "保存标签", "outfitCount": "{count} / {total} 件衣物", "empty": "衣橱里还没有衣物", "noMatches": "没有符合条件的衣物", "clearFilters": "清除所有筛选", "saveCharacter": "保存当前穿着", "saveNamePrompt": "衣物名称：", "saved": "已将「{name}」保存到本机衣橱，云端进度请查看同步状态。", "imported": "已将 {count} 件衣物导入本机衣橱，云端进度请查看同步状态。", "nothingImported": "没有可导入的衣物。请检查导入内容是否为空。", "operationFailed": "操作未完成：{error}", "itemUnavailable": "这件衣物或标签已不可用，请重新选择后再试。", "deleteOutfitConfirm": "删除「{name}」？本机衣橱会删除它，并同步这次删除。", "previewOutfit": "预览「{name}」", "outfitActions": "「{name}」的操作", "moreActions": "更多操作", "cloudIncluded": "参与云同步", "localOnly": "仅保存在本机", "localFork": "保留的本机副本", "localForkHint": "另一台设备重新开启云同步时，这台设备修改过的版本被保留为本机副本。此副本不会自动上传，可手动开启云同步。", "cloudToggleTitle": "开启或关闭这件衣物的云同步，本机副本会保留。", "cloudStorage": "共享云端容量", "otherExtensions": "其他扩展", "remainingCapacity": "可用：{amount}", "quotaAria": "{source}：已用 {used}，上限 {limit}", "quotaObservedLogin": "最近一次登录从 BC 读取的占用", "quotaObservedCache": "BC 本机缓存估计，尚未核对", "quotaObservedUnavailable": "尚未读取到云端占用数据", "observedRemaining": "最近读取的可用空间：{amount}", "proposedUpload": "下次上传预计占用，尚未上传", "proposedRemaining": "预计上传后可用：{amount}", "sharedQuotaInfo": "共享云端容量说明", "sharedQuotaHint": "衣橱按 180 kB（180000 字节）控制全部扩展设置。上方显示最近读取的占用，展开可查看下次上传预计占用。VPW 包括衣物和设备标记。", "quotaWarning": "预计上传后接近容量上限。可将部分衣物设为仅保存在本机。", "quotaBlocked": "上传已暂停：预计更新超过 180 kB 的共享或单包限制。本机衣物仍可使用，请减少云同步衣物后重试。", "localSaved": "已保存到本机", "localUnsaved": "尚未保存到本机", "retrySync": "重试上传", "exportLocalBackup": "导出本机备份", "deviceLimit": "云同步已登记 16 台安装环境。当前新设备仍可保存到本机并导出备份；已登记设备可继续同步。旧设备记录不会自动清除。", "exportRecovery": "导出迁移前备份", "conflict": { "review": "处理 {count} 处冲突", "title": "处理同步冲突", "back": "返回衣橱", "intro": "选择要保留的版本后，云端才能继续上传。你的修改仍保存在本机。", "quarantineIntro": "检测到云端缺少一次设备修改。同步衣物已暂时隐藏，上传暂停；请在原设备找回，或明确舍弃缺失修改。", "quarantined": "同步衣物暂时隐藏，不能预览或应用；仅本机衣物仍可使用。处理缺失修改前，保存、导入和开启云同步暂不可用。", "hiddenEmpty": "同步衣物已暂时隐藏，目前没有仅保存在本机的衣物。", "cloudEnablePaused": "请先处理缺失修改，再开启云同步。", "paused": "云端上传已暂停。处理冲突后可继续同步。", "itemTitle": "{name} · {field}", "unnamed": "项目", "changed": "已修改", "deleted": "已删除", "partCount": "{count} 个部件", "tagCount": "{count} 个标签", "thisDevice": "本机版本", "cloud": "云端版本", "chooseExplanation": "两边分别修改了这项内容，请选择要保留的版本。", "deleteEditExplanation": "一台设备删除了这项内容，另一台设备修改了它。选择修改版会以新项目恢复。", "privacyExplanation": "一台设备将这件衣物设为仅保存在本机，另一台开启了云同步。请选择要保留的存储设置和衣物版本。", "keepLocal": "保留本机版本", "keepCloud": "保留云端版本", "keepDeletion": "保留删除结果", "restoreAsNewOutfit": "作为新衣物恢复", "restoreAsNewTag": "作为新标签恢复", "missingTitle": "发现未合入的修改", "missingExplanation": "一台设备报告过修改，但云端衣橱里没有修改内容。可在原设备重新打开衣橱以找回，或明确舍弃这次修改。", "waitForDevice": "等待原设备", "discardMissing": "舍弃缺失修改", "discardConfirm": "确定不再等待这次缺失的修改？云端无法还原其内容；如果原设备仍保存它，可从那里找回。", "resolveFailed": "冲突未能处理。本机修改仍已保存，请重试。", "fields": { "name": "名称", "data": "衣物内容", "tagIds": "标签", "cloudSync": "云同步", "enabled": "云同步", "$record": "删除与修改", "sequence": "修改记录", "record": "项目", "deleted": "删除" } }, "sync": { "idle": "云同步就绪", "pending": "待上传或核对", "submitted": "已发送，待云端核对", "verified": "已与云端核对", "offline": "离线，等待重试", "quota": "容量超限，上传暂停", "error": "同步需要处理", "conflict": "存在冲突，上传暂停" }, "selected": "已选择", "browseLibrary": "浏览衣橱", "findTag": "搜索标签…", "storageFilter": "云同步范围", "filters": "筛选", "storageDetails": "容量明细", "showResults": "查看 {count} 件衣物" };
       const fileItem = { "open": "打开", "rename": "重命名", "delete": "删除", "apply": "应用到角色", "sendToStudio": "发送到 Studio", "cancel": "取消", "promptNewName": "新名字", "confirmDelete": "确认删除该项目吗？", "elementDefaultName": "元素", "sendError": "发送到 Studio 失败", "exportBCX": "导出为 BCX", "cloudOn": "云同步开", "cloudOff": "云同步关", "cloudToggleFileTitle": "切换此文件是否云同步", "cloudToggleFolderTitle": "切换此文件夹及其子项是否云同步" };
       const fileManager = { "title": "衣橱", "newFolderTitle": "新建文件夹", "restoreTitle": "恢复", "refreshThumbnails": "刷新缩略图", "closePanel": "关闭面板", "promptNewFolderName": "新建文件夹名", "goUp": "返回上一级", "parentFolder": "上一级", "dropToParentTitle": "拖到这里移到上一级文件夹", "searchPlaceholderCurrent": "在当前文件夹搜索...", "searchPlaceholderAll": "搜索所有文件夹...", "searchAria": "搜索文件", "clearSearch": "清除搜索", "switchToGlobalSearch": "切换到全局搜索", "switchToCurrentSearch": "切换到当前文件夹", "emptyTip": "没有匹配的文件/文件夹", "scopeCurrent": "当前目录", "scopeAll": "全局", "sortBy": "排序方式", "sortToggle": "排序", "sortToggleAria": "切换排序方式", "viewMode": "视图模式", "viewCard": "卡牌", "viewList": "列表", "sortRecent": "最近修改", "sortName": "名称", "sortType": "类型", "cloudUsageTitle": "云端占用", "cloudUsageAria": "云端容量占用", "cloudUsageOk": "容量正常", "cloudUsageWarn": "容量接近上限", "cloudUsageOver": "超出 180KB 上限", "filterAll": "全部", "filterFolder": "文件夹", "filterOutfit": "套装", "filterCharacter": "角色快照" };
       const filterManager = { "ariaLabel": "换装微调", "inCharacter": "角色已有", "applyFailed": "应用失败，请确认所选角色当前允许换装。", "hiddenBadge": "隐藏", "emptyItems": "此分组没有部件", "emptyGroups": "没有可微调的部位", "legendToggle": "操作说明", "slotModeShortOriginal": "原角色", "slotModeShortIncoming": "所选衣物", "slotModeShortEmpty": "置空", "dotNone": "无", "noItemName": "无", "showAllSlots": "显示全部部位", "collapseAllGroups": "全部收起", "expandAllGroups": "全部展开", "sectionGlobal": "全部部位", "operationAdd": "补入", "operationReplace": "覆盖", "operationFullReplace": "完全替换", "groupProgressTooltip": "按当前预览选择下一步：补入缺少的部位；已补齐时覆盖来源包含的部位；已覆盖时完全替换，清空来源没有的部位。完成后保持完全替换。", "operationComplete": "已完全替换", "restoreOriginalTooltip": "恢复原角色的全部部位。", "replaceAllTooltip": "全部使用所选衣物，清空其中没有的部位。", "clearScopeTooltip": "清空此范围内的所有部位。", "replaceAllAction": "完全替换", "inSelectedOutfit": "所选衣物中存在", "slotControlLabel": "{name}：选择来源", "preserveBodyTooltip": "恢复原角色的身体、面容、发型和发色，其他部位保持当前选择。仅修改本次预览。", "preserveBody": "保留原身形", "replaceBodyOnlyTooltip": "只使用所选衣物的身体、面容、发型和发色，其他部位恢复原角色。", "replaceBodyOnly": "只替换身形", "groupProgressHint": "分组按钮显示下一步操作；部件滑块直接选择来源。", "fullReplaceSourceHint": "完全替换后，来源没有的部位会清空，滑块仍保留该来源。手动选择“置空”才会切到空档。", "slotSourceHint": "每行依次为原角色、所选衣物和置空。名称显示该来源的实际部件；蓝点表示原角色有此部位，绿点表示仅所选衣物有此部位。" };
@@ -32659,12 +33579,12 @@ ${lightForced}`;
           wardrobeUi: normalizeWardrobeUi(safeLoadJson(WARDROBE_UI_KEY, defaultWardrobeUi))
         };
       }
-      const workbenchApi = createStore((set, get2) => ({
+      const workbenchApi = createStore((set2, get2) => ({
         ...createInitialState(),
         setActiveTab(tab) {
           if (!TABS.includes(tab)) return;
           if (get2().activeTab === tab) return;
-          set({ activeTab: tab });
+          set2({ activeTab: tab });
           safeSave(ACTIVE_TAB_KEY, tab);
         },
         setWardrobeUi(partial) {
@@ -32672,7 +33592,7 @@ ${lightForced}`;
             ...get2().wardrobeUi,
             ...partial
           });
-          set({ wardrobeUi });
+          set2({ wardrobeUi });
           safeSave(WARDROBE_UI_KEY, JSON.stringify(wardrobeUi));
         }
       }));
@@ -33025,7 +33945,7 @@ ${lightForced}`;
           }
         );
       }
-      const FileItem = reactExports.memo(function FileItem2({ item, tagNames, viewMode, onEditTags, onSelectOutfit }) {
+      const FileItem = reactExports.memo(function FileItem2({ item, tagNames, viewMode, cloudEnableBlocked = false, onEditTags, onSelectOutfit }) {
         const { t } = useTranslation();
         const dialog2 = useDialog();
         const isPreviewLocked = useFsSelector((fs) => fs.lockedItem?.id === item.id);
@@ -33084,6 +34004,7 @@ ${lightForced}`;
         };
         const toggleCloudSync = async (event) => {
           event.stopPropagation();
+          if (cloudEnableBlocked && !isCloudSyncEnabled) return;
           try {
             if (!getFs().setOutfitCloudSync(item.id, !isCloudSyncEnabled)) await dialog2.alert(t("library.itemUnavailable"));
           } catch (error) {
@@ -33136,7 +34057,8 @@ ${lightForced}`;
                     {
                       onClick: (event) => void toggleCloudSync(event),
                       onDoubleClick: (event) => event.stopPropagation(),
-                      title: t("library.cloudToggleTitle"),
+                      disabled: cloudEnableBlocked && !isCloudSyncEnabled,
+                      title: t(cloudEnableBlocked && !isCloudSyncEnabled ? "library.conflict.cloudEnablePaused" : "library.cloudToggleTitle"),
                       "aria-pressed": isCloudSyncEnabled,
                       style: {
                         fontSize: 11,
@@ -33245,6 +34167,136 @@ ${lightForced}`;
           ) })
         ] });
       }
+      function candidateName(value) {
+        if (typeof value === "string") return value;
+        if (value && typeof value === "object" && "name" in value && typeof value.name === "string") return value.name;
+        return null;
+      }
+      function SyncConflictReview({ conflicts, mobile, onBack }) {
+        const { t } = useTranslation();
+        const dialog2 = useDialog();
+        const outfits = useFsSelector((fs) => fs.outfits);
+        const tags = useFsSelector((fs) => fs.tags);
+        const [resolving, setResolving] = reactExports.useState(null);
+        const backRef = reactExports.useRef(null);
+        const hasMissingChange = conflicts.some((conflict) => conflict.type === "missing-device");
+        const tagNames = new Map(tags.flatMap((tag) => [tag.id, ...tag.aliasIds].map((id) => [id, tag.name])));
+        reactExports.useEffect(() => {
+          if (mobile) backRef.current?.focus({ preventScroll: true });
+        }, [mobile]);
+        const itemName = (conflict) => {
+          const current = outfits.find((item) => item.id === conflict.id)?.name ?? tags.find((item) => item.aliasIds.includes(conflict.id))?.name;
+          return current ?? candidateName(conflict.local) ?? candidateName(conflict.remote) ?? candidateName(conflict.base) ?? `${t("library.conflict.unnamed")} ${conflict.id.slice(0, 8)}`;
+        };
+        const summary = (value, field2) => {
+          if (value == null) return t("library.conflict.deleted");
+          if ((field2 === "cloudSync" || field2 === "enabled") && typeof value === "boolean") {
+            return t(value ? "library.cloudIncluded" : "library.localOnly");
+          }
+          if (field2 === "name" && typeof value === "string") return value;
+          if (field2 === "tagIds" && Array.isArray(value)) {
+            const names = value.map((id) => tagNames.get(String(id))).filter(Boolean);
+            return names.length ? names.join(" · ") : t("library.conflict.tagCount", { count: value.length });
+          }
+          if (field2 === "data" && Array.isArray(value)) {
+            const names = value.slice(0, 4).map((part) => part && typeof part === "object" && "Name" in part ? String(part.Name) : "").filter(Boolean);
+            return `${t("library.conflict.partCount", { count: value.length })}${names.length ? ` · ${names.join(", ")}` : ""}`;
+          }
+          if (typeof value === "string" || typeof value === "number") return String(value);
+          return candidateName(value) ?? t("library.conflict.changed");
+        };
+        const resolve = async (conflict, choice) => {
+          if (choice === "discard" && !await dialog2.confirm(t("library.conflict.discardConfirm"))) return;
+          const key = `${conflict.kind}:${conflict.id}:${conflict.field}`;
+          setResolving(key);
+          try {
+            const ok = getFs().resolveSyncConflict([{ kind: conflict.kind, id: conflict.id, field: conflict.field, choice }]);
+            if (!ok) await dialog2.alert(t("library.conflict.resolveFailed"));
+          } catch (error) {
+            await dialog2.alert(t("library.operationFailed", { error: error instanceof Error ? error.message : String(error) }));
+          } finally {
+            setResolving(null);
+          }
+        };
+        const choiceLabel = (conflict, choice) => {
+          if (conflict.type === "delete-edit") {
+            return conflict[choice === "local" ? "local" : "remote"] == null ? t("library.conflict.keepDeletion") : t(conflict.kind === "tag" ? "library.conflict.restoreAsNewTag" : "library.conflict.restoreAsNewOutfit");
+          }
+          return t(choice === "local" ? "library.conflict.keepLocal" : "library.conflict.keepCloud");
+        };
+        return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          Box,
+          {
+            component: "section",
+            "aria-label": t("library.conflict.title"),
+            className: "vpw-sync-conflict-review",
+            style: { display: "flex", flexDirection: "column", height: mobile ? "100%" : "min(65dvh, 620px)", minHeight: 0 },
+            children: [
+              mobile && /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { gap: "xs", mb: "sm", wrap: "nowrap", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { ref: backRef, variant: "subtle", size: "compact-sm", onClick: onBack, children: t("library.conflict.back") }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { fw: 700, size: "sm", children: t("library.conflict.title") })
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "sm", c: "dimmed", mb: "sm", children: t(hasMissingChange ? "library.conflict.quarantineIntro" : "library.conflict.intro") }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Box, { style: { overflowY: "auto", overscrollBehavior: "contain", flex: 1, minHeight: 0 }, children: /* @__PURE__ */ jsxRuntimeExports.jsx(Stack, { gap: "sm", pb: "sm", children: conflicts.map((conflict) => {
+                const key = `${conflict.kind}:${conflict.id}:${conflict.field}`;
+                const missing = conflict.type === "missing-device";
+                const label = t(`library.conflict.fields.${conflict.field}`, { defaultValue: t("library.conflict.changed") });
+                return /* @__PURE__ */ jsxRuntimeExports.jsx(Paper, { withBorder: true, radius: "md", p: "sm", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(Stack, { gap: "xs", children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "sm", fw: 700, children: missing ? t("library.conflict.missingTitle") : t("library.conflict.itemTitle", { name: itemName(conflict), field: label }) }),
+                  missing ? /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "sm", children: t("library.conflict.missingExplanation") }) : /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "dimmed", children: t(conflict.type === "delete-edit" ? "library.conflict.deleteEditExplanation" : conflict.type === "privacy" ? "library.conflict.privacyExplanation" : "library.conflict.chooseExplanation") }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { align: "stretch", gap: "xs", grow: true, children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsxs(Paper, { withBorder: true, p: "xs", radius: "sm", style: { minWidth: 0, overflowWrap: "anywhere" }, children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", fw: 700, children: t("library.conflict.thisDevice") }),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", children: summary(conflict.local, conflict.field) })
+                      ] }),
+                      /* @__PURE__ */ jsxRuntimeExports.jsxs(Paper, { withBorder: true, p: "xs", radius: "sm", style: { minWidth: 0, overflowWrap: "anywhere" }, children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", fw: 700, children: t("library.conflict.cloud") }),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", children: summary(conflict.remote, conflict.field) })
+                      ] })
+                    ] })
+                  ] }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(Group, { gap: "xs", justify: "flex-end", children: missing ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "default", size: "xs", onClick: onBack, children: t("library.conflict.waitForDevice") }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      Button,
+                      {
+                        color: "red",
+                        variant: "light",
+                        size: "xs",
+                        disabled: resolving !== null,
+                        onClick: () => void resolve(conflict, "discard"),
+                        children: t("library.conflict.discardMissing")
+                      }
+                    )
+                  ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      Button,
+                      {
+                        variant: "default",
+                        size: "xs",
+                        disabled: resolving !== null,
+                        onClick: () => void resolve(conflict, "local"),
+                        children: choiceLabel(conflict, "local")
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      Button,
+                      {
+                        variant: "light",
+                        size: "xs",
+                        disabled: resolving !== null,
+                        onClick: () => void resolve(conflict, "cloud"),
+                        children: choiceLabel(conflict, "cloud")
+                      }
+                    )
+                  ] }) })
+                ] }) }, key);
+              }) }) })
+            ]
+          }
+        );
+      }
       const libraryStyles = ".vpw-library-root{container-type:inline-size;container-name:wardrobe-library;display:flex;flex-direction:column;gap:10px;height:100%;min-height:0;min-width:0}.vpw-library-search,.vpw-library-toolbar,.vpw-library-quota{flex:0 0 auto}.vpw-library-workspace{display:flex;flex:1;min-height:0;min-width:0;gap:14px}.vpw-library-sidebar{display:none;flex:0 0 154px;min-width:0;padding-right:12px;overflow-y:auto;border-right:1px solid var(--vpw-color-default-border)}.vpw-library-filter-option{display:flex;align-items:baseline;justify-content:space-between;gap:8px;width:100%;min-height:36px;padding:7px 9px;border-radius:8px}.vpw-library-filter-name{overflow-wrap:anywhere}.vpw-library-filter-option:hover{background:var(--vpw-color-default-hover)}.vpw-library-filter-option[aria-pressed=true]{color:var(--vpw-color-teal-light-color);background:var(--vpw-color-teal-light);font-weight:600}.vpw-library-filter-option:focus-visible,.vpw-outfit-select:focus-visible{outline:2px solid var(--vpw-color-teal-5);outline-offset:-2px}.vpw-library-scroll{flex:1;min-width:0;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:2px 3px 8px}.vpw-library-masonry{column-width:154px;column-gap:12px}.vpw-library-masonry[data-view=list]{columns:auto}.vpw-outfit-card{display:block;width:100%;vertical-align:top;break-inside:avoid;margin-bottom:12px;overflow:hidden;background:var(--vpw-color-body);transition:border-color .12s ease,box-shadow .12s ease}.vpw-outfit-card:hover{border-color:var(--vpw-color-teal-4)}.vpw-outfit-card[data-selected]{border-color:var(--vpw-color-teal-5);box-shadow:0 0 0 1px var(--vpw-color-teal-5)}.vpw-outfit-select{display:flex;flex-direction:column;width:100%;padding:5px;border-radius:10px;text-align:left}.vpw-outfit-thumbnail{position:relative;width:100%;aspect-ratio:9 / 16;flex:0 0 auto;overflow:hidden;border-radius:8px;background:linear-gradient(150deg,var(--vpw-color-default-hover),var(--vpw-color-body))}.vpw-outfit-selected-badge{position:absolute;inset-inline-start:6px;top:6px}.vpw-outfit-caption{min-width:0;padding:9px 6px 5px;width:100%}.vpw-outfit-name{min-width:0;flex:1;line-height:1.35;overflow-wrap:anywhere}.vpw-outfit-tag{padding:2px 6px;border-radius:5px;background:var(--vpw-color-default-hover);color:var(--vpw-color-dimmed);font-size:10px;line-height:1.4;max-width:100%;overflow-wrap:anywhere}.vpw-outfit-actions{padding:5px 10px 9px}.vpw-outfit-card[data-view=list]{display:flex;align-items:stretch;margin-bottom:8px}.vpw-outfit-card[data-view=list] .vpw-outfit-select{min-width:0;flex:1;justify-content:center;padding:12px}.vpw-outfit-card[data-view=list] .vpw-outfit-caption{padding:0}.vpw-outfit-card[data-view=list] .vpw-outfit-actions{flex:0 0 auto;align-content:center;padding:8px 8px 8px 0}@container wardrobe-library (max-width: 420px){.vpw-library-toolbar{align-items:flex-start}.vpw-outfit-card[data-view=list] .vpw-outfit-actions{flex-direction:column;justify-content:center;gap:2px}}@container wardrobe-library (min-width: 540px){.vpw-library-sidebar{display:block}.vpw-library-filter-trigger{display:none}}@media(pointer:coarse){.vpw-outfit-actions button,.vpw-library-filter-option{min-height:40px}.vpw-outfit-actions button:last-child{min-width:40px}}@media(prefers-reduced-motion:reduce){.vpw-outfit-card{transition:none}}@media(max-height:600px){.vpw-library-quota:not([data-expanded]) .vpw-library-quota-secondary{display:none}}";
       function formatKB(bytes) {
         return `${(Math.max(0, bytes) / 1e3).toFixed(1)} kB`;
@@ -33252,6 +34304,7 @@ ${lightForced}`;
       function FileManager({ onSelectOutfit }) {
         const { t } = useTranslation();
         const dialog2 = useDialog();
+        const isMobile = useIsMobile();
         const actions = useWardrobeActions();
         const outfits = useFsSelector((fs) => fs.outfits);
         const tags = useFsSelector((fs) => fs.tags);
@@ -33268,6 +34321,13 @@ ${lightForced}`;
         const [tagQuery, setTagQuery] = reactExports.useState("");
         const [cloudFilter, setCloudFilter] = reactExports.useState("all");
         const [quotaDetailsOpened, setQuotaDetailsOpened] = reactExports.useState(false);
+        const [conflictReviewOpened, setConflictReviewOpened] = reactExports.useState(false);
+        const conflicts = sync.conflicts ?? [];
+        const cloudQuarantined = conflicts.some((conflict) => conflict.type === "missing-device");
+        const reviewingConflicts = conflictReviewOpened && conflicts.length > 0;
+        reactExports.useEffect(() => {
+          if (conflicts.length === 0) setConflictReviewOpened(false);
+        }, [conflicts.length]);
         const tagNames = reactExports.useMemo(() => new Map(tags.flatMap((tag) => [tag.id, ...tag.aliasIds].map((id) => [id, tag.name]))), [tags]);
         const selectedTag = tags.find((tag) => tag.id === selectedTagId);
         const tagOptions = tags.map((tag) => ({ value: tag.id, label: tag.name }));
@@ -33356,8 +34416,10 @@ ${lightForced}`;
             await reportError2(error);
           }
         };
-        const quotaColor = quota.isOverLimit ? "red" : quota.isWarning ? "orange" : "teal";
-        const syncColor = sync.state === "verified" ? "teal" : ["error", "quota"].includes(sync.state) ? "red" : "gray";
+        const observedQuota = quota.observed;
+        const observedColor = observedQuota?.isOverLimit ? "red" : observedQuota?.isWarning ? "orange" : "teal";
+        const proposedColor = quota.isOverLimit ? "red" : quota.isWarning ? "orange" : "teal";
+        const syncColor = sync.state === "verified" ? "teal" : sync.state === "conflict" ? "orange" : ["error", "quota"].includes(sync.state) ? "red" : "gray";
         const activeFilterCount = Number(!!selectedTagId) + Number(cloudFilter !== "all");
         const clearFilters = () => {
           setSearchQuery("");
@@ -33421,6 +34483,10 @@ ${lightForced}`;
           ] }),
           activeFilterCount > 0 && /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "subtle", size: "xs", onClick: clearFilters, children: t("library.clearFilters") })
         ] });
+        if (isMobile && reviewingConflicts) return /* @__PURE__ */ jsxRuntimeExports.jsxs(Box, { className: "vpw-library-root", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("style", { children: libraryStyles }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(SyncConflictReview, { conflicts, mobile: true, onBack: () => setConflictReviewOpened(false) })
+        ] });
         return /* @__PURE__ */ jsxRuntimeExports.jsxs(Box, { className: "vpw-library-root", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("style", { children: libraryStyles }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { gap: 8, wrap: "nowrap", className: "vpw-library-search", children: [
@@ -33447,6 +34513,7 @@ ${lightForced}`;
               }
             )
           ] }),
+          cloudQuarantined && /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "orange", role: "status", children: t("library.conflict.quarantined") }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { className: "vpw-library-toolbar", justify: "space-between", gap: 6, children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "dimmed", role: "status", children: t("library.outfitCount", { count: displayList.length, total: outfits.length }) }),
             /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { gap: 6, children: [
@@ -33474,12 +34541,12 @@ ${lightForced}`;
               /* @__PURE__ */ jsxRuntimeExports.jsxs(Menu, { position: "bottom-end", withinPortal: true, shadow: "md", width: 240, zIndex: OVERLAY_Z_INDEX, children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx(Menu.Target, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "default", size: "compact-xs", children: t("wardrobeIO.menuLabel") }) }),
                 /* @__PURE__ */ jsxRuntimeExports.jsxs(Menu.Dropdown, { children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(Menu.Item, { onClick: () => void actions.saveCharacterToFolder(), children: t("library.saveCharacter") }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(Menu.Item, { onClick: () => void actions.importPlayerWardrobe(), children: t("fileManagerPanel.importPlayerWardrobe") }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(Menu.Item, { onClick: () => void actions.importBCX(), children: t("fileManagerPanel.importBCX") }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(Menu.Item, { disabled: cloudQuarantined, onClick: () => void actions.saveCharacterToFolder(), children: t("library.saveCharacter") }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(Menu.Item, { disabled: cloudQuarantined, onClick: () => void actions.importPlayerWardrobe(), children: t("fileManagerPanel.importPlayerWardrobe") }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(Menu.Item, { disabled: cloudQuarantined, onClick: () => void actions.importBCX(), children: t("fileManagerPanel.importBCX") }),
                   /* @__PURE__ */ jsxRuntimeExports.jsx(Menu.Divider, {}),
                   /* @__PURE__ */ jsxRuntimeExports.jsx(Menu.Item, { onClick: actions.saveBackup, children: t("fileManagerPanel.saveBackup") }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(Menu.Item, { onClick: actions.importBackup, children: t("fileManagerPanel.importBackup") }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(Menu.Item, { disabled: cloudQuarantined, onClick: actions.importBackup, children: t("fileManagerPanel.importBackup") }),
                   /* @__PURE__ */ jsxRuntimeExports.jsx(Menu.Divider, {}),
                   /* @__PURE__ */ jsxRuntimeExports.jsx(Menu.Item, { onClick: () => getFs().refreshThumbnails(displayList), children: t("fileManager.refreshThumbnails") })
                 ] })
@@ -33499,14 +34566,15 @@ ${lightForced}`;
                 {
                   item,
                   viewMode: fileViewMode,
+                  cloudEnableBlocked: cloudQuarantined,
                   onSelectOutfit,
                   tagNames: [...new Set(item.tagIds.map((id) => tagNames.get(id)).filter((name) => !!name))],
                   onEditTags: () => editTags(item)
                 },
                 item.id
               )) }) : /* @__PURE__ */ jsxRuntimeExports.jsxs(Stack, { align: "center", py: "xl", children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { c: "dimmed", children: t(outfits.length ? "library.noMatches" : "library.empty") }),
-                searchQuery || activeFilterCount ? /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "light", size: "xs", onClick: clearFilters, children: t("library.clearFilters") }) : /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "light", size: "xs", onClick: () => void actions.saveCharacterToFolder(), children: t("library.saveCharacter") })
+                /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { c: "dimmed", children: t(cloudQuarantined && !outfits.length ? "library.conflict.hiddenEmpty" : outfits.length ? "library.noMatches" : "library.empty") }),
+                searchQuery || activeFilterCount ? /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "light", size: "xs", onClick: clearFilters, children: t("library.clearFilters") }) : cloudQuarantined ? /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "light", size: "xs", onClick: () => setConflictReviewOpened(true), children: t("library.conflict.review", { count: conflicts.length }) }) : /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "light", size: "xs", onClick: () => void actions.saveCharacterToFolder(), children: t("library.saveCharacter") })
               ] })
             ] })
           ] }),
@@ -33542,42 +34610,71 @@ ${lightForced}`;
                 )
               ] })
             ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              Progress,
-              {
-                value: Math.min(100, Math.max(0, quota.usageRatio * 100)),
-                color: quotaColor,
-                size: 4,
-                "aria-label": t("library.quotaAria", { used: formatKB(quota.totalBytes), limit: formatKB(quota.limitBytes) })
-              }
-            ),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { justify: "space-between", gap: 4, children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsxs(Text, { size: "xs", children: [
-                "VPW ",
-                formatKB(quota.wardrobeBytes)
-              ] }),
-              /* @__PURE__ */ jsxRuntimeExports.jsxs(Text, { size: "xs", c: "dimmed", className: "vpw-library-quota-secondary", children: [
-                t("library.otherExtensions"),
-                " ",
-                formatKB(quota.otherExtensionsBytes)
-              ] }),
-              /* @__PURE__ */ jsxRuntimeExports.jsxs(Text, { size: "xs", fw: 600, c: quotaColor, children: [
-                formatKB(quota.totalBytes),
-                " / ",
-                formatKB(quota.limitBytes)
+            /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "dimmed", children: t(quota.observedSource === "login-response" ? "library.quotaObservedLogin" : "library.quotaObservedCache") }),
+            observedQuota ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                Progress,
+                {
+                  value: Math.min(100, Math.max(0, observedQuota.usageRatio * 100)),
+                  color: observedColor,
+                  size: 4,
+                  "aria-label": t("library.quotaAria", {
+                    used: formatKB(observedQuota.totalBytes),
+                    limit: formatKB(observedQuota.limitBytes),
+                    source: t(quota.observedSource === "login-response" ? "library.quotaObservedLogin" : "library.quotaObservedCache")
+                  })
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { justify: "space-between", gap: 4, children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs(Text, { size: "xs", children: [
+                  "VPW ",
+                  formatKB(observedQuota.wardrobeBytes)
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs(Text, { size: "xs", c: "dimmed", className: "vpw-library-quota-secondary", children: [
+                  t("library.otherExtensions"),
+                  " ",
+                  formatKB(observedQuota.otherExtensionsBytes)
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs(Text, { size: "xs", fw: 600, c: observedColor, children: [
+                  formatKB(observedQuota.totalBytes),
+                  " / ",
+                  formatKB(observedQuota.limitBytes)
+                ] })
               ] })
-            ] }),
+            ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "dimmed", children: t("library.quotaObservedUnavailable") }),
             /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { justify: "space-between", gap: 4, className: "vpw-library-quota-secondary", children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: sync.localSaved ? "dimmed" : "red", children: t(sync.localSaved ? "library.localSaved" : "library.localUnsaved") }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "subtle", size: "compact-xs", onClick: () => void retrySync(), children: t("library.retrySync") })
+              conflicts.length > 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "light", color: "orange", size: "compact-xs", onClick: () => setConflictReviewOpened(true), children: t("library.conflict.review", { count: conflicts.length }) }) : sync.errorCode === "device-limit" ? /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "subtle", size: "compact-xs", onClick: actions.saveBackup, children: t("library.exportLocalBackup") }) : /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "subtle", size: "compact-xs", onClick: () => void retrySync(), children: t("library.retrySync") })
             ] }),
             /* @__PURE__ */ jsxRuntimeExports.jsx(Collapse, { in: showQuotaDetails, children: /* @__PURE__ */ jsxRuntimeExports.jsxs(Stack, { gap: 4, children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "dimmed", children: t("library.remainingCapacity", { amount: formatKB(quota.remainingBytes) }) }),
+              observedQuota && /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "dimmed", children: t("library.observedRemaining", { amount: formatKB(observedQuota.remainingBytes) }) }),
+              quota.proposalAvailable !== false && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", fw: 600, children: t("library.proposedUpload") }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { justify: "space-between", gap: 4, children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs(Text, { size: "xs", children: [
+                    "VPW ",
+                    formatKB(quota.wardrobeBytes)
+                  ] }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs(Text, { size: "xs", c: "dimmed", className: "vpw-library-quota-secondary", children: [
+                    t("library.otherExtensions"),
+                    " ",
+                    formatKB(quota.otherExtensionsBytes)
+                  ] }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs(Text, { size: "xs", fw: 600, c: proposedColor, children: [
+                    formatKB(quota.totalBytes),
+                    " / ",
+                    formatKB(quota.limitBytes)
+                  ] })
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "dimmed", children: t("library.proposedRemaining", { amount: formatKB(quota.remainingBytes) }) })
+              ] }),
               sync.recoveryAvailable && /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "subtle", size: "compact-xs", onClick: actions.saveRecoveryBackup, children: t("library.exportRecovery") })
             ] }) }),
             quota.isWarning && !quota.isOverLimit && /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "orange", children: t("library.quotaWarning") }),
+            conflicts.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "orange", children: t("library.conflict.paused") }),
             sync.state === "quota" && /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "red", children: t("library.quotaBlocked") }),
-            sync.error && sync.state !== "quota" && /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "red", style: { overflowWrap: "anywhere" }, children: sync.error })
+            sync.errorCode === "device-limit" && /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "red", children: t("library.deviceLimit") }),
+            sync.error && sync.errorCode !== "device-limit" && sync.state !== "quota" && sync.state !== "conflict" && /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "red", style: { overflowWrap: "anywhere" }, children: sync.error })
           ] }) }),
           /* @__PURE__ */ jsxRuntimeExports.jsx(
             Drawer,
@@ -33651,6 +34748,19 @@ ${lightForced}`;
                   /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { onClick: () => void saveTags(), children: t("library.saveTags") })
                 ] })
               ] })
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            Modal,
+            {
+              opened: reviewingConflicts && !isMobile,
+              onClose: () => setConflictReviewOpened(false),
+              centered: true,
+              zIndex: OVERLAY_Z_INDEX,
+              lockScroll: false,
+              size: "lg",
+              title: t("library.conflict.title"),
+              children: /* @__PURE__ */ jsxRuntimeExports.jsx(SyncConflictReview, { conflicts, mobile: false, onBack: () => setConflictReviewOpened(false) })
             }
           )
         ] });
@@ -35130,7 +36240,7 @@ ${lightForced}`;
           hostWindow.addEventListener("pointermove", onSplitMove);
           hostWindow.addEventListener("pointerup", onSplitUp);
         };
-        const col = (grow, content) => /* @__PURE__ */ jsxRuntimeExports.jsx(Box, { style: { flexGrow: grow, flexBasis: 0, minWidth: 0, minHeight: 0 }, children: content });
+        const col = (grow, content2) => /* @__PURE__ */ jsxRuntimeExports.jsx(Box, { style: { flexGrow: grow, flexBasis: 0, minWidth: 0, minHeight: 0 }, children: content2 });
         return /* @__PURE__ */ jsxRuntimeExports.jsxs(Flex, { ref: containerRef, h: "100%", style: { minHeight: 0 }, children: [
           col(weights.list, children),
           /* @__PURE__ */ jsxRuntimeExports.jsx(ColumnSplitter, { onStart: startSplit("list", "preview") }),
@@ -35384,45 +36494,219 @@ ${lightForced}`;
         );
       }
       const HOST_ID = "vpw-shadow-host";
+      const LOCK_SCOPE = "origin";
       const w = hostWindow;
-      console.log("[VPW] React entry loaded");
-      function waitForGameReady(callback) {
-        if (w.Player && typeof w.Player.MemberNumber !== "undefined" && w.bcModSdk?.registerMod && typeof w.CharacterRefresh === "function") {
-          callback();
-        } else {
-          setTimeoutHost(() => waitForGameReady(callback), 500);
-        }
+      if (!doc.getElementById(HOST_ID)) {
+        w.__VPW_WARDROBE_LOCK_OWNER = false;
+        w.__VPW_WARDROBE_LOCK_MEMBER = null;
       }
-      async function injectApp() {
+      function waitForLoginHookReady(callback) {
+        if (w.bcModSdk?.registerMod && typeof w.LoginResponse === "function" && typeof w.ServerSend === "function") callback();
+        else setTimeoutHost(() => waitForLoginHookReady(callback), 100);
+      }
+      function injectApp() {
         if (doc.getElementById(HOST_ID)) return;
-        const version$1 = w.VPW_Version || version;
-        const modApi = registerModWithSdk(version$1);
-        installRenderHooks(modApi);
+        const modApi = registerModWithSdk(w.VPW_Version || version);
         const wardrobe = useFileSystemStore.getState();
-        wardrobe.loadAll();
+        const { shadow, mountEl } = createShadowHost(HOST_ID);
+        const status = doc.createElement("div");
+        status.setAttribute("role", "status");
+        status.setAttribute("aria-live", "polite");
+        status.style.cssText = "position:fixed;right:16px;bottom:16px;max-width:min(360px,calc(100vw - 32px));padding:12px 16px;border-radius:10px;background:#1f2937;color:#fff;font:14px/1.5 system-ui,sans-serif;box-shadow:0 4px 20px #0004;z-index:2147483647;display:none";
+        shadow.appendChild(status);
+        const message = (zh2, en2) => instance.language?.startsWith("zh") ? zh2 : en2;
+        const showStatus = (value) => {
+          status.textContent = value;
+          status.style.display = value ? "block" : "none";
+        };
+        let root = null;
+        let loadedMember = null;
+        let desiredMember = null;
+        let gameReady = false;
+        let disposed = false;
+        let pageHidden = false;
+        let historyHooked = false;
+        let generation = 0;
+        let lockRun = 0;
+        let lockPending = false;
+        let waitTimer = null;
+        let disposeRender = () => {
+        };
+        const loginCapture = createWardrobeLoginCapture();
+        const repository = () => wardrobe._repository;
+        const lock = createWardrobeTabLock({
+          locks: w.navigator?.locks,
+          onChange: (owned) => {
+            w.__VPW_WARDROBE_LOCK_OWNER = owned;
+            w.__VPW_WARDROBE_LOCK_MEMBER = owned ? loadedMember : null;
+            if (!owned) repository()?.cancelPending();
+          }
+        });
+        const ownsWriter = () => lock.isHeldFor(LOCK_SCOPE) && loadedMember !== null && w.__VPW_WARDROBE_LOCK_MEMBER === loadedMember && String(w.Player?.MemberNumber) === loadedMember;
+        const stopWaitTimer = () => {
+          if (waitTimer !== null) w.clearTimeout(waitTimer);
+          waitTimer = null;
+        };
+        const unmountApp = () => {
+          root?.unmount();
+          root = null;
+          loadedMember = null;
+        };
+        const mountApp = () => {
+          if (root) return;
+          root = clientExports.createRoot(mountEl);
+          root.render(/* @__PURE__ */ jsxRuntimeExports.jsx(Root, { rootEl: mountEl }));
+          if (!historyHooked && modApi) {
+            historyHooked = true;
+            try {
+              hookHistory(modApi, (data) => useFileSystemStore.getState().addToHistory(data), collectOutfitData);
+            } catch (error) {
+              console.error("[VPW] hookHistory failed", error);
+            }
+          }
+        };
+        const activate = (member) => {
+          if (pageHidden || !gameReady || !ownsOriginLock() || !/^\d+$/.test(member)) return;
+          if (desiredMember === member && loadedMember === member) return;
+          const ticket = ++generation;
+          desiredMember = member;
+          w.__VPW_WARDROBE_LOCK_MEMBER = null;
+          repository()?.invalidateFreshness();
+          unmountApp();
+          if (ticket !== generation || String(w.Player?.MemberNumber) !== member) return;
+          try {
+            wardrobe.loadAll();
+            loadedMember = member;
+            w.__VPW_WARDROBE_LOCK_MEMBER = member;
+            const fresh = loginCapture.take({ member, player: w.Player, lockToken: lock.token() });
+            if (fresh) wardrobe.receiveCloud(fresh);
+            mountApp();
+            showStatus(fresh ? "" : message(
+              "衣柜已打开。重新登录 BC 后会核对云端并继续同步。",
+              "Wardrobe is open. Sign in to BC again to check the cloud before syncing."
+            ));
+          } catch (error) {
+            console.error("[VPW] wardrobe initialization failed", error);
+            w.__VPW_WARDROBE_LOCK_MEMBER = null;
+            unmountApp();
+            showStatus(message("衣柜启动失败。请刷新页面重试。", "Wardrobe could not start. Reload the page to retry."));
+          }
+        };
+        const ownsOriginLock = () => lock.isHeldFor(LOCK_SCOPE);
+        const acquireOriginLock = async () => {
+          if (pageHidden || lockPending || ownsOriginLock() || doc.visibilityState === "hidden" && !gameReady) return;
+          const ticket = ++lockRun;
+          lockPending = true;
+          w.__VPW_WARDROBE_LOCK_OWNER = false;
+          w.__VPW_WARDROBE_LOCK_MEMBER = null;
+          showStatus(message("正在打开衣柜…", "Opening wardrobe…"));
+          waitTimer = w.setTimeout(() => {
+            if (ticket === lockRun && !ownsOriginLock()) showStatus(message(
+              "衣柜正在另一个标签页使用。关闭那个标签页后，这里会自动接管。",
+              "Wardrobe is open in another tab. Close that tab to take over here automatically."
+            ));
+          }, 200);
+          const held = await lock.acquire(LOCK_SCOPE);
+          if (pageHidden || ticket !== lockRun) return;
+          lockPending = false;
+          stopWaitTimer();
+          if (!held) {
+            showStatus(message(
+              "无法取得多标签页写入锁，已暂停打开衣柜以保护本机数据。",
+              "The tab write lock is unavailable. Opening is paused to protect local changes."
+            ));
+            return;
+          }
+          if (gameReady) activate(String(w.Player?.MemberNumber));
+          else showStatus(message("等待 BC 登录…", "Waiting for BC sign-in…"));
+        };
+        modApi.hookFunction("ServerSend", 0, (args, next) => {
+          if (args[0] === "AccountLogin") loginCapture.markRequest(ownsOriginLock() ? lock.token() : null);
+          return next(args);
+        });
+        modApi.hookFunction("LoginResponse", -1, (args, next) => {
+          const result = next(args);
+          loginCapture.noteResponse();
+          return result;
+        });
         installWardrobeSyncEvents({
           hostWindow: w,
           modApi,
-          onLogin: (event) => wardrobe.receiveCloud(event),
-          onStorage: (event) => {
-            const repository = wardrobe._getRepository();
-            if (event.key !== repository.key) return;
-            if (event.newValue === null) {
-              repository.cancelPending();
-              repository.emit({ state: "error", localSaved: false, error: "Local wardrobe storage was removed. Reopen the wardrobe to reload." });
-            } else repository.flush();
+          onLogin: (event) => {
+            if (disposed || pageHidden) return;
+            const member = String(event.memberNumber);
+            if (member !== String(w.Player?.MemberNumber)) return;
+            loginCapture.record(event, w.Player, ownsOriginLock() ? lock.token() : null);
+            if (!gameReady || !ownsOriginLock()) return;
+            if (desiredMember !== member || loadedMember !== member) {
+              activate(member);
+              return;
+            }
+            const fresh = loginCapture.take({ member, player: w.Player, lockToken: lock.token() });
+            if (fresh) {
+              wardrobe.receiveCloud(fresh);
+              showStatus("");
+            } else {
+              repository()?.invalidateFreshness();
+              showStatus(message(
+                "这次登录开始于衣柜接管前。请重新登录 BC 后再同步。",
+                "This sign-in began before the wardrobe took over. Sign in again to sync."
+              ));
+            }
           },
-          onOnline: ({ source }) => {
-            if (source === "browser" && w.ServerSocket?.connected !== false) wardrobe._getRepository().queue();
+          onStorage: (event) => {
+            if (!ownsWriter()) return;
+            const repo = repository();
+            if (!repo || event.key !== repo.key) return;
+            if (event.newValue === null) {
+              repo.cancelPending();
+              repo.emit({ state: "error", localSaved: false, error: "Local wardrobe storage was removed. Reopen the wardrobe to reload." });
+            } else repo.flush();
+          },
+          onOnline: () => {
+            if (!ownsWriter() || desiredMember !== loadedMember) return;
+            repository()?.invalidateFreshness();
           },
           onOffline: () => {
-            const repository = wardrobe._getRepository();
-            repository.cancelPending();
-            repository.emit({ state: "offline" });
+            if (!ownsWriter()) return;
+            const repo = repository();
+            repo?.invalidateFreshness();
+            repo?.emit({ state: "offline" });
           }
         });
-        await ensureItemColorLayerNamesLoaded();
-        cleanUpItemColorLayerNamesLoad();
+        const onPageHide = () => {
+          pageHidden = true;
+          generation++;
+          lockRun++;
+          lockPending = false;
+          stopWaitTimer();
+          loginCapture.clear();
+          w.__VPW_WARDROBE_LOCK_MEMBER = null;
+          lock.release();
+          unmountApp();
+          desiredMember = null;
+        };
+        const onPageShow = (event) => {
+          if (!event.persisted || disposed) return;
+          pageHidden = false;
+          void acquireOriginLock();
+        };
+        const onVisibilityChange = () => {
+          if (pageHidden) return;
+          if (doc.visibilityState === "hidden" && !gameReady && loadedMember === null) {
+            lockRun++;
+            lockPending = false;
+            stopWaitTimer();
+            loginCapture.clear();
+            w.__VPW_WARDROBE_LOCK_MEMBER = null;
+            lock.release();
+          } else if (doc.visibilityState === "visible" && loadedMember === null) {
+            void acquireOriginLock();
+          }
+        };
+        w.addEventListener("pagehide", onPageHide);
+        w.addEventListener("pageshow", onPageShow);
+        doc.addEventListener("visibilitychange", onVisibilityChange);
         const i18nCompat = {
           global: {
             t: (key, params) => params ? instance.t(key, params) : instance.t(key)
@@ -35430,26 +36714,32 @@ ${lightForced}`;
         };
         w.__APP_I18N__ = i18nCompat;
         w.APP_I18N = i18nCompat;
-        const { mountEl } = createShadowHost(HOST_ID);
-        clientExports.createRoot(mountEl).render(/* @__PURE__ */ jsxRuntimeExports.jsx(Root, { rootEl: mountEl }));
-        try {
-          if (modApi) {
-            hookHistory(
-              modApi,
-              (data) => useFileSystemStore.getState().addToHistory(data),
-              collectOutfitData
-            );
+        void acquireOriginLock();
+        const waitForPlayerReady = () => {
+          if (!w.Player || typeof w.Player.MemberNumber === "undefined" || typeof w.CharacterRefresh !== "function") {
+            setTimeoutHost(waitForPlayerReady, 100);
+            return;
           }
-        } catch (e) {
-          console.error("[VPW] hookHistory failed", e);
-        }
+          try {
+            hookDrawCharacter(modApi);
+            disposeRender = installRenderHooks(modApi);
+            void Promise.resolve().then(() => ensureItemColorLayerNamesLoaded()).catch((error) => console.warn("[VPW] item color layer names unavailable", error)).finally(() => cleanUpItemColorLayerNamesLoad());
+            gameReady = true;
+            if (ownsOriginLock()) activate(String(w.Player.MemberNumber));
+          } catch (error) {
+            console.error("[VPW] game hooks failed", error);
+            showStatus(message("衣柜启动失败。请刷新页面重试。", "Wardrobe could not start. Reload the page to retry."));
+          }
+        };
+        waitForPlayerReady();
       }
-      setTimeoutHost(() => {
-        console.log("[VPW] waiting for game ready…");
-        waitForGameReady(() => {
-          injectApp().catch((err) => console.error("[VPW] init failed", err));
-        });
-      }, 1e3);
+      waitForLoginHookReady(() => {
+        try {
+          injectApp();
+        } catch (error) {
+          console.error("[VPW] init failed", error);
+        }
+      });
     }
   });
   require_main_001();
