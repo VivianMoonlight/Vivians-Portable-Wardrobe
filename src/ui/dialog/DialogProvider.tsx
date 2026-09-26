@@ -74,6 +74,7 @@ export function DialogProvider({ children }: { children: ReactNode }) {
       {children}
       <Modal
         opened={request !== null}
+        lockScroll={false}
         onClose={() => settle(dismissValue)}
         title={request?.title ? <Text fw={600}>{request.title}</Text> : undefined}
         centered

@@ -7,9 +7,6 @@
 
 /** @type {SlotMode[]} */
 export const SLOT_MODES = ['original', 'incoming', 'empty']
-/** @type {GroupOperation[]} */
-export const GROUP_OPERATIONS = ['add', 'replace', 'full-replace']
-
 /** @param {unknown} mode @returns {SlotMode} */
 export function normalizeSlotMode(mode) {
   return SLOT_MODES.includes(/** @type {SlotMode} */ (mode)) ? /** @type {SlotMode} */ (mode) : 'empty'
@@ -52,33 +49,54 @@ export function buildSlotPresenceMap(characterData = [], incomingData = []) {
 }
 
 /**
- * Group choices always resolve from the two source snapshots. Repeating the
- * cycle must restore the same result after a full replacement.
+ * Add and replace change only the slots they affect. A manually cleared slot
+ * stays cleared unless the chosen source supplies it or full replacement runs.
  * @param {SlotMode} source
  * @param {GroupOperation} operation
+ * @param {SlotMode} currentMode
  * @param {boolean} inCharacter
  * @param {boolean} inIncoming
  * @returns {SlotMode}
  */
-export function computeGroupSlotMode(source, operation, inCharacter, inIncoming) {
+export function computeGroupSlotMode(source, operation, currentMode, inCharacter, inIncoming) {
   if (source === 'empty') return 'empty'
-  const fallback = source === 'incoming' ? 'original' : 'incoming'
   const sourcePresent = source === 'incoming' ? inIncoming : inCharacter
-  const fallbackPresent = source === 'incoming' ? inCharacter : inIncoming
-  if (operation === 'add') return fallbackPresent ? fallback : source
-  if (operation === 'replace') return sourcePresent ? source : fallback
+  const currentPresent = currentMode === 'original' ? inCharacter : currentMode === 'incoming' && inIncoming
+  if (operation === 'add') return sourcePresent && !currentPresent ? source : currentMode
+  if (operation === 'replace') return sourcePresent ? source : currentMode
   return source
 }
 
+// Bundles are JSON records. Compare all saved details while ignoring object-key
+// order and undefined fields that do not survive the preview snapshot.
+function equalBundleValue(left, right) {
+  if (left === right) return true
+  if (left === null || right === null || typeof left !== 'object' || typeof right !== 'object') return false
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return Array.isArray(left) && Array.isArray(right) && left.length === right.length
+      && left.every((value, index) => equalBundleValue(value, right[index]))
+  }
+  const leftKeys = Object.keys(left).filter(key => left[key] !== undefined)
+  const rightKeys = Object.keys(right).filter(key => right[key] !== undefined)
+  return leftKeys.length === rightKeys.length
+    && leftKeys.every(key => Object.hasOwn(right, key) && equalBundleValue(left[key], right[key]))
+}
+
 /**
- * @param {{ mode: string, operation: GroupOperation } | undefined} previous
- * @param {SlotMode} source
+ * Choose the first operation that can still improve the current group. Empty
+ * source groups proceed to full replacement so they can clear existing parts.
+ * @param {string[]} keys
+ * @param {OutfitPart[]} currentData
+ * @param {OutfitPart[]} sourceData
  * @returns {GroupOperation}
  */
-export function nextGroupOperation(previous, source) {
-  if (!previous || previous.mode !== source) return 'add'
-  const index = GROUP_OPERATIONS.indexOf(previous.operation)
-  return GROUP_OPERATIONS[(index + 1) % GROUP_OPERATIONS.length]
+export function nextGroupOperation(keys, currentData, sourceData) {
+  const current = groupPartsBySlot(currentData)
+  const source = groupPartsBySlot(sourceData)
+  const suppliedKeys = keys.filter(key => source.has(key))
+  if (suppliedKeys.some(key => !current.has(key))) return 'add'
+  if (suppliedKeys.some(key => !equalBundleValue(current.get(key), source.get(key)))) return 'replace'
+  return 'full-replace'
 }
 
 /**

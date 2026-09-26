@@ -110,6 +110,15 @@ test('private outfits stay local while cloud settings and tombstones remain publ
   assert.equal(isWardrobeIndex(cloud), true)
 })
 
+test('editing only private content does not change the cloud projection or clock', () => {
+  const local = apply(createWardrobeIndex(), [outfit('private'), { type: 'set-cloud', id: 'private', enabled: false }])
+  const before = projectWardrobeCloudIndex(local)
+  const edited = apply(local, [{ type: 'put-outfit', id: 'private', changes: { name: '本机私改' } }])
+  const after = projectWardrobeCloudIndex(edited)
+  assert.equal(edited.clock > local.clock, true)
+  assert.deepEqual(after, before)
+})
+
 test('editing a private outfit never implicitly re-enables cloud sync', () => {
   const original = apply(createWardrobeIndex(), [outfit('private')])
   assert.equal(original.cloudState.private.enabled, true)
@@ -156,6 +165,75 @@ test('explicit opt-in publishes the existing local payload after a remote opt-ou
   assert.equal(uploaded.outfits.private.name, '本地可恢复的服装')
   assert.equal(uploaded.cloudState.private.enabled, true)
   assert.equal(mergeWardrobeIndexes(createWardrobeIndex(), uploaded).outfits.private.name, '本地可恢复的服装')
+})
+
+test('another device re-enabling cloud keeps this device private edits as a local fork', () => {
+  const base = apply(createWardrobeIndex(), [
+    { type: 'put-tag', id: 'tag-a', name: '日常' },
+    outfit('shared', '同名衣服', { tagIds: ['tag-a'] }),
+  ], 'device-a')
+  const disabledA = apply(base, [{ type: 'set-cloud', id: 'shared', enabled: false }], 'device-a')
+  const disabledB = mergeWardrobeIndexes(base, projectWardrobeCloudIndex(disabledA))
+  const privateB = apply(disabledB, [
+    { type: 'put-outfit', id: 'shared', changes: { data: [{ Group: 'Cloth', Name: 'PrivateDress' }] } },
+  ], 'device-b')
+  const reenabledA = apply(disabledA, [{ type: 'set-cloud', id: 'shared', enabled: true }], 'device-a')
+  const remote = projectWardrobeCloudIndex(reenabledA)
+  const merged = mergeWardrobeIndexes(privateB, remote)
+  const fork = Object.values(merged.outfits).find(record => record.vpwLocalFork?.sourceId === 'shared')
+
+  assert.ok(fork, 'the private edit is retained under a new local identity')
+  assert.notEqual(fork.id, 'shared')
+  assert.equal(fork.name, '同名衣服')
+  assert.deepEqual(fork.tagIds, ['tag-a'])
+  assert.equal(fork.data[0].Name, 'PrivateDress')
+  assert.equal(merged.cloudState[fork.id].enabled, false)
+  assert.equal(merged.outfits.shared.data[0].Name, 'Dress')
+  assert.deepEqual(merged.outfits.shared.tagIds, ['tag-a'])
+  const projection = projectWardrobeCloudIndex(merged)
+  assert.equal(projection.outfits[fork.id], undefined)
+  assert.equal(projection.cloudState[fork.id], undefined)
+  assert.equal(projection.outfits.shared.data[0].Name, 'Dress')
+  assert.equal(JSON.stringify(projection).includes('PrivateDress'), false)
+  assert.deepEqual(mergeWardrobeIndexes(merged, remote), merged)
+  assert.deepEqual(mergeWardrobeIndexes(privateB, remote), merged)
+  assert.deepEqual(mergeWardrobeIndexes(remote, privateB, { bothLocal: true }), merged)
+  const untrustedPrivatePayload = mergeWardrobeIndexes(remote, privateB)
+  assert.equal(untrustedPrivatePayload.outfits.shared.data[0].Name, 'Dress')
+  assert.equal(Object.values(untrustedPrivatePayload.outfits).some(record => record.vpwLocalFork), false)
+  assert.equal(JSON.stringify(projectWardrobeCloudIndex(untrustedPrivatePayload)).includes('PrivateDress'), false)
+
+  const sharedByChoice = apply(merged, [{ type: 'set-cloud', id: fork.id, enabled: true }], 'device-b')
+  assert.equal(projectWardrobeCloudIndex(sharedByChoice).outfits[fork.id].data[0].Name, 'PrivateDress')
+  const removedFork = apply(merged, [{ type: 'delete-outfit', id: fork.id }], 'device-b')
+  assert.equal(mergeWardrobeIndexes(removedFork, merged).outfits[fork.id], undefined)
+  assert.equal(JSON.stringify(projectWardrobeCloudIndex(removedFork)).includes('PrivateDress'), false)
+})
+
+test('an untouched old copy does not fork when its originator changes and re-enables cloud', () => {
+  const original = apply(createWardrobeIndex(), [outfit('shared', '同名衣服')], 'device-a')
+  const disabledA = apply(original, [{ type: 'set-cloud', id: 'shared', enabled: false }], 'device-a')
+  const staleB = mergeWardrobeIndexes(original, projectWardrobeCloudIndex(disabledA))
+  const changedA = apply(disabledA, [
+    { type: 'put-outfit', id: 'shared', changes: { data: [{ Group: 'Cloth', Name: 'NewDress' }] } },
+    { type: 'set-cloud', id: 'shared', enabled: true },
+  ], 'device-a')
+  const merged = mergeWardrobeIndexes(staleB, projectWardrobeCloudIndex(changedA))
+  assert.deepEqual(Object.keys(merged.outfits), ['shared'])
+  assert.equal(merged.outfits.shared.data[0].Name, 'NewDress')
+})
+
+test('a cloud opt-in without a payload cannot expose or discard the private local copy', () => {
+  const original = apply(createWardrobeIndex(), [outfit('shared', '仅本机')], 'device-a')
+  const disabled = apply(original, [{ type: 'set-cloud', id: 'shared', enabled: false }], 'device-a')
+  const incomplete = apply(disabled, [{ type: 'set-cloud', id: 'shared', enabled: true }], 'device-a')
+  delete incomplete.outfits.shared
+  const merged = mergeWardrobeIndexes(disabled, incomplete)
+  const fork = Object.values(merged.outfits).find(record => record.vpwLocalFork?.sourceId === 'shared')
+  assert.ok(fork)
+  assert.equal(fork.name, '仅本机')
+  assert.equal(merged.outfits.shared, undefined)
+  assert.equal(projectWardrobeCloudIndex(merged).outfits[fork.id], undefined)
 })
 
 test('partial edits preserve outfit extensions and never mutate caller-owned input', () => {

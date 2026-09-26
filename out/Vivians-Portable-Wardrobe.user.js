@@ -1,11 +1,11 @@
 // ==UserScript==
 // @name         Vivians Portable Wardrobe
 // @namespace    http://tampermonkey.net/
-// @version      0.10.1-react.2
+// @version      0.10.1-react.3
 // @author       VIVianMoonlight
 // @description  Portable Wardrobe for Bondage Club (React + Mantine, Shadow DOM isolated)
-// @downloadURL  https://cdn.jsdelivr.net/gh/VivianMoonlight/Vivians-Portable-Wardrobe@feat%2Fwardrobe-react/ViviansPortableWardrobeReactLoader.user.js
-// @updateURL    https://cdn.jsdelivr.net/gh/VivianMoonlight/Vivians-Portable-Wardrobe@feat%2Fwardrobe-react/ViviansPortableWardrobeReactLoader.user.js
+// @downloadURL  https://cdn.jsdelivr.net/gh/VivianMoonlight/Vivians-Portable-Wardrobe@wardrobe-react/ViviansPortableWardrobeReactLoader.user.js
+// @updateURL    https://cdn.jsdelivr.net/gh/VivianMoonlight/Vivians-Portable-Wardrobe@wardrobe-react/ViviansPortableWardrobeReactLoader.user.js
 // @match        https://bondageprojects.elementfx.com/*
 // @match        https://www.bondageprojects.elementfx.com/*
 // @match        https://bondage-europe.com/*
@@ -32,7 +32,7 @@
     return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
   };
   var require_main_001 = __commonJS({
-    "main-D_g4z4SS.js"(exports) {
+    "main-DLVlvFEy.js"(exports) {
       function _mergeNamespaces(n, m) {
         for (var i = 0; i < m.length; i++) {
           const e = m[i];
@@ -9285,7 +9285,7 @@
       instance.hasLoadedNamespace;
       instance.loadNamespaces;
       instance.loadLanguages;
-      const version = "0.10.1-react.2";
+      const version = "0.10.1-react.3";
       var _unsafeWindow = /* @__PURE__ */ (() => typeof unsafeWindow != "undefined" ? unsafeWindow : void 0)();
       const hostWindow = typeof _unsafeWindow !== "undefined" ? _unsafeWindow : window;
       const doc = hostWindow.document;
@@ -11388,6 +11388,16 @@ One of mods you are using is using an old version of SDK. It will work for now b
       function sameValue(left, right) {
         return JSON.stringify(canonical(left)) === JSON.stringify(canonical(right));
       }
+      function sameOutfitContent(left, right) {
+        const leftContent = { ...left };
+        const rightContent = { ...right };
+        delete leftContent.rev;
+        delete rightContent.rev;
+        return sameValue(leftContent, rightContent);
+      }
+      function hasPrivateRevision(outfit, disabledState) {
+        return compareRevision(outfit.rev, disabledState.rev) > 0 || outfit.rev[1] !== disabledState.rev[1];
+      }
       function assert(condition, message) {
         if (!condition) throw new Error(`Invalid wardrobe index: ${message}`);
       }
@@ -11429,6 +11439,19 @@ One of mods you are using is using an old version of SDK. It will work for now b
       }
       function setRecord(table, id, record) {
         Object.defineProperty(table, id, { value: record, enumerable: true, configurable: true, writable: true });
+      }
+      function preservePrivateFork(index2, sourceId, outfit) {
+        const sourceRev = outfit.rev;
+        const baseId = `local_${sourceId.length}_${sourceId}_${sourceRev[0]}_${sourceRev[1].length}_${sourceRev[1]}`;
+        let id = baseId;
+        let suffix = 1;
+        while (hasOwn(index2.outfits, id)) {
+          const fork = index2.outfits[id].vpwLocalFork;
+          if (fork?.sourceId === sourceId && sameValue(fork.sourceRev, sourceRev)) return;
+          id = `${baseId}_${suffix++}`;
+        }
+        setRecord(index2.outfits, id, { ...clone$2(outfit), id, vpwLocalFork: { sourceId, sourceRev: [...sourceRev] } });
+        setRecord(index2.cloudState, id, { enabled: false, rev: [...sourceRev], localOnly: true });
       }
       function createWardrobeIndex() {
         return {
@@ -11478,7 +11501,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
       function mergeTable(left, right, choose) {
         return Object.fromEntries(Array.from(/* @__PURE__ */ new Set([...Object.keys(left), ...Object.keys(right)])).sort(compareText).map((id) => [id, clone$2(choose(hasOwn(left, id) ? left[id] : null, hasOwn(right, id) ? right[id] : null))]));
       }
-      function mergeWardrobeIndexes(local, remote) {
+      function mergeWardrobeIndexes(local, remote, { bothLocal = false } = {}) {
         validateWardrobeIndex(local);
         validateWardrobeIndex(remote);
         const merged = createWardrobeIndex();
@@ -11507,14 +11530,34 @@ One of mods you are using is using an old version of SDK. It will work for now b
           if (hasOwn(local.outfits, id)) setRecord(merged.outfits, id, clone$2(local.outfits[id]));
           else delete merged.outfits[id];
         }
+        for (const [id, state] of Object.entries(merged.cloudState)) {
+          if (!state.enabled) continue;
+          const privateIndex = local.cloudState[id]?.enabled === false ? local : remote.cloudState[id]?.enabled === false ? remote : null;
+          if (!privateIndex) continue;
+          const publicIndex = privateIndex === local ? remote : local;
+          if (publicIndex.cloudState[id]?.enabled !== true) continue;
+          const privateOutfit = privateIndex.outfits[id];
+          const publicOutfit = publicIndex.outfits[id];
+          if (privateIndex === local || bothLocal) {
+            if (privateOutfit && (!publicOutfit || hasPrivateRevision(privateOutfit, privateIndex.cloudState[id]) && !sameOutfitContent(privateOutfit, publicOutfit))) {
+              preservePrivateFork(merged, id, privateOutfit);
+            }
+          }
+          if (publicOutfit) setRecord(merged.outfits, id, clone$2(publicOutfit));
+          else delete merged.outfits[id];
+        }
         return merged;
       }
       function projectWardrobeCloudIndex(index2) {
         validateWardrobeIndex(index2);
         const projected = mergeWardrobeIndexes(index2, createWardrobeIndex());
         for (const [id, state] of Object.entries(projected.cloudState)) {
-          if (!state.enabled) delete projected.outfits[id];
+          if (!state.enabled) {
+            delete projected.outfits[id];
+            if (state.localOnly) delete projected.cloudState[id];
+          }
         }
+        projected.clock = maximumClock({ ...projected, clock: 0 });
         return projected;
       }
       function listWardrobeOutfits(index2) {
@@ -11983,6 +12026,10 @@ One of mods you are using is using an old version of SDK. It will work for now b
           this.remoteRaw = void 0;
           this.lastObservedHostRaw = void 0;
           this.freshRemoteRaw = void 0;
+          this.freshCloudObserved = false;
+          this.verifiedPayloadInSession = null;
+          this.provisionalCloudPayload = null;
+          this.sessionLocalEdit = false;
           this.submittedRaw = null;
           this.freshSettings = null;
           this.pendingRemote = null;
@@ -12049,7 +12096,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
             return [{ key, value, raw }];
           });
         }
-        open({ extensionSettings = this.getPlayer()?.ExtensionSettings, fresh = true } = {}) {
+        open({ extensionSettings = this.getPlayer()?.ExtensionSettings, fresh = false } = {}) {
           this.cancelPending();
           this.member = null;
           this.index = createWardrobeIndex();
@@ -12057,6 +12104,10 @@ One of mods you are using is using an old version of SDK. It will work for now b
           this.remoteRaw = void 0;
           this.lastObservedHostRaw = this.getPlayer()?.ExtensionSettings?.VPWardrobe;
           this.freshRemoteRaw = void 0;
+          this.freshCloudObserved = false;
+          this.verifiedPayloadInSession = null;
+          this.provisionalCloudPayload = null;
+          this.sessionLocalEdit = false;
           this.submittedRaw = null;
           this.freshSettings = null;
           this.pendingRemote = null;
@@ -12101,6 +12152,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
             if (isWardrobeIndex(online)) this.index = mergeWardrobeIndexes(this.index, online);
             else if (stored && isLegacyWardrobe(online)) this.archive("older-client-cloud-snapshot", { online, onlineRaw: raw });
             this.remoteRaw = raw;
+            if (!fresh && isWardrobeIndex(online)) this.provisionalCloudPayload = encode(projectWardrobeCloudIndex(online));
             this.observeSettings(extensionSettings, fresh);
             const verified = fresh && isWardrobeIndex(online) && equal(projectWardrobeCloudIndex(this.index), projectWardrobeCloudIndex(online));
             this.writeDocument(this.index, {
@@ -12109,6 +12161,8 @@ One of mods you are using is using an old version of SDK. It will work for now b
               lastVerifiedPayload: verified ? encode(projectWardrobeCloudIndex(this.index)) : this.document.lastVerifiedPayload
             });
             committed = true;
+            this.freshCloudObserved = fresh && !this.remoteError;
+            if (verified) this.verifiedPayloadInSession = encode(projectWardrobeCloudIndex(this.index));
             this.measure();
             this.emit({
               localSaved: true,
@@ -12117,7 +12171,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
               state: this.remoteError ? "error" : this.quota.isOverLimit ? "quota" : verified ? "verified" : "pending",
               error: this.remoteError?.message || ""
             });
-            if (!verified && !this.remoteError && !this.quota.isOverLimit) this.queue();
+            if (fresh && !verified && !this.remoteError && !this.quota.isOverLimit) this.queue();
             return true;
           } catch (error) {
             this.emit({ state: "error", error: error.message, localSaved: committed });
@@ -12134,7 +12188,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
         mergeStored() {
           const stored = this.readDocument();
           if (stored) {
-            this.index = mergeWardrobeIndexes(stored.index, this.index);
+            this.index = mergeWardrobeIndexes(stored.index, this.index, { bothLocal: true });
             const recoveryKeys = [.../* @__PURE__ */ new Set([...this.document.recoveryKeys || [], ...stored.recoveryKeys || []])];
             const pending = stored.pending || !equal(projectWardrobeCloudIndex(stored.index), projectWardrobeCloudIndex(this.index));
             this.document = { ...stored, pending, recoveryKeys };
@@ -12153,6 +12207,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
             const next = applyWardrobeOperations(this.index, operations, { replicaId: this.replicaId });
             this.writeDocument(next, { pending: true });
             committed = true;
+            this.sessionLocalEdit = true;
             this.measure();
             this.emit({
               state: this.remoteError ? "error" : this.quota.isOverLimit ? "quota" : "pending",
@@ -12265,7 +12320,11 @@ One of mods you are using is using an old version of SDK. It will work for now b
               return false;
             }
             const payload = encode(projectWardrobeCloudIndex(this.index));
-            if (!force && !this.document.pending && payload === this.document.lastVerifiedPayload) {
+            if (!this.freshCloudObserved && (payload === this.provisionalCloudPayload || !this.sessionLocalEdit && (!force || this.provisionalCloudPayload === null))) {
+              this.emit({ state: "pending", localSaved: true, error: "" });
+              return false;
+            }
+            if (!force && !this.document.pending && payload === this.verifiedPayloadInSession) {
               this.emit({ state: "verified", localSaved: true, error: "" });
               return true;
             }
@@ -12300,7 +12359,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
             return false;
           }
         }
-        receiveCloud({ extensionSettings, fresh = true, memberNumber = this.getPlayer()?.MemberNumber, schedule = true } = {}) {
+        receiveCloud({ extensionSettings, fresh = false, memberNumber = this.getPlayer()?.MemberNumber, schedule = true } = {}) {
           let committed = false;
           let beforeRemote = null;
           try {
@@ -12329,7 +12388,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
             this.remoteRaw = raw;
             const payload = encode(projectWardrobeCloudIndex(this.index));
             const freshMatch = fresh && isWardrobeIndex(online) && equal(projectWardrobeCloudIndex(this.index), projectWardrobeCloudIndex(online));
-            const verified = freshMatch || !fresh && !this.document.pending && payload === this.document.lastVerifiedPayload;
+            const verified = freshMatch || !fresh && !this.document.pending && payload === this.verifiedPayloadInSession;
             if (fresh && !freshMatch) this.submittedRaw = null;
             this.writeDocument(this.index, {
               pending: !verified,
@@ -12337,6 +12396,12 @@ One of mods you are using is using an old version of SDK. It will work for now b
               lastVerifiedPayload: freshMatch ? payload : this.document.lastVerifiedPayload
             });
             committed = true;
+            if (fresh) {
+              this.freshCloudObserved = true;
+              this.verifiedPayloadInSession = freshMatch ? payload : null;
+            } else if (isWardrobeIndex(online)) {
+              this.provisionalCloudPayload = encode(projectWardrobeCloudIndex(online));
+            }
             this.pendingRemote = null;
             this.measure();
             let state = verified ? "verified" : "pending";
@@ -14272,7 +14337,6 @@ One of mods you are using is using an old version of SDK. It will work for now b
         return groupData?.Category === "Appearance" && groupData.Clothing === false;
       }
       const SLOT_MODES = ["original", "incoming", "empty"];
-      const GROUP_OPERATIONS = ["add", "replace", "full-replace"];
       function normalizeSlotMode(mode) {
         return SLOT_MODES.includes(
           /** @type {SlotMode} */
@@ -14309,19 +14373,31 @@ One of mods you are using is using an old version of SDK. It will work for now b
         }
         return presence;
       }
-      function computeGroupSlotMode(source, operation, inCharacter, inIncoming) {
+      function computeGroupSlotMode(source, operation, currentMode, inCharacter, inIncoming) {
         if (source === "empty") return "empty";
-        const fallback = source === "incoming" ? "original" : "incoming";
         const sourcePresent = source === "incoming" ? inIncoming : inCharacter;
-        const fallbackPresent = source === "incoming" ? inCharacter : inIncoming;
-        if (operation === "add") return fallbackPresent ? fallback : source;
-        if (operation === "replace") return sourcePresent ? source : fallback;
+        const currentPresent = currentMode === "original" ? inCharacter : currentMode === "incoming" && inIncoming;
+        if (operation === "add") return sourcePresent && !currentPresent ? source : currentMode;
+        if (operation === "replace") return sourcePresent ? source : currentMode;
         return source;
       }
-      function nextGroupOperation(previous, source) {
-        if (!previous || previous.mode !== source) return "add";
-        const index2 = GROUP_OPERATIONS.indexOf(previous.operation);
-        return GROUP_OPERATIONS[(index2 + 1) % GROUP_OPERATIONS.length];
+      function equalBundleValue(left, right) {
+        if (left === right) return true;
+        if (left === null || right === null || typeof left !== "object" || typeof right !== "object") return false;
+        if (Array.isArray(left) || Array.isArray(right)) {
+          return Array.isArray(left) && Array.isArray(right) && left.length === right.length && left.every((value, index2) => equalBundleValue(value, right[index2]));
+        }
+        const leftKeys = Object.keys(left).filter((key) => left[key] !== void 0);
+        const rightKeys = Object.keys(right).filter((key) => right[key] !== void 0);
+        return leftKeys.length === rightKeys.length && leftKeys.every((key) => Object.hasOwn(right, key) && equalBundleValue(left[key], right[key]));
+      }
+      function nextGroupOperation(keys2, currentData, sourceData) {
+        const current = groupPartsBySlot(currentData);
+        const source = groupPartsBySlot(sourceData);
+        const suppliedKeys = keys2.filter((key) => source.has(key));
+        if (suppliedKeys.some((key) => !current.has(key))) return "add";
+        if (suppliedKeys.some((key) => !equalBundleValue(current.get(key), source.get(key)))) return "replace";
+        return "full-replace";
       }
       function scopeModeState(keys2, targetMode, controls, inCharacter, inIncoming) {
         if (keys2.length === 0) return "none";
@@ -14745,38 +14821,55 @@ One of mods you are using is using an old version of SDK. It will work for now b
             }
             if (changed) this.groupOperations = next;
           },
-          cycleGroupSource(groupID, source) {
+          getGroupSourceAction(groupID, source) {
+            const mode = normalizeSlotMode(source);
+            const keys2 = this._getGroupSlotKeys(groupID);
+            if (keys2.length === 0 || mode === SLOT_MODE_EMPTY) return null;
+            const sourceData = mode === SLOT_MODE_ORIGINAL ? this.characterItem : prepareOutfitBundle(this.activeItem?.data || []);
+            const operation = nextGroupOperation(keys2, this.previewItem?.data || [], sourceData);
+            return {
+              operation,
+              complete: operation === "full-replace" && keys2.every((key) => this.slotControlMap[key]?.mode === mode)
+            };
+          },
+          progressGroupSource(groupID, source) {
             const mode = normalizeSlotMode(source);
             const keys2 = this._getGroupSlotKeys(groupID);
             if (keys2.length === 0 || mode === SLOT_MODE_EMPTY) return false;
             this._ensureSlotControls();
-            const operation = nextGroupOperation(this.groupOperations[groupID], mode);
+            const action = this.getGroupSourceAction(groupID, mode);
+            if (action.complete) return action.operation;
+            const { operation } = action;
             const { inCharacter, inIncoming } = this._presenceSets();
             const current = this.slotControlMap;
             const next = { ...current };
+            const baseModes = {};
             let changed = false;
             for (const key of keys2) {
-              const slotMode = computeGroupSlotMode(mode, operation, inCharacter.has(key), inIncoming.has(key));
+              const currentMode = normalizeSlotMode(current[key]?.mode);
+              baseModes[key] = currentMode;
+              const slotMode = computeGroupSlotMode(mode, operation, currentMode, inCharacter.has(key), inIncoming.has(key));
               if (current[key]?.mode !== slotMode) {
                 next[key] = { mode: slotMode, locked: false };
                 changed = true;
               }
             }
-            this.groupOperations = { ...this.groupOperations, [groupID]: { mode, operation } };
+            this.groupOperations = { ...this.groupOperations, [groupID]: { mode, operation, baseModes } };
             if (changed) {
               this.slotControlMap = next;
               this._syncActiveFiltersFromSlotControls();
-              this.updatePreviewItem();
             }
+            this.updatePreviewItem();
             return operation;
           },
           _resolveGroupOperations() {
             const { inCharacter, inIncoming } = this._presenceSets();
             const next = { ...this.slotControlMap };
             let changed = false;
-            for (const [groupID, { mode, operation }] of Object.entries(this.groupOperations)) {
+            for (const [groupID, { mode, operation, baseModes }] of Object.entries(this.groupOperations)) {
               for (const key of this._getGroupSlotKeys(groupID)) {
-                const slotMode = computeGroupSlotMode(mode, operation, inCharacter.has(key), inIncoming.has(key));
+                const baseline = normalizeSlotMode(baseModes[key] ?? next[key]?.mode);
+                const slotMode = computeGroupSlotMode(mode, operation, baseline, inCharacter.has(key), inIncoming.has(key));
                 if (next[key]?.mode === slotMode) continue;
                 next[key] = { mode: slotMode, locked: false };
                 changed = true;
@@ -15367,7 +15460,25 @@ One of mods you are using is using an old version of SDK. It will work for now b
 }
 #vpw-root {
   box-sizing: border-box;
-  color: var(--mantine-color-text);
+  /* Only VPW-owned aliases are consumed by our CSS. Mantine keeps its own
+     variables for its components, scoped to this shadow root by Root.tsx. */
+  --vpw-color-blue-5: var(--mantine-color-blue-5);
+  --vpw-color-body: var(--mantine-color-body);
+  --vpw-color-default: var(--mantine-color-default);
+  --vpw-color-default-border: var(--mantine-color-default-border);
+  --vpw-color-default-hover: var(--mantine-color-default-hover);
+  --vpw-color-dimmed: var(--mantine-color-dimmed);
+  --vpw-color-gray-5: var(--mantine-color-gray-5);
+  --vpw-color-teal-4: var(--mantine-color-teal-4);
+  --vpw-color-teal-5: var(--mantine-color-teal-5);
+  --vpw-color-teal-6: var(--mantine-color-teal-6);
+  --vpw-color-teal-light: var(--mantine-color-teal-light);
+  --vpw-color-teal-light-color: var(--mantine-color-teal-light-color);
+  --vpw-color-text: var(--mantine-color-text);
+  --vpw-radius-md: var(--mantine-radius-md);
+  --vpw-shadow-md: var(--mantine-shadow-md);
+  --vpw-spacing-md: var(--mantine-spacing-md);
+  color: var(--vpw-color-text);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   line-height: 1.5;
 }
@@ -15376,12 +15487,18 @@ One of mods you are using is using an old version of SDK. It will work for now b
 #vpw-root *::after {
   box-sizing: border-box;
 }
+#vpw-root[data-vpw-switching-theme],
+#vpw-root[data-vpw-switching-theme] *,
+#vpw-root[data-vpw-switching-theme] *::before,
+#vpw-root[data-vpw-switching-theme] *::after {
+  transition: none !important;
+}
 #vpw-root {
-  scrollbar-color: var(--mantine-color-gray-5) transparent;
+  scrollbar-color: var(--vpw-color-gray-5) transparent;
   scrollbar-width: thin;
 }
 #vpw-root * {
-  scrollbar-color: var(--mantine-color-gray-5) transparent;
+  scrollbar-color: var(--vpw-color-gray-5) transparent;
   scrollbar-width: thin;
 }
 #vpw-root ::-webkit-scrollbar {
@@ -15392,13 +15509,13 @@ One of mods you are using is using an old version of SDK. It will work for now b
   background: transparent;
 }
 #vpw-root ::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--mantine-color-gray-5) 68%, transparent);
+  background: color-mix(in srgb, var(--vpw-color-gray-5) 68%, transparent);
   border: 2px solid transparent;
   border-radius: 999px;
   background-clip: content-box;
 }
 #vpw-root ::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in srgb, var(--mantine-color-blue-5) 72%, transparent);
+  background: color-mix(in srgb, var(--vpw-color-blue-5) 72%, transparent);
   background-clip: content-box;
 }
 `;
@@ -32166,10 +32283,10 @@ ${lightForced}`;
           value
         }, children);
       }
-      const library$1 = { "searchPlaceholder": "Search outfit names and tags…", "allOutfits": "All outfits", "untagged": "Untagged", "filterByTag": "Filter by tag", "manageTags": "Manage tags", "newTag": "New tag", "newTagPrompt": "Enter a unique tag name:", "renameTag": "Rename selected tag", "renameTagPrompt": "New tag name:", "deleteTag": "Delete selected tag", "deleteTagConfirm": 'Delete tag "{name}"? Your outfits will remain in the library.', "tagNameInvalid": "Use a non-empty, unique tag name.", "editTags": "Edit tags", "editOutfitTags": "Tags for {name}", "tags": "Tags", "selectTags": "Select one or more tags", "noTags": "No matching tags. Create tags from Manage tags.", "multipleTagsHint": "An outfit can have multiple tags. Removing a tag does not delete the outfit.", "saveTags": "Save tags", "outfitCount": "{count} / {total} outfits", "empty": "No matching outfits", "clearFilters": "Clear all filters", "saveCharacter": "Save current outfit", "saveNamePrompt": "Name this outfit:", "saved": 'Saved "{name}" to your library on this device. Check cloud status for sync progress.', "imported": "Imported {count} outfits to your library on this device. Check cloud status for sync progress.", "nothingImported": "No outfits were added. The data may be empty or already in your library.", "operationFailed": "The operation could not be completed: {error}", "itemUnavailable": "This outfit or tag is no longer available. Refresh your selection and try again.", "deleteOutfitConfirm": 'Delete "{name}" from your library and cloud sync?', "previewOutfit": "Preview {name}", "previewLocked": "Preview locked", "outfitActions": "Actions for {name}", "moreActions": "More actions", "cloudIncluded": "Cloud enabled", "localOnly": "This device only", "cloudToggleTitle": "Include or exclude this outfit from cloud sync. Local copies are retained.", "cloudStorage": "Shared cloud storage", "otherExtensions": "Other extensions", "remainingCapacity": "Available: {amount}", "quotaAria": "Shared cloud storage: {used} of {limit}", "sharedQuotaInfo": "About shared cloud capacity", "sharedQuotaHint": "The 180 kB cloud capacity is shared with other extensions. Tag names still sync when an outfit is kept on this device only.", "quotaWarning": "Shared storage is nearly full. Keep some outfits on this device only to free cloud space.", "quotaBlocked": "Upload paused: shared storage exceeds the limit. Your local outfits are retained. Disable cloud sync on some outfits, then retry.", "localSaved": "Saved on this device", "localUnsaved": "Not saved on this device", "retrySync": "Retry upload", "exportRecovery": "Export pre-migration backup", "sync": { "idle": "Cloud ready", "pending": "Waiting to upload", "submitted": "Submitted · awaiting verification", "verified": "Cloud readback verified", "offline": "Offline · waiting to retry", "quota": "Upload paused · over limit", "error": "Sync needs attention" }, "selected": "Selected", "adjustSelection": "Preview again →", "previewAndAdjust": "Preview & adjust →", "browseLibrary": "Browse wardrobe", "findTag": "Find a tag…", "storageFilter": "Cloud inclusion", "filters": "Filters", "storageDetails": "Storage details", "showResults": "Show {count} outfits" };
+      const library$1 = { "searchPlaceholder": "Search outfits or tags…", "allOutfits": "All outfits", "untagged": "Untagged", "filterByTag": "Filter by tag", "manageTags": "Manage tags", "newTag": "New tag", "newTagPrompt": "Enter a unique tag name:", "renameTag": "Rename selected tag", "renameTagPrompt": "New tag name:", "deleteTag": "Delete selected tag", "deleteTagConfirm": 'Delete tag "{name}"? Your outfits will stay in the wardrobe.', "tagNameInvalid": "Enter a tag name that is different from your existing tags.", "editTags": "Edit tags", "editOutfitTags": "Tags for {name}", "tags": "Tags", "selectTags": "Select one or more tags", "noTags": "No matching tags. Create tags from Manage tags.", "multipleTagsHint": "An outfit can have multiple tags. Removing a tag does not delete the outfit.", "saveTags": "Save tags", "outfitCount": "{count} / {total} outfits", "empty": "Your wardrobe is empty", "noMatches": "No matching outfits", "clearFilters": "Clear all filters", "saveCharacter": "Save current outfit", "saveNamePrompt": "Name this outfit:", "saved": 'Saved "{name}" to this device. Check cloud status for sync progress.', "imported": "Imported {count} outfits to this device. Check cloud status for sync progress.", "nothingImported": "No outfits to import. Check that the imported data contains outfits.", "operationFailed": "The operation could not be completed: {error}", "itemUnavailable": "This outfit or tag is no longer available. Refresh your selection and try again.", "deleteOutfitConfirm": 'Delete "{name}"? It will be removed from this device, and the deletion will sync.', "previewOutfit": "Preview {name}", "outfitActions": "Actions for {name}", "moreActions": "More actions", "cloudIncluded": "Cloud enabled", "localOnly": "This device only", "localFork": "Saved local copy", "localForkHint": "Another device re-enabled cloud sync, so this device's edited version was kept as a local copy. It will not upload automatically. You can turn on cloud sync for this copy.", "cloudToggleTitle": "Include or exclude this outfit from cloud sync. Local copies are retained.", "cloudStorage": "Shared cloud storage", "otherExtensions": "Other extensions", "remainingCapacity": "Available: {amount}", "quotaAria": "Shared cloud storage: {used} of {limit}", "sharedQuotaInfo": "About shared cloud capacity", "sharedQuotaHint": "All extensions share 180 kB (180000 bytes). Tag names still sync when an outfit is kept on this device only.", "quotaWarning": "Shared storage is nearly full. Keep some outfits on this device only to free cloud space.", "quotaBlocked": "Upload paused: shared storage is full. Saved local outfits remain available. Turn off cloud sync for some outfits, then retry.", "localSaved": "Saved on this device", "localUnsaved": "Not saved on this device", "retrySync": "Retry upload", "exportRecovery": "Export pre-migration backup", "sync": { "idle": "Cloud ready", "pending": "Awaiting cloud check", "submitted": "Submitted · awaiting verification", "verified": "Verified against cloud data", "offline": "Offline · waiting to retry", "quota": "Upload paused · over limit", "error": "Sync needs attention" }, "selected": "Selected", "browseLibrary": "Browse wardrobe", "findTag": "Find a tag…", "storageFilter": "Cloud sync", "filters": "Filters", "storageDetails": "Storage details", "showResults": "Show {count} outfits" };
       const fileItem$1 = { "open": "Open", "rename": "Rename", "delete": "Delete", "apply": "Apply to Character", "sendToStudio": "Send to Studio", "cancel": "Cancel", "promptNewName": "New name", "confirmDelete": "Are you sure you want to delete this item?", "elementDefaultName": "Element", "sendError": "Send to Studio failed", "exportBCX": "Export as BCX", "cloudOn": "Cloud On", "cloudOff": "Cloud Off", "cloudToggleFileTitle": "Toggle cloud sync for this file", "cloudToggleFolderTitle": "Toggle cloud sync for this folder and its children" };
-      const fileManager$1 = { "title": "Wardrobe", "newFolderTitle": "New folder", "restoreTitle": "Restore", "refreshThumbnails": "Refresh thumbnails", "closePanel": "Close panel", "promptNewFolderName": "New folder name", "goUp": "Go to parent folder", "parentFolder": "Parent folder", "dropToParentTitle": "Drop here to move to the parent folder", "searchPlaceholderCurrent": "Search in current folder...", "searchPlaceholderAll": "Search all folders...", "searchAria": "Search files", "clearSearch": "Clear search", "switchToGlobalSearch": "Switch to global search", "switchToCurrentSearch": "Switch to current-folder search", "emptyTip": "No matching files or folders", "scopeCurrent": "Current folder", "scopeAll": "Global", "sortBy": "Sort by", "sortToggle": "Sort", "sortToggleAria": "Cycle sort mode", "viewMode": "View mode", "viewLarge": "Large icons", "viewSmall": "Small icons", "viewList": "List", "sortRecent": "Recent", "sortName": "Name", "sortType": "Type", "cloudUsageTitle": "Cloud Usage", "cloudUsageAria": "Cloud storage usage", "cloudUsageOk": "Within limit", "cloudUsageWarn": "Approaching limit", "cloudUsageOver": "Over 180KB limit", "filterAll": "All", "filterFolder": "Folders", "filterOutfit": "Outfits", "filterCharacter": "Character snapshots" };
-      const filterManager$1 = { "ariaLabel": "Outfit adjustments", "inCharacter": "On character", "applyFailed": "Could not apply. Check that the selected character currently allows outfit changes.", "hiddenBadge": "Hidden", "emptyItems": "No items", "emptyGroups": "No slots to adjust", "legendToggle": "How it works", "slotModeShortOriginal": "Original", "slotModeShortIncoming": "Outfit", "slotModeShortEmpty": "Empty", "dotNone": "None", "noItemName": "None", "showAllSlots": "Show all slots", "collapseAllGroups": "Collapse all", "expandAllGroups": "Expand all", "sectionGlobal": "All slots", "operationAdd": "Add", "operationReplace": "Replace", "operationFullReplace": "Full replace", "groupCycleTooltip": "Click a group source repeatedly: Add keeps the other source's existing items and fills empty slots. Replace overwrites slots included in this source. Full replace also clears slots missing from this source.", "restoreOriginalTooltip": "Restore every slot from the original character.", "replaceAllTooltip": "Use the selected outfit for every slot, clearing slots it does not contain.", "clearScopeTooltip": "Set this entire range directly to Empty.", "replaceAllAction": "Replace all", "inSelectedOutfit": "In selected outfit", "slotControlLabel": "{name}: choose source", "preserveBodyTooltip": "Keep the original body, face, hairstyle and hair color for this preview. Other slot choices stay as they are.", "preserveBody": "Keep original body", "replaceBodyOnlyTooltip": "Use only the selected outfit's body, face, hairstyle and hair color. Restore all other slots from the original character.", "replaceBodyOnly": "Replace body only", "groupCycleHint": "Group clicks: Add → Replace → Full replace. Individual sliders select a source directly.", "fullReplaceSourceHint": "Missing items stay on the chosen source during full replacement. Only an explicit Empty choice moves the slider to Empty.", "slotSourceHint": "Each row shows Original, Outfit, then Empty. Names identify the actual items. Blue dots mark original items; green dots mark slots only in the selected outfit." };
+      const fileManager$1 = { "title": "Wardrobe", "newFolderTitle": "New folder", "restoreTitle": "Restore", "refreshThumbnails": "Refresh thumbnails", "closePanel": "Close panel", "promptNewFolderName": "New folder name", "goUp": "Go to parent folder", "parentFolder": "Parent folder", "dropToParentTitle": "Drop here to move to the parent folder", "searchPlaceholderCurrent": "Search in current folder...", "searchPlaceholderAll": "Search all folders...", "searchAria": "Search files", "clearSearch": "Clear search", "switchToGlobalSearch": "Switch to global search", "switchToCurrentSearch": "Switch to current-folder search", "emptyTip": "No matching files or folders", "scopeCurrent": "Current folder", "scopeAll": "Global", "sortBy": "Sort by", "sortToggle": "Sort", "sortToggleAria": "Cycle sort mode", "viewMode": "View mode", "viewCard": "Cards", "viewList": "List", "sortRecent": "Recent", "sortName": "Name", "sortType": "Type", "cloudUsageTitle": "Cloud Usage", "cloudUsageAria": "Cloud storage usage", "cloudUsageOk": "Within limit", "cloudUsageWarn": "Approaching limit", "cloudUsageOver": "Over 180KB limit", "filterAll": "All", "filterFolder": "Folders", "filterOutfit": "Outfits", "filterCharacter": "Character snapshots" };
+      const filterManager$1 = { "ariaLabel": "Outfit adjustments", "inCharacter": "On character", "applyFailed": "Could not apply. Check that the selected character currently allows outfit changes.", "hiddenBadge": "Hidden", "emptyItems": "No items in this group", "emptyGroups": "No slots to adjust", "legendToggle": "How it works", "slotModeShortOriginal": "Original", "slotModeShortIncoming": "Outfit", "slotModeShortEmpty": "Empty", "dotNone": "None", "noItemName": "None", "showAllSlots": "Show all slots", "collapseAllGroups": "Collapse all", "expandAllGroups": "Expand all", "sectionGlobal": "All slots", "operationAdd": "Add", "operationReplace": "Replace", "operationFullReplace": "Full replace", "groupProgressTooltip": "The next action depends on your preview: Add fills empty slots. Once filled, Replace overwrites this source's slots. Once matched, Full replace clears slots missing from this source. It stays complete after that.", "operationComplete": "Fully replaced", "restoreOriginalTooltip": "Restore every slot from the original character.", "replaceAllTooltip": "Use the selected outfit for every slot, clearing slots it does not contain.", "clearScopeTooltip": "Clear every slot in this range.", "replaceAllAction": "Replace all", "inSelectedOutfit": "In selected outfit", "slotControlLabel": "{name}: choose source", "preserveBodyTooltip": "Restore the original body, face, hairstyle and hair color for this preview. Keep all other slot choices.", "preserveBody": "Keep original body", "replaceBodyOnlyTooltip": "Use only the selected outfit's body, face, hairstyle and hair color. Restore all other slots from the original character.", "replaceBodyOnly": "Replace body only", "groupProgressHint": "Group buttons show the next action. Individual sliders choose a source directly.", "fullReplaceSourceHint": "Full replace clears slots missing from the source. Their sliders keep that source selected. Choose Empty to clear a slot manually.", "slotSourceHint": "Each row shows Original, Outfit, then Empty. Names identify the actual items. Blue dots mark original items; green dots mark slots only in the selected outfit." };
       const assetSelector$1 = { "ariaLabel": "Asset Selector panel", "title": "Asset Selector", "searchPlaceholder": "Search assets (name / description)", "searchAria": "Search assets", "toggleToCardView": "Switch to card view", "toggleToListView": "Switch to list view", "refreshTitle": "Reload asset list", "notInReplaceModePlaceholder": "Click “Replace” in the left list or select an empty slot to enter replace mode", "groupLabel": "Group:", "candidatesLabel": "Asset candidates:", "loading": "Loading…", "noMatches": "No matching assets found", "apply": "Apply", "applyTitle": "Apply this asset to the currently selected part/slot (will replace with a new part)", "alertNoReplaceMode": "Please click “Replace” in the left list to enter replace mode and select an element (stack) to edit first.", "alertApplyFailed": "Apply failed — see console for details", "unknown": "(unknown)", "unnamed": "(unnamed)" };
       const colorableLayer$1 = { "color": "Color", "default": "Default", "paletteTitle": "Edit this color entry in Palette", "opacity": "Opacity", "linkedOpacityTitle": "Modify Opacity for all subLayers", "offset": "Offset", "offsetX": "X:", "offsetY": "Y:", "linkedOffsetTitle": "Modify Offset for all subLayers", "priority": "Priority", "priorityDefault": "Priority (default)", "priorityOverridden": "Priority (overridden)", "resetPriorityTitle": "Reset to default priority", "resetOffsetTitle": "Reset offset to default", "resetColorTitle": "Reset color to default", "subLayer": "SubLayer", "unknown": "(unknown)", "unnamed": "(unnamed)", "visualMoveTitle": "Enable visual move for this layer", "collapse": "Collapse", "expand": "Expand", "selectLayer": "Select layer" };
       const palette$1 = { "ariaLabelPanel": "Color Palette panel", "pickerAria": "Embedded color picker", "mode": { "external": "Modify external color", "saved": "Modify Saved Colors", "tags": "Modify Color Tags" }, "messages": { "createTagFailed": "Create tag failed — see console for details", "tagNameEmpty": "Tag name cannot be empty", "tagNameExists": "A tag with the same name already exists", "renameFailed": "Rename failed — see console for details", "tagDeleted": "Tag '<strong>{tag}</strong>' deleted", "colorDeleted": "Color deleted", "allColorsDeletd": "All saved colors cleared" }, "modeIndicator": { "browse": "Browse Mode", "editingTag": "Editing Tag" }, "saved": { "title": "Quick Palette", "description": "Temporary saved colors for quick access", "emptyText": "Save frequently used colors here", "emptyCTA": "Save Current Color", "editTitle": "Edit Saved Colors", "saveTitle": "Save current color", "clearTitle": "Clear all saved colors", "none": "No saved colors", "copy": "Copy", "delete": "Delete", "deleteConfirm": "Confirm delete" }, "tags": { "title": "Color Tags", "description": "Named color library for global use. Rename or delete tags here.", "emptyText": "Create named tags for key colors you'll reuse across layers", "emptyCTA": "Create First Tag", "editTitle": "Edit Color Tags", "createFromCurrent": "Create tag from current color", "clearTitle": "Clear palette", "none": "No tags (automatically generated when adding items with duplicate colors)" }, "actions": { "copy": "Copy", "rename": "Rename", "cancel": "Cancel", "confirm": "Confirm", "apply": "Apply", "disabledInEditMode": "Disabled in edit mode — click Done to exit" }, "advanced": { "title": "Advanced Coloring", "summary": "Apply H/L/S offsets on top of a base Tag color for consistent but flexible batch styling.", "targetType": "Current Target", "baseTag": "Base Tag", "selectTag": "Select a tag", "suggest": "Set HLS from current", "apply": "Apply", "reset": "Reset Offset", "toHls": "Convert to HLS", "detach": "Detach to Raw", "kindTag": "Plain Tag", "kindTagOffset": "Tag + Offset", "kindRaw": "Raw Color" } };
@@ -32178,9 +32295,9 @@ ${lightForced}`;
       const studio$1 = { "ariaLabel": "Studio window", "title": "Studio", "saveStacksTitle": "Export current stacks to local JSON file", "loadStacksTitle": "Import stacks from local JSON", "savePaletteTitle": "Export current palette to local JSON file", "loadPaletteTitle": "Import palette from local JSON", "showPalette": "Show palette", "hidePalette": "Hide palette", "showLayerManager": "Show layer manager", "hideLayerManager": "Hide layer manager", "showHistory": "Show history", "hideHistory": "Hide history", "applyToTargetLabel": "Apply merged appearance to: {name}", "applyNoTargetTitle": "No target character set in File System store", "applyNoTargetAlert": "No target character set in File System store.", "applyMergedEmptyConfirm": "Merged appearance appears empty. Do you still want to apply it to the target character?", "applySuccessAlert": "Applied appearance to target character.", "applyFailedAlert": "Apply failed — see console for details.", "exportMergedTitle": "Export merged appearance to File Store", "exportNoFSAlert": "File System store not available.", "exportSuccessAlert": "Exported merged appearance to File Store.", "exportFailedAlert": "Export failed: {msg}", "closeTitle": "Close", "stacksImportSuccess": "Stacks imported successfully.", "stacksImportFailed": "Failed to import stacks from selected file.", "paletteImportSuccess": "Palette imported successfully.", "paletteImportFailed": "Failed to import palette from selected file.", "targetDefault": "target", "importCharacterTitle": "Import Character", "savesManager": "Manage saves", "layersSelected": "{count} layers selected", "replaceMode": "Replace mode", "visualMoveMode": "Visual Move mode" };
       const history$1 = { "title": "History", "clear": "Clear", "clearTitle": "Clear all history", "clearConfirmMessage": "Are you sure you want to clear all history? This cannot be undone.", "currentState": "Current State", "timelineSubtitle": "Browse and jump between edit states", "undoCount": "Undo", "redoCount": "Redo", "undoAction": "Undo", "redoAction": "Redo", "totalStates": "Total", "emptyState": "No history yet. Your changes will be tracked here.", "justNow": "Just now", "minutesAgo": "{count} min ago", "hoursAgo": "{count} hours ago", "undoItem": "Previous state", "redoItem": "Future state", "pastTag": "Past", "futureTag": "Future", "currentTag": "Now", "scrollHint": "Scroll horizontally to browse more states", "jumpLatest": "Jump to latest", "hasFutureState": "Future states available", "stateChange": "State Change", "initialState": "Initial State", "actionTypeLabels": { "part": { "updateMetadata": "Update part metadata", "updateProperty": "Update part properties", "applyLayerDeltas": "Apply part layer changes" }, "layer": { "batchApplyLayerDeltas": "Apply layer batch changes" }, "batch": { "updateOpacity": "Batch update opacity", "updateOffset": "Batch update offset", "updateColor": "Batch update color", "updatePriority": "Batch update priority" }, "palette": { "applyColor": "Apply color", "applyTag": "Apply palette tag", "applyTagOffset": "Apply tag offset", "resetTagOffset": "Reset tag offset", "updateTag": "Update palette tag", "createTagAndReplace": "Create tag and replace", "renameTagReferences": "Rename tag references", "deleteTag": "Delete palette tag", "clear": "Clear palette", "savedColor": { "add": "Add saved color", "update": "Update saved color", "delete": "Delete saved color", "clear": "Clear saved colors" } }, "stack": { "add": "Add stack", "remove": "Remove stack", "move": "Move stack", "clear": "Clear stacks", "rename": "Rename stack" }, "asset": { "apply": "Apply asset" } }, "actionScopeLabels": { "part": "Part", "layer": "Layer", "batch": "Batch", "palette": "Palette", "stack": "Stack", "asset": "Asset" }, "operationContentLabels": { "color": "Color", "opacity": "Opacity", "shift": "Shift", "order": "Order", "layer": "Layer", "property": "Property", "tag": "Tag", "general": "Edit" } };
       const groupNames$1 = { "Item": "Item", "Cosplay": "Cosplay", "Hair": "Hair", "Headwear": "Headwear", "Face": "Face", "Markings": "Markings / Tattoos", "ClothUpper": "Upper Clothing", "ClothLower": "Lower Clothing", "Hands": "Hands", "Feet": "Feet", "Accessories": "Accessories", "HiddenBody": "Hidden Body Parts", "Appearance": "Appearance" };
-      const fileManagerPanel$1 = { "ariaLabel": "File Manager Panel", "title": "Mobile Wardrobe", "saveBackup": "Save Backup", "importBackup": "Import Backup", "saveCharacter": "Save Character to Current Folder", "importBCX": "Import from BCX", "importPlayerWardrobe": "Import Player Wardrobe", "settings": "Settings", "toggleFilters": "Filters", "lightMode": "Light mode", "darkMode": "Dark mode", "themedMode": "Themed mode", "toggleTheme": "Toggle Theme", "tabAriaLabel": "Workbench tabs", "tabWardrobe": "Wardrobe", "tabHistory": "History", "tabStudio": "Studio", "tabSettings": "Settings", "themeSettings": "Theme Settings", "themedNotAvailable": "Themed BC not detected, using default light theme", "themedModeDesc": "Themed mode uses colors from Themed BC plugin. Themed BC must be installed and enabled." };
-      const historyViewer$1 = { "title": "History", "toggleToHistory": "View History", "toggleToFileManager": "View File Manager", "clearAll": "Clear All", "clearAllConfirm": "Are you sure you want to clear all history? This cannot be undone.", "deleteRecord": "Delete", "deleteConfirm": "Delete this history record?", "delete": "Delete", "searchPlaceholder": "Search history records...", "clearSearch": "Clear", "timeFilter": "Time filters", "filterAll": "All", "filterToday": "Today", "filterWeek": "Last 7 days", "loadRecord": "Load this record", "apply": "Apply", "cancel": "Cancel", "loadToPreview": "Load to preview", "recordedAt": "Recorded at", "emptyState": "No history records yet. Your outfit changes will be automatically recorded here.", "recordCount": "{count} records" };
-      const sidePreview$1 = { "ariaLabel": "Preview panel", "hint": "Hover to preview, click to lock/unlock current preview", "targetCharacter": "Target character", "noTargetCharacter": "No available character", "renderFailed": "The preview could not load. Try again.", "retry": "Reload preview", "loading": "Loading preview" };
+      const fileManagerPanel$1 = { "ariaLabel": "Wardrobe panel", "title": "Portable wardrobe", "saveBackup": "Save backup", "importBackup": "Import backup", "saveCharacter": "Save current outfit", "importBCX": "Import from BCX", "importPlayerWardrobe": "Import player wardrobe", "settings": "Settings", "toggleFilters": "Adjust outfit", "lightMode": "Light mode", "darkMode": "Dark mode", "themedMode": "Themed mode", "toggleTheme": "Switch theme", "tabAriaLabel": "Workbench tabs", "tabWardrobe": "Wardrobe", "tabHistory": "History", "tabStudio": "Studio", "tabSettings": "Settings", "themeSettings": "Theme settings", "themedNotAvailable": "Themed BC not detected, using default light theme", "themedModeDesc": "Themed mode uses colors from Themed BC plugin. Themed BC must be installed and enabled." };
+      const historyViewer$1 = { "title": "History", "toggleToHistory": "View History", "toggleToFileManager": "View wardrobe", "clearAll": "Clear All", "clearAllConfirm": "Are you sure you want to clear all history? This cannot be undone.", "deleteRecord": "Delete", "deleteConfirm": "Delete this history record?", "delete": "Delete", "searchPlaceholder": "Search history records...", "clearSearch": "Clear", "timeFilter": "Time filters", "filterAll": "All", "filterToday": "Today", "filterWeek": "Last 7 days", "loadRecord": "Load this record", "apply": "Apply", "cancel": "Cancel", "loadToPreview": "Load to preview", "recordedAt": "Recorded at", "emptyState": "No history records yet. Your outfit changes will be automatically recorded here.", "recordCount": "{count} records" };
+      const sidePreview$1 = { "ariaLabel": "Character preview", "hint": "Check the preview, then apply it to the selected character.", "targetCharacter": "Target character", "noTargetCharacter": "No available character", "renderFailed": "The preview could not load. Try again.", "retry": "Reload preview", "loading": "Loading preview" };
       const stackDetail$1 = { "ariaLabel": "Stack Detail Panel", "title": "Details", "name": "Name", "group": "Group", "color": "Color", "property": "Property", "overridePriority": "OverridePriority", "opacity": "Opacity", "typeRecord": "TypeRecord", "offset": "Offset", "craft": "Craft", "craftSummary": "Craft (summary)", "download": "Download", "downloadTitle": "Download entire element", "copy": "Copy", "copyTitle": "Copy entire element JSON", "placeholder": "Select a stack item to view details", "unnamed": "(unnamed)" };
       const assetRender$1 = { "ariaLabel": "Asset Render Panel", "title": "Asset Render", "part": "Part:", "asset": "Asset:", "placeholder": "Select a part to view asset rendering", "loading": "Loading…", "retry": "Retry", "stop": "Stop" };
       const priorityArrangement$1 = { "ariaLabel": "Priority Arrangement Panel", "title": "Priority Arrangement", "name": "Name:", "parts": "Parts:", "priority": "Priority:", "layers": "Layers:", "placeholder": "Select an element (stack) to view priority grouping", "emptyStack": "No layer overridePriority settings in current stack", "dropHint": "Drag layer/part here to set overridePriority", "refresh": "Refresh" };
@@ -32191,8 +32308,8 @@ ${lightForced}`;
       const partInspector$1 = { "ariaLabel": "Part Inspector panel", "title": "Part Inspector", "noPartPlaceholder": "Click a part to view details", "descriptionLabel": "Description", "groupLabel": "Group", "colorLabel": "Color", "propertyLabel": "Property", "typeRecordLabel": "TypeRecord", "craftLabel": "Craft (summary)", "unnamed": "(unnamed)", "noGroup": "-", "singleMode": "Single mode", "multiMode": "Multi-select mode", "selectAll": "Select All (Ctrl+A)", "selectAllBtn": "All", "clearSelection": "Clear Selection (Ctrl+D)", "clearBtn": "Clear", "viewMode": "View mode (pan & zoom)", "moveMode": "Move mode (drag layers)", "corePropertiesTitle": "Core Properties", "advancedPropertiesTitle": "Advanced Properties", "layers": "Layers", "selectType": "Select type", "applyTo": "Apply to", "applyToCurrentLayer": "Apply to current layer" };
       const dialog$1 = { "ok": "OK", "cancel": "Cancel", "promptPlaceholder": "Enter value", "confirmTitle": "Please confirm", "alertTitle": "Notice" };
       const savesManager$1 = { "title": "Studio Saves", "close": "Close", "saveNew": "Save Current", "storageUsed": "Storage", "noSaves": "No saves yet", "current": "Current", "load": "Load", "rename": "Rename", "delete": "Delete", "deleteConfirm": "Delete this save? This cannot be undone.", "deleteFailed": "Delete failed", "enterName": "Enter save name:", "saved": "Saved successfully!", "saveFailed": "Save failed: {error}", "loadConfirm": "Load this save? Current unsaved changes will be lost.", "loaded": "Loaded successfully!", "loadFailed": "Load failed: {error}", "justNow": "Just now", "minutesAgo": "{n}m ago", "hoursAgo": "{n}h ago", "daysAgo": "{n}d ago" };
-      const wardrobeIO$1 = { "menuLabel": "Import / Export", "importEmpty": "Imported data is empty.", "importMerged": "Backup imported and merged into your wardrobe.", "importReplaced": "Replaced the wardrobe with the imported backup.", "importedAsFile": "Imported as a file into the current folder.", "importNamePrompt": "Enter a name for the imported outfit:", "importCancelled": "Import cancelled.", "importUnrecognized": "Unrecognized import format.", "playerWardrobeUnavailable": "Player wardrobe data is not available.", "playerWardrobeImported": 'Imported {count} outfits into "{name}".', "playerWardrobeFailed": "Failed to import player wardrobe. See console for details.", "bcxImportPrompt": "Paste BCX code (base64 + LZString):", "bcxImportFailed": "Failed to decode/parse BCX. Check the input.", "bcxCopied": "BCX code copied to clipboard.", "backupSaveFailed": "Failed to save backup. See console for details.", "backupParseFailed": "Failed to parse backup file (must be valid JSON).", "saveCharacterEmpty": "No character outfit data to save.", "saveCharacterPrompt": "Save character outfit — file name:", "savedToFolder": 'Saved "{name}" to the current folder.', "saveFailed": "Save failed. See console for details." };
-      const outfitFlow$1 = { "backToLibrary": "Back to wardrobe", "previewAndAdjust": "Preview & adjust", "applyHint": "Preview your selection, fine-tune it, then apply to your character.", "applyTo": "Apply to {name}", "appliedTo": "Applied to {name}" };
+      const wardrobeIO$1 = { "menuLabel": "Import / Export", "importEmpty": "Imported data is empty.", "importMerged": "Backup imported and merged into your wardrobe.", "importReplaced": "Replaced the wardrobe with the imported backup.", "importedAsFile": "Imported as a file into the current folder.", "importNamePrompt": "Enter a name for the imported outfit:", "importCancelled": "Import cancelled.", "importUnrecognized": "Unrecognized import format.", "playerWardrobeUnavailable": "Player wardrobe data is not available.", "playerWardrobeImported": 'Imported {count} outfits into "{name}".', "playerWardrobeFailed": "Failed to import player wardrobe. See console for details.", "bcxImportPrompt": "Paste BCX code (base64 + LZString):", "bcxImportFailed": "Failed to decode/parse BCX. Check the input.", "bcxCopied": "BCX code copied to clipboard.", "backupSaveFailed": "Failed to save backup. See console for details.", "backupParseFailed": "Failed to parse backup file (must be valid JSON).", "saveCharacterEmpty": "No outfit to save for this character. Select a character and try again.", "saveCharacterPrompt": "Outfit name:", "savedToFolder": 'Saved "{name}" to the current folder.', "saveFailed": "Save failed. See console for details." };
+      const outfitFlow$1 = { "backToLibrary": "Back to wardrobe", "backToPreview": "Back to preview", "previewTitle": "Outfit preview", "closePreview": "Close preview", "openAdjustments": "Adjust outfit", "dialogTitle": "Outfit adjustments", "closeAdjustments": "Close adjustments", "doneAdjusting": "Done adjusting", "adjustmentPreviewHint": "Changes update the preview only.", "applyHint": "Check the target and preview before applying.", "applyTo": "Apply to {name}", "appliedTo": "Applied to {name}" };
       const en = {
         library: library$1,
         fileItem: fileItem$1,
@@ -32222,10 +32339,10 @@ ${lightForced}`;
         wardrobeIO: wardrobeIO$1,
         outfitFlow: outfitFlow$1
       };
-      const library = { "searchPlaceholder": "搜索服装名称或标签…", "allOutfits": "全部服装", "untagged": "未加标签", "filterByTag": "按标签筛选", "manageTags": "管理标签", "newTag": "新建标签", "newTagPrompt": "输入唯一的标签名称：", "renameTag": "重命名当前标签", "renameTagPrompt": "新的标签名称：", "deleteTag": "删除当前标签", "deleteTagConfirm": "删除标签「{name}」？服装仍会保留在衣橱中。", "tagNameInvalid": "请输入非空且不重复的标签名称。", "editTags": "编辑标签", "editOutfitTags": "「{name}」的标签", "tags": "标签", "selectTags": "选择一个或多个标签", "noTags": "没有匹配标签，可在「管理标签」中新建。", "multipleTagsHint": "一件服装可以属于多个标签。移除标签不会删除服装。", "saveTags": "保存标签", "outfitCount": "{count} / {total} 件服装", "empty": "没有匹配的服装", "clearFilters": "清除所有筛选", "saveCharacter": "保存当前穿着", "saveNamePrompt": "为这套服装命名：", "saved": "已将「{name}」保存到本机衣橱，云端进度请查看同步状态。", "imported": "已将 {count} 件服装导入本机衣橱，云端进度请查看同步状态。", "nothingImported": "没有新增服装；导入内容可能为空，或已存在于衣橱中。", "operationFailed": "操作未完成：{error}", "itemUnavailable": "这件服装或标签已不可用，请重新选择后再试。", "deleteOutfitConfirm": "从衣橱和云同步中删除「{name}」？", "previewOutfit": "预览「{name}」", "previewLocked": "已锁定预览", "outfitActions": "「{name}」的操作", "moreActions": "更多操作", "cloudIncluded": "参与云同步", "localOnly": "仅保存在本机", "cloudToggleTitle": "开启或关闭这件服装的云同步，本机副本会保留。", "cloudStorage": "共享云端容量", "otherExtensions": "其他扩展", "remainingCapacity": "可用：{amount}", "quotaAria": "共享云端容量：已用 {used}，上限 {limit}", "sharedQuotaInfo": "共享云端容量说明", "sharedQuotaHint": "180 kB 云端容量与其他扩展共享。服装可以选择仅保存在本机，标签名称仍会同步。", "quotaWarning": "共享容量即将用满，可将部分服装设为仅保存在本机以释放云端空间。", "quotaBlocked": "上传已暂停：共享容量超限。本机服装仍保留，请关闭部分服装的云同步后重试。", "localSaved": "已保存到本机", "localUnsaved": "尚未保存到本机", "retrySync": "重试上传", "exportRecovery": "导出迁移前备份", "sync": { "idle": "云同步就绪", "pending": "等待上传", "submitted": "已提交，等待核验", "verified": "云端回读已核验", "offline": "离线，等待重试", "quota": "容量超限，上传暂停", "error": "同步需要处理" }, "selected": "已选择", "adjustSelection": "重新预览 →", "previewAndAdjust": "预览与微调 →", "browseLibrary": "浏览衣橱", "findTag": "搜索标签…", "storageFilter": "存储范围", "filters": "筛选", "storageDetails": "容量明细", "showResults": "查看 {count} 件服装" };
+      const library = { "searchPlaceholder": "搜索衣物或标签…", "allOutfits": "全部衣物", "untagged": "未加标签", "filterByTag": "按标签筛选", "manageTags": "管理标签", "newTag": "新建标签", "newTagPrompt": "输入唯一的标签名称：", "renameTag": "重命名当前标签", "renameTagPrompt": "新的标签名称：", "deleteTag": "删除当前标签", "deleteTagConfirm": "删除标签「{name}」？衣物会保留在衣橱中。", "tagNameInvalid": "请输入标签名称，并使用与现有标签不同的名称。", "editTags": "编辑标签", "editOutfitTags": "「{name}」的标签", "tags": "标签", "selectTags": "选择一个或多个标签", "noTags": "没有匹配标签，可在「管理标签」中新建。", "multipleTagsHint": "每件衣物可添加多个标签。移除标签不会删除衣物。", "saveTags": "保存标签", "outfitCount": "{count} / {total} 件衣物", "empty": "衣橱里还没有衣物", "noMatches": "没有符合条件的衣物", "clearFilters": "清除所有筛选", "saveCharacter": "保存当前穿着", "saveNamePrompt": "衣物名称：", "saved": "已将「{name}」保存到本机衣橱，云端进度请查看同步状态。", "imported": "已将 {count} 件衣物导入本机衣橱，云端进度请查看同步状态。", "nothingImported": "没有可导入的衣物。请检查导入内容是否为空。", "operationFailed": "操作未完成：{error}", "itemUnavailable": "这件衣物或标签已不可用，请重新选择后再试。", "deleteOutfitConfirm": "删除「{name}」？本机衣橱会删除它，并同步这次删除。", "previewOutfit": "预览「{name}」", "outfitActions": "「{name}」的操作", "moreActions": "更多操作", "cloudIncluded": "参与云同步", "localOnly": "仅保存在本机", "localFork": "保留的本机副本", "localForkHint": "另一台设备重新开启云同步时，这台设备修改过的版本被保留为本机副本。此副本不会自动上传，可手动开启云同步。", "cloudToggleTitle": "开启或关闭这件衣物的云同步，本机副本会保留。", "cloudStorage": "共享云端容量", "otherExtensions": "其他扩展", "remainingCapacity": "可用：{amount}", "quotaAria": "共享云端容量：已用 {used}，上限 {limit}", "sharedQuotaInfo": "共享云端容量说明", "sharedQuotaHint": "180 kB（180000 字节）由所有扩展共享。衣物可设为仅保存在本机，标签名称仍会同步。", "quotaWarning": "共享容量即将用满，可将部分衣物设为仅保存在本机以减少云端用量。", "quotaBlocked": "上传已暂停：共享容量超限。已保存的本机衣物仍可使用，请关闭部分衣物的云同步后重试。", "localSaved": "已保存到本机", "localUnsaved": "尚未保存到本机", "retrySync": "重试上传", "exportRecovery": "导出迁移前备份", "sync": { "idle": "云同步就绪", "pending": "等待云端核对", "submitted": "已提交，等待核验", "verified": "已与云端核对", "offline": "离线，等待重试", "quota": "容量超限，上传暂停", "error": "同步需要处理" }, "selected": "已选择", "browseLibrary": "浏览衣橱", "findTag": "搜索标签…", "storageFilter": "云同步范围", "filters": "筛选", "storageDetails": "容量明细", "showResults": "查看 {count} 件衣物" };
       const fileItem = { "open": "打开", "rename": "重命名", "delete": "删除", "apply": "应用到角色", "sendToStudio": "发送到 Studio", "cancel": "取消", "promptNewName": "新名字", "confirmDelete": "确认删除该项目吗？", "elementDefaultName": "元素", "sendError": "发送到 Studio 失败", "exportBCX": "导出为 BCX", "cloudOn": "云同步开", "cloudOff": "云同步关", "cloudToggleFileTitle": "切换此文件是否云同步", "cloudToggleFolderTitle": "切换此文件夹及其子项是否云同步" };
-      const fileManager = { "title": "衣橱", "newFolderTitle": "新建文件夹", "restoreTitle": "恢复", "refreshThumbnails": "刷新缩略图", "closePanel": "关闭面板", "promptNewFolderName": "新建文件夹名", "goUp": "返回上一级", "parentFolder": "上一级", "dropToParentTitle": "拖到这里移到上一级文件夹", "searchPlaceholderCurrent": "在当前文件夹搜索...", "searchPlaceholderAll": "搜索所有文件夹...", "searchAria": "搜索文件", "clearSearch": "清除搜索", "switchToGlobalSearch": "切换到全局搜索", "switchToCurrentSearch": "切换到当前文件夹", "emptyTip": "没有匹配的文件/文件夹", "scopeCurrent": "当前目录", "scopeAll": "全局", "sortBy": "排序方式", "sortToggle": "排序", "sortToggleAria": "切换排序方式", "viewMode": "视图模式", "viewLarge": "大图标", "viewSmall": "小图标", "viewList": "列表", "sortRecent": "最近修改", "sortName": "名称", "sortType": "类型", "cloudUsageTitle": "云端占用", "cloudUsageAria": "云端容量占用", "cloudUsageOk": "容量正常", "cloudUsageWarn": "容量接近上限", "cloudUsageOver": "超出 180KB 上限", "filterAll": "全部", "filterFolder": "文件夹", "filterOutfit": "套装", "filterCharacter": "角色快照" };
-      const filterManager = { "ariaLabel": "换装微调", "inCharacter": "角色已有", "applyFailed": "应用失败，请确认所选角色当前允许换装。", "hiddenBadge": "隐藏", "emptyItems": "暂无项目", "emptyGroups": "没有可微调的部位", "legendToggle": "操作说明", "slotModeShortOriginal": "原角色", "slotModeShortIncoming": "所选衣物", "slotModeShortEmpty": "置空", "dotNone": "无", "noItemName": "无", "showAllSlots": "显示全部槽位", "collapseAllGroups": "全部收起", "expandAllGroups": "全部展开", "sectionGlobal": "全部部位", "operationAdd": "补入", "operationReplace": "覆盖", "operationFullReplace": "完全替换", "groupCycleTooltip": "连续点击同一个分组来源：补入，保留另一来源已有的部位；覆盖，替换此来源包含的部位；完全替换，同时清空此来源没有的部位。", "restoreOriginalTooltip": "恢复原角色的全部部位。", "replaceAllTooltip": "全部使用所选衣物，清空其中没有的部位。", "clearScopeTooltip": "直接将此范围的滑块设为置空。", "replaceAllAction": "全量替换", "inSelectedOutfit": "所选衣物中存在", "slotControlLabel": "{name}：选择来源", "preserveBodyTooltip": "单次保留原角色的身体、面容、发型和发色，其余微调保持当前选择。", "preserveBody": "保留原身形", "replaceBodyOnlyTooltip": "只使用所选衣物的身体、面容、发型和发色，其他部位恢复原角色。", "replaceBodyOnly": "只替换身形", "groupCycleHint": "分组连点：补入 → 覆盖 → 完全替换。部件滑块直接选择来源。", "fullReplaceSourceHint": "完全替换产生的空部位仍停在所选来源；只有手动选择“置空”才会切到空档。", "slotSourceHint": "每行依次为原角色、所选衣物和置空。名称显示该来源的实际部件；蓝点表示原角色有此部位，绿点表示仅所选衣物有此部位。" };
+      const fileManager = { "title": "衣橱", "newFolderTitle": "新建文件夹", "restoreTitle": "恢复", "refreshThumbnails": "刷新缩略图", "closePanel": "关闭面板", "promptNewFolderName": "新建文件夹名", "goUp": "返回上一级", "parentFolder": "上一级", "dropToParentTitle": "拖到这里移到上一级文件夹", "searchPlaceholderCurrent": "在当前文件夹搜索...", "searchPlaceholderAll": "搜索所有文件夹...", "searchAria": "搜索文件", "clearSearch": "清除搜索", "switchToGlobalSearch": "切换到全局搜索", "switchToCurrentSearch": "切换到当前文件夹", "emptyTip": "没有匹配的文件/文件夹", "scopeCurrent": "当前目录", "scopeAll": "全局", "sortBy": "排序方式", "sortToggle": "排序", "sortToggleAria": "切换排序方式", "viewMode": "视图模式", "viewCard": "卡牌", "viewList": "列表", "sortRecent": "最近修改", "sortName": "名称", "sortType": "类型", "cloudUsageTitle": "云端占用", "cloudUsageAria": "云端容量占用", "cloudUsageOk": "容量正常", "cloudUsageWarn": "容量接近上限", "cloudUsageOver": "超出 180KB 上限", "filterAll": "全部", "filterFolder": "文件夹", "filterOutfit": "套装", "filterCharacter": "角色快照" };
+      const filterManager = { "ariaLabel": "换装微调", "inCharacter": "角色已有", "applyFailed": "应用失败，请确认所选角色当前允许换装。", "hiddenBadge": "隐藏", "emptyItems": "此分组没有部件", "emptyGroups": "没有可微调的部位", "legendToggle": "操作说明", "slotModeShortOriginal": "原角色", "slotModeShortIncoming": "所选衣物", "slotModeShortEmpty": "置空", "dotNone": "无", "noItemName": "无", "showAllSlots": "显示全部部位", "collapseAllGroups": "全部收起", "expandAllGroups": "全部展开", "sectionGlobal": "全部部位", "operationAdd": "补入", "operationReplace": "覆盖", "operationFullReplace": "完全替换", "groupProgressTooltip": "按当前预览选择下一步：补入缺少的部位；已补齐时覆盖来源包含的部位；已覆盖时完全替换，清空来源没有的部位。完成后保持完全替换。", "operationComplete": "已完全替换", "restoreOriginalTooltip": "恢复原角色的全部部位。", "replaceAllTooltip": "全部使用所选衣物，清空其中没有的部位。", "clearScopeTooltip": "清空此范围内的所有部位。", "replaceAllAction": "完全替换", "inSelectedOutfit": "所选衣物中存在", "slotControlLabel": "{name}：选择来源", "preserveBodyTooltip": "恢复原角色的身体、面容、发型和发色，其他部位保持当前选择。仅修改本次预览。", "preserveBody": "保留原身形", "replaceBodyOnlyTooltip": "只使用所选衣物的身体、面容、发型和发色，其他部位恢复原角色。", "replaceBodyOnly": "只替换身形", "groupProgressHint": "分组按钮显示下一步操作；部件滑块直接选择来源。", "fullReplaceSourceHint": "完全替换后，来源没有的部位会清空，滑块仍保留该来源。手动选择“置空”才会切到空档。", "slotSourceHint": "每行依次为原角色、所选衣物和置空。名称显示该来源的实际部件；蓝点表示原角色有此部位，绿点表示仅所选衣物有此部位。" };
       const assetSelector = { "ariaLabel": "Asset Selector 面板", "title": "Asset Selector", "searchPlaceholder": "搜索 assets（名称 / 描述）", "searchAria": "搜索 asset", "toggleToCardView": "切换到卡片视图", "toggleToListView": "切换到列表视图", "refreshTitle": "重新加载 asset 列表", "notInReplaceModePlaceholder": "先在左侧列表中点击“替换”或选择空槽位进入替换模式", "groupLabel": "分组：", "candidatesLabel": "候选 asset：", "loading": "加载中…", "noMatches": "未找到对应的 assets", "apply": "应用", "applyTitle": "将此 asset 应用到当前选中的 part/槽位（会用新 part 替换）", "alertNoReplaceMode": "请先在左侧点击“替换”以进入替换模式，并选择要编辑的 element（stack）。", "alertApplyFailed": "应用失败，详情见控制台", "unknown": "(未知)", "unnamed": "(未命名)" };
       const colorableLayer = { "color": "颜色", "default": "默认", "paletteTitle": "在调色板中编辑此颜色项", "opacity": "不透明度", "linkedOpacityTitle": "同时修改所有子图层的不透明度", "offset": "偏移", "offsetX": "X：", "offsetY": "Y：", "linkedOffsetTitle": "同时修改所有子图层的偏移", "priority": "优先级", "priorityDefault": "优先级（默认）", "priorityOverridden": "优先级（已覆盖）", "resetPriorityTitle": "重置为默认优先级", "resetOffsetTitle": "重置偏移为默认值", "resetColorTitle": "重置颜色为默认值", "subLayer": "子图层", "unknown": "(未知)", "unnamed": "(未命名)", "visualMoveTitle": "启用此图层的可视移动", "collapse": "折叠", "expand": "展开", "selectLayer": "选择图层" };
       const palette = { "ariaLabelPanel": "Color Palette 面板", "pickerAria": "嵌入式颜色选择器", "mode": { "external": "修改外部颜色", "saved": "修改 Saved Colors", "tags": "修改 Color Tags" }, "messages": { "createTagFailed": "创建 tag 失败，请查看控制台", "tagNameEmpty": "Tag 名称不能为空", "tagNameExists": "已有相同的 tag 名，请先选择其它名称", "renameFailed": "重命名失败，请查看控制台", "tagDeleted": "色标签 '<strong>{tag}</strong>' 已删除", "colorDeleted": "颜色已删除", "allColorsDeletd": "所有保存的颜色已清空" }, "modeIndicator": { "browse": "浏览模式", "editingTag": "编辑色标签" }, "saved": { "title": "快速调色板", "description": "临时保存的颜色，便于快速访问", "emptyText": "在此保存常用颜色", "emptyCTA": "保存当前颜色", "editTitle": "编辑已保存颜色", "saveTitle": "保存当前颜色", "clearTitle": "清空所有保存的颜色", "none": "尚无保存颜色", "copy": "复制", "delete": "删除", "deleteConfirm": "确认删除" }, "tags": { "title": "颜色标签", "description": "命名的颜色库，支持全局使用。在此可重命名或删除标签。", "emptyText": "为关键颜色创建命名标签，支持跨层级复用", "emptyCTA": "创建第一个标签", "editTitle": "编辑 Color Tags", "createFromCurrent": "为当前颜色创建 Tag", "clearTitle": "清空调色板", "none": "暂无 tag（当添加含重复 color 的 item 时自动生成）" }, "actions": { "copy": "复制", "rename": "改名", "cancel": "取消", "confirm": "确认", "apply": "应用", "disabledInEditMode": "编辑模式下禁用 — 点击 Done 退出" }, "advanced": { "title": "高级赋色", "summary": "基于 Tag 基色应用 H/L/S 偏移，支持批量统一风格与局部微调。", "targetType": "当前目标", "baseTag": "基础 Tag", "selectTag": "选择一个 Tag", "suggest": "从当前设置HLS", "apply": "应用", "reset": "重置偏移", "toHls": "转为HLS", "detach": "转为纯色", "kindTag": "纯 Tag", "kindTagOffset": "Tag + 偏移", "kindRaw": "纯色" } };
@@ -32234,9 +32351,9 @@ ${lightForced}`;
       const studio = { "ariaLabel": "Studio 窗口", "title": "Studio", "saveStacksTitle": "将当前 stacks 导出为本地 JSON 文件", "loadStacksTitle": "从本地 JSON 导入 stacks", "savePaletteTitle": "将当前调色板导出为本地 JSON 文件", "loadPaletteTitle": "从本地 JSON 导入调色板", "showPalette": "显示调色板", "hidePalette": "隐藏调色板", "showLayerManager": "显示图层管理器", "hideLayerManager": "隐藏图层管理器", "showHistory": "显示历史记录", "hideHistory": "隐藏历史记录", "applyToTargetLabel": "将合并外观应用到：{name}", "applyNoTargetTitle": "未在文件系统中设置目标角色", "applyNoTargetAlert": "未在文件系统中设置目标角色。", "applyMergedEmptyConfirm": "合并的外观似乎为空。仍要将其应用到目标角色吗？", "applySuccessAlert": "已将外观应用到目标角色。", "applyFailedAlert": "应用失败，详情见控制台。", "exportMergedTitle": "导出 mergedAppearance 到文件仓库", "exportNoFSAlert": "文件系统存储不可用。", "exportSuccessAlert": "已导出合并外观到文件仓库。", "exportFailedAlert": "导出失败：{msg}", "closeTitle": "关闭", "stacksImportSuccess": "Stacks 导入成功。", "stacksImportFailed": "从所选文件导入 Stacks 失败。", "paletteImportSuccess": "调色板导入成功。", "paletteImportFailed": "从所选文件导入调色板失败。", "targetDefault": "目标", "importCharacterTitle": "导入角色", "savesManager": "管理存档", "layersSelected": "已选择 {count} 个图层", "replaceMode": "替换模式", "visualMoveMode": "可视移动模式" };
       const history = { "title": "历史记录", "clear": "清空", "clearTitle": "清空所有历史记录", "clearConfirmMessage": "确定要清空所有历史记录吗？此操作无法撤销。", "currentState": "当前状态", "timelineSubtitle": "浏览并跳转到任意编辑状态", "undoCount": "可撤销", "redoCount": "可重做", "undoAction": "撤销", "redoAction": "重做", "totalStates": "总数", "emptyState": "暂无历史记录。您的更改将在此处跟踪。", "justNow": "刚刚", "minutesAgo": "{count} 分钟前", "hoursAgo": "{count} 小时前", "undoItem": "之前的状态", "redoItem": "未来的状态", "pastTag": "过去", "futureTag": "未来", "currentTag": "当前", "scrollHint": "横向滚动可查看更多状态", "jumpLatest": "跳至最新", "hasFutureState": "存在可重做状态", "stateChange": "状态变更", "initialState": "初始状态", "actionTypeLabels": { "part": { "updateMetadata": "更新部件元数据", "updateProperty": "更新部件属性", "applyLayerDeltas": "应用部件图层改动" }, "layer": { "batchApplyLayerDeltas": "批量应用图层改动" }, "batch": { "updateOpacity": "批量更新不透明度", "updateOffset": "批量更新偏移", "updateColor": "批量更新颜色", "updatePriority": "批量更新优先级" }, "palette": { "applyColor": "应用颜色", "applyTag": "应用调色标签", "applyTagOffset": "应用标签偏移", "resetTagOffset": "重置标签偏移", "updateTag": "更新调色标签", "createTagAndReplace": "创建标签并替换", "renameTagReferences": "重命名标签引用", "deleteTag": "删除调色标签", "clear": "清空调色板", "savedColor": { "add": "添加收藏颜色", "update": "更新收藏颜色", "delete": "删除收藏颜色", "clear": "清空收藏颜色" } }, "stack": { "add": "新增堆栈", "remove": "删除堆栈", "move": "移动堆栈", "clear": "清空堆栈", "rename": "重命名堆栈" }, "asset": { "apply": "应用资源" } }, "actionScopeLabels": { "part": "部件", "layer": "图层", "batch": "批量", "palette": "调色", "stack": "堆栈", "asset": "资源" }, "operationContentLabels": { "color": "颜色", "opacity": "透明度", "shift": "位移", "order": "顺序", "layer": "图层", "property": "属性", "tag": "标签", "general": "编辑" } };
       const groupNames = { "Item": "道具", "Cosplay": "Cosplay", "Hair": "头发", "Headwear": "头饰", "Face": "面部", "Markings": "痕迹/纹身", "ClothUpper": "上身服装", "ClothLower": "下身服装", "Hands": "手部", "Feet": "足部", "Accessories": "配饰", "HiddenBody": "隐藏身体部件", "Appearance": "外观" };
-      const fileManagerPanel = { "ariaLabel": "文件管理面板", "title": "移动衣橱", "saveBackup": "保存备份", "importBackup": "备份导入", "saveCharacter": "保存角色到当前文件夹", "importBCX": "从 BCX 导入", "importPlayerWardrobe": "导入玩家衣柜", "settings": "设置", "toggleFilters": "过滤", "lightMode": "浅色模式", "darkMode": "深色模式", "themedMode": "Themed 模式", "toggleTheme": "切换主题", "tabAriaLabel": "工作台标签", "tabWardrobe": "衣柜", "tabHistory": "历史", "tabStudio": "Studio", "tabSettings": "设置", "themeSettings": "主题设置", "themedNotAvailable": "未检测到 Themed BC，使用默认浅色主题", "themedModeDesc": "Themed 模式使用 Themed BC 的颜色配置，需要安装并启用 Themed BC 插件。" };
-      const historyViewer = { "title": "历史记录", "toggleToHistory": "查看历史", "toggleToFileManager": "查看文件管理", "clearAll": "清空全部", "clearAllConfirm": "确定要清空所有历史记录吗？此操作无法撤销。", "deleteRecord": "删除", "deleteConfirm": "确定要删除此历史记录吗？", "delete": "删除", "searchPlaceholder": "搜索历史记录...", "clearSearch": "清除", "timeFilter": "时间筛选", "filterAll": "全部", "filterToday": "今天", "filterWeek": "近7天", "loadRecord": "载入此记录", "apply": "应用", "cancel": "取消", "loadToPreview": "加载到预览", "recordedAt": "记录于", "emptyState": "暂无历史记录。您的装扮更改将自动记录在此。", "recordCount": "{count} 条记录" };
-      const sidePreview = { "ariaLabel": "预览面板", "hint": "悬停可预览，单击可锁定/解锁当前预览", "targetCharacter": "目标角色", "noTargetCharacter": "无可用角色", "renderFailed": "预览加载失败，请重试。", "retry": "重新加载预览", "loading": "正在加载预览" };
+      const fileManagerPanel = { "ariaLabel": "衣橱面板", "title": "随身衣橱", "saveBackup": "保存备份", "importBackup": "备份导入", "saveCharacter": "保存当前穿着", "importBCX": "从 BCX 导入", "importPlayerWardrobe": "导入玩家衣柜", "settings": "设置", "toggleFilters": "微调部位", "lightMode": "浅色模式", "darkMode": "深色模式", "themedMode": "Themed 模式", "toggleTheme": "切换主题", "tabAriaLabel": "工作台标签", "tabWardrobe": "衣橱", "tabHistory": "历史", "tabStudio": "Studio", "tabSettings": "设置", "themeSettings": "主题设置", "themedNotAvailable": "未检测到 Themed BC，使用默认浅色主题", "themedModeDesc": "Themed 模式使用 Themed BC 的颜色配置，需要安装并启用 Themed BC 插件。" };
+      const historyViewer = { "title": "历史记录", "toggleToHistory": "查看历史", "toggleToFileManager": "查看衣橱", "clearAll": "清空全部", "clearAllConfirm": "确定要清空所有历史记录吗？此操作无法撤销。", "deleteRecord": "删除", "deleteConfirm": "确定要删除此历史记录吗？", "delete": "删除", "searchPlaceholder": "搜索历史记录...", "clearSearch": "清除", "timeFilter": "时间筛选", "filterAll": "全部", "filterToday": "今天", "filterWeek": "近7天", "loadRecord": "载入此记录", "apply": "应用", "cancel": "取消", "loadToPreview": "加载到预览", "recordedAt": "记录于", "emptyState": "暂无历史记录。您的装扮更改将自动记录在此。", "recordCount": "{count} 条记录" };
+      const sidePreview = { "ariaLabel": "角色预览", "hint": "确认目标角色和预览效果后，再应用。", "targetCharacter": "目标角色", "noTargetCharacter": "无可用角色", "renderFailed": "预览加载失败，请重试。", "retry": "重新加载预览", "loading": "正在加载预览" };
       const stackDetail = { "ariaLabel": "Stack 详细信息面板", "title": "详细信息", "name": "名称", "group": "分组", "color": "颜色", "property": "属性", "overridePriority": "覆盖优先级", "opacity": "不透明度", "typeRecord": "类型记录", "offset": "偏移", "craft": "Craft", "craftSummary": "Craft（摘要）", "download": "下载", "downloadTitle": "下载整个 element", "copy": "复制", "copyTitle": "复制整个 element JSON", "placeholder": "请选择一个 stack 项查看详细信息", "unnamed": "（未命名）" };
       const assetRender = { "ariaLabel": "Asset 渲染面板", "title": "Asset 渲染", "part": "Part：", "asset": "Asset：", "placeholder": "选择一个 part 来查看 asset 渲染", "loading": "加载中…", "retry": "重试", "stop": "停止" };
       const priorityArrangement = { "ariaLabel": "优先级排列面板", "title": "优先级排列", "name": "名称：", "parts": "Parts：", "priority": "Priority：", "layers": "Layers：", "placeholder": "请选择一个 element（stack）查看优先级分组", "emptyStack": "当前 stack 中没有任何 layer overridePriority 设置", "dropHint": "将 layer/part 拖入此处以设置其 overridePriority", "refresh": "刷新" };
@@ -32247,8 +32364,8 @@ ${lightForced}`;
       const partInspector = { "ariaLabel": "Part Inspector 面板", "title": "部件检查器", "noPartPlaceholder": "点击一个 part 来查看详细信息", "descriptionLabel": "描述", "groupLabel": "分组", "colorLabel": "颜色", "propertyLabel": "属性", "typeRecordLabel": "类型记录", "craftLabel": "Craft（摘要）", "unnamed": "(未命名)", "noGroup": "-", "singleMode": "单选模式", "multiMode": "多选模式", "selectAll": "全选（Ctrl+A）", "selectAllBtn": "全选", "clearSelection": "清除选择（Ctrl+D）", "clearBtn": "清除", "viewMode": "查看模式（平移和缩放）", "moveMode": "移动模式（拖动图层）", "corePropertiesTitle": "核心属性", "advancedPropertiesTitle": "高级属性", "layers": "图层", "selectType": "选择类型", "applyTo": "应用到", "applyToCurrentLayer": "应用到当前图层" };
       const dialog = { "ok": "确定", "cancel": "取消", "promptPlaceholder": "请输入内容", "confirmTitle": "请确认", "alertTitle": "提示" };
       const savesManager = { "title": "Studio 存档", "close": "关闭", "saveNew": "保存当前", "storageUsed": "存储空间", "noSaves": "暂无存档", "current": "当前", "load": "加载", "rename": "重命名", "delete": "删除", "deleteConfirm": "确认删除此存档吗？此操作无法撤销。", "deleteFailed": "删除失败", "enterName": "请输入存档名称：", "saved": "保存成功！", "saveFailed": "保存失败：{error}", "loadConfirm": "加载此存档吗？当前未保存的更改将丢失。", "loaded": "加载成功！", "loadFailed": "加载失败：{error}", "justNow": "刚刚", "minutesAgo": "{n}分钟前", "hoursAgo": "{n}小时前", "daysAgo": "{n}天前" };
-      const wardrobeIO = { "menuLabel": "导入 / 导出", "importEmpty": "导入的数据为空。", "importMerged": "备份已导入并合并到衣橱。", "importReplaced": "已用导入备份替换当前衣橱。", "importedAsFile": "已作为文件导入到当前文件夹。", "importNamePrompt": "请输入导入服装的文件名：", "importCancelled": "已取消导入。", "importUnrecognized": "无法识别的导入格式。", "playerWardrobeUnavailable": "无法获取角色 Wardrobe 数据。", "playerWardrobeImported": '已导入 {count} 套服装到 "{name}"。', "playerWardrobeFailed": "导入角色 Wardrobe 失败，请查看控制台。", "bcxImportPrompt": "请粘贴 BCX 代码（base64 + LZString 压缩）：", "bcxImportFailed": "BCX 解码或解析失败，请检查输入。", "bcxCopied": "BCX 代码已复制到剪贴板。", "backupSaveFailed": "保存备份失败，请查看控制台。", "backupParseFailed": "解析备份文件失败（需为合法 JSON）。", "saveCharacterEmpty": "当前没有可保存的角色服装数据。", "saveCharacterPrompt": "保存角色服装 — 文件名：", "savedToFolder": '已保存 "{name}" 到当前文件夹。', "saveFailed": "保存失败，请查看控制台。" };
-      const outfitFlow = { "backToLibrary": "返回衣橱", "previewAndAdjust": "预览与微调", "applyHint": "选衣后先预览；微调完成再应用到角色。", "applyTo": "应用到「{name}」", "appliedTo": "已应用到「{name}」" };
+      const wardrobeIO = { "menuLabel": "导入 / 导出", "importEmpty": "导入的数据为空。", "importMerged": "备份已导入并合并到衣橱。", "importReplaced": "已用导入备份替换当前衣橱。", "importedAsFile": "已作为文件导入到当前文件夹。", "importNamePrompt": "导入的衣物名称：", "importCancelled": "已取消导入。", "importUnrecognized": "无法识别的导入格式。", "playerWardrobeUnavailable": "无法获取角色 Wardrobe 数据。", "playerWardrobeImported": '已导入 {count} 套服装到 "{name}"。', "playerWardrobeFailed": "导入角色 Wardrobe 失败，请查看控制台。", "bcxImportPrompt": "请粘贴 BCX 代码（base64 + LZString 压缩）：", "bcxImportFailed": "BCX 解码或解析失败，请检查输入。", "bcxCopied": "BCX 代码已复制到剪贴板。", "backupSaveFailed": "保存备份失败，请查看控制台。", "backupParseFailed": "解析备份文件失败（需为合法 JSON）。", "saveCharacterEmpty": "当前角色没有可保存的衣物。请选择角色后重试。", "saveCharacterPrompt": "衣物名称：", "savedToFolder": '已保存 "{name}" 到当前文件夹。', "saveFailed": "保存失败，请查看控制台。" };
+      const outfitFlow = { "backToLibrary": "返回衣橱", "backToPreview": "返回预览", "previewTitle": "试穿预览", "closePreview": "收起预览", "openAdjustments": "微调部位", "dialogTitle": "微调部位", "closeAdjustments": "关闭微调", "doneAdjusting": "完成微调", "adjustmentPreviewHint": "调整只更新预览。", "applyHint": "确认目标角色和效果后，再应用。", "applyTo": "应用到「{name}」", "appliedTo": "已应用到「{name}」" };
       const zh = {
         library,
         fileItem,
@@ -32338,20 +32455,20 @@ ${lightForced}`;
             Modal: {
               styles: {
                 content: {
-                  backgroundColor: "var(--mantine-color-body)",
-                  color: "var(--mantine-color-text)"
+                  backgroundColor: "var(--vpw-color-body)",
+                  color: "var(--vpw-color-text)"
                 },
                 header: {
-                  backgroundColor: "var(--mantine-color-body)",
-                  color: "var(--mantine-color-text)",
-                  borderBottom: "1px solid var(--mantine-color-default-border)"
+                  backgroundColor: "var(--vpw-color-body)",
+                  color: "var(--vpw-color-text)",
+                  borderBottom: "1px solid var(--vpw-color-default-border)"
                 }
               }
             },
             Paper: {
               styles: {
                 root: {
-                  color: "var(--mantine-color-text)"
+                  color: "var(--vpw-color-text)"
                 }
               }
             },
@@ -32365,18 +32482,18 @@ ${lightForced}`;
             TextInput: {
               styles: {
                 input: {
-                  color: "var(--mantine-color-text)",
-                  backgroundColor: "var(--mantine-color-body)"
+                  color: "var(--vpw-color-text)",
+                  backgroundColor: "var(--vpw-color-body)"
                 }
               }
             },
             SegmentedControl: {
               styles: {
                 root: {
-                  color: "var(--mantine-color-text)"
+                  color: "var(--vpw-color-text)"
                 },
                 label: {
-                  color: "var(--mantine-color-text)"
+                  color: "var(--vpw-color-text)"
                 }
               }
             }
@@ -32384,12 +32501,32 @@ ${lightForced}`;
         });
       }
       const ThemeContext = reactExports.createContext(null);
-      function ThemeProvider({ children }) {
-        const { colorScheme, setColorScheme, toggleColorScheme } = useMantineColorScheme();
+      function ThemeProvider({ children, rootEl }) {
+        const { colorScheme, setColorScheme, toggleColorScheme } = useMantineColorScheme({ keepTransitions: true });
+        const restoreRef = reactExports.useRef(() => {
+        });
+        reactExports.useEffect(() => () => restoreRef.current(), []);
+        const changeScheme = (change) => {
+          restoreRef.current();
+          rootEl.setAttribute("data-vpw-switching-theme", "");
+          change();
+          let secondFrame = 0;
+          const firstFrame = hostWindow.requestAnimationFrame(() => {
+            secondFrame = hostWindow.requestAnimationFrame(() => restore());
+          });
+          const timeout = hostWindow.setTimeout(() => restore(), 150);
+          const restore = () => {
+            hostWindow.cancelAnimationFrame(firstFrame);
+            hostWindow.cancelAnimationFrame(secondFrame);
+            hostWindow.clearTimeout(timeout);
+            rootEl.removeAttribute("data-vpw-switching-theme");
+          };
+          restoreRef.current = restore;
+        };
         const value = {
           colorScheme,
-          setColorScheme,
-          toggle: () => toggleColorScheme(),
+          setColorScheme: (scheme) => changeScheme(() => setColorScheme(scheme)),
+          toggle: () => changeScheme(toggleColorScheme),
           isDark: colorScheme === "dark"
         };
         return /* @__PURE__ */ jsxRuntimeExports.jsx(ThemeContext.Provider, { value, children });
@@ -32434,6 +32571,7 @@ ${lightForced}`;
             Modal,
             {
               opened: request !== null,
+              lockScroll: false,
               onClose: () => settle(dismissValue),
               title: request?.title ? /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { fw: 600, children: request.title }) : void 0,
               centered: true,
@@ -32503,16 +32641,22 @@ ${lightForced}`;
       const defaultWardrobeUi = {
         searchScope: "current",
         sortBy: "recent",
-        fileViewMode: "large",
+        fileViewMode: "card",
         leftPanelCollapsed: false,
         rightPanelCollapsed: false
       };
+      function normalizeWardrobeUi(preferences) {
+        return {
+          ...preferences,
+          fileViewMode: preferences.fileViewMode === "list" ? "list" : "card"
+        };
+      }
       function createInitialState() {
         const persistedTab = safeLoadString(ACTIVE_TAB_KEY, "wardrobe");
         const activeTab = TABS.includes(persistedTab) ? persistedTab : "wardrobe";
         return {
           activeTab,
-          wardrobeUi: safeLoadJson(WARDROBE_UI_KEY, defaultWardrobeUi)
+          wardrobeUi: normalizeWardrobeUi(safeLoadJson(WARDROBE_UI_KEY, defaultWardrobeUi))
         };
       }
       const workbenchApi = createStore((set, get2) => ({
@@ -32524,10 +32668,10 @@ ${lightForced}`;
           safeSave(ACTIVE_TAB_KEY, tab);
         },
         setWardrobeUi(partial) {
-          const wardrobeUi = {
+          const wardrobeUi = normalizeWardrobeUi({
             ...get2().wardrobeUi,
             ...partial
-          };
+          });
           set({ wardrobeUi });
           safeSave(WARDROBE_UI_KEY, JSON.stringify(wardrobeUi));
         }
@@ -32886,6 +33030,9 @@ ${lightForced}`;
         const dialog2 = useDialog();
         const isPreviewLocked = useFsSelector((fs) => fs.lockedItem?.id === item.id);
         const isCloudSyncEnabled = useFsSelector(() => item.cloudSync !== false);
+        const isLocalFork = !!item.vpwLocalFork && !isCloudSyncEnabled;
+        const localForkHintId = reactExports.useId();
+        const localForkHint = t("library.localForkHint");
         useFsSelector(() => item.__thumbRefresh);
         const [menu, setMenu] = reactExports.useState(null);
         const closeMenu = () => setMenu(null);
@@ -32944,7 +33091,6 @@ ${lightForced}`;
           }
         };
         const isList = viewMode === "list";
-        const isSmall = viewMode === "small";
         return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs(
             Paper,
@@ -32964,17 +33110,22 @@ ${lightForced}`;
                     onClick: handleClick,
                     "aria-label": t("library.previewOutfit", { name: item.name }),
                     "aria-pressed": isPreviewLocked,
+                    "aria-describedby": isLocalFork ? localForkHintId : void 0,
                     children: [
-                      isList ? /* @__PURE__ */ jsxRuntimeExports.jsx(Box, { style: { width: 44, aspectRatio: "9 / 16", flex: "0 0 auto", borderRadius: 8, overflow: "hidden", background: "var(--mantine-color-default-hover)" }, children: /* @__PURE__ */ jsxRuntimeExports.jsx(FileThumbnail, { item }) }) : /* @__PURE__ */ jsxRuntimeExports.jsxs(Box, { className: "vpw-outfit-thumbnail", children: [
+                      !isList && /* @__PURE__ */ jsxRuntimeExports.jsxs(Box, { className: "vpw-outfit-thumbnail", children: [
                         /* @__PURE__ */ jsxRuntimeExports.jsx(Box, { style: { position: "absolute", inset: 0 }, children: /* @__PURE__ */ jsxRuntimeExports.jsx(FileThumbnail, { item }) }),
                         isPreviewLocked && /* @__PURE__ */ jsxRuntimeExports.jsx(Badge, { size: "sm", variant: "filled", color: "teal", className: "vpw-outfit-selected-badge", children: t("library.selected", { defaultValue: "Selected" }) })
                       ] }),
                       /* @__PURE__ */ jsxRuntimeExports.jsxs(Box, { className: "vpw-outfit-caption", children: [
-                        /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: isSmall ? "xs" : "sm", fw: 600, className: "vpw-outfit-name", children: item.name }),
-                        tagNames.length > 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx(Group, { gap: 4, mt: 5, "aria-label": t("library.tags"), children: tagNames.map((name) => /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { component: "span", className: "vpw-outfit-tag", children: name }, name)) }) : /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "dimmed", mt: 4, children: t("library.untagged") }),
-                        /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", mt: 7, c: isPreviewLocked ? "teal" : "dimmed", children: t(isPreviewLocked ? "library.adjustSelection" : "library.previewAndAdjust", {
-                          defaultValue: isPreviewLocked ? "Preview again →" : "Preview & adjust →"
-                        }) })
+                        /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { gap: 6, wrap: "nowrap", align: "start", children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "sm", fw: 600, className: "vpw-outfit-name", children: item.name }),
+                          isList && isPreviewLocked && /* @__PURE__ */ jsxRuntimeExports.jsx(Badge, { size: "xs", variant: "light", color: "teal", style: { flexShrink: 0 }, children: t("library.selected", { defaultValue: "已选择" }) })
+                        ] }),
+                        isLocalFork && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(Badge, { size: "xs", variant: "light", color: "orange", mt: 5, title: localForkHint, style: { maxWidth: "100%" }, children: t("library.localFork") }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(VisuallyHidden, { id: localForkHintId, children: localForkHint })
+                        ] }),
+                        tagNames.length > 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx(Group, { gap: 4, mt: 5, "aria-label": t("library.tags"), children: tagNames.map((name) => /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { component: "span", className: "vpw-outfit-tag", children: name }, name)) }) : /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "dimmed", mt: 4, children: t("library.untagged") })
                       ] })
                     ]
                   }
@@ -32988,12 +33139,12 @@ ${lightForced}`;
                       title: t("library.cloudToggleTitle"),
                       "aria-pressed": isCloudSyncEnabled,
                       style: {
-                        fontSize: isSmall ? 10 : 11,
+                        fontSize: 11,
                         lineHeight: 1.2,
                         padding: "7px 6px",
                         borderRadius: 6,
-                        border: "1px solid var(--mantine-color-default-border)",
-                        color: isCloudSyncEnabled ? "var(--mantine-color-teal-6)" : "var(--mantine-color-dimmed)",
+                        border: "1px solid var(--vpw-color-default-border)",
+                        color: isCloudSyncEnabled ? "var(--vpw-color-teal-6)" : "var(--vpw-color-dimmed)",
                         overflow: "hidden",
                         textOverflow: "ellipsis",
                         whiteSpace: "nowrap"
@@ -33094,7 +33245,7 @@ ${lightForced}`;
           ) })
         ] });
       }
-      const libraryStyles = ".vpw-library-root{container-type:inline-size;container-name:wardrobe-library;display:flex;flex-direction:column;gap:10px;height:100%;min-height:0;min-width:0}.vpw-library-search,.vpw-library-toolbar,.vpw-library-quota{flex:0 0 auto}.vpw-library-workspace{display:flex;flex:1;min-height:0;min-width:0;gap:14px}.vpw-library-sidebar{display:none;flex:0 0 154px;min-width:0;padding-right:12px;overflow-y:auto;border-right:1px solid var(--mantine-color-default-border)}.vpw-library-filter-option{display:flex;align-items:baseline;justify-content:space-between;gap:8px;width:100%;min-height:36px;padding:7px 9px;border-radius:8px}.vpw-library-filter-name{overflow-wrap:anywhere}.vpw-library-filter-option:hover{background:var(--mantine-color-default-hover)}.vpw-library-filter-option[aria-pressed=true]{color:var(--mantine-color-teal-light-color);background:var(--mantine-color-teal-light);font-weight:600}.vpw-library-filter-option:focus-visible,.vpw-outfit-select:focus-visible{outline:2px solid var(--mantine-color-teal-5);outline-offset:-2px}.vpw-library-scroll{flex:1;min-width:0;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:2px 3px 8px}.vpw-library-masonry{column-width:154px;column-gap:12px}.vpw-library-masonry[data-view=small]{column-width:112px;column-gap:9px}.vpw-library-masonry[data-view=list]{columns:auto}.vpw-outfit-card{display:block;width:100%;vertical-align:top;break-inside:avoid;margin-bottom:12px;overflow:hidden;background:var(--mantine-color-body);transition:border-color .12s ease,box-shadow .12s ease}.vpw-outfit-card:hover{border-color:var(--mantine-color-teal-4)}.vpw-outfit-card[data-selected]{border-color:var(--mantine-color-teal-5);box-shadow:0 0 0 1px var(--mantine-color-teal-5)}.vpw-outfit-select{display:flex;flex-direction:column;width:100%;padding:5px;border-radius:10px;text-align:left}.vpw-outfit-thumbnail{position:relative;width:100%;aspect-ratio:9 / 16;flex:0 0 auto;overflow:hidden;border-radius:8px;background:linear-gradient(150deg,var(--mantine-color-default-hover),var(--mantine-color-body))}.vpw-outfit-selected-badge{position:absolute;inset-inline-start:6px;top:6px}.vpw-outfit-caption{min-width:0;padding:9px 6px 5px;width:100%}.vpw-outfit-name{line-height:1.35;overflow-wrap:anywhere}.vpw-outfit-tag{padding:2px 6px;border-radius:5px;background:var(--mantine-color-default-hover);color:var(--mantine-color-dimmed);font-size:10px;line-height:1.4;max-width:100%;overflow-wrap:anywhere}.vpw-outfit-actions{padding:5px 10px 9px}.vpw-outfit-card[data-view=list] .vpw-outfit-select{flex-direction:row;align-items:center;gap:8px;padding:8px 10px 0}.vpw-outfit-card[data-view=list] .vpw-outfit-caption{flex:1;padding-top:0}.vpw-outfit-card[data-view=list] .vpw-outfit-actions{padding-left:70px}@container wardrobe-library (min-width: 540px){.vpw-library-sidebar{display:block}.vpw-library-filter-trigger{display:none}}@media(pointer:coarse){.vpw-outfit-actions button,.vpw-library-filter-option{min-height:40px}.vpw-outfit-actions button:last-child{min-width:40px}}@media(prefers-reduced-motion:reduce){.vpw-outfit-card{transition:none}}@media(max-height:600px){.vpw-library-quota:not([data-expanded]) .vpw-library-quota-secondary{display:none}}";
+      const libraryStyles = ".vpw-library-root{container-type:inline-size;container-name:wardrobe-library;display:flex;flex-direction:column;gap:10px;height:100%;min-height:0;min-width:0}.vpw-library-search,.vpw-library-toolbar,.vpw-library-quota{flex:0 0 auto}.vpw-library-workspace{display:flex;flex:1;min-height:0;min-width:0;gap:14px}.vpw-library-sidebar{display:none;flex:0 0 154px;min-width:0;padding-right:12px;overflow-y:auto;border-right:1px solid var(--vpw-color-default-border)}.vpw-library-filter-option{display:flex;align-items:baseline;justify-content:space-between;gap:8px;width:100%;min-height:36px;padding:7px 9px;border-radius:8px}.vpw-library-filter-name{overflow-wrap:anywhere}.vpw-library-filter-option:hover{background:var(--vpw-color-default-hover)}.vpw-library-filter-option[aria-pressed=true]{color:var(--vpw-color-teal-light-color);background:var(--vpw-color-teal-light);font-weight:600}.vpw-library-filter-option:focus-visible,.vpw-outfit-select:focus-visible{outline:2px solid var(--vpw-color-teal-5);outline-offset:-2px}.vpw-library-scroll{flex:1;min-width:0;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:2px 3px 8px}.vpw-library-masonry{column-width:154px;column-gap:12px}.vpw-library-masonry[data-view=list]{columns:auto}.vpw-outfit-card{display:block;width:100%;vertical-align:top;break-inside:avoid;margin-bottom:12px;overflow:hidden;background:var(--vpw-color-body);transition:border-color .12s ease,box-shadow .12s ease}.vpw-outfit-card:hover{border-color:var(--vpw-color-teal-4)}.vpw-outfit-card[data-selected]{border-color:var(--vpw-color-teal-5);box-shadow:0 0 0 1px var(--vpw-color-teal-5)}.vpw-outfit-select{display:flex;flex-direction:column;width:100%;padding:5px;border-radius:10px;text-align:left}.vpw-outfit-thumbnail{position:relative;width:100%;aspect-ratio:9 / 16;flex:0 0 auto;overflow:hidden;border-radius:8px;background:linear-gradient(150deg,var(--vpw-color-default-hover),var(--vpw-color-body))}.vpw-outfit-selected-badge{position:absolute;inset-inline-start:6px;top:6px}.vpw-outfit-caption{min-width:0;padding:9px 6px 5px;width:100%}.vpw-outfit-name{min-width:0;flex:1;line-height:1.35;overflow-wrap:anywhere}.vpw-outfit-tag{padding:2px 6px;border-radius:5px;background:var(--vpw-color-default-hover);color:var(--vpw-color-dimmed);font-size:10px;line-height:1.4;max-width:100%;overflow-wrap:anywhere}.vpw-outfit-actions{padding:5px 10px 9px}.vpw-outfit-card[data-view=list]{display:flex;align-items:stretch;margin-bottom:8px}.vpw-outfit-card[data-view=list] .vpw-outfit-select{min-width:0;flex:1;justify-content:center;padding:12px}.vpw-outfit-card[data-view=list] .vpw-outfit-caption{padding:0}.vpw-outfit-card[data-view=list] .vpw-outfit-actions{flex:0 0 auto;align-content:center;padding:8px 8px 8px 0}@container wardrobe-library (max-width: 420px){.vpw-library-toolbar{align-items:flex-start}.vpw-outfit-card[data-view=list] .vpw-outfit-actions{flex-direction:column;justify-content:center;gap:2px}}@container wardrobe-library (min-width: 540px){.vpw-library-sidebar{display:block}.vpw-library-filter-trigger{display:none}}@media(pointer:coarse){.vpw-outfit-actions button,.vpw-library-filter-option{min-height:40px}.vpw-outfit-actions button:last-child{min-width:40px}}@media(prefers-reduced-motion:reduce){.vpw-outfit-card{transition:none}}@media(max-height:600px){.vpw-library-quota:not([data-expanded]) .vpw-library-quota-secondary{display:none}}";
       function formatKB(bytes) {
         return `${(Math.max(0, bytes) / 1e3).toFixed(1)} kB`;
       }
@@ -33107,7 +33258,7 @@ ${lightForced}`;
         const selectedTagId = useFsSelector((fs) => fs.selectedTagId);
         const quota = useFsSelector((fs) => fs.cloudQuota);
         const sync = useFsSelector((fs) => fs.syncStatus);
-        const fileViewMode = useWbSelector((wb) => wb.wardrobeUi.fileViewMode || "large");
+        const fileViewMode = useWbSelector((wb) => wb.wardrobeUi.fileViewMode);
         const [searchQuery, setSearchQuery] = reactExports.useState("");
         const [editingOutfit, setEditingOutfit] = reactExports.useState(null);
         const [editingTagIds, setEditingTagIds] = reactExports.useState([]);
@@ -33299,16 +33450,16 @@ ${lightForced}`;
           /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { className: "vpw-library-toolbar", justify: "space-between", gap: 6, children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "dimmed", role: "status", children: t("library.outfitCount", { count: displayList.length, total: outfits.length }) }),
             /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { gap: 6, children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(Button.Group, { children: ["large", "small", "list"].map((mode) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Button.Group, { children: ["card", "list"].map((mode) => /* @__PURE__ */ jsxRuntimeExports.jsx(
                 Button,
                 {
                   size: "compact-xs",
                   variant: fileViewMode === mode ? "light" : "default",
                   onClick: () => getWb().setWardrobeUi({ fileViewMode: mode }),
-                  title: t(`fileManager.view${mode[0].toUpperCase()}${mode.slice(1)}`),
-                  "aria-label": t(`fileManager.view${mode[0].toUpperCase()}${mode.slice(1)}`),
+                  title: t(mode === "card" ? "fileManager.viewCard" : "fileManager.viewList", { defaultValue: mode === "card" ? "卡牌" : "列表" }),
+                  "aria-label": t(mode === "card" ? "fileManager.viewCard" : "fileManager.viewList", { defaultValue: mode === "card" ? "卡牌" : "列表" }),
                   "aria-pressed": fileViewMode === mode,
-                  children: mode === "large" ? "▣" : mode === "small" ? "▦" : "☷"
+                  children: t(mode === "card" ? "fileManager.viewCard" : "fileManager.viewList", { defaultValue: mode === "card" ? "卡牌" : "列表" })
                 },
                 mode
               )) }),
@@ -33354,7 +33505,7 @@ ${lightForced}`;
                 },
                 item.id
               )) }) : /* @__PURE__ */ jsxRuntimeExports.jsxs(Stack, { align: "center", py: "xl", children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { c: "dimmed", children: t("library.empty") }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { c: "dimmed", children: t(outfits.length ? "library.noMatches" : "library.empty") }),
                 searchQuery || activeFilterCount ? /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "light", size: "xs", onClick: clearFilters, children: t("library.clearFilters") }) : /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "light", size: "xs", onClick: () => void actions.saveCharacterToFolder(), children: t("library.saveCharacter") })
               ] })
             ] })
@@ -33435,6 +33586,7 @@ ${lightForced}`;
               onClose: () => setFiltersOpened(false),
               position: "left",
               size: "min(340px, 88vw)",
+              lockScroll: false,
               closeOnEscape: !filterTagPickerOpened,
               title: t("library.filters", { defaultValue: "Filters" }),
               zIndex: OVERLAY_Z_INDEX,
@@ -33471,6 +33623,7 @@ ${lightForced}`;
               onClose: () => setEditingOutfit(null),
               centered: true,
               zIndex: OVERLAY_Z_INDEX,
+              lockScroll: false,
               closeOnEscape: !tagPickerOpened,
               title: t("library.editOutfitTags", { name: editingOutfit?.name }),
               children: /* @__PURE__ */ jsxRuntimeExports.jsxs(Stack, { children: [
@@ -33502,12 +33655,11 @@ ${lightForced}`;
           )
         ] });
       }
-      const filterStyles = ".vpw-filter-manager{min-height:0;min-width:0;container-type:inline-size;overflow-y:auto;overscroll-behavior:contain}.vpw-filter-groups{flex:1;min-height:96px;overflow:hidden auto;scrollbar-gutter:stable;padding-right:2px}.vpw-filter-manager>:not(.vpw-filter-groups){flex-shrink:0}.vpw-filter-source-buttons{flex:1;min-width:0}.vpw-filter-source{flex:1 1 0;min-width:0}.vpw-filter-empty-source{flex:0 0 auto}.vpw-filter-operation{margin-inline-start:5px;font-size:10px;font-weight:400;opacity:.85}.vpw-filter-slot-row{display:grid;grid-template-columns:84px minmax(0,1fr);align-items:center;gap:6px;padding:5px 2px}.vpw-filter-slot-name,.vpw-filter-slot-slider{min-width:0}.vpw-filter-presence-dot{flex:0 0 6px;width:6px;height:6px;border-radius:50%}.vpw-filter-slot-slider span{display:block;overflow:hidden;text-overflow:ellipsis}@container (max-width: 420px){.vpw-filter-slot-row{grid-template-columns:minmax(0,1fr);gap:3px}}@media(pointer:coarse){.vpw-filter-manager button{min-height:36px}.vpw-filter-slot-slider label{min-height:32px}}";
+      const filterStyles = ".vpw-filter-manager{min-height:0;min-width:0;container-type:inline-size;overflow-y:auto;overscroll-behavior:contain}.vpw-filter-groups{flex:0 0 auto;min-height:0;padding-right:2px}.vpw-filter-manager>:not(.vpw-filter-groups){flex-shrink:0}.vpw-filter-source-buttons{flex:1;min-width:0}.vpw-filter-source{flex:1 1 0;height:auto;min-height:34px;min-width:0;padding-block:5px}.vpw-filter-source .mantine-Button-label{flex-wrap:wrap;justify-content:center;line-height:1.3;white-space:normal}.vpw-filter-empty-source{flex:0 0 auto}.vpw-filter-operation{margin-inline-start:5px;font-size:10px;font-weight:400;opacity:.85}.vpw-filter-slot-row{display:grid;grid-template-columns:84px minmax(0,1fr);align-items:center;gap:6px;padding:5px 2px}.vpw-filter-slot-name,.vpw-filter-slot-slider{min-width:0}.vpw-filter-presence-dot{flex:0 0 6px;width:6px;height:6px;border-radius:50%}.vpw-filter-slot-slider span{display:block;overflow:hidden;text-overflow:ellipsis}@container (max-width: 420px){.vpw-filter-slot-row{grid-template-columns:minmax(0,1fr);gap:3px}}@media(pointer:coarse){.vpw-filter-manager button{min-height:36px}.vpw-filter-slot-slider label{min-height:32px}}";
       const EMPTY_GROUPS = [];
       const EMPTY_ITEMS = [];
       const EMPTY_PARTS = [];
       const EMPTY_SLOT_CONTROL_MAP = {};
-      const EMPTY_GROUP_OPERATIONS = {};
       const EMPTY_SCOPE_STATES = { original: "none", incoming: "none", empty: "none" };
       function buildPartNameMapBySlot(parts, character) {
         const names = {};
@@ -33532,7 +33684,7 @@ ${lightForced}`;
       }
       function SourceButtons({
         states,
-        operation,
+        actions,
         grouped = false,
         onApply
       }) {
@@ -33547,24 +33699,19 @@ ${lightForced}`;
           replace: t("filterManager.operationReplace", { defaultValue: "覆盖" }),
           "full-replace": t("filterManager.operationFullReplace", { defaultValue: "完全替换" })
         };
-        const groupTip = t("filterManager.groupCycleTooltip", {
-          defaultValue: "连续点击同一个分组来源：补入，保留另一来源已有的部位；覆盖，替换此来源包含的部位；完全替换，同时清空此来源没有的部位。"
-        });
         const directTips = {
           original: t("filterManager.restoreOriginalTooltip", { defaultValue: "恢复原角色的全部部位。" }),
           incoming: t("filterManager.replaceAllTooltip", { defaultValue: "全部使用所选衣物，清空其中没有的部位。" }),
           empty: t("filterManager.clearScopeTooltip", { defaultValue: "直接将此范围的滑块设为置空。" })
         };
         return /* @__PURE__ */ jsxRuntimeExports.jsx(Group, { gap: 5, wrap: "nowrap", className: "vpw-filter-source-buttons", children: SLOT_MODES.map((mode) => {
-          const active = operation ? operation.mode === mode : states[mode] === "full";
-          let phase;
-          if (grouped && mode !== "empty") {
-            if (operation?.mode === mode) phase = operation.operation;
-            else if (!operation && states[mode] === "full") phase = "full-replace";
-          }
+          const action = mode !== "empty" ? actions?.[mode] : void 0;
+          const active = action?.complete || states[mode] === "full";
+          const phase = grouped ? action?.operation : void 0;
+          const complete = !!action?.complete;
           const variant = active ? "filled" : states[mode] === "partial" ? "light" : "default";
           const label = !grouped && mode === "incoming" ? t("filterManager.replaceAllAction", { defaultValue: "全量替换" }) : labels[mode];
-          return /* @__PURE__ */ jsxRuntimeExports.jsx(Tooltip, { label: grouped && mode !== "empty" ? groupTip : directTips[mode], withinPortal: true, zIndex: OVERLAY_Z_INDEX, multiline: true, w: 270, children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          return /* @__PURE__ */ jsxRuntimeExports.jsx(Tooltip, { label: directTips[mode], disabled: grouped, withinPortal: true, zIndex: OVERLAY_Z_INDEX + 1, multiline: true, w: 270, children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
             Button,
             {
               size: "compact-xs",
@@ -33573,11 +33720,17 @@ ${lightForced}`;
               "aria-pressed": active,
               "data-source": mode,
               "data-operation": phase,
-              onClick: () => onApply(mode),
+              "data-complete": complete || void 0,
+              "data-disabled": complete || void 0,
+              "aria-disabled": complete || void 0,
+              disabled: grouped && mode !== "empty" && !action,
+              onClick: () => {
+                if (!complete) onApply(mode);
+              },
               className: mode === "empty" ? "vpw-filter-empty-source" : "vpw-filter-source",
               children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: label }),
-                phase && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "vpw-filter-operation", children: operationLabels[phase] })
+                phase && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "vpw-filter-operation", children: complete ? t("filterManager.operationComplete", { defaultValue: "已完全替换" }) : operationLabels[phase] })
               ]
             }
           ) }, mode);
@@ -33624,7 +33777,7 @@ ${lightForced}`;
         ].filter(Boolean).join(" / ") || t("filterManager.dotNone");
         return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "vpw-filter-slot-row", "data-slot-key": item.key, children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { gap: 6, wrap: "nowrap", className: "vpw-filter-slot-name", title: presenceText, children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx(Box, { className: "vpw-filter-presence-dot", bg: `var(--mantine-color-${dotColor}-5)` }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(Box, { className: "vpw-filter-presence-dot", bg: `var(--vpw-color-${dotColor}-5)` }),
             /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", truncate: true, title: name, children: name })
           ] }),
           /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -33650,7 +33803,7 @@ ${lightForced}`;
         collapsed,
         showAllSlots,
         slotControls,
-        operation,
+        actions,
         presence,
         characterNames,
         incomingNames,
@@ -33686,7 +33839,7 @@ ${lightForced}`;
               ] })
             }
           ),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(SourceButtons, { grouped: true, states: scopeStates, operation, onApply: (mode) => onApplyGroup(group.groupID, mode) }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(SourceButtons, { grouped: true, states: scopeStates, actions, onApply: (mode) => onApplyGroup(group.groupID, mode) }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs(Stack, { id: contentID, gap: 3, mt: "xs", hidden: collapsed, children: [
             !collapsed && items.map((item) => /* @__PURE__ */ jsxRuntimeExports.jsx(
               FilterItemRow,
@@ -33709,7 +33862,7 @@ ${lightForced}`;
         const { t } = useTranslation();
         const filterSnapshot = useFsSelector((fs) => fs.filterSnapshot);
         const slotControls = useFsSelector((fs) => fs.slotControlMap) || EMPTY_SLOT_CONTROL_MAP;
-        const groupOperations = useFsSelector((fs) => fs.groupOperations) || EMPTY_GROUP_OPERATIONS;
+        const previewItem = useFsSelector((fs) => fs.previewItem);
         const characterItem = useFsSelector((fs) => fs.characterItem) || EMPTY_PARTS;
         const incomingData = useFsSelector((fs) => fs.activeItem?.data) || EMPTY_PARTS;
         const character = useFsSelector((fs) => fs.character);
@@ -33749,6 +33902,13 @@ ${lightForced}`;
             (item) => presence[item.key]?.inCharacter || presence[item.key]?.inHover
           );
         }), [groups, presence, showAllSlots]);
+        const groupActions = reactExports.useMemo(() => {
+          const fs = getFs();
+          return new Map(groups.map((group) => [group.groupID, {
+            original: fs.getGroupSourceAction(group.groupID, "original"),
+            incoming: fs.getGroupSourceAction(group.groupID, "incoming")
+          }]));
+        }, [groups, slotControls, characterItem, incomingData, previewItem]);
         const toggleCollapsed = reactExports.useCallback((id) => {
           setCollapsed((previous) => {
             const next = new Set(previous);
@@ -33762,7 +33922,7 @@ ${lightForced}`;
         }, []);
         const applyGroup = reactExports.useCallback((id, mode) => {
           if (mode === "empty") getFs().setGroupSlotModes(id, mode);
-          else getFs().cycleGroupSource(id, mode);
+          else getFs().progressGroupSource(id, mode);
         }, []);
         const setSlot = reactExports.useCallback((key, mode) => {
           getFs().setSlotMode(key, mode);
@@ -33771,15 +33931,15 @@ ${lightForced}`;
           /* @__PURE__ */ jsxRuntimeExports.jsx("style", { children: filterStyles }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs(Paper, { withBorder: true, radius: "md", p: "xs", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { gap: 6, grow: true, wrap: "nowrap", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(Tooltip, { label: t("filterManager.preserveBodyTooltip", { defaultValue: "单次保留原角色的身体、面容和头发，其余微调保持当前选择。" }), multiline: true, w: 250, withinPortal: true, zIndex: OVERLAY_Z_INDEX, children: /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "light", size: "xs", px: 8, onClick: () => getFs().preserveBody(), children: t("filterManager.preserveBody", { defaultValue: "保留原身形" }) }) }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(Tooltip, { label: t("filterManager.replaceBodyOnlyTooltip", { defaultValue: "只使用所选衣物的身体、面容和头发，其他部位恢复原角色。" }), multiline: true, w: 250, withinPortal: true, zIndex: OVERLAY_Z_INDEX, children: /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "default", size: "xs", px: 8, onClick: () => getFs().replaceBodyOnly(), children: t("filterManager.replaceBodyOnly", { defaultValue: "只替换身形" }) }) })
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Tooltip, { label: t("filterManager.preserveBodyTooltip", { defaultValue: "单次保留原角色的身体、面容和发色，其余微调保持当前选择。" }), multiline: true, w: 250, withinPortal: true, zIndex: OVERLAY_Z_INDEX + 1, children: /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "light", size: "xs", px: 8, onClick: () => getFs().preserveBody(), children: t("filterManager.preserveBody", { defaultValue: "保留原身形" }) }) }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Tooltip, { label: t("filterManager.replaceBodyOnlyTooltip", { defaultValue: "只使用所选衣物的身体、面容和发色，其他部位恢复原角色。" }), multiline: true, w: 250, withinPortal: true, zIndex: OVERLAY_Z_INDEX + 1, children: /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "default", size: "xs", px: 8, onClick: () => getFs().replaceBodyOnly(), children: t("filterManager.replaceBodyOnly", { defaultValue: "只替换身形" }) }) })
             ] }),
             /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { justify: "space-between", gap: "xs", mt: "xs", wrap: "nowrap", children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "dimmed", style: { flexShrink: 0 }, children: t("filterManager.sectionGlobal") }),
               /* @__PURE__ */ jsxRuntimeExports.jsx(SourceButtons, { states: scopes.all, onApply: applyAll })
             ] })
           ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "dimmed", children: t("filterManager.groupCycleHint", { defaultValue: "分组连点：补入 → 覆盖 → 完全替换。部件滑块直接选择来源。" }) }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "dimmed", children: t("filterManager.groupProgressHint", { defaultValue: "分组按钮显示当前预览需要的下一步；部件滑块直接选择来源。" }) }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { justify: "space-between", gap: 4, children: [
             /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { gap: 2, children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { size: "compact-xs", variant: "subtle", onClick: () => setLegendOpen((value) => !value), "aria-expanded": legendOpen, children: t("filterManager.legendToggle") }),
@@ -33796,8 +33956,8 @@ ${lightForced}`;
               }
             )
           ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(Collapse, { in: legendOpen, children: /* @__PURE__ */ jsxRuntimeExports.jsx(Paper, { withBorder: true, radius: "sm", p: "xs", bg: "var(--mantine-color-default-hover)", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(Stack, { gap: 4, children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", children: t("filterManager.groupCycleTooltip", { defaultValue: "连续点击同一个分组来源：补入，保留另一来源已有的部位；覆盖，替换此来源包含的部位；完全替换，同时清空此来源没有的部位。" }) }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(Collapse, { in: legendOpen, children: /* @__PURE__ */ jsxRuntimeExports.jsx(Paper, { withBorder: true, radius: "sm", p: "xs", bg: "var(--vpw-color-default-hover)", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(Stack, { gap: 4, children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", children: t("filterManager.groupProgressTooltip", { defaultValue: "按钮根据当前预览执行下一步：先补齐缺少的部位，已补齐时覆盖已有部位，已覆盖时清空来源中没有的部位。" }) }),
             /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "dimmed", children: t("filterManager.fullReplaceSourceHint", { defaultValue: "完全替换产生的空部位仍停在所选来源；只有手动选择“置空”才会切到空档。" }) }),
             /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "dimmed", children: t("filterManager.slotSourceHint", { defaultValue: "每行依次为原角色、所选衣物和置空。名称显示该来源的实际部件；蓝点表示原角色有此部位，绿点表示仅所选衣物有此部位。" }) })
           ] }) }) }),
@@ -33810,7 +33970,7 @@ ${lightForced}`;
                 collapsed: collapsed.has(group.groupID),
                 showAllSlots,
                 slotControls,
-                operation: groupOperations[group.groupID],
+                actions: groupActions.get(group.groupID),
                 presence,
                 characterNames,
                 incomingNames,
@@ -34039,24 +34199,24 @@ ${lightForced}`;
                   style: { width: "100%", flex: "0 0 auto" },
                   styles: {
                     label: {
-                      color: "var(--mantine-color-dimmed)",
+                      color: "var(--vpw-color-dimmed)",
                       fontWeight: 700,
                       letterSpacing: 0
                     },
                     input: {
-                      background: "var(--mantine-color-default)",
-                      borderColor: "var(--mantine-color-default-border)",
-                      color: "var(--mantine-color-text)",
+                      background: "var(--vpw-color-default)",
+                      borderColor: "var(--vpw-color-default-border)",
+                      color: "var(--vpw-color-text)",
                       fontWeight: 600
                     },
                     dropdown: {
-                      background: "var(--mantine-color-body)",
-                      borderColor: "var(--mantine-color-default-border)",
-                      boxShadow: "var(--mantine-shadow-md)",
+                      background: "var(--vpw-color-body)",
+                      borderColor: "var(--vpw-color-default-border)",
+                      boxShadow: "var(--vpw-shadow-md)",
                       zIndex: OVERLAY_Z_INDEX
                     },
                     option: {
-                      color: "var(--mantine-color-text)",
+                      color: "var(--vpw-color-text)",
                       fontWeight: 600
                     }
                   }
@@ -34108,46 +34268,189 @@ ${lightForced}`;
           }
         );
       }
-      const styles = ".vpw-workspace{height:100%;min-height:0;min-width:0;container-type:inline-size}.vpw-workspace-browse{height:100%;min-height:0}.vpw-workspace-edit{height:100%;min-height:0;display:flex;flex-direction:column;gap:10px}.vpw-workspace-heading{flex:0 0 auto}.vpw-workspace-body{flex:1;min-height:0;display:grid;grid-template-columns:minmax(220px,.75fr) minmax(350px,1.25fr);gap:14px}.vpw-workspace-preview{min-height:0;min-width:0;overflow:hidden;border:1px solid var(--mantine-color-default-border);border-radius:14px;background:var(--mantine-color-default-hover)}.vpw-workspace-adjustments{min-width:0;min-height:0;overflow:hidden}.vpw-workspace-footer{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0 0;border-top:1px solid var(--mantine-color-default-border)}.vpw-workspace-apply{width:300px;max-width:100%}.vpw-workspace-hint{max-width:400px}@container (max-width: 650px){.vpw-workspace-edit{gap:7px}.vpw-workspace-body{display:flex;flex-direction:column;gap:8px;overflow-y:auto;overscroll-behavior:contain}.vpw-workspace-preview{flex:0 0 250px}.vpw-workspace-adjustments{flex:0 0 auto;overflow:visible}.vpw-workspace-adjustments .vpw-filter-manager{height:auto;overflow:visible}.vpw-workspace-adjustments .vpw-filter-groups{overflow:visible}.vpw-workspace-footer{padding-top:7px;padding-bottom:env(safe-area-inset-bottom,0px)}.vpw-workspace-hint{display:none}.vpw-workspace-apply{width:100%}}";
-      function WardrobeWorkspace() {
+      const dialogStyles = ".vpw-adjustments-dialog{display:flex;flex-direction:column;height:min(760px,calc(100dvh - 48px));overflow:hidden}.vpw-adjustments-page{display:flex;flex-direction:column;gap:10px;height:100%;min-height:0;min-width:0;overflow:hidden}.vpw-adjustments-header{flex:0 0 auto}.vpw-adjustments-body{display:flex;flex:1 1 auto;flex-direction:column;gap:12px;min-height:0;overflow:hidden}.vpw-adjustments-layout{display:grid;grid-template-columns:minmax(160px,.65fr) minmax(0,1.5fr);flex:1 1 auto;gap:16px;min-height:0}.vpw-adjustments-preview,.vpw-adjustments-controls{min-width:0;min-height:0}.vpw-adjustments-preview{border:1px solid var(--vpw-color-default-border);border-radius:var(--vpw-radius-md);background:var(--vpw-color-default-hover);overflow:hidden}.vpw-adjustments-footer{flex:0 0 auto;border-top:1px solid var(--vpw-color-default-border);padding-top:10px}.vpw-adjustments-footer button{flex:0 0 auto}@media(max-width:899px){.vpw-adjustments-page .vpw-adjustments-layout{grid-template-columns:minmax(0,1fr);grid-template-rows:164px minmax(0,1fr);gap:10px}.vpw-adjustments-page .vpw-adjustments-footer{padding-bottom:env(safe-area-inset-bottom,0px)}}@media(max-width:899px)and (max-height:600px){.vpw-adjustments-page .vpw-adjustments-layout{grid-template-rows:minmax(0,1fr)}.vpw-adjustments-page .vpw-adjustments-preview{display:none}}";
+      function exitOnEscape(event, onExit) {
+        if (event.key !== "Escape" || event.nativeEvent.isComposing || event.defaultPrevented) return;
+        const target = event.nativeEvent.composedPath().find((node) => node instanceof HTMLElement);
+        if (target?.closest('[role="listbox"], [role="menu"], [role="combobox"][aria-expanded="true"], [aria-haspopup][aria-expanded="true"], [aria-haspopup][aria-controls]')) return;
+        event.stopPropagation();
+        event.preventDefault();
+        onExit();
+      }
+      function OutfitAdjustmentsContent({ onDone }) {
+        const { t } = useTranslation();
+        return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("style", { children: dialogStyles }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(Box, { className: "vpw-adjustments-layout", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(Box, { className: "vpw-adjustments-preview", children: /* @__PURE__ */ jsxRuntimeExports.jsx(SidePreview, {}) }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(Box, { className: "vpw-adjustments-controls", children: /* @__PURE__ */ jsxRuntimeExports.jsx(FilterManager, {}) })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { className: "vpw-adjustments-footer", justify: "space-between", gap: "xs", wrap: "nowrap", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "dimmed", children: t("outfitFlow.adjustmentPreviewHint", { defaultValue: "修改会实时更新预览。" }) }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { onClick: onDone, children: t("outfitFlow.doneAdjusting", { defaultValue: "完成微调" }) })
+          ] })
+        ] });
+      }
+      function OutfitAdjustmentsPage({ onBack }) {
+        const { t } = useTranslation();
+        const backButton = reactExports.useRef(null);
+        reactExports.useLayoutEffect(() => {
+          backButton.current?.focus({ preventScroll: true });
+        }, []);
+        return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          Box,
+          {
+            component: "section",
+            className: "vpw-adjustments-page",
+            "aria-label": t("outfitFlow.dialogTitle", { defaultValue: "微调部位" }),
+            onKeyDownCapture: (event) => exitOnEscape(event, onBack),
+            onKeyDown: (event) => {
+              if (event.key === "Escape") event.stopPropagation();
+            },
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { className: "vpw-adjustments-header", gap: "xs", wrap: "nowrap", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { ref: backButton, variant: "subtle", size: "compact-sm", px: 4, onClick: onBack, leftSection: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { "aria-hidden": "true", children: "←" }), children: t("outfitFlow.backToPreview", { defaultValue: "返回预览" }) }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "sm", fw: 600, children: t("outfitFlow.dialogTitle", { defaultValue: "微调部位" }) })
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Box, { className: "vpw-adjustments-body", children: /* @__PURE__ */ jsxRuntimeExports.jsx(OutfitAdjustmentsContent, { onDone: onBack }) })
+            ]
+          }
+        );
+      }
+      function OutfitAdjustmentsDialog({ opened, onClose }) {
+        const { t } = useTranslation();
+        const returnFocusTo = reactExports.useRef(null);
+        reactExports.useLayoutEffect(() => {
+          if (!opened) return;
+          let active = hostWindow.document.activeElement;
+          while (active?.shadowRoot?.activeElement) active = active.shadowRoot.activeElement;
+          returnFocusTo.current = active instanceof HTMLElement ? active : null;
+        }, [opened]);
+        const restoreFocus = () => {
+          const target = returnFocusTo.current;
+          if (!opened && target?.isConnected && target.getClientRects().length) target.focus({ preventScroll: true });
+        };
+        return /* @__PURE__ */ jsxRuntimeExports.jsx(
+          Modal,
+          {
+            opened,
+            lockScroll: false,
+            onClose,
+            title: /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { fw: 600, children: t("outfitFlow.dialogTitle", { defaultValue: "微调部位" }) }),
+            closeButtonProps: { "aria-label": t("outfitFlow.closeAdjustments", { defaultValue: "关闭微调" }) },
+            size: 920,
+            centered: true,
+            radius: "md",
+            padding: "sm",
+            zIndex: OVERLAY_Z_INDEX,
+            overlayProps: { backgroundOpacity: 0.4 },
+            classNames: { content: "vpw-adjustments-dialog", body: "vpw-adjustments-body", header: "vpw-adjustments-header" },
+            closeOnEscape: false,
+            onKeyDownCapture: (event) => exitOnEscape(event, onClose),
+            returnFocus: false,
+            onExitTransitionEnd: restoreFocus,
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx(OutfitAdjustmentsContent, { onDone: onClose })
+          }
+        );
+      }
+      const styles = ".vpw-workspace,.vpw-workspace-columns,.vpw-workspace-browse{height:100%;min-height:0;min-width:0}.vpw-workspace-columns{display:grid;grid-template-columns:minmax(0,1fr);gap:14px}.vpw-workspace-columns[data-preview-open]{grid-template-columns:minmax(0,1fr) clamp(270px,29%,350px)}.vpw-workspace-preview{min-width:0;min-height:0;border-left:1px solid var(--vpw-color-default-border);padding-left:14px}.vpw-preview-pane{height:100%;min-height:0;min-width:0;display:flex;flex-direction:column;gap:10px}.vpw-preview-heading,.vpw-preview-actions{flex:0 0 auto}.vpw-mobile-preview-page{display:flex;flex-direction:column;gap:10px;height:100%;min-height:0;min-width:0}.vpw-mobile-page-header{flex:0 0 auto;padding-bottom:8px;border-bottom:1px solid var(--vpw-color-default-border)}.vpw-mobile-preview-content{flex:1;min-height:0}.vpw-mobile-preview-page .vpw-preview-actions{padding-bottom:env(safe-area-inset-bottom,0px)}.vpw-preview-canvas{flex:1;min-height:110px;min-width:0;overflow:hidden;border:1px solid var(--vpw-color-default-border);border-radius:12px;background:var(--vpw-color-default-hover)}.vpw-preview-actions{display:flex;flex-direction:column;gap:8px;padding-top:8px;border-top:1px solid var(--vpw-color-default-border)}@media(max-height:600px){.vpw-preview-pane{gap:6px}.vpw-preview-actions{gap:5px;padding-top:5px}.vpw-preview-actions>p{display:none}}";
+      function WardrobeWorkspace({ onMobileDetailChange }) {
         const { t } = useTranslation();
         const selected = useFsSelector((fs) => fs.lockedItem);
-        const [editing, setEditing] = reactExports.useState(false);
-        const headingRef = reactExports.useRef(null);
+        const isMobile = useIsMobile();
+        const [previewOpen, setPreviewOpen] = reactExports.useState(false);
+        const [adjusting, setAdjusting] = reactExports.useState(false);
         const browsingRef = reactExports.useRef(null);
-        const showPreview = editing && !!selected;
+        const previewRef = reactExports.useRef(null);
+        const previewBackRef = reactExports.useRef(null);
+        const showPreview = previewOpen && !!selected;
+        reactExports.useLayoutEffect(() => {
+          onMobileDetailChange?.(isMobile && showPreview);
+          return () => onMobileDetailChange?.(false);
+        }, [isMobile, showPreview, onMobileDetailChange]);
         reactExports.useEffect(() => {
-          if (showPreview) headingRef.current?.focus();
-        }, [showPreview]);
-        const backToLibrary = () => {
-          setEditing(false);
-          requestAnimationFrame(() => {
-            browsingRef.current?.querySelector('[aria-pressed="true"][data-outfit-id], [data-outfit-id] button, input')?.focus({ preventScroll: true });
+          if (isMobile && showPreview) previewBackRef.current?.focus({ preventScroll: true });
+        }, [isMobile, showPreview]);
+        reactExports.useEffect(() => {
+          if (!selected) {
+            setPreviewOpen(false);
+            setAdjusting(false);
+          }
+        }, [selected]);
+        const closePreview = () => {
+          setPreviewOpen(false);
+          setAdjusting(false);
+          hostWindow.requestAnimationFrame(() => {
+            browsingRef.current?.querySelector('[aria-pressed="true"][data-outfit-id]')?.focus({ preventScroll: true });
           });
         };
+        const closeAdjustments = () => {
+          setAdjusting(false);
+          if (isMobile) hostWindow.requestAnimationFrame(() => {
+            previewRef.current?.querySelector(".vpw-preview-actions button")?.focus({ preventScroll: true });
+          });
+        };
+        const onPreviewKeyDown = (event) => {
+          if (event.key !== "Escape" || event.nativeEvent.isComposing || event.defaultPrevented) return;
+          const target = event.nativeEvent.composedPath().find((node) => node instanceof HTMLElement);
+          if (target?.closest('[role="listbox"], [role="menu"], [aria-haspopup][aria-controls], [aria-expanded="true"][aria-haspopup]')) return;
+          event.stopPropagation();
+          event.preventDefault();
+          closePreview();
+        };
+        const preview = /* @__PURE__ */ jsxRuntimeExports.jsxs(Box, { ref: previewRef, className: "vpw-preview-pane", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { justify: "space-between", wrap: "nowrap", gap: "xs", className: "vpw-preview-heading", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs(Box, { style: { minWidth: 0 }, children: [
+              !isMobile && /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "dimmed", children: t("outfitFlow.previewTitle", { defaultValue: "试穿预览" }) }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "sm", fw: 700, truncate: true, children: selected?.name })
+            ] }),
+            !isMobile && /* @__PURE__ */ jsxRuntimeExports.jsx(CloseButton, { onClick: closePreview, "aria-label": t("outfitFlow.closePreview", { defaultValue: "收起预览" }) })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(Box, { className: "vpw-preview-canvas", children: /* @__PURE__ */ jsxRuntimeExports.jsx(SidePreview, {}) }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(Box, { className: "vpw-preview-actions", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { fullWidth: true, variant: "default", "aria-haspopup": isMobile ? void 0 : "dialog", onClick: () => setAdjusting(true), children: t("outfitFlow.openAdjustments", { defaultValue: "微调部位" }) }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "dimmed", children: t("outfitFlow.applyHint") }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(ApplyOutfitButton, {})
+          ] })
+        ] });
         return /* @__PURE__ */ jsxRuntimeExports.jsxs(Box, { className: "vpw-workspace", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("style", { children: styles }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(Box, { ref: browsingRef, className: "vpw-workspace-browse", style: { display: showPreview ? "none" : "block" }, children: /* @__PURE__ */ jsxRuntimeExports.jsx(FileManager, { onSelectOutfit: () => setEditing(true) }) }),
-          showPreview && /* @__PURE__ */ jsxRuntimeExports.jsxs(Box, { className: "vpw-workspace-edit", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { gap: "sm", wrap: "nowrap", className: "vpw-workspace-heading", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsxs(Button, { variant: "subtle", size: "compact-sm", onClick: backToLibrary, children: [
-                "← ",
-                t("outfitFlow.backToLibrary")
-              ] }),
-              /* @__PURE__ */ jsxRuntimeExports.jsxs(Box, { style: { minWidth: 0 }, children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { ref: headingRef, tabIndex: -1, fw: 700, size: "sm", truncate: true, style: { outline: "none" }, children: selected.name || t("outfitFlow.previewAndAdjust") }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "dimmed", children: t("outfitFlow.previewAndAdjust") })
-              ] })
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs(Box, { className: "vpw-workspace-body", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(Box, { className: "vpw-workspace-preview", children: /* @__PURE__ */ jsxRuntimeExports.jsx(SidePreview, {}) }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(Box, { className: "vpw-workspace-adjustments", children: /* @__PURE__ */ jsxRuntimeExports.jsx(FilterManager, {}) })
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs(Box, { className: "vpw-workspace-footer", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "dimmed", className: "vpw-workspace-hint", children: t("outfitFlow.applyHint") }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(Box, { className: "vpw-workspace-apply", children: /* @__PURE__ */ jsxRuntimeExports.jsx(ApplyOutfitButton, {}) })
-            ] })
-          ] })
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            Box,
+            {
+              className: "vpw-workspace-columns",
+              "data-preview-open": showPreview && !isMobile || void 0,
+              style: { display: isMobile && showPreview ? "none" : void 0 },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(Box, { ref: browsingRef, className: "vpw-workspace-browse", children: /* @__PURE__ */ jsxRuntimeExports.jsx(FileManager, { onSelectOutfit: () => setPreviewOpen(true) }) }),
+                showPreview && !isMobile && /* @__PURE__ */ jsxRuntimeExports.jsx(Box, { component: "aside", "aria-label": t("outfitFlow.previewTitle", { defaultValue: "试穿预览" }), className: "vpw-workspace-preview", children: preview })
+              ]
+            }
+          ),
+          showPreview && isMobile && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              Box,
+              {
+                component: "section",
+                "aria-label": t("outfitFlow.previewTitle"),
+                className: "vpw-mobile-preview-page",
+                onKeyDownCapture: onPreviewKeyDown,
+                onKeyDown: (event) => {
+                  if (event.key === "Escape") event.stopPropagation();
+                },
+                style: { display: adjusting ? "none" : void 0 },
+                children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { wrap: "nowrap", gap: "xs", className: "vpw-mobile-page-header", children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { ref: previewBackRef, variant: "subtle", size: "compact-sm", leftSection: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { "aria-hidden": true, children: "←" }), onClick: closePreview, children: t("outfitFlow.backToLibrary") }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { fw: 600, size: "sm", truncate: true, children: t("outfitFlow.previewTitle") })
+                  ] }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(Box, { className: "vpw-mobile-preview-content", children: preview })
+                ]
+              }
+            ),
+            adjusting && /* @__PURE__ */ jsxRuntimeExports.jsx(OutfitAdjustmentsPage, { onBack: closeAdjustments })
+          ] }),
+          !isMobile && /* @__PURE__ */ jsxRuntimeExports.jsx(OutfitAdjustmentsDialog, { opened: showPreview && adjusting, onClose: closeAdjustments })
         ] });
       }
       function formatTimestamp(recordName) {
@@ -34316,7 +34619,7 @@ ${lightForced}`;
                           flex: "0 0 auto",
                           borderRadius: 8,
                           overflow: "hidden",
-                          background: "var(--mantine-color-default-hover)"
+                          background: "var(--vpw-color-default-hover)"
                         },
                         children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                           Box,
@@ -34381,26 +34684,31 @@ ${lightForced}`;
         const rawActiveTab = useWbSelector((wb) => wb.activeTab);
         const theme = useTheme();
         const [pane, setPane] = reactExports.useState("list");
+        const [adjustmentsOpen, setAdjustmentsOpen] = reactExports.useState(false);
+        const [wardrobeDetailOpen, setWardrobeDetailOpen] = reactExports.useState(false);
         const mainTab = rawActiveTab === "studio" ? "wardrobe" : rawActiveTab;
+        const showNavigation = !(mainTab === "wardrobe" && wardrobeDetailOpen || mainTab === "history" && adjustmentsOpen);
         return /* @__PURE__ */ jsxRuntimeExports.jsxs(Stack, { gap: "xs", style: { height: "100dvh", minHeight: 0, overflow: "hidden" }, p: "xs", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { justify: "space-between", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { fw: 700, children: t("fileManagerPanel.title") }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(ActionIcon, { variant: "subtle", onClick: onClose, "aria-label": t("studio.closeTitle"), children: "✕" })
+          showNavigation && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { justify: "space-between", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { fw: 700, children: t("fileManagerPanel.title") }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(ActionIcon, { variant: "subtle", onClick: onClose, "aria-label": t("studio.closeTitle"), children: "✕" })
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              SegmentedControl,
+              {
+                fullWidth: true,
+                value: mainTab,
+                onChange: (v) => getWb().setActiveTab(v),
+                data: [
+                  { value: "wardrobe", label: t("fileManagerPanel.tabWardrobe") },
+                  { value: "history", label: t("fileManagerPanel.tabHistory") },
+                  { value: "settings", label: t("fileManagerPanel.tabSettings") }
+                ]
+              }
+            )
           ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            SegmentedControl,
-            {
-              fullWidth: true,
-              value: mainTab,
-              onChange: (v) => getWb().setActiveTab(v),
-              data: [
-                { value: "wardrobe", label: t("fileManagerPanel.tabWardrobe") },
-                { value: "history", label: t("fileManagerPanel.tabHistory") },
-                { value: "settings", label: t("fileManagerPanel.tabSettings") }
-              ]
-            }
-          ),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(Box, { style: { display: mainTab === "wardrobe" ? "block" : "none", flex: 1, minHeight: 0 }, children: /* @__PURE__ */ jsxRuntimeExports.jsx(WardrobeWorkspace, {}) }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(Box, { style: { display: mainTab === "wardrobe" ? "block" : "none", flex: 1, minHeight: 0 }, children: /* @__PURE__ */ jsxRuntimeExports.jsx(WardrobeWorkspace, { onMobileDetailChange: setWardrobeDetailOpen }) }),
           mainTab === "settings" && /* @__PURE__ */ jsxRuntimeExports.jsxs(Stack, { gap: "sm", pt: "md", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { fw: 600, children: t("fileManagerPanel.themeSettings") }),
             /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { children: [
@@ -34428,7 +34736,7 @@ ${lightForced}`;
               )
             ] })
           ] }),
-          mainTab === "history" && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+          mainTab === "history" && (adjustmentsOpen ? /* @__PURE__ */ jsxRuntimeExports.jsx(Box, { style: { flex: 1, minHeight: 0 }, children: /* @__PURE__ */ jsxRuntimeExports.jsx(OutfitAdjustmentsPage, { onBack: () => setAdjustmentsOpen(false) }) }) : /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               SegmentedControl,
               {
@@ -34438,17 +34746,16 @@ ${lightForced}`;
                 onChange: (v) => setPane(v),
                 data: [
                   { value: "preview", label: t("sidePreview.ariaLabel") },
-                  { value: "list", label: mainTab === "history" ? t("fileManagerPanel.tabHistory") : t("fileManagerPanel.tabWardrobe") },
-                  { value: "filter", label: t("filterManager.ariaLabel") }
+                  { value: "list", label: t("fileManagerPanel.tabHistory") }
                 ]
               }
             ),
             /* @__PURE__ */ jsxRuntimeExports.jsxs(Box, { style: { flex: 1, minHeight: 0, overflow: "hidden" }, children: [
               pane === "preview" && /* @__PURE__ */ jsxRuntimeExports.jsx(SidePreview, { showApply: true }),
-              pane === "list" && /* @__PURE__ */ jsxRuntimeExports.jsx(HistoryViewer, {}),
-              pane === "filter" && /* @__PURE__ */ jsxRuntimeExports.jsx(FilterManager, {})
-            ] })
-          ] })
+              pane === "list" && /* @__PURE__ */ jsxRuntimeExports.jsx(HistoryViewer, {})
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "default", onClick: () => setAdjustmentsOpen(true), children: t("outfitFlow.openAdjustments", { defaultValue: "微调部位" }) })
+          ] }))
         ] });
       }
       const PANEL_RECT_STORAGE_KEY = "vpw-panel-rect-v1";
@@ -34469,7 +34776,7 @@ ${lightForced}`;
         const rawActiveTab = useWbSelector((wb) => wb.activeTab);
         const theme = useTheme();
         const isMobile = useIsMobile();
-        const [showFilters, setShowFilters] = reactExports.useState(false);
+        const [adjustmentsOpen, setAdjustmentsOpen] = reactExports.useState(false);
         const [panelRect, setPanelRect] = reactExports.useState(() => {
           const width = Math.min(1180, Math.max(PANEL_MIN_WIDTH, Math.round((hostWindow.innerWidth || 1280) * 0.82)));
           const height = fitPanelHeight(Math.min(760, Math.max(PANEL_MIN_HEIGHT, Math.round((hostWindow.innerHeight || 800) * 0.74))));
@@ -34616,6 +34923,7 @@ ${lightForced}`;
               radius: 0,
               withCloseButton: false,
               padding: 0,
+              lockScroll: false,
               closeOnEscape: false,
               classNames: { content: "vpw-main-wardrobe-dialog" },
               children: /* @__PURE__ */ jsxRuntimeExports.jsx(MobileWardrobeShell, { onClose })
@@ -34623,121 +34931,123 @@ ${lightForced}`;
           );
         }
         if (!opened) return null;
-        return /* @__PURE__ */ jsxRuntimeExports.jsx(Portal, { children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
-          Paper,
-          {
-            ref: winRef,
-            withBorder: true,
-            shadow: "xl",
-            radius: "md",
-            style: {
-              position: "fixed",
-              left: 0,
-              top: 0,
-              transform: `translate3d(${panelRect.x}px, ${panelRect.y}px, 0)`,
-              width: panelRect.width,
-              height: panelRect.height,
-              display: "flex",
-              flexDirection: "column",
-              overflow: "hidden",
-              zIndex: PANEL_Z_INDEX,
-              willChange: "transform"
-            },
-            children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                Group,
-                {
-                  justify: "space-between",
-                  wrap: "nowrap",
-                  px: "md",
-                  gap: "sm",
-                  onPointerDown: startPanelDrag,
-                  style: {
-                    flex: "0 0 auto",
-                    height: HEADER_HEIGHT,
-                    borderBottom: "1px solid var(--mantine-color-default-border)",
-                    cursor: draggingPanel ? "grabbing" : "grab",
-                    userSelect: "none",
-                    touchAction: "none"
-                  },
-                  children: [
-                    /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { gap: 8, wrap: "nowrap", style: { minWidth: 0 }, children: [
-                      /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { "aria-hidden": true, c: "dimmed", style: { letterSpacing: 2, lineHeight: 1 }, children: "⠿" }),
-                      /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { fw: 700, truncate: true, children: t("fileManagerPanel.title") })
-                    ] }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx(
-                      CloseButton,
-                      {
-                        "aria-label": t("studio.closeTitle"),
-                        onPointerDown: (e) => e.stopPropagation(),
-                        onClick: onClose
-                      }
-                    )
-                  ]
-                }
-              ),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(Box, { style: { flex: 1, minHeight: 0, display: "flex", flexDirection: "column", padding: "var(--mantine-spacing-md)" }, children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                Tabs,
-                {
-                  value: activeTab,
-                  onChange: (value) => value && getWb().setActiveTab(value),
-                  style: { display: "flex", flexDirection: "column", flex: 1, minHeight: 0 },
-                  children: [
-                    /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { justify: "space-between", children: [
-                      /* @__PURE__ */ jsxRuntimeExports.jsxs(Tabs.List, { children: [
-                        /* @__PURE__ */ jsxRuntimeExports.jsx(Tabs.Tab, { value: "wardrobe", children: t("fileManagerPanel.tabWardrobe") }),
-                        /* @__PURE__ */ jsxRuntimeExports.jsx(Tabs.Tab, { value: "history", children: t("fileManagerPanel.tabHistory") }),
-                        /* @__PURE__ */ jsxRuntimeExports.jsx(Tabs.Tab, { value: "settings", children: t("fileManagerPanel.tabSettings") })
+        return /* @__PURE__ */ jsxRuntimeExports.jsxs(Portal, { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            Paper,
+            {
+              ref: winRef,
+              withBorder: true,
+              shadow: "xl",
+              radius: "md",
+              style: {
+                position: "fixed",
+                left: 0,
+                top: 0,
+                transform: `translate3d(${panelRect.x}px, ${panelRect.y}px, 0)`,
+                width: panelRect.width,
+                height: panelRect.height,
+                display: "flex",
+                flexDirection: "column",
+                overflow: "hidden",
+                zIndex: PANEL_Z_INDEX,
+                willChange: "transform"
+              },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  Group,
+                  {
+                    justify: "space-between",
+                    wrap: "nowrap",
+                    px: "md",
+                    gap: "sm",
+                    onPointerDown: startPanelDrag,
+                    style: {
+                      flex: "0 0 auto",
+                      height: HEADER_HEIGHT,
+                      borderBottom: "1px solid var(--vpw-color-default-border)",
+                      cursor: draggingPanel ? "grabbing" : "grab",
+                      userSelect: "none",
+                      touchAction: "none"
+                    },
+                    children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { gap: 8, wrap: "nowrap", style: { minWidth: 0 }, children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { "aria-hidden": true, c: "dimmed", style: { letterSpacing: 2, lineHeight: 1 }, children: "⠿" }),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { fw: 700, truncate: true, children: t("fileManagerPanel.title") })
                       ] }),
-                      /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { gap: "xs", children: [
-                        showSidebars && /* @__PURE__ */ jsxRuntimeExports.jsx(Tooltip, { label: t("filterManager.ariaLabel"), children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-                          Button,
-                          {
-                            size: "compact-sm",
-                            variant: showFilters ? "filled" : "default",
-                            onClick: () => setShowFilters((v) => !v),
-                            "aria-label": t("filterManager.ariaLabel"),
-                            "aria-pressed": showFilters,
-                            leftSection: "▼",
-                            children: t("fileManagerPanel.toggleFilters")
-                          }
-                        ) }),
-                        showSidebars && /* @__PURE__ */ jsxRuntimeExports.jsx(Divider, { orientation: "vertical" }),
-                        /* @__PURE__ */ jsxRuntimeExports.jsx(Tooltip, { label: t("fileManagerPanel.toggleTheme"), children: /* @__PURE__ */ jsxRuntimeExports.jsx(ActionIcon, { variant: "default", onClick: theme.toggle, "aria-label": t("fileManagerPanel.toggleTheme"), children: theme.isDark ? "☀" : "☾" }) })
-                      ] })
-                    ] }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx(Tabs.Panel, { value: "wardrobe", style: { flex: 1, minHeight: 0, paddingTop: 12 }, children: /* @__PURE__ */ jsxRuntimeExports.jsx(WardrobeWorkspace, {}) }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx(Tabs.Panel, { value: "history", style: { flex: 1, minHeight: 0, paddingTop: 12 }, children: /* @__PURE__ */ jsxRuntimeExports.jsx(ThreeColumn, { showFilters, showApply: true, children: /* @__PURE__ */ jsxRuntimeExports.jsx(HistoryViewer, {}) }) }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx(Tabs.Panel, { value: "settings", style: { flex: 1, paddingTop: 12 }, children: /* @__PURE__ */ jsxRuntimeExports.jsx(SettingsPanel, {}) })
-                  ]
-                }
-              ) }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                Box,
-                {
-                  title: "Resize",
-                  onPointerDown: startPanelResize,
-                  style: {
-                    position: "absolute",
-                    right: 4,
-                    bottom: 4,
-                    width: 16,
-                    height: 16,
-                    cursor: "nwse-resize",
-                    borderRight: "2px solid var(--mantine-color-dimmed)",
-                    borderBottom: "2px solid var(--mantine-color-dimmed)",
-                    opacity: 0.55,
-                    touchAction: "none"
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        CloseButton,
+                        {
+                          "aria-label": t("studio.closeTitle"),
+                          onPointerDown: (e) => e.stopPropagation(),
+                          onClick: onClose
+                        }
+                      )
+                    ]
                   }
-                }
-              )
-            ]
-          }
-        ) });
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(Box, { style: { flex: 1, minHeight: 0, display: "flex", flexDirection: "column", padding: "var(--vpw-spacing-md)" }, children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  Tabs,
+                  {
+                    value: activeTab,
+                    onChange: (value) => value && getWb().setActiveTab(value),
+                    style: { display: "flex", flexDirection: "column", flex: 1, minHeight: 0 },
+                    children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { justify: "space-between", children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsxs(Tabs.List, { children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(Tabs.Tab, { value: "wardrobe", children: t("fileManagerPanel.tabWardrobe") }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(Tabs.Tab, { value: "history", children: t("fileManagerPanel.tabHistory") }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(Tabs.Tab, { value: "settings", children: t("fileManagerPanel.tabSettings") })
+                        ] }),
+                        /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { gap: "xs", children: [
+                          showSidebars && /* @__PURE__ */ jsxRuntimeExports.jsx(Tooltip, { label: t("outfitFlow.openAdjustments"), children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                            Button,
+                            {
+                              size: "compact-sm",
+                              variant: "default",
+                              onClick: () => setAdjustmentsOpen(true),
+                              "aria-label": t("outfitFlow.openAdjustments"),
+                              "aria-haspopup": "dialog",
+                              children: t("outfitFlow.openAdjustments", { defaultValue: "微调部位" })
+                            }
+                          ) }),
+                          showSidebars && /* @__PURE__ */ jsxRuntimeExports.jsx(Divider, { orientation: "vertical" }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(Tooltip, { label: t("fileManagerPanel.toggleTheme"), children: /* @__PURE__ */ jsxRuntimeExports.jsx(ActionIcon, { variant: "default", onClick: theme.toggle, "aria-label": t("fileManagerPanel.toggleTheme"), children: theme.isDark ? "☀" : "☾" }) })
+                        ] })
+                      ] }),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(Tabs.Panel, { value: "wardrobe", style: { flex: 1, minHeight: 0, paddingTop: 12 }, children: /* @__PURE__ */ jsxRuntimeExports.jsx(WardrobeWorkspace, {}) }),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(Tabs.Panel, { value: "history", style: { flex: 1, minHeight: 0, paddingTop: 12 }, children: /* @__PURE__ */ jsxRuntimeExports.jsx(HistoryColumns, { showApply: true, children: /* @__PURE__ */ jsxRuntimeExports.jsx(HistoryViewer, {}) }) }),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(Tabs.Panel, { value: "settings", style: { flex: 1, paddingTop: 12 }, children: /* @__PURE__ */ jsxRuntimeExports.jsx(SettingsPanel, {}) })
+                    ]
+                  }
+                ) }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  Box,
+                  {
+                    title: "Resize",
+                    onPointerDown: startPanelResize,
+                    style: {
+                      position: "absolute",
+                      right: 4,
+                      bottom: 4,
+                      width: 16,
+                      height: 16,
+                      cursor: "nwse-resize",
+                      borderRight: "2px solid var(--vpw-color-dimmed)",
+                      borderBottom: "2px solid var(--vpw-color-dimmed)",
+                      opacity: 0.55,
+                      touchAction: "none"
+                    }
+                  }
+                )
+              ]
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(OutfitAdjustmentsDialog, { opened: adjustmentsOpen, onClose: () => setAdjustmentsOpen(false) })
+        ] });
       }
       const COL_WEIGHTS_STORAGE_KEY = "vpw-col-weights-v1";
       const MIN_COL_WEIGHT = 0.4;
-      const DEFAULT_COL_WEIGHTS = { list: 1.65, preview: 1, filter: 1 };
+      const DEFAULT_COL_WEIGHTS = { list: 1.65, preview: 1 };
       function ColumnSplitter({ onStart }) {
         return /* @__PURE__ */ jsxRuntimeExports.jsx(
           Box,
@@ -34761,15 +35071,14 @@ ${lightForced}`;
                   height: "36%",
                   minHeight: 24,
                   borderRadius: 3,
-                  background: "var(--mantine-color-default-border)"
+                  background: "var(--vpw-color-default-border)"
                 }
               }
             )
           }
         );
       }
-      function ThreeColumn({
-        showFilters,
+      function HistoryColumns({
         showApply = false,
         children
       }) {
@@ -34779,8 +35088,8 @@ ${lightForced}`;
             const raw = hostWindow.localStorage.getItem(COL_WEIGHTS_STORAGE_KEY);
             if (raw) {
               const p = JSON.parse(raw);
-              if (typeof p?.list === "number" && typeof p?.preview === "number" && typeof p?.filter === "number") {
-                return { list: p.list, preview: p.preview, filter: p.filter };
+              if (typeof p?.list === "number" && typeof p?.preview === "number") {
+                return { list: p.list, preview: p.preview };
               }
             }
           } catch {
@@ -34815,7 +35124,7 @@ ${lightForced}`;
             startX: event.clientX,
             baseLeft: weights[leftKey],
             pairTotal: weights[leftKey] + weights[rightKey],
-            sumAll: weights.list + weights.preview + (showFilters ? weights.filter : 0),
+            sumAll: weights.list + weights.preview,
             containerW: containerRef.current?.getBoundingClientRect().width || 1
           };
           hostWindow.addEventListener("pointermove", onSplitMove);
@@ -34825,11 +35134,7 @@ ${lightForced}`;
         return /* @__PURE__ */ jsxRuntimeExports.jsxs(Flex, { ref: containerRef, h: "100%", style: { minHeight: 0 }, children: [
           col(weights.list, children),
           /* @__PURE__ */ jsxRuntimeExports.jsx(ColumnSplitter, { onStart: startSplit("list", "preview") }),
-          col(weights.preview, /* @__PURE__ */ jsxRuntimeExports.jsx(SidePreview, { showApply })),
-          showFilters && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx(ColumnSplitter, { onStart: startSplit("preview", "filter") }),
-            col(weights.filter, /* @__PURE__ */ jsxRuntimeExports.jsx(FilterManager, {}))
-          ] })
+          col(weights.preview, /* @__PURE__ */ jsxRuntimeExports.jsx(SidePreview, { showApply }))
         ] });
       }
       function SettingsPanel() {
@@ -35074,7 +35379,7 @@ ${lightForced}`;
             colorSchemeManager,
             getRootElement: () => rootEl,
             cssVariablesSelector: "#vpw-root",
-            children: /* @__PURE__ */ jsxRuntimeExports.jsx(I18nextProvider, { i18n, children: /* @__PURE__ */ jsxRuntimeExports.jsx(ThemeProvider, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(DialogProvider, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(App, { rootEl }) }) }) })
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx(I18nextProvider, { i18n, children: /* @__PURE__ */ jsxRuntimeExports.jsx(ThemeProvider, { rootEl, children: /* @__PURE__ */ jsxRuntimeExports.jsx(DialogProvider, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(App, { rootEl }) }) }) })
           }
         );
       }

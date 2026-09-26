@@ -36,20 +36,20 @@ export function buildTheme(portalTarget: HTMLElement): MantineThemeOverride {
       Modal: {
         styles: {
           content: {
-            backgroundColor: 'var(--mantine-color-body)',
-            color: 'var(--mantine-color-text)',
+            backgroundColor: 'var(--vpw-color-body)',
+            color: 'var(--vpw-color-text)',
           },
           header: {
-            backgroundColor: 'var(--mantine-color-body)',
-            color: 'var(--mantine-color-text)',
-            borderBottom: '1px solid var(--mantine-color-default-border)',
+            backgroundColor: 'var(--vpw-color-body)',
+            color: 'var(--vpw-color-text)',
+            borderBottom: '1px solid var(--vpw-color-default-border)',
           },
         },
       },
       Paper: {
         styles: {
           root: {
-            color: 'var(--mantine-color-text)',
+            color: 'var(--vpw-color-text)',
           },
         },
       },
@@ -63,18 +63,18 @@ export function buildTheme(portalTarget: HTMLElement): MantineThemeOverride {
       TextInput: {
         styles: {
           input: {
-            color: 'var(--mantine-color-text)',
-            backgroundColor: 'var(--mantine-color-body)',
+            color: 'var(--vpw-color-text)',
+            backgroundColor: 'var(--vpw-color-body)',
           },
         },
       },
       SegmentedControl: {
         styles: {
           root: {
-            color: 'var(--mantine-color-text)',
+            color: 'var(--vpw-color-text)',
           },
           label: {
-            color: 'var(--mantine-color-text)',
+            color: 'var(--vpw-color-text)',
           },
         },
       },

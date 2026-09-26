@@ -30,7 +30,8 @@ interface FilterGroup {
   isHiddenGroup?: boolean
   itemList?: FilterItem[]
 }
-type SourceOperation = { mode: 'original' | 'incoming'; operation: GroupOperation }
+type SourceAction = { operation: GroupOperation; complete: boolean }
+type GroupActions = Partial<Record<'original' | 'incoming', SourceAction | null>>
 type PresenceMap = Record<string, { inCharacter?: boolean; inHover?: boolean }>
 type NameMap = Record<string, string>
 type ScopeStates = Record<SlotMode, ScopeState>
@@ -39,7 +40,6 @@ const EMPTY_GROUPS: FilterGroup[] = []
 const EMPTY_ITEMS: FilterItem[] = []
 const EMPTY_PARTS: WardrobePart[] = []
 const EMPTY_SLOT_CONTROL_MAP: SlotControlMap = {}
-const EMPTY_GROUP_OPERATIONS: Record<string, SourceOperation> = {}
 const EMPTY_SCOPE_STATES: ScopeStates = { original: 'none', incoming: 'none', empty: 'none' }
 
 function buildPartNameMapBySlot(parts: WardrobePart[], character: unknown): NameMap {
@@ -73,12 +73,12 @@ function buildKnownSlotKeys(
 
 function SourceButtons({
   states,
-  operation,
+  actions,
   grouped = false,
   onApply,
 }: {
   states: ScopeStates
-  operation?: SourceOperation
+  actions?: GroupActions
   grouped?: boolean
   onApply: (mode: SlotMode) => void
 }) {
@@ -93,9 +93,6 @@ function SourceButtons({
     replace: t('filterManager.operationReplace', { defaultValue: '覆盖' }),
     'full-replace': t('filterManager.operationFullReplace', { defaultValue: '完全替换' }),
   }
-  const groupTip = t('filterManager.groupCycleTooltip', {
-    defaultValue: '连续点击同一个分组来源：补入，保留另一来源已有的部位；覆盖，替换此来源包含的部位；完全替换，同时清空此来源没有的部位。',
-  })
   const directTips = {
     original: t('filterManager.restoreOriginalTooltip', { defaultValue: '恢复原角色的全部部位。' }),
     incoming: t('filterManager.replaceAllTooltip', { defaultValue: '全部使用所选衣物，清空其中没有的部位。' }),
@@ -105,18 +102,16 @@ function SourceButtons({
   return (
     <Group gap={5} wrap="nowrap" className="vpw-filter-source-buttons">
       {SLOT_MODES.map((mode) => {
-        const active = operation ? operation.mode === mode : states[mode] === 'full'
-        let phase: GroupOperation | undefined
-        if (grouped && mode !== 'empty') {
-          if (operation?.mode === mode) phase = operation.operation
-          else if (!operation && states[mode] === 'full') phase = 'full-replace'
-        }
+        const action = mode !== 'empty' ? actions?.[mode] : undefined
+        const active = action?.complete || states[mode] === 'full'
+        const phase = grouped ? action?.operation : undefined
+        const complete = !!action?.complete
         const variant = active ? 'filled' : states[mode] === 'partial' ? 'light' : 'default'
         const label = !grouped && mode === 'incoming'
           ? t('filterManager.replaceAllAction', { defaultValue: '全量替换' })
           : labels[mode]
         return (
-          <Tooltip key={mode} label={grouped && mode !== 'empty' ? groupTip : directTips[mode]} withinPortal zIndex={OVERLAY_Z_INDEX} multiline w={270}>
+          <Tooltip key={mode} label={directTips[mode]} disabled={grouped} withinPortal zIndex={OVERLAY_Z_INDEX + 1} multiline w={270}>
             <Button
               size="compact-xs"
               px={7}
@@ -124,11 +119,17 @@ function SourceButtons({
               aria-pressed={active}
               data-source={mode}
               data-operation={phase}
-              onClick={() => onApply(mode)}
+              data-complete={complete || undefined}
+              data-disabled={complete || undefined}
+              aria-disabled={complete || undefined}
+              disabled={grouped && mode !== 'empty' && !action}
+              onClick={() => { if (!complete) onApply(mode) }}
               className={mode === 'empty' ? 'vpw-filter-empty-source' : 'vpw-filter-source'}
             >
               <span>{label}</span>
-              {phase && <span className="vpw-filter-operation">{operationLabels[phase]}</span>}
+              {phase && <span className="vpw-filter-operation">{complete
+                ? t('filterManager.operationComplete', { defaultValue: '已完全替换' })
+                : operationLabels[phase]}</span>}
             </Button>
           </Tooltip>
         )
@@ -176,7 +177,7 @@ const FilterItemRow = memo(function FilterItemRow({
   return (
     <div className="vpw-filter-slot-row" data-slot-key={item.key}>
       <Group gap={6} wrap="nowrap" className="vpw-filter-slot-name" title={presenceText}>
-        <Box className="vpw-filter-presence-dot" bg={`var(--mantine-color-${dotColor}-5)`} />
+        <Box className="vpw-filter-presence-dot" bg={`var(--vpw-color-${dotColor}-5)`} />
         <Text size="xs" truncate title={name}>{name}</Text>
       </Group>
       <SegmentedControl
@@ -201,7 +202,7 @@ function FilterGroupCard({
   collapsed,
   showAllSlots,
   slotControls,
-  operation,
+  actions,
   presence,
   characterNames,
   incomingNames,
@@ -214,7 +215,7 @@ function FilterGroupCard({
   collapsed: boolean
   showAllSlots: boolean
   slotControls: SlotControlMap
-  operation?: SourceOperation
+  actions?: GroupActions
   presence: PresenceMap
   characterNames: NameMap
   incomingNames: NameMap
@@ -250,7 +251,7 @@ function FilterGroupCard({
           <Text span size="xs" c="dimmed" ml={6}>{items.length}</Text>
         </Text>
       </Button>
-      <SourceButtons grouped states={scopeStates} operation={operation} onApply={(mode) => onApplyGroup(group.groupID, mode)} />
+      <SourceButtons grouped states={scopeStates} actions={actions} onApply={(mode) => onApplyGroup(group.groupID, mode)} />
       <Stack id={contentID} gap={3} mt="xs" hidden={collapsed}>
         {!collapsed && items.map((item) => (
           <FilterItemRow
@@ -274,7 +275,7 @@ export function FilterManager() {
   const { t } = useTranslation()
   const filterSnapshot = useFsSelector((fs) => fs.filterSnapshot)
   const slotControls = useFsSelector((fs) => fs.slotControlMap) || EMPTY_SLOT_CONTROL_MAP
-  const groupOperations = useFsSelector((fs) => fs.groupOperations) || EMPTY_GROUP_OPERATIONS
+  const previewItem = useFsSelector((fs) => fs.previewItem)
   const characterItem = (useFsSelector((fs) => fs.characterItem) as WardrobePart[]) || EMPTY_PARTS
   const incomingData = (useFsSelector((fs) => fs.activeItem?.data) as WardrobePart[]) || EMPTY_PARTS
   const character = useFsSelector((fs) => fs.character)
@@ -315,6 +316,13 @@ export function FilterManager() {
       presence[item.key]?.inCharacter || presence[item.key]?.inHover,
     )
   }), [groups, presence, showAllSlots])
+  const groupActions = useMemo(() => {
+    const fs = getFs()
+    return new Map(groups.map((group) => [group.groupID, {
+      original: fs.getGroupSourceAction(group.groupID, 'original'),
+      incoming: fs.getGroupSourceAction(group.groupID, 'incoming'),
+    }]))
+  }, [groups, slotControls, characterItem, incomingData, previewItem])
 
   const toggleCollapsed = useCallback((id: string) => {
     setCollapsed((previous) => {
@@ -327,7 +335,7 @@ export function FilterManager() {
   const applyAll = useCallback((mode: SlotMode) => { getFs().replaceAllFromSource(mode) }, [])
   const applyGroup = useCallback((id: string, mode: SlotMode) => {
     if (mode === 'empty') getFs().setGroupSlotModes(id, mode)
-    else getFs().cycleGroupSource(id, mode)
+    else getFs().progressGroupSource(id, mode)
   }, [])
   const setSlot = useCallback((key: string, mode: SlotMode) => { getFs().setSlotMode(key, mode) }, [])
 
@@ -336,12 +344,12 @@ export function FilterManager() {
       <style>{filterStyles}</style>
       <Paper withBorder radius="md" p="xs">
         <Group gap={6} grow wrap="nowrap">
-          <Tooltip label={t('filterManager.preserveBodyTooltip', { defaultValue: '单次保留原角色的身体、面容和头发，其余微调保持当前选择。' })} multiline w={250} withinPortal zIndex={OVERLAY_Z_INDEX}>
+          <Tooltip label={t('filterManager.preserveBodyTooltip', { defaultValue: '单次保留原角色的身体、面容和发色，其余微调保持当前选择。' })} multiline w={250} withinPortal zIndex={OVERLAY_Z_INDEX + 1}>
             <Button variant="light" size="xs" px={8} onClick={() => getFs().preserveBody()}>
               {t('filterManager.preserveBody', { defaultValue: '保留原身形' })}
             </Button>
           </Tooltip>
-          <Tooltip label={t('filterManager.replaceBodyOnlyTooltip', { defaultValue: '只使用所选衣物的身体、面容和头发，其他部位恢复原角色。' })} multiline w={250} withinPortal zIndex={OVERLAY_Z_INDEX}>
+          <Tooltip label={t('filterManager.replaceBodyOnlyTooltip', { defaultValue: '只使用所选衣物的身体、面容和发色，其他部位恢复原角色。' })} multiline w={250} withinPortal zIndex={OVERLAY_Z_INDEX + 1}>
             <Button variant="default" size="xs" px={8} onClick={() => getFs().replaceBodyOnly()}>
               {t('filterManager.replaceBodyOnly', { defaultValue: '只替换身形' })}
             </Button>
@@ -354,7 +362,7 @@ export function FilterManager() {
       </Paper>
 
       <Text size="xs" c="dimmed">
-        {t('filterManager.groupCycleHint', { defaultValue: '分组连点：补入 → 覆盖 → 完全替换。部件滑块直接选择来源。' })}
+        {t('filterManager.groupProgressHint', { defaultValue: '分组按钮显示当前预览需要的下一步；部件滑块直接选择来源。' })}
       </Text>
       <Group justify="space-between" gap={4}>
         <Group gap={2}>
@@ -376,9 +384,9 @@ export function FilterManager() {
         />
       </Group>
       <Collapse in={legendOpen}>
-        <Paper withBorder radius="sm" p="xs" bg="var(--mantine-color-default-hover)">
+        <Paper withBorder radius="sm" p="xs" bg="var(--vpw-color-default-hover)">
           <Stack gap={4}>
-            <Text size="xs">{t('filterManager.groupCycleTooltip', { defaultValue: '连续点击同一个分组来源：补入，保留另一来源已有的部位；覆盖，替换此来源包含的部位；完全替换，同时清空此来源没有的部位。' })}</Text>
+            <Text size="xs">{t('filterManager.groupProgressTooltip', { defaultValue: '按钮根据当前预览执行下一步：先补齐缺少的部位，已补齐时覆盖已有部位，已覆盖时清空来源中没有的部位。' })}</Text>
             <Text size="xs" c="dimmed">
               {t('filterManager.fullReplaceSourceHint', { defaultValue: '完全替换产生的空部位仍停在所选来源；只有手动选择“置空”才会切到空档。' })}
             </Text>
@@ -399,7 +407,7 @@ export function FilterManager() {
               collapsed={collapsed.has(group.groupID)}
               showAllSlots={showAllSlots}
               slotControls={slotControls}
-              operation={groupOperations[group.groupID]}
+              actions={groupActions.get(group.groupID)}
               presence={presence}
               characterNames={characterNames}
               incomingNames={incomingNames}

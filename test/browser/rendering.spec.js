@@ -122,7 +122,7 @@ async function rendererWork(page) {
   })
 }
 
-test('visible thumbnails update from BC images; preview and return reuse completed renders', async ({ page }) => {
+test('BC image loads update visible cards; the sidebar and adjustment preview share cached renders', async ({ page }) => {
   const errors = []
   page.on('pageerror', error => errors.push(error.message))
   let releaseImages
@@ -155,13 +155,18 @@ test('visible thumbnails update from BC images; preview and return reuse complet
 
     await amber.click()
     await expect(page.getByRole('button', { name: 'Apply to Tester', exact: true })).toBeVisible()
-    await expect(amber).toBeHidden()
+    await expect(amber).toBeVisible()
     const preview = page.locator('.vpw-workspace-preview canvas')
     await expect.poll(() => centerPixel(preview)).toEqual([189, 121, 62, 255])
-    await expect.poll(() => amber.locator('canvas').evaluate(canvas => [canvas.width, canvas.height])).toEqual([1, 1])
+    await expect.poll(() => centerPixel(amber.locator('canvas'))).toEqual([189, 121, 62, 255])
     const warmLoads = await page.evaluate(() => window.__renderProbe.loads.length)
+    await page.locator('.vpw-preview-actions').getByRole('button', { name: 'Adjust outfit', exact: true }).click()
+    const adjustments = page.getByRole('dialog', { name: 'Outfit adjustments', exact: true })
+    await expect.poll(() => centerPixel(adjustments.locator('canvas'))).toEqual([189, 121, 62, 255])
+    expect(await page.evaluate(() => window.__renderProbe.loads.length)).toBe(warmLoads)
+    await adjustments.getByRole('button', { name: 'Done adjusting', exact: true }).click()
     await page.screenshot({ path: test.info().outputPath('rendered-outfit-preview.png'), fullPage: true, animations: 'disabled' })
-    await page.getByRole('button', { name: /Back to wardrobe/ }).click()
+    await page.getByRole('button', { name: 'Close preview', exact: true }).click()
     await expect(page.locator('.vpw-workspace-preview canvas')).toHaveCount(0)
     await expect(amber.locator('.vpw-thumbnail')).toHaveAttribute('aria-busy', 'false')
     await expect.poll(() => centerPixel(amber.locator('canvas'))).toEqual([189, 121, 62, 255])

@@ -7,7 +7,7 @@ import fs from 'fs'
 // Read version from package.json (single source of truth)
 const pkgJson = JSON.parse(fs.readFileSync(new URL('./package.json', import.meta.url)))
 const VERSION = pkgJson.version || '0.0.0'
-const REACT_LOADER_URL = 'https://cdn.jsdelivr.net/gh/VivianMoonlight/Vivians-Portable-Wardrobe@feat%2Fwardrobe-react/ViviansPortableWardrobeReactLoader.user.js'
+const REACT_LOADER_URL = 'https://cdn.jsdelivr.net/gh/VivianMoonlight/Vivians-Portable-Wardrobe@wardrobe-react/ViviansPortableWardrobeReactLoader.user.js'
 
 const hosts = [
   'https://bondageprojects.elementfx.com/*',

@@ -1,2 +1,4 @@
 # Bundled dependencies retain upstream comment formatting.
 out/*.user.js linguist-generated=true whitespace=-blank-at-eol
+# Preserve Markdown hard line breaks in the archived pre-React guide.
+docs/LEGACY_USER_GUIDE.md whitespace=-blank-at-eol

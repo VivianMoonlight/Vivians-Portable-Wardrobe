@@ -1,5 +1,5 @@
-import { memo, useState, type MouseEvent } from 'react'
-import { ActionIcon, Badge, Box, Button, FocusTrap, Group, Paper, Portal, Text, UnstyledButton } from '@mantine/core'
+import { memo, useId, useState, type MouseEvent } from 'react'
+import { ActionIcon, Badge, Box, Button, FocusTrap, Group, Paper, Portal, Text, UnstyledButton, VisuallyHidden } from '@mantine/core'
 import { useTranslation } from 'react-i18next'
 import { hostWindow } from '@/utils/host-window.js'
 import { ExternalAdapter } from '@/utils/external_adapters.js'
@@ -11,7 +11,7 @@ import { FileThumbnail } from './FileThumbnail'
 interface FileItemProps {
   item: WardrobeOutfit
   tagNames: string[]
-  viewMode: 'large' | 'small' | 'list'
+  viewMode: 'card' | 'list'
   onEditTags: () => void
   onSelectOutfit?: (item: WardrobeOutfit) => void
 }
@@ -26,6 +26,9 @@ export const FileItem = memo(function FileItem({ item, tagNames, viewMode, onEdi
   const dialog = useDialog()
   const isPreviewLocked = useFsSelector((fs) => fs.lockedItem?.id === item.id)
   const isCloudSyncEnabled = useFsSelector(() => item.cloudSync !== false)
+  const isLocalFork = !!item.vpwLocalFork && !isCloudSyncEnabled
+  const localForkHintId = useId()
+  const localForkHint = t('library.localForkHint')
   const thumbnailRefresh = useFsSelector(() => item.__thumbRefresh)
   const [menu, setMenu] = useState<MenuState | null>(null)
   void thumbnailRefresh
@@ -85,18 +88,14 @@ export const FileItem = memo(function FileItem({ item, tagNames, viewMode, onEdi
   }
 
   const isList = viewMode === 'list'
-  const isSmall = viewMode === 'small'
   return (
     <>
       <Paper withBorder radius="md" className="vpw-outfit-card" data-view={viewMode} data-selected={isPreviewLocked || undefined}
         onContextMenu={(event) => openContextMenu(event)}>
         <UnstyledButton className="vpw-outfit-select" data-outfit-id={item.id} onClick={handleClick}
-          aria-label={t('library.previewOutfit', { name: item.name })} aria-pressed={isPreviewLocked}>
-        {isList ? (
-          <Box style={{ width: 44, aspectRatio: '9 / 16', flex: '0 0 auto', borderRadius: 8, overflow: 'hidden', background: 'var(--mantine-color-default-hover)' }}>
-            <FileThumbnail item={item} />
-          </Box>
-        ) : (
+          aria-label={t('library.previewOutfit', { name: item.name })} aria-pressed={isPreviewLocked}
+          aria-describedby={isLocalFork ? localForkHintId : undefined}>
+        {!isList && (
           <Box className="vpw-outfit-thumbnail">
             <Box style={{ position: 'absolute', inset: 0 }}><FileThumbnail item={item} /></Box>
             {isPreviewLocked && <Badge size="sm" variant="filled" color="teal" className="vpw-outfit-selected-badge">
@@ -105,23 +104,29 @@ export const FileItem = memo(function FileItem({ item, tagNames, viewMode, onEdi
           </Box>
         )}
         <Box className="vpw-outfit-caption">
-          <Text size={isSmall ? 'xs' : 'sm'} fw={600} className="vpw-outfit-name">{item.name}</Text>
+          <Group gap={6} wrap="nowrap" align="start">
+            <Text size="sm" fw={600} className="vpw-outfit-name">{item.name}</Text>
+            {isList && isPreviewLocked && <Badge size="xs" variant="light" color="teal" style={{ flexShrink: 0 }}>
+              {t('library.selected', { defaultValue: '已选择' })}
+            </Badge>}
+          </Group>
+          {isLocalFork && <>
+            <Badge size="xs" variant="light" color="orange" mt={5} title={localForkHint} style={{ maxWidth: '100%' }}>
+              {t('library.localFork')}
+            </Badge>
+            <VisuallyHidden id={localForkHintId}>{localForkHint}</VisuallyHidden>
+          </>}
           {tagNames.length > 0 ? <Group gap={4} mt={5} aria-label={t('library.tags')}>
             {tagNames.map((name) => <Text component="span" key={name} className="vpw-outfit-tag">{name}</Text>)}
           </Group> : <Text size="xs" c="dimmed" mt={4}>{t('library.untagged')}</Text>}
-          <Text size="xs" mt={7} c={isPreviewLocked ? 'teal' : 'dimmed'}>
-            {t(isPreviewLocked ? 'library.adjustSelection' : 'library.previewAndAdjust', {
-              defaultValue: isPreviewLocked ? 'Preview again →' : 'Preview & adjust →',
-            })}
-          </Text>
         </Box>
         </UnstyledButton>
           <Group className="vpw-outfit-actions" justify="space-between" gap={4} wrap="nowrap">
             <UnstyledButton onClick={(event) => void toggleCloudSync(event)} onDoubleClick={(event) => event.stopPropagation()}
               title={t('library.cloudToggleTitle')} aria-pressed={isCloudSyncEnabled}
-              style={{ fontSize: isSmall ? 10 : 11, lineHeight: 1.2, padding: '7px 6px', borderRadius: 6,
-                border: '1px solid var(--mantine-color-default-border)',
-                color: isCloudSyncEnabled ? 'var(--mantine-color-teal-6)' : 'var(--mantine-color-dimmed)',
+              style={{ fontSize: 11, lineHeight: 1.2, padding: '7px 6px', borderRadius: 6,
+                border: '1px solid var(--vpw-color-default-border)',
+                color: isCloudSyncEnabled ? 'var(--vpw-color-teal-6)' : 'var(--vpw-color-dimmed)',
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {t(isCloudSyncEnabled ? 'library.cloudIncluded' : 'library.localOnly')}
             </UnstyledButton>

@@ -14,7 +14,7 @@ const MOBILE_UI_KEY = 'vpw.workbench.mobileUi'
 const defaultWardrobeUi = {
   searchScope: 'current',
   sortBy: 'recent',
-  fileViewMode: 'large',
+  fileViewMode: 'card',
   leftPanelCollapsed: false,
   rightPanelCollapsed: false,
 }
@@ -108,12 +108,24 @@ test('updating wardrobe preferences keeps the existing shape and survives reload
   const { store, saved, writes } = loadStore({
     [WARDROBE_UI_KEY]: JSON.stringify({ searchScope: 'all', extra: 'preserved' }),
   })
-  store.getState().setWardrobeUi({ fileViewMode: 'small' })
+  store.getState().setWardrobeUi({ fileViewMode: 'list' })
 
-  const expected = { ...defaultWardrobeUi, searchScope: 'all', fileViewMode: 'small', extra: 'preserved' }
+  const expected = { ...defaultWardrobeUi, searchScope: 'all', fileViewMode: 'list', extra: 'preserved' }
   assert.deepEqual(wardrobeUi(store), expected)
   assert.deepEqual(writes, [[WARDROBE_UI_KEY, JSON.stringify(expected)]])
   assert.deepEqual(wardrobeUi(loadStore(Object.fromEntries(saved)).store), expected)
+})
+
+test('legacy thumbnail sizes restore as cards while lists remain lists', () => {
+  for (const oldMode of ['large', 'small', 'card', null, 'unknown']) {
+    const { store, saved } = loadStore({
+      [WARDROBE_UI_KEY]: JSON.stringify({ fileViewMode: oldMode, extra: 'preserved' }),
+    })
+    assert.equal(store.getState().wardrobeUi.fileViewMode, 'card')
+    store.getState().setWardrobeUi({ sortBy: 'name' })
+    assert.equal(JSON.parse(saved.get(WARDROBE_UI_KEY)).fileViewMode, 'card')
+    assert.equal(store.getState().wardrobeUi.extra, 'preserved')
+  }
 })
 
 test('storage write failures do not prevent in-memory interactions', () => {

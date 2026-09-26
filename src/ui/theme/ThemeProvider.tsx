@@ -1,5 +1,6 @@
-import { createContext, useContext, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useRef, type ReactNode } from 'react'
 import { useMantineColorScheme, type MantineColorScheme } from '@mantine/core'
+import { hostWindow } from '@/utils/host-window.js'
 
 /**
  * React replacement for the Vue `ThemeService` (which used ref/computed/inject).
@@ -17,13 +18,37 @@ interface ThemeContextValue {
 
 const ThemeContext = createContext<ThemeContextValue | null>(null)
 
-export function ThemeProvider({ children }: { children: ReactNode }) {
-  const { colorScheme, setColorScheme, toggleColorScheme } = useMantineColorScheme()
+export function ThemeProvider({ children, rootEl }: { children: ReactNode; rootEl: HTMLElement }) {
+  // Mantine's default transition guard is inserted into document.head. Our UI
+  // lives in a shadow root, so that guard affects the game instead of the UI.
+  const { colorScheme, setColorScheme, toggleColorScheme } = useMantineColorScheme({ keepTransitions: true })
+  const restoreRef = useRef<() => void>(() => {})
+
+  useEffect(() => () => restoreRef.current(), [])
+
+  const changeScheme = (change: () => void) => {
+    restoreRef.current()
+    rootEl.setAttribute('data-vpw-switching-theme', '')
+    change()
+
+    let secondFrame = 0
+    const firstFrame = hostWindow.requestAnimationFrame(() => {
+      secondFrame = hostWindow.requestAnimationFrame(() => restore())
+    })
+    const timeout = hostWindow.setTimeout(() => restore(), 150)
+    const restore = () => {
+      hostWindow.cancelAnimationFrame(firstFrame)
+      hostWindow.cancelAnimationFrame(secondFrame)
+      hostWindow.clearTimeout(timeout)
+      rootEl.removeAttribute('data-vpw-switching-theme')
+    }
+    restoreRef.current = restore
+  }
 
   const value: ThemeContextValue = {
     colorScheme,
-    setColorScheme,
-    toggle: () => toggleColorScheme(),
+    setColorScheme: (scheme) => changeScheme(() => setColorScheme(scheme)),
+    toggle: () => changeScheme(toggleColorScheme),
     isDark: colorScheme === 'dark',
   }
 

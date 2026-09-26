@@ -25,7 +25,7 @@ export function FileManager({ onSelectOutfit }: FileManagerProps) {
   const selectedTagId = useFsSelector((fs) => fs.selectedTagId)
   const quota = useFsSelector((fs) => fs.cloudQuota)
   const sync = useFsSelector((fs) => fs.syncStatus)
-  const fileViewMode = useWbSelector((wb) => wb.wardrobeUi.fileViewMode || 'large')
+  const fileViewMode = useWbSelector((wb) => wb.wardrobeUi.fileViewMode)
   const [searchQuery, setSearchQuery] = useState('')
   const [editingOutfit, setEditingOutfit] = useState<WardrobeOutfit | null>(null)
   const [editingTagIds, setEditingTagIds] = useState<string[]>([])
@@ -185,12 +185,12 @@ export function FileManager({ onSelectOutfit }: FileManagerProps) {
         <Text size="xs" c="dimmed" role="status">{t('library.outfitCount', { count: displayList.length, total: outfits.length })}</Text>
         <Group gap={6}>
           <Button.Group>
-            {(['large', 'small', 'list'] as const).map((mode) => (
+            {(['card', 'list'] as const).map((mode) => (
               <Button key={mode} size="compact-xs" variant={fileViewMode === mode ? 'light' : 'default'}
                 onClick={() => getWb().setWardrobeUi({ fileViewMode: mode })}
-                title={t(`fileManager.view${mode[0].toUpperCase()}${mode.slice(1)}`)}
-                aria-label={t(`fileManager.view${mode[0].toUpperCase()}${mode.slice(1)}`)} aria-pressed={fileViewMode === mode}>
-                {mode === 'large' ? '▣' : mode === 'small' ? '▦' : '☷'}
+                title={t(mode === 'card' ? 'fileManager.viewCard' : 'fileManager.viewList', { defaultValue: mode === 'card' ? '卡牌' : '列表' })}
+                aria-label={t(mode === 'card' ? 'fileManager.viewCard' : 'fileManager.viewList', { defaultValue: mode === 'card' ? '卡牌' : '列表' })} aria-pressed={fileViewMode === mode}>
+                {t(mode === 'card' ? 'fileManager.viewCard' : 'fileManager.viewList', { defaultValue: mode === 'card' ? '卡牌' : '列表' })}
               </Button>
             ))}
           </Button.Group>
@@ -236,7 +236,7 @@ export function FileManager({ onSelectOutfit }: FileManagerProps) {
             ))}
           </Box> : (
             <Stack align="center" py="xl">
-              <Text c="dimmed">{t('library.empty')}</Text>
+              <Text c="dimmed">{t(outfits.length ? 'library.noMatches' : 'library.empty')}</Text>
               {searchQuery || activeFilterCount ? <Button variant="light" size="xs" onClick={clearFilters}>{t('library.clearFilters')}</Button>
                 : <Button variant="light" size="xs" onClick={() => void actions.saveCharacterToFolder()}>{t('library.saveCharacter')}</Button>}
             </Stack>
@@ -285,7 +285,7 @@ export function FileManager({ onSelectOutfit }: FileManagerProps) {
         </Stack>
       </Paper>
 
-      <Drawer opened={filtersOpened} onClose={() => setFiltersOpened(false)} position="left" size="min(340px, 88vw)"
+      <Drawer opened={filtersOpened} onClose={() => setFiltersOpened(false)} position="left" size="min(340px, 88vw)" lockScroll={false}
         closeOnEscape={!filterTagPickerOpened}
         title={t('library.filters', { defaultValue: 'Filters' })} zIndex={OVERLAY_Z_INDEX}
         styles={{ content: { display: 'flex', flexDirection: 'column' }, body: { flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex' } }}>
@@ -304,7 +304,7 @@ export function FileManager({ onSelectOutfit }: FileManagerProps) {
         </Stack>
       </Drawer>
 
-      <Modal opened={editingOutfit !== null} onClose={() => setEditingOutfit(null)} centered zIndex={OVERLAY_Z_INDEX}
+      <Modal opened={editingOutfit !== null} onClose={() => setEditingOutfit(null)} centered zIndex={OVERLAY_Z_INDEX} lockScroll={false}
         closeOnEscape={!tagPickerOpened}
         title={t('library.editOutfitTags', { name: editingOutfit?.name })}>
         <Stack>

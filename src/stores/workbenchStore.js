@@ -37,9 +37,16 @@ function safeSave(key, value) {
 const defaultWardrobeUi = {
   searchScope: 'current',
   sortBy: 'recent',
-  fileViewMode: 'large',
+  fileViewMode: 'card',
   leftPanelCollapsed: false,
   rightPanelCollapsed: false
+}
+
+function normalizeWardrobeUi(preferences) {
+  return {
+    ...preferences,
+    fileViewMode: preferences.fileViewMode === 'list' ? 'list' : 'card'
+  }
 }
 
 function createInitialState() {
@@ -48,7 +55,7 @@ function createInitialState() {
 
   return {
     activeTab,
-    wardrobeUi: safeLoadJson(WARDROBE_UI_KEY, defaultWardrobeUi)
+    wardrobeUi: normalizeWardrobeUi(safeLoadJson(WARDROBE_UI_KEY, defaultWardrobeUi))
   }
 }
 
@@ -65,10 +72,10 @@ const workbenchApi = createStore((set, get) => ({
   },
 
   setWardrobeUi(partial) {
-    const wardrobeUi = {
+    const wardrobeUi = normalizeWardrobeUi({
       ...get().wardrobeUi,
       ...partial
-    }
+    })
 
     set({ wardrobeUi })
     safeSave(WARDROBE_UI_KEY, JSON.stringify(wardrobeUi))

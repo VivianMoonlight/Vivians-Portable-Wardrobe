@@ -206,7 +206,7 @@ export function HistoryViewer() {
                   flex: '0 0 auto',
                   borderRadius: 8,
                   overflow: 'hidden',
-                  background: 'var(--mantine-color-default-hover)',
+                  background: 'var(--vpw-color-default-hover)',
                 }}
               >
                 <Box

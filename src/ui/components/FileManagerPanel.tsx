@@ -7,7 +7,7 @@ import { useTheme } from '@/ui/theme/ThemeProvider'
 import { useIsMobile } from '@/ui/hooks/useIsMobile'
 import { WardrobeWorkspace } from './WardrobeWorkspace'
 import { HistoryViewer } from './HistoryViewer'
-import { FilterManager } from './FilterManager'
+import { OutfitAdjustmentsDialog } from './OutfitAdjustmentsDialog'
 import { SidePreview } from './SidePreview'
 import { MobileWardrobeShell } from './MobileWardrobeShell'
 
@@ -37,7 +37,7 @@ export function FileManagerPanel({ opened, onClose }: FileManagerPanelProps) {
   const rawActiveTab = useWbSelector((wb) => wb.activeTab)
   const theme = useTheme()
   const isMobile = useIsMobile()
-  const [showFilters, setShowFilters] = useState(false)
+  const [adjustmentsOpen, setAdjustmentsOpen] = useState(false)
   const [panelRect, setPanelRect] = useState(() => {
     const width = Math.min(1180, Math.max(PANEL_MIN_WIDTH, Math.round((hostWindow.innerWidth || 1280) * 0.82)))
     const height = fitPanelHeight(Math.min(760, Math.max(PANEL_MIN_HEIGHT, Math.round((hostWindow.innerHeight || 800) * 0.74))))
@@ -207,7 +207,7 @@ export function FileManagerPanel({ opened, onClose }: FileManagerPanelProps) {
   // ---- Mobile: full-screen modal (no drag/resize) ----
   if (isMobile) {
     return (
-      <Modal opened={opened} onClose={onClose} fullScreen radius={0} withCloseButton={false} padding={0}
+      <Modal opened={opened} onClose={onClose} fullScreen radius={0} withCloseButton={false} padding={0} lockScroll={false}
         closeOnEscape={false} classNames={{ content: 'vpw-main-wardrobe-dialog' }}>
         <MobileWardrobeShell onClose={onClose} />
       </Modal>
@@ -248,7 +248,7 @@ export function FileManagerPanel({ opened, onClose }: FileManagerPanelProps) {
           style={{
             flex: '0 0 auto',
             height: HEADER_HEIGHT,
-            borderBottom: '1px solid var(--mantine-color-default-border)',
+            borderBottom: '1px solid var(--vpw-color-default-border)',
             cursor: draggingPanel ? 'grabbing' : 'grab',
             userSelect: 'none',
             touchAction: 'none',
@@ -270,7 +270,7 @@ export function FileManagerPanel({ opened, onClose }: FileManagerPanelProps) {
         </Group>
 
         {/* Body */}
-        <Box style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: 'var(--mantine-spacing-md)' }}>
+        <Box style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: 'var(--vpw-spacing-md)' }}>
           <Tabs
             value={activeTab}
             onChange={(value) => value && getWb().setActiveTab(value)}
@@ -284,16 +284,15 @@ export function FileManagerPanel({ opened, onClose }: FileManagerPanelProps) {
               </Tabs.List>
               <Group gap="xs">
                 {showSidebars && (
-                  <Tooltip label={t('filterManager.ariaLabel')}>
+                  <Tooltip label={t('outfitFlow.openAdjustments')}>
                     <Button
                       size="compact-sm"
-                      variant={showFilters ? 'filled' : 'default'}
-                      onClick={() => setShowFilters((v) => !v)}
-                      aria-label={t('filterManager.ariaLabel')}
-                      aria-pressed={showFilters}
-                      leftSection="▼"
+                      variant="default"
+                      onClick={() => setAdjustmentsOpen(true)}
+                      aria-label={t('outfitFlow.openAdjustments')}
+                      aria-haspopup="dialog"
                     >
-                      {t('fileManagerPanel.toggleFilters')}
+                      {t('outfitFlow.openAdjustments', { defaultValue: '微调部位' })}
                     </Button>
                   </Tooltip>
                 )}
@@ -311,9 +310,9 @@ export function FileManagerPanel({ opened, onClose }: FileManagerPanelProps) {
             </Tabs.Panel>
 
             <Tabs.Panel value="history" style={{ flex: 1, minHeight: 0, paddingTop: 12 }}>
-              <ThreeColumn showFilters={showFilters} showApply>
+              <HistoryColumns showApply>
                 <HistoryViewer />
-              </ThreeColumn>
+              </HistoryColumns>
             </Tabs.Panel>
 
             <Tabs.Panel value="settings" style={{ flex: 1, paddingTop: 12 }}>
@@ -333,13 +332,14 @@ export function FileManagerPanel({ opened, onClose }: FileManagerPanelProps) {
             width: 16,
             height: 16,
             cursor: 'nwse-resize',
-            borderRight: '2px solid var(--mantine-color-dimmed)',
-            borderBottom: '2px solid var(--mantine-color-dimmed)',
+            borderRight: '2px solid var(--vpw-color-dimmed)',
+            borderBottom: '2px solid var(--vpw-color-dimmed)',
             opacity: 0.55,
             touchAction: 'none',
           }}
         />
       </Paper>
+      <OutfitAdjustmentsDialog opened={adjustmentsOpen} onClose={() => setAdjustmentsOpen(false)} />
     </Portal>
   )
 }
@@ -347,9 +347,9 @@ export function FileManagerPanel({ opened, onClose }: FileManagerPanelProps) {
 const COL_WEIGHTS_STORAGE_KEY = 'vpw-col-weights-v1'
 const MIN_COL_WEIGHT = 0.4
 // Reserve enough room to browse several outfits beside the preview.
-const DEFAULT_COL_WEIGHTS: ColWeights = { list: 1.65, preview: 1, filter: 1 }
+const DEFAULT_COL_WEIGHTS: ColWeights = { list: 1.65, preview: 1 }
 
-type ColKey = 'list' | 'preview' | 'filter'
+type ColKey = 'list' | 'preview'
 type ColWeights = Record<ColKey, number>
 
 /** Thin draggable divider used between the resizable columns. */
@@ -374,19 +374,17 @@ function ColumnSplitter({ onStart }: { onStart: (e: ReactPointerEvent) => void }
           height: '36%',
           minHeight: 24,
           borderRadius: 3,
-          background: 'var(--mantine-color-default-border)',
+          background: 'var(--vpw-color-default-border)',
         }}
       />
     </Box>
   )
 }
 
-function ThreeColumn({
-  showFilters,
+function HistoryColumns({
   showApply = false,
   children,
 }: {
-  showFilters: boolean
   showApply?: boolean
   children: ReactNode
 }) {
@@ -396,8 +394,8 @@ function ThreeColumn({
       const raw = hostWindow.localStorage.getItem(COL_WEIGHTS_STORAGE_KEY)
       if (raw) {
         const p = JSON.parse(raw)
-        if (typeof p?.list === 'number' && typeof p?.preview === 'number' && typeof p?.filter === 'number') {
-          return { list: p.list, preview: p.preview, filter: p.filter }
+        if (typeof p?.list === 'number' && typeof p?.preview === 'number') {
+          return { list: p.list, preview: p.preview }
         }
       }
     } catch {
@@ -449,7 +447,7 @@ function ThreeColumn({
       startX: event.clientX,
       baseLeft: weights[leftKey],
       pairTotal: weights[leftKey] + weights[rightKey],
-      sumAll: weights.list + weights.preview + (showFilters ? weights.filter : 0),
+      sumAll: weights.list + weights.preview,
       containerW: containerRef.current?.getBoundingClientRect().width || 1,
     }
     hostWindow.addEventListener('pointermove', onSplitMove)
@@ -465,12 +463,6 @@ function ThreeColumn({
       {col(weights.list, children)}
       <ColumnSplitter onStart={startSplit('list', 'preview')} />
       {col(weights.preview, <SidePreview showApply={showApply} />)}
-      {showFilters && (
-        <>
-          <ColumnSplitter onStart={startSplit('preview', 'filter')} />
-          {col(weights.filter, <FilterManager />)}
-        </>
-      )}
     </Flex>
   )
 }

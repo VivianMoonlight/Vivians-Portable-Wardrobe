@@ -26,6 +26,18 @@ function sameValue(left, right) {
   return JSON.stringify(canonical(left)) === JSON.stringify(canonical(right))
 }
 
+function sameOutfitContent(left, right) {
+  const leftContent = { ...left }
+  const rightContent = { ...right }
+  delete leftContent.rev
+  delete rightContent.rev
+  return sameValue(leftContent, rightContent)
+}
+
+function hasPrivateRevision(outfit, disabledState) {
+  return compareRevision(outfit.rev, disabledState.rev) > 0 || outfit.rev[1] !== disabledState.rev[1]
+}
+
 function assert(condition, message) {
   if (!condition) throw new Error(`Invalid wardrobe index: ${message}`)
 }
@@ -76,6 +88,20 @@ function allocateId(kind) {
 
 function setRecord(table, id, record) {
   Object.defineProperty(table, id, { value: record, enumerable: true, configurable: true, writable: true })
+}
+
+function preservePrivateFork(index, sourceId, outfit) {
+  const sourceRev = outfit.rev
+  const baseId = `local_${sourceId.length}_${sourceId}_${sourceRev[0]}_${sourceRev[1].length}_${sourceRev[1]}`
+  let id = baseId
+  let suffix = 1
+  while (hasOwn(index.outfits, id)) {
+    const fork = index.outfits[id].vpwLocalFork
+    if (fork?.sourceId === sourceId && sameValue(fork.sourceRev, sourceRev)) return
+    id = `${baseId}_${suffix++}`
+  }
+  setRecord(index.outfits, id, { ...clone(outfit), id, vpwLocalFork: { sourceId, sourceRev: [...sourceRev] } })
+  setRecord(index.cloudState, id, { enabled: false, rev: [...sourceRev], localOnly: true })
 }
 
 export function createWardrobeIndex() {
@@ -133,7 +159,7 @@ function mergeTable(left, right, choose) {
 }
 
 /** Missing remote records mean unavailable/private, never deleted. */
-export function mergeWardrobeIndexes(local, remote) {
+export function mergeWardrobeIndexes(local, remote, { bothLocal = false } = {}) {
   validateWardrobeIndex(local)
   validateWardrobeIndex(remote)
   const merged = createWardrobeIndex()
@@ -164,6 +190,25 @@ export function mergeWardrobeIndexes(local, remote) {
     if (hasOwn(local.outfits, id)) setRecord(merged.outfits, id, clone(local.outfits[id]))
     else delete merged.outfits[id]
   }
+  for (const [id, state] of Object.entries(merged.cloudState)) {
+    if (!state.enabled) continue
+    const privateIndex = local.cloudState[id]?.enabled === false ? local
+      : remote.cloudState[id]?.enabled === false ? remote : null
+    if (!privateIndex) continue
+    const publicIndex = privateIndex === local ? remote : local
+    if (publicIndex.cloudState[id]?.enabled !== true) continue
+    const privateOutfit = privateIndex.outfits[id]
+    const publicOutfit = publicIndex.outfits[id]
+    if (privateIndex === local || bothLocal) {
+      if (privateOutfit && (!publicOutfit
+        || (hasPrivateRevision(privateOutfit, privateIndex.cloudState[id]) && !sameOutfitContent(privateOutfit, publicOutfit)))) {
+        preservePrivateFork(merged, id, privateOutfit)
+      }
+    }
+    // A remote cloud payload with cloud=false can never supply public content.
+    if (publicOutfit) setRecord(merged.outfits, id, clone(publicOutfit))
+    else delete merged.outfits[id]
+  }
   return merged
 }
 
@@ -171,8 +216,14 @@ export function projectWardrobeCloudIndex(index) {
   validateWardrobeIndex(index)
   const projected = mergeWardrobeIndexes(index, createWardrobeIndex())
   for (const [id, state] of Object.entries(projected.cloudState)) {
-    if (!state.enabled) delete projected.outfits[id]
+    if (!state.enabled) {
+      delete projected.outfits[id]
+      if (state.localOnly) delete projected.cloudState[id]
+    }
   }
+  // Private edits advance the local Lamport clock, but must not turn an
+  // otherwise unchanged cloud projection into a new upload.
+  projected.clock = maximumClock({ ...projected, clock: 0 })
   return projected
 }
 

@@ -5,25 +5,29 @@ import { getWb, useWbSelector } from '@/stores/hooks'
 import { useTheme } from '@/ui/theme/ThemeProvider'
 import { WardrobeWorkspace } from './WardrobeWorkspace'
 import { HistoryViewer } from './HistoryViewer'
-import { FilterManager } from './FilterManager'
+import { OutfitAdjustmentsPage } from './OutfitAdjustmentsDialog'
 import { SidePreview } from './SidePreview'
 
 interface MobileWardrobeShellProps {
   onClose: () => void
 }
 
-type Pane = 'preview' | 'list' | 'filter'
+type Pane = 'preview' | 'list'
 
 export function MobileWardrobeShell({ onClose }: MobileWardrobeShellProps) {
   const { t } = useTranslation()
   const rawActiveTab = useWbSelector((wb) => wb.activeTab)
   const theme = useTheme()
   const [pane, setPane] = useState<Pane>('list')
+  const [adjustmentsOpen, setAdjustmentsOpen] = useState(false)
+  const [wardrobeDetailOpen, setWardrobeDetailOpen] = useState(false)
 
   const mainTab = rawActiveTab === 'studio' ? 'wardrobe' : rawActiveTab
+  const showNavigation = !((mainTab === 'wardrobe' && wardrobeDetailOpen) || (mainTab === 'history' && adjustmentsOpen))
 
   return (
     <Stack gap="xs" style={{ height: '100dvh', minHeight: 0, overflow: 'hidden' }} p="xs">
+      {showNavigation && <>
       <Group justify="space-between">
         <Text fw={700}>{t('fileManagerPanel.title')}</Text>
         <ActionIcon variant="subtle" onClick={onClose} aria-label={t('studio.closeTitle')}>
@@ -41,9 +45,10 @@ export function MobileWardrobeShell({ onClose }: MobileWardrobeShellProps) {
           { value: 'settings', label: t('fileManagerPanel.tabSettings') },
         ]}
       />
+      </>}
 
       <Box style={{ display: mainTab === 'wardrobe' ? 'block' : 'none', flex: 1, minHeight: 0 }}>
-        <WardrobeWorkspace />
+        <WardrobeWorkspace onMobileDetailChange={setWardrobeDetailOpen} />
       </Box>
 
       {mainTab === 'settings' && (
@@ -66,7 +71,9 @@ export function MobileWardrobeShell({ onClose }: MobileWardrobeShellProps) {
         </Stack>
       )}
       {mainTab === 'history' && (
-        <>
+        adjustmentsOpen ? <Box style={{ flex: 1, minHeight: 0 }}>
+          <OutfitAdjustmentsPage onBack={() => setAdjustmentsOpen(false)} />
+        </Box> : <>
           <SegmentedControl
             fullWidth
             size="xs"
@@ -74,16 +81,17 @@ export function MobileWardrobeShell({ onClose }: MobileWardrobeShellProps) {
             onChange={(v) => setPane(v as Pane)}
             data={[
               { value: 'preview', label: t('sidePreview.ariaLabel') },
-              { value: 'list', label: mainTab === 'history' ? t('fileManagerPanel.tabHistory') : t('fileManagerPanel.tabWardrobe') },
-              { value: 'filter', label: t('filterManager.ariaLabel') },
+              { value: 'list', label: t('fileManagerPanel.tabHistory') },
             ]}
           />
 
           <Box style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
             {pane === 'preview' && <SidePreview showApply />}
             {pane === 'list' && <HistoryViewer />}
-            {pane === 'filter' && <FilterManager />}
           </Box>
+          <Button variant="default" onClick={() => setAdjustmentsOpen(true)}>
+            {t('outfitFlow.openAdjustments', { defaultValue: '微调部位' })}
+          </Button>
         </>
       )}
     </Stack>

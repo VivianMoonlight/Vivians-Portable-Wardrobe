@@ -12,34 +12,49 @@ import {
   buildOutfitBundle,
 } from '../src/services/outfit-slot-rules.js'
 
-test('group operations resolve both directions from original and incoming presence', () => {
-  // Columns: absent, character only, incoming only, both present.
-  const presence = [[false, false], [true, false], [false, true], [true, true]]
-  const expected = {
-    incoming: {
-      add: ['incoming', 'original', 'incoming', 'original'],
-      replace: ['original', 'original', 'incoming', 'incoming'],
-      'full-replace': ['incoming', 'incoming', 'incoming', 'incoming'],
-    },
-    original: {
-      add: ['original', 'original', 'incoming', 'incoming'],
-      replace: ['incoming', 'original', 'incoming', 'original'],
-      'full-replace': ['original', 'original', 'original', 'original'],
-    },
-  }
-  for (const [source, operations] of Object.entries(expected)) {
-    for (const [operation, modes] of Object.entries(operations)) {
-      assert.deepEqual(presence.map(([original, incoming]) => computeGroupSlotMode(source, operation, original, incoming)), modes)
+test('group add and replace preserve the current source in slots they do not affect', () => {
+  for (const source of ['incoming', 'original']) {
+    for (const current of ['incoming', 'original', 'empty']) {
+      for (const original of [false, true]) {
+        for (const incoming of [false, true]) {
+          const sourcePresent = source === 'original' ? original : incoming
+          const occupied = current === 'original' ? original : current === 'incoming' && incoming
+          assert.equal(computeGroupSlotMode(source, 'add', current, original, incoming), sourcePresent && !occupied ? source : current)
+          assert.equal(computeGroupSlotMode(source, 'replace', current, original, incoming), sourcePresent ? source : current)
+          assert.equal(computeGroupSlotMode(source, 'full-replace', current, original, incoming), source)
+        }
+      }
     }
   }
 })
 
-test('group cycles start at add, repeat after full replacement, and reset when the source changes', () => {
-  assert.equal(nextGroupOperation(undefined, 'incoming'), 'add')
-  assert.equal(nextGroupOperation({ mode: 'incoming', operation: 'add' }, 'incoming'), 'replace')
-  assert.equal(nextGroupOperation({ mode: 'incoming', operation: 'replace' }, 'incoming'), 'full-replace')
-  assert.equal(nextGroupOperation({ mode: 'incoming', operation: 'full-replace' }, 'incoming'), 'add')
-  assert.equal(nextGroupOperation({ mode: 'incoming', operation: 'replace' }, 'original'), 'add')
+test('the next group operation follows contents and remains full replacement after completion', () => {
+  const keys = ['Cloth', 'Shoes', 'Gloves']
+  const source = [{ Group: 'Cloth', Name: 'shirt' }, { Group: 'Shoes', Name: 'shoes' }]
+  const otherShirt = { Group: 'Cloth', Name: 'other-shirt' }
+  assert.equal(nextGroupOperation(keys, [], source), 'add')
+  assert.equal(nextGroupOperation(keys, [otherShirt], source), 'add')
+  assert.equal(nextGroupOperation(keys, [otherShirt, source[1]], source), 'replace')
+  assert.equal(nextGroupOperation(keys, [...source, { Group: 'Gloves', Name: 'gloves' }], source), 'full-replace')
+  assert.equal(nextGroupOperation(keys, source, source), 'full-replace')
+  assert.equal(nextGroupOperation(keys, source, []), 'full-replace')
+  assert.equal(nextGroupOperation(keys, [...source, { Group: 'Hair', Name: 'hair' }], source), 'full-replace')
+})
+
+test('covered groups compare complete part details, repeated layers and unordered object keys', () => {
+  const source = [{ Group: 'Cloth', Name: 'shirt', Color: ['red'], Property: { TypeRecord: { b: 2, a: 1 } }, Craft: { Name: 'custom' } }]
+  const same = [{ Craft: { Name: 'custom' }, Property: { TypeRecord: { a: 1, b: 2 } }, Color: ['red'], Name: 'shirt', Group: 'Cloth' }]
+  assert.equal(nextGroupOperation(['Cloth'], same, source), 'full-replace')
+  for (const field of ['Color', 'Property', 'Craft']) {
+    const different = structuredClone(same)
+    delete different[0][field]
+    assert.equal(nextGroupOperation(['Cloth'], different, source), 'replace', field)
+  }
+  assert.equal(nextGroupOperation(['Cloth'], [...same, { Group: 'Cloth', Name: 'layer' }], source), 'replace')
+  assert.equal(nextGroupOperation(['Cloth'], [same[0]], [...source, source[0]]), 'replace')
+})
+
+test('individual source normalization remains direct', () => {
   for (const mode of [null, undefined, '', 'auto', 'unknown', 1, {}]) assert.equal(normalizeSlotMode(mode), 'empty')
   for (const mode of ['original', 'incoming', 'empty']) assert.equal(normalizeSlotMode(mode), mode)
 })

@@ -282,24 +282,24 @@ export function SidePreview({ showApply = false }: SidePreviewProps) {
         style={{ width: '100%', flex: '0 0 auto' }}
         styles={{
           label: {
-            color: 'var(--mantine-color-dimmed)',
+            color: 'var(--vpw-color-dimmed)',
             fontWeight: 700,
             letterSpacing: 0,
           },
           input: {
-            background: 'var(--mantine-color-default)',
-            borderColor: 'var(--mantine-color-default-border)',
-            color: 'var(--mantine-color-text)',
+            background: 'var(--vpw-color-default)',
+            borderColor: 'var(--vpw-color-default-border)',
+            color: 'var(--vpw-color-text)',
             fontWeight: 600,
           },
           dropdown: {
-            background: 'var(--mantine-color-body)',
-            borderColor: 'var(--mantine-color-default-border)',
-            boxShadow: 'var(--mantine-shadow-md)',
+            background: 'var(--vpw-color-body)',
+            borderColor: 'var(--vpw-color-default-border)',
+            boxShadow: 'var(--vpw-shadow-md)',
             zIndex: OVERLAY_Z_INDEX,
           },
           option: {
-            color: 'var(--mantine-color-text)',
+            color: 'var(--vpw-color-text)',
             fontWeight: 600,
           },
         }}

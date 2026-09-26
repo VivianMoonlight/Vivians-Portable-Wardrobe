@@ -54,7 +54,7 @@ test('rename and deletion survive reload; total extension quota pauses upload wi
   await expect(page.getByLabel('Actions for Renamed outfit', { exact: true })).toHaveCount(0)
   await page.evaluate(() => { window.Player.ExtensionSettings.OtherPlugin = 'x'.repeat(180000) })
   await page.getByRole('button', { name: 'Retry upload', exact: true }).click()
-  await expect(page.getByText(/Upload paused: shared storage exceeds/)).toBeVisible()
+  await expect(page.getByText(/Upload paused: shared storage is full/)).toBeVisible()
   await expect(page.getByLabel('Actions for Local draft', { exact: true })).toBeVisible()
   expect(errors).toEqual([])
 })
@@ -62,7 +62,7 @@ test('rename and deletion survive reload; total extension quota pauses upload wi
 test('mobile index stays usable and can search by a migrated tag', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   const errors = await openLibrary(page)
-  await page.getByPlaceholder('Search outfit names and tags…').fill('夏天')
+  await page.getByPlaceholder('Search outfits or tags…').fill('夏天')
   await expect(page.getByLabel('Actions for Sample Outfit', { exact: true })).toBeVisible()
   await expect(page.getByLabel('Actions for Local draft', { exact: true })).toHaveCount(0)
   await page.getByRole('button', { name: 'Manage tags', exact: true }).click()

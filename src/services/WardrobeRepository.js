@@ -69,6 +69,10 @@ export class WardrobeRepository {
     this.remoteRaw = undefined
     this.lastObservedHostRaw = undefined
     this.freshRemoteRaw = undefined
+    this.freshCloudObserved = false
+    this.verifiedPayloadInSession = null
+    this.provisionalCloudPayload = null
+    this.sessionLocalEdit = false
     this.submittedRaw = null
     this.freshSettings = null
     this.pendingRemote = null
@@ -132,7 +136,7 @@ export class WardrobeRepository {
     })
   }
 
-  open({ extensionSettings = this.getPlayer()?.ExtensionSettings, fresh = true } = {}) {
+  open({ extensionSettings = this.getPlayer()?.ExtensionSettings, fresh = false } = {}) {
     this.cancelPending()
     this.member = null
     this.index = createWardrobeIndex()
@@ -140,6 +144,10 @@ export class WardrobeRepository {
     this.remoteRaw = undefined
     this.lastObservedHostRaw = this.getPlayer()?.ExtensionSettings?.VPWardrobe
     this.freshRemoteRaw = undefined
+    this.freshCloudObserved = false
+    this.verifiedPayloadInSession = null
+    this.provisionalCloudPayload = null
+    this.sessionLocalEdit = false
     this.submittedRaw = null
     this.freshSettings = null
     this.pendingRemote = null
@@ -176,6 +184,7 @@ export class WardrobeRepository {
       if (isWardrobeIndex(online)) this.index = mergeWardrobeIndexes(this.index, online)
       else if (stored && isLegacyWardrobe(online)) this.archive('older-client-cloud-snapshot', { online, onlineRaw: raw })
       this.remoteRaw = raw
+      if (!fresh && isWardrobeIndex(online)) this.provisionalCloudPayload = encode(projectWardrobeCloudIndex(online))
       this.observeSettings(extensionSettings, fresh)
       const verified = fresh && isWardrobeIndex(online)
         && equal(projectWardrobeCloudIndex(this.index), projectWardrobeCloudIndex(online))
@@ -183,12 +192,14 @@ export class WardrobeRepository {
         lastVerifiedAt: verified ? Date.now() : this.document.lastVerifiedAt,
         lastVerifiedPayload: verified ? encode(projectWardrobeCloudIndex(this.index)) : this.document.lastVerifiedPayload })
       committed = true
+      this.freshCloudObserved = fresh && !this.remoteError
+      if (verified) this.verifiedPayloadInSession = encode(projectWardrobeCloudIndex(this.index))
       this.measure()
       this.emit({ localSaved: true, lastSubmittedAt: this.document.lastSubmittedAt || null,
         lastVerifiedAt: this.document.lastVerifiedAt || null,
         state: this.remoteError ? 'error' : this.quota.isOverLimit ? 'quota' : verified ? 'verified' : 'pending',
         error: this.remoteError?.message || '' })
-      if (!verified && !this.remoteError && !this.quota.isOverLimit) this.queue()
+      if (fresh && !verified && !this.remoteError && !this.quota.isOverLimit) this.queue()
       return true
     } catch (error) {
       this.emit({ state: 'error', error: error.message, localSaved: committed })
@@ -209,7 +220,7 @@ export class WardrobeRepository {
     if (stored) {
       // This is the same device's durable copy, including newer private edits
       // from another tab. It is the local side of the directional cloud merge.
-      this.index = mergeWardrobeIndexes(stored.index, this.index)
+      this.index = mergeWardrobeIndexes(stored.index, this.index, { bothLocal: true })
       const recoveryKeys = [...new Set([...(this.document.recoveryKeys || []), ...(stored.recoveryKeys || [])])]
       const pending = stored.pending || !equal(projectWardrobeCloudIndex(stored.index), projectWardrobeCloudIndex(this.index))
       this.document = { ...stored, pending, recoveryKeys }
@@ -231,6 +242,7 @@ export class WardrobeRepository {
       const next = applyWardrobeOperations(this.index, operations, { replicaId: this.replicaId })
       this.writeDocument(next, { pending: true })
       committed = true
+      this.sessionLocalEdit = true
       this.measure()
       this.emit({ state: this.remoteError ? 'error' : this.quota.isOverLimit ? 'quota' : 'pending',
         localSaved: true, error: this.remoteError?.message || '' })
@@ -347,7 +359,12 @@ export class WardrobeRepository {
         return false
       }
       const payload = encode(projectWardrobeCloudIndex(this.index))
-      if (!force && !this.document.pending && payload === this.document.lastVerifiedPayload) {
+      if (!this.freshCloudObserved && (payload === this.provisionalCloudPayload
+        || (!this.sessionLocalEdit && (!force || this.provisionalCloudPayload === null)))) {
+        this.emit({ state: 'pending', localSaved: true, error: '' })
+        return false
+      }
+      if (!force && !this.document.pending && payload === this.verifiedPayloadInSession) {
         this.emit({ state: 'verified', localSaved: true, error: '' })
         return true
       }
@@ -385,7 +402,7 @@ export class WardrobeRepository {
     }
   }
 
-  receiveCloud({ extensionSettings, fresh = true, memberNumber = this.getPlayer()?.MemberNumber, schedule = true } = {}) {
+  receiveCloud({ extensionSettings, fresh = false, memberNumber = this.getPlayer()?.MemberNumber, schedule = true } = {}) {
     let committed = false
     let beforeRemote = null
     try {
@@ -415,7 +432,7 @@ export class WardrobeRepository {
       const payload = encode(projectWardrobeCloudIndex(this.index))
       const freshMatch = fresh && isWardrobeIndex(online)
         && equal(projectWardrobeCloudIndex(this.index), projectWardrobeCloudIndex(online))
-      const verified = freshMatch || (!fresh && !this.document.pending && payload === this.document.lastVerifiedPayload)
+      const verified = freshMatch || (!fresh && !this.document.pending && payload === this.verifiedPayloadInSession)
       // A fresh mismatch is evidence that an unacknowledged earlier send was
       // lost. It permits retransmission even if the local payload is unchanged.
       if (fresh && !freshMatch) this.submittedRaw = null
@@ -423,6 +440,12 @@ export class WardrobeRepository {
         lastVerifiedAt: freshMatch ? Date.now() : this.document.lastVerifiedAt,
         lastVerifiedPayload: freshMatch ? payload : this.document.lastVerifiedPayload })
       committed = true
+      if (fresh) {
+        this.freshCloudObserved = true
+        this.verifiedPayloadInSession = freshMatch ? payload : null
+      } else if (isWardrobeIndex(online)) {
+        this.provisionalCloudPayload = encode(projectWardrobeCloudIndex(online))
+      }
       this.pendingRemote = null
       this.measure()
       let state = verified ? 'verified' : 'pending'

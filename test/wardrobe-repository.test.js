@@ -372,6 +372,46 @@ test('local-only outfit content stays private across submission and another devi
   assert.equal(newcomer.repo.index.outfits['outfit-1'], undefined)
 })
 
+test('two devices keep private edits local when the first device re-enables cloud', () => {
+  const a = seed()
+  a.repo.apply([
+    { type: 'put-tag', id: 'tag-a', name: '日常' },
+    { type: 'put-outfit', id: 'outfit-1', changes: { tagIds: ['tag-a'] } },
+  ])
+  a.repo.flush()
+  const b = client(a.server, { replicaId: 'device-b' })
+  b.repo.open()
+
+  a.repo.apply([{ type: 'set-cloud', id: 'outfit-1', enabled: false }])
+  a.repo.flush()
+  b.login()
+  b.repo.apply([{ type: 'put-outfit', id: 'outfit-1', changes: { data: [{ Group: 'Cloth', Name: 'PrivateDress' }] } }])
+  b.repo.flush()
+  assert.equal(cloudIndex(a.server).outfits['outfit-1'], undefined)
+
+  a.repo.apply([{ type: 'set-cloud', id: 'outfit-1', enabled: true }])
+  a.repo.flush()
+  b.login()
+  const fork = Object.values(b.repo.index.outfits).find(record => record.vpwLocalFork?.sourceId === 'outfit-1')
+  assert.ok(fork)
+  assert.equal(fork.name, 'Original')
+  assert.deepEqual(fork.tagIds, ['tag-a'])
+  assert.equal(fork.data[0].Name, 'PrivateDress')
+  assert.equal(b.repo.index.cloudState[fork.id].enabled, false)
+  assert.equal(b.repo.index.outfits['outfit-1'].data[0].Name, 'Shirt')
+  assert.equal(b.login(), true)
+  assert.equal(Object.values(b.repo.index.outfits).filter(record => record.vpwLocalFork?.sourceId === 'outfit-1').length, 1)
+
+  b.repo.apply([put('unrelated')])
+  b.repo.flush()
+  const cloud = cloudIndex(a.server)
+  assert.equal(cloud.outfits['outfit-1'].data[0].Name, 'Shirt')
+  assert.equal(cloud.outfits[fork.id], undefined)
+  assert.equal(cloud.cloudState[fork.id], undefined)
+  assert.equal(JSON.stringify(cloud).includes('PrivateDress'), false)
+  assert.equal(b.document().index.outfits[fork.id].data[0].Name, 'PrivateDress')
+})
+
 test('an edit observes a newer host cloud revision before allocating its own revision', () => {
   const device = seed()
   let latest = cloudIndex(device.server)
@@ -496,6 +536,9 @@ test('open reports local success when loading succeeds but subsequent quota meas
   assert.equal(device.timers.size, 0)
   assert.equal(device.repo.flush(), false)
   device.player().ExtensionSettings.Other = 'repaired'
+  assert.equal(device.repo.flush(), false, 'A repaired quota cannot turn the stale Player cache into fresh server proof')
+  assert.equal(device.sendCount(), 0)
+  assert.equal(device.login(), true)
   assert.equal(device.repo.flush(), true)
   assert.deepEqual(names(cloudIndex(device.server)), ['Keep me', 'Original'])
 })

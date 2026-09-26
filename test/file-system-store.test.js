@@ -86,10 +86,10 @@ test('group updates preserve slots outside the group and ignore unknown groups',
 })
 
 for (const source of ['incoming', 'original']) {
-  test(`group ${source} cycles through add, replace and full replacement independently of preview state`, () => {
-    const { fs, candidate } = setup()
-    fs.selectOutfit(candidate)
+  test(`group ${source} progresses from actual contents and remains fully replaced`, () => {
+    const { fs, renders } = setup()
     fs.characterItem = [...fs.characterItem, part('Gloves', 'old-gloves')]
+    fs.replaceAllFromSource(source === 'incoming' ? 'original' : 'incoming')
     fs.setSlotMode('Hair', 'original')
     const outside = fs.slotControlMap.Hair
     const expected = source === 'incoming' ? [
@@ -101,34 +101,79 @@ for (const source of ['incoming', 'original']) {
       { Cloth: 'original', Shoes: 'incoming', Gloves: 'original' },
       { Cloth: 'original', Shoes: 'original', Gloves: 'original' },
     ]
-    for (const [index, operation] of ['add', 'replace', 'full-replace', 'add'].entries()) {
-      assert.equal(fs.cycleGroupSource('clothes', source), operation)
-      assert.deepEqual(Object.fromEntries(clothes.map(key => [key, fs.slotControlMap[key].mode])), expected[index % 3])
+    for (const [index, operation] of ['add', 'replace', 'full-replace'].entries()) {
+      assert.equal(fs.getGroupSourceAction('clothes', source).operation, operation)
+      assert.equal(fs.progressGroupSource('clothes', source), operation)
+      assert.deepEqual(Object.fromEntries(clothes.map(key => [key, fs.slotControlMap[key].mode])), expected[index])
       assert.equal(fs.slotControlMap.Hair, outside)
       assert.equal(fs.groupOperations.clothes.mode, source)
       assert.equal(fs.groupOperations.clothes.operation, operation)
     }
+    assert.equal(fs.getGroupSourceAction('clothes', source).complete, true)
+    const controls = fs.slotControlMap
+    const preview = fs.previewItem
+    const renderCount = renders.length
+    assert.equal(fs.progressGroupSource('clothes', source), 'full-replace')
+    assert.equal(fs.slotControlMap, controls)
+    assert.equal(fs.previewItem, preview)
+    assert.equal(renders.length, renderCount)
   })
 }
 
-test('group source changes and direct slot edits reset the cycle without changing other groups', () => {
+test('group source changes and direct slot edits use actual contents without changing other groups', () => {
   const { fs, candidate } = setup()
   fs.selectOutfit(candidate)
-  assert.equal(fs.cycleGroupSource('clothes', 'incoming'), 'add')
-  assert.equal(fs.cycleGroupSource('clothes', 'incoming'), 'replace')
-  assert.equal(fs.cycleGroupSource('body', 'original'), 'add')
+  assert.equal(fs.progressGroupSource('clothes', 'incoming'), 'full-replace')
+  assert.equal(fs.progressGroupSource('body', 'original'), 'add')
   const bodyOperation = fs.groupOperations.body
-  assert.equal(fs.cycleGroupSource('clothes', 'original'), 'add')
-  assert.equal(fs.cycleGroupSource('clothes', 'original'), 'replace')
+  assert.equal(fs.progressGroupSource('clothes', 'original'), 'replace')
   fs.setSlotMode('Cloth', fs.slotControlMap.Cloth.mode)
   assert.equal(fs.groupOperations.clothes, undefined)
   assert.equal(fs.groupOperations.body, bodyOperation)
-  assert.equal(fs.cycleGroupSource('clothes', 'incoming'), 'add')
-  assert.equal(fs.cycleGroupSource('unknown', 'incoming'), false)
-  assert.equal(fs.cycleGroupSource('clothes', 'empty'), false)
+  assert.equal(fs.progressGroupSource('clothes', 'incoming'), 'replace')
+  assert.equal(fs.progressGroupSource('unknown', 'incoming'), false)
+  assert.equal(fs.progressGroupSource('clothes', 'empty'), false)
   fs.replaceAllFromSource('original')
   assert.deepEqual(Object.keys(fs.groupOperations), [])
   assert.deepEqual(names(fs), ['old-shirt', 'old-hair'])
+})
+
+test('partial replacement preserves manually cleared source-absent slots and skips completed stages', () => {
+  const { fs } = setup()
+  fs.characterItem.push(part('Gloves', 'old-gloves'))
+  fs.replaceAllFromSource('original')
+  fs.setSlotMode('Gloves', 'empty')
+  assert.equal(fs.progressGroupSource('clothes', 'incoming'), 'add')
+  assert.equal(fs.slotControlMap.Gloves.mode, 'empty')
+  assert.equal(fs.progressGroupSource('clothes', 'incoming'), 'replace')
+  assert.equal(fs.slotControlMap.Gloves.mode, 'empty')
+  assert.equal(fs.progressGroupSource('clothes', 'incoming'), 'full-replace')
+  assert.equal(fs.slotControlMap.Gloves.mode, 'incoming')
+
+  fs.setSlotMode('Shoes', 'empty')
+  assert.equal(fs.progressGroupSource('clothes', 'incoming'), 'add')
+  assert.equal(fs.getGroupSourceAction('clothes', 'incoming').operation, 'full-replace')
+  fs.setSlotMode('Cloth', 'original')
+  assert.equal(fs.getGroupSourceAction('clothes', 'incoming').operation, 'replace')
+})
+
+test('matching contents count as covered even before their source controls are aligned', () => {
+  const { fs } = setup()
+  fs.characterItem = JSON.parse(JSON.stringify(fs.activeItem.data))
+  fs.replaceAllFromSource('original')
+  assert.equal(fs.getGroupSourceAction('clothes', 'incoming').operation, 'full-replace')
+  assert.equal(fs.getGroupSourceAction('clothes', 'incoming').complete, false)
+  fs.progressGroupSource('clothes', 'incoming')
+  assert.equal(fs.getGroupSourceAction('clothes', 'incoming').complete, true)
+})
+
+test('an empty group source clears the group directly without moving controls to empty', () => {
+  const { fs, candidate } = setup()
+  fs.selectOutfit(candidate)
+  fs.setSlotMode('Hair', 'original')
+  assert.equal(fs.progressGroupSource('body', 'incoming'), 'full-replace')
+  assert.equal(fs.slotControlMap.Hair.mode, 'incoming')
+  assert.deepEqual(names(fs), ['new-shirt', 'new-shoes'])
 })
 
 test('single slots select directly with no cycle and missing sources retain the chosen slider position', () => {
@@ -165,7 +210,7 @@ test('selecting an outfit always starts with full replacement and does not write
   assert.equal(JSON.stringify(hostWindow.Player), gameBefore)
   assert.deepEqual(writes, [])
 
-  fs.cycleGroupSource('clothes', 'incoming')
+  fs.progressGroupSource('clothes', 'incoming')
   fs.setSlotMode('Shoes', 'empty')
   fs.selectOutfit(candidate)
   assert.deepEqual(names(fs), ['new-shirt', 'new-shoes'])
@@ -337,9 +382,10 @@ test('switching targets resolves active group operations against the new target 
     for (let clicks = 1; clicks <= 3; clicks++) {
       const { fs, candidate, hostWindow } = setup()
       fs.loadAll()
-      hostWindow.Player.Appearance = [appearance('Cloth', 'initial-shirt'), appearance('HairFront', 'initial-hair')]
+      hostWindow.Player.Appearance = [appearance('Cloth', 'initial-shirt'), appearance('Gloves', 'initial-gloves'), appearance('HairFront', 'initial-hair')]
       fs.selectOutfit(candidate)
-      for (let click = 0; click < clicks; click++) fs.cycleGroupSource('clothes', source)
+      fs.replaceAllFromSource(source === 'incoming' ? 'original' : 'incoming')
+      for (let click = 0; click < clicks; click++) fs.progressGroupSource('clothes', source)
       fs.setSlotMode('HairFront', 'original')
       const groupOperation = fs.groupOperations.clothes
       const target = { MemberNumber: 43, Appearance: [appearance('Shoes', 'target-shoes'), appearance('HairFront', 'target-hair')] }
@@ -347,6 +393,13 @@ test('switching targets resolves active group operations against the new target 
       assert.deepEqual(names(fs), expectedBySource[source][clicks - 1], `${source} click ${clicks}`)
       assert.equal(fs.groupOperations.clothes, groupOperation)
       assert.equal(fs.slotControlMap.HairFront.mode, 'original')
+
+      const nextTarget = { MemberNumber: 44, Appearance: [appearance('Cloth', 'third-shirt'), appearance('HairFront', 'third-hair')] }
+      await fs.initialize(nextTarget, { preInitialize: false, keepSelection: true, preserveSlotControls: true })
+      assert.equal(fs.groupOperations.clothes, groupOperation)
+      if (source === 'incoming' && clicks === 1) {
+        assert.deepEqual(names(fs), ['third-shirt', 'third-hair', 'new-shoes'])
+      }
     }
   }
 })
@@ -357,7 +410,7 @@ test('switching targets does not resurrect a group policy cleared by a manual pa
   const appearance = (Group, Name) => ({ Asset: { Name, Group: { Name: Group, Category: 'Appearance' } } })
   hostWindow.Player.Appearance = [appearance('Cloth', 'initial-shirt')]
   fs.selectOutfit(candidate)
-  fs.cycleGroupSource('clothes', 'incoming')
+  fs.progressGroupSource('clothes', 'incoming')
   fs.setSlotMode('Cloth', 'incoming')
   const target = { MemberNumber: 43, Appearance: [appearance('Cloth', 'target-shirt'), appearance('Shoes', 'target-shoes')] }
   await fs.initialize(target, { preInitialize: false, keepSelection: true, preserveSlotControls: true })
@@ -384,7 +437,8 @@ test('only final apply writes the selected snapshot and game mutations cannot al
     character.Appearance = bundle.map(entry => ({ Asset: asset(entry.Group, entry.Name), Color: entry.Color }))
   }
   fs.selectOutfit(candidate)
-  fs.cycleGroupSource('clothes', 'incoming')
+  fs.replaceAllFromSource('original')
+  fs.progressGroupSource('clothes', 'incoming')
   const expected = JSON.stringify(fs.previewItem.data)
   assert.deepEqual(names(fs), ['captured-shirt', 'new-shoes'])
   assert.equal(writes, 0)
@@ -393,6 +447,24 @@ test('only final apply writes the selected snapshot and game mutations cannot al
   assert.equal(JSON.stringify(applied), expected)
   assert.equal(writes, 1)
   assert.equal(candidate.data[1].Color[0], 'Default')
+})
+
+test('group coverage compares prepared crafting data and refreshes changed crafting before completion', () => {
+  const { fs, candidate, hostWindow } = setup()
+  hostWindow.Player.AssetFamily = 'Female3DCG'
+  hostWindow.Player.Appearance = []
+  hostWindow.Player.Crafting = [{ Item: 'new-shirt', Group: 'Cloth', Color: ['#123abc'], TypeRecord: { style: 2 } }]
+  fs.selectOutfit(candidate)
+  assert.equal(fs.getGroupSourceAction('clothes', 'incoming').operation, 'full-replace')
+  assert.equal(fs.getGroupSourceAction('clothes', 'incoming').complete, true)
+  const prepared = fs.previewItem
+  hostWindow.Player.Crafting[0].Color[0] = '#fedcba'
+  assert.equal(fs.getGroupSourceAction('clothes', 'incoming').operation, 'replace')
+  assert.equal(fs.getGroupSourceAction('clothes', 'incoming').complete, false)
+  assert.equal(fs.previewItem, prepared)
+  assert.equal(fs.progressGroupSource('clothes', 'incoming'), 'replace')
+  assert.equal(fs.previewItem.data[0].Color[0], '#fedcba')
+  assert.equal(fs.getGroupSourceAction('clothes', 'incoming').complete, true)
 })
 
 

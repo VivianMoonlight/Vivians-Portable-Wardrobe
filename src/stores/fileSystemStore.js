@@ -523,29 +523,49 @@ const fileSystemStoreDefinition = {
       if (changed) this.groupOperations = next
     },
 
-    cycleGroupSource(groupID, source) {
+    getGroupSourceAction(groupID, source) {
+      const mode = normalizeSlotMode(source)
+      const keys = this._getGroupSlotKeys(groupID)
+      if (keys.length === 0 || mode === SLOT_MODE_EMPTY) return null
+      const sourceData = mode === SLOT_MODE_ORIGINAL
+        ? this.characterItem
+        : prepareOutfitBundle(this.activeItem?.data || [])
+      const operation = nextGroupOperation(keys, this.previewItem?.data || [], sourceData)
+      return {
+        operation,
+        complete: operation === 'full-replace' && keys.every(key => this.slotControlMap[key]?.mode === mode),
+      }
+    },
+
+    progressGroupSource(groupID, source) {
       const mode = normalizeSlotMode(source)
       const keys = this._getGroupSlotKeys(groupID)
       if (keys.length === 0 || mode === SLOT_MODE_EMPTY) return false
       this._ensureSlotControls()
-      const operation = nextGroupOperation(this.groupOperations[groupID], mode)
+      const action = this.getGroupSourceAction(groupID, mode)
+      if (action.complete) return action.operation
+      const { operation } = action
       const { inCharacter, inIncoming } = this._presenceSets()
       const current = this.slotControlMap
       const next = { ...current }
+      const baseModes = {}
       let changed = false
       for (const key of keys) {
-        const slotMode = computeGroupSlotMode(mode, operation, inCharacter.has(key), inIncoming.has(key))
+        const currentMode = normalizeSlotMode(current[key]?.mode)
+        baseModes[key] = currentMode
+        const slotMode = computeGroupSlotMode(mode, operation, currentMode, inCharacter.has(key), inIncoming.has(key))
         if (current[key]?.mode !== slotMode) {
           next[key] = { mode: slotMode, locked: false }
           changed = true
         }
       }
-      this.groupOperations = { ...this.groupOperations, [groupID]: { mode, operation } }
+      this.groupOperations = { ...this.groupOperations, [groupID]: { mode, operation, baseModes } }
       if (changed) {
         this.slotControlMap = next
         this._syncActiveFiltersFromSlotControls()
-        this.updatePreviewItem()
       }
+      // An incoming craft may have changed while its source control stayed put.
+      this.updatePreviewItem()
       return operation
     },
 
@@ -553,9 +573,10 @@ const fileSystemStoreDefinition = {
       const { inCharacter, inIncoming } = this._presenceSets()
       const next = { ...this.slotControlMap }
       let changed = false
-      for (const [groupID, { mode, operation }] of Object.entries(this.groupOperations)) {
+      for (const [groupID, { mode, operation, baseModes }] of Object.entries(this.groupOperations)) {
         for (const key of this._getGroupSlotKeys(groupID)) {
-          const slotMode = computeGroupSlotMode(mode, operation, inCharacter.has(key), inIncoming.has(key))
+          const baseline = normalizeSlotMode(baseModes[key] ?? next[key]?.mode)
+          const slotMode = computeGroupSlotMode(mode, operation, baseline, inCharacter.has(key), inIncoming.has(key))
           if (next[key]?.mode === slotMode) continue
           next[key] = { mode: slotMode, locked: false }
           changed = true

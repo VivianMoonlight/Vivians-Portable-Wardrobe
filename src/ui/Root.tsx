@@ -27,7 +27,7 @@ export function Root({ rootEl }: RootProps) {
       cssVariablesSelector="#vpw-root"
     >
       <I18nextProvider i18n={i18n}>
-        <ThemeProvider>
+        <ThemeProvider rootEl={rootEl}>
           <DialogProvider>
             <App rootEl={rootEl} />
           </DialogProvider>

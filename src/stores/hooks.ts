@@ -29,6 +29,7 @@ export interface WardrobeOutfit extends FileNode {
   data: unknown[]
   tagIds: string[]
   cloudSync: boolean
+  vpwLocalFork?: { sourceId: string; sourceRev: [number, string] }
 }
 
 export interface WardrobeTag {
@@ -108,14 +109,15 @@ export interface FsCtx {
   clearHistory: () => void
   // filters / slot controls
   filterSnapshot: { groups?: unknown[]; visibleGroups?: unknown[]; items?: unknown[] }
-  groupOperations: Record<string, { mode: 'original' | 'incoming'; operation: 'add' | 'replace' | 'full-replace' }>
+  groupOperations: Record<string, { mode: 'original' | 'incoming'; operation: 'add' | 'replace' | 'full-replace'; baseModes: Record<string, 'original' | 'incoming' | 'empty'> }>
   slotControlMap: Record<string, { mode?: string; locked?: boolean }>
   slotPresenceMap: Record<string, { inCharacter?: boolean; inHover?: boolean }>
   getSlotControlState: (key: string) => { mode: string; locked?: boolean }
   setSlotMode: (key: string, mode: string) => boolean
   setAllSlotModes: (mode: string) => boolean
   setGroupSlotModes: (groupID: string, mode: string) => boolean
-  cycleGroupSource: (groupID: string, mode: string) => 'add' | 'replace' | 'full-replace' | false
+  getGroupSourceAction: (groupID: string, mode: string) => { operation: 'add' | 'replace' | 'full-replace'; complete: boolean } | null
+  progressGroupSource: (groupID: string, mode: string) => 'add' | 'replace' | 'full-replace' | false
   replaceAllFromSource: (mode: string) => boolean
   preserveBody: () => boolean
   replaceBodyOnly: () => boolean
@@ -126,7 +128,7 @@ export interface FsCtx {
 export interface WardrobeUi {
   searchScope: 'current' | 'all'
   sortBy: 'recent' | 'name' | 'type'
-  fileViewMode: 'large' | 'small' | 'list'
+  fileViewMode: 'card' | 'list'
   leftPanelCollapsed: boolean
   rightPanelCollapsed: boolean
 }

@@ -17,7 +17,25 @@ const BASE_CSS = `
 }
 #vpw-root {
   box-sizing: border-box;
-  color: var(--mantine-color-text);
+  /* Only VPW-owned aliases are consumed by our CSS. Mantine keeps its own
+     variables for its components, scoped to this shadow root by Root.tsx. */
+  --vpw-color-blue-5: var(--mantine-color-blue-5);
+  --vpw-color-body: var(--mantine-color-body);
+  --vpw-color-default: var(--mantine-color-default);
+  --vpw-color-default-border: var(--mantine-color-default-border);
+  --vpw-color-default-hover: var(--mantine-color-default-hover);
+  --vpw-color-dimmed: var(--mantine-color-dimmed);
+  --vpw-color-gray-5: var(--mantine-color-gray-5);
+  --vpw-color-teal-4: var(--mantine-color-teal-4);
+  --vpw-color-teal-5: var(--mantine-color-teal-5);
+  --vpw-color-teal-6: var(--mantine-color-teal-6);
+  --vpw-color-teal-light: var(--mantine-color-teal-light);
+  --vpw-color-teal-light-color: var(--mantine-color-teal-light-color);
+  --vpw-color-text: var(--mantine-color-text);
+  --vpw-radius-md: var(--mantine-radius-md);
+  --vpw-shadow-md: var(--mantine-shadow-md);
+  --vpw-spacing-md: var(--mantine-spacing-md);
+  color: var(--vpw-color-text);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   line-height: 1.5;
 }
@@ -26,12 +44,18 @@ const BASE_CSS = `
 #vpw-root *::after {
   box-sizing: border-box;
 }
+#vpw-root[data-vpw-switching-theme],
+#vpw-root[data-vpw-switching-theme] *,
+#vpw-root[data-vpw-switching-theme] *::before,
+#vpw-root[data-vpw-switching-theme] *::after {
+  transition: none !important;
+}
 #vpw-root {
-  scrollbar-color: var(--mantine-color-gray-5) transparent;
+  scrollbar-color: var(--vpw-color-gray-5) transparent;
   scrollbar-width: thin;
 }
 #vpw-root * {
-  scrollbar-color: var(--mantine-color-gray-5) transparent;
+  scrollbar-color: var(--vpw-color-gray-5) transparent;
   scrollbar-width: thin;
 }
 #vpw-root ::-webkit-scrollbar {
@@ -42,13 +66,13 @@ const BASE_CSS = `
   background: transparent;
 }
 #vpw-root ::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--mantine-color-gray-5) 68%, transparent);
+  background: color-mix(in srgb, var(--vpw-color-gray-5) 68%, transparent);
   border: 2px solid transparent;
   border-radius: 999px;
   background-clip: content-box;
 }
 #vpw-root ::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in srgb, var(--mantine-color-blue-5) 72%, transparent);
+  background: color-mix(in srgb, var(--vpw-color-blue-5) 72%, transparent);
   background-clip: content-box;
 }
 `
