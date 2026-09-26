@@ -4,7 +4,8 @@ import { useTranslation } from 'react-i18next'
 import { hostWindow } from '@/utils/host-window.js'
 import { ExternalAdapter } from '@/utils/external_adapters.js'
 import { retryFailedImagesForOutfit } from '@/utils/RenderApi.js'
-import { getFs, useFsSelector } from '@/stores/hooks'
+import { isForceSelfApplyEnabled } from '@/stores/workbenchStore.js'
+import { getFs, useFsSelector, useWbSelector } from '@/stores/hooks'
 import { useDialog } from '@/ui/dialog/DialogProvider'
 import { OVERLAY_Z_INDEX } from '@/ui/z-index'
 import { drawSourceCentered, sizeCanvasToContainer } from '@/ui/canvas-utils'
@@ -97,13 +98,23 @@ export function ApplyOutfitButton() {
   const dialog = useDialog()
   const character = useFsSelector((fs) => fs.character)
   const previewItem = useFsSelector((fs) => fs.previewItem)
-  const [applied, setApplied] = useState<{ name: string; preview: unknown; character: unknown } | null>(null)
+  useWbSelector((wb) => wb.forceSelfApplyRevision)
+  const [applied, setApplied] = useState<{ name: string; preview: unknown; character: unknown; forced: boolean } | null>(null)
   const target = character || gameWindow.CurrentCharacter || gameWindow.Player
   const name = target ? getCharacterName(target) : t('sidePreview.noTargetCharacter')
+  const canForceSelfApply = target === gameWindow.Player && isForceSelfApplyEnabled()
 
   const applyCurrent = async () => {
-    if (getFs().applyCurrentPreviewToCharacter()) setApplied({ name, preview: getFs().previewItem, character })
+    setApplied(null)
+    if (getFs().applyCurrentPreviewToCharacter()) setApplied({ name, preview: getFs().previewItem, character, forced: false })
     else await dialog.alert(t('filterManager.applyFailed'))
+  }
+
+  const forceApplyCurrent = async () => {
+    setApplied(null)
+    if (target !== gameWindow.Player || !isForceSelfApplyEnabled() || !Array.isArray(previewItem?.data)) return
+    if (getFs().applyCurrentPreviewToSelfForced()) setApplied({ name, preview: getFs().previewItem, character, forced: true })
+    else await dialog.alert(t('outfitFlow.forceApplyFailed'))
   }
 
   return (
@@ -111,7 +122,12 @@ export function ApplyOutfitButton() {
       <Button fullWidth disabled={!target || !Array.isArray(previewItem?.data)} onClick={applyCurrent}>
         {t('outfitFlow.applyTo', { name })}
       </Button>
-      {applied?.preview === previewItem && applied.character === character && <Text role="status" size="xs" c="teal" ta="center" mt={3}>{t('outfitFlow.appliedTo', { name: applied.name })}</Text>}
+      {canForceSelfApply && <Button fullWidth color="red" disabled={!Array.isArray(previewItem?.data)} onClick={forceApplyCurrent} mt="xs">
+        {t('outfitFlow.forceApplyTo', { name })}
+      </Button>}
+      {applied?.preview === previewItem && applied.character === character && <Text role="status" size="xs" c="teal" ta="center" mt={3}>
+        {t(applied.forced ? 'outfitFlow.forceApplyAttempted' : 'outfitFlow.appliedTo', { name: applied.name })}
+      </Text>}
     </Box>
   )
 }

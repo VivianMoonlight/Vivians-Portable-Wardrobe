@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
+  SLOT_MODES,
   normalizeSlotMode,
   getGroupNameFromPart,
   groupPartsBySlot,
@@ -11,6 +12,7 @@ import {
   scopeModeState,
   buildOutfitBundle,
 } from '../src/services/outfit-slot-rules.js'
+import { isHiddenBodySlot, preserveHiddenBodySlots } from '../src/services/hidden-body-slots.js'
 
 test('group add and replace preserve the current source in slots they do not affect', () => {
   for (const source of ['incoming', 'original']) {
@@ -123,4 +125,37 @@ test('a missing full-replacement source clears output without moving its source 
   assert.equal(controls.Hat.mode, 'incoming')
   const { inCharacter, inIncoming } = buildPresenceSets(original, incoming)
   assert.equal(scopeModeState(Object.keys(controls), 'incoming', controls, inCharacter, inIncoming), 'full')
+})
+
+test('every BC hidden-body group keeps the original in preview regardless of selected mode', () => {
+  const protectedGroups = ['Blush', 'ArmsLeft', 'ArmsRight', 'HandsLeft', 'HandsRight', 'Emoticon', 'Fluids']
+  const original = protectedGroups.map(Group => ({ Group, Name: `original-${Group}` }))
+  const incoming = protectedGroups.map(Group => ({ Group, Name: `incoming-${Group}` }))
+  incoming.push({ Group: 'Cloth', Name: 'new-shirt' })
+  for (const mode of SLOT_MODES) {
+    const controls = Object.fromEntries([...protectedGroups, 'Cloth'].map(Group => [Group, { mode }]))
+    const result = buildOutfitBundle(original, incoming, controls)
+    assert.deepEqual(result.filter(part => isHiddenBodySlot(part.Group)), original)
+    assert.deepEqual(result.filter(part => part.Group === 'Cloth'), mode === 'incoming' ? [incoming.at(-1)] : [])
+  }
+  assert.deepEqual(buildOutfitBundle([], incoming, Object.fromEntries(protectedGroups.map(Group => [Group, { mode: 'incoming' }]))), [])
+})
+
+test('final-boundary normalization retains live hidden-body values when a bundle omits or changes them', () => {
+  const current = [
+    { Group: 'Blush', Name: 'live-expression', Property: { Expression: 'Low' } },
+    { Group: 'ArmsLeft', Name: 'live-arm' },
+    { Group: 'Cloth', Name: 'old-shirt' },
+  ]
+  const requested = [
+    { Group: 'Blush', Name: 'saved-expression' },
+    { Group: 'Cloth', Name: 'new-shirt' },
+    { Group: 'Fluids', Name: 'saved-fluids' },
+  ]
+  const result = preserveHiddenBodySlots(current, requested)
+  assert.deepEqual(result, [current[0], requested[1], current[1]])
+  assert.deepEqual(current[0].Property, { Expression: 'Low' })
+  assert.equal(requested[0].Name, 'saved-expression')
+  assert.equal(isHiddenBodySlot('Cloth'), false)
+  assert.equal(isHiddenBodySlot('ItemArms'), false)
 })

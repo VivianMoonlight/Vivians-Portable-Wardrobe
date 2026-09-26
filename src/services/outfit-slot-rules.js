@@ -1,4 +1,5 @@
 /** Shared, side-effect-free rules used by both the preview store and filter UI. */
+import { isHiddenBodySlot } from './hidden-body-slots.js'
 /** @typedef {'original' | 'incoming' | 'empty'} SlotMode */
 /** @typedef {'add' | 'replace' | 'full-replace'} GroupOperation */
 /** @typedef {'none' | 'partial' | 'full'} ScopeState */
@@ -131,6 +132,10 @@ export function buildOutfitBundle(characterData, incomingData, controls = {}) {
   const incoming = groupPartsBySlot(incomingData)
   const bundle = []
   for (const key of new Set([...original.keys(), ...incoming.keys()])) {
+    if (isHiddenBodySlot(key)) {
+      bundle.push(...(original.get(key) || []))
+      continue
+    }
     const mode = normalizeSlotMode(controls[key]?.mode)
     if (mode === 'original') bundle.push(...(original.get(key) || []))
     if (mode === 'incoming') bundle.push(...(incoming.get(key) || []))

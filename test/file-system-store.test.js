@@ -66,6 +66,36 @@ test('global mode changes update every known slot and render only when modes cha
   assert.equal(renders.length, 3)
 })
 
+test('hidden BC body slots stay original through global, group, direct, and legacy controls', () => {
+  const { fs } = setup()
+  const protectedGroups = ['Blush', 'ArmsLeft', 'ArmsRight', 'HandsLeft', 'HandsRight', 'Emoticon', 'Fluids']
+  const original = protectedGroups.map(Group => part(Group, `live-${Group}`))
+  const incoming = protectedGroups.map(Group => part(Group, `saved-${Group}`))
+  fs.characterItem.push(...original)
+  fs.activeItem.data.push(...incoming)
+  fs.filterSnapshot.items.push(...protectedGroups.map(key => ({ key })))
+  fs.filterSnapshot.groups.push({ groupID: 'HiddenBody', itemList: protectedGroups.map(key => ({ key })) })
+  fs.slotControlMap.Blush = { mode: 'incoming', locked: false }
+
+  fs._ensureSlotControls()
+  assert.deepEqual(protectedGroups.map(key => fs.getSlotControlState(key).mode), protectedGroups.map(() => 'original'))
+  assert.equal(fs.setSlotMode('Blush', 'incoming'), false)
+  assert.equal(fs.setGroupSlotModes('HiddenBody', 'incoming'), false)
+  assert.equal(fs.progressGroupSource('HiddenBody', 'incoming'), false)
+  fs.replaceAllFromSource('incoming')
+  fs.setActiveFilters(['Cloth'])
+  fs.filterInvertAll()
+  fs.replaceBodyOnly()
+  fs.updatePreviewItem()
+
+  assert.deepEqual(protectedGroups.map(key => fs.slotControlMap[key].mode), protectedGroups.map(() => 'original'))
+  assert.deepEqual(
+    Array.from(fs.previewItem.data.filter(entry => protectedGroups.includes(entry.Group)), entry => `${entry.Group}/${entry.Name}`),
+    original.map(entry => `${entry.Group}/${entry.Name}`),
+  )
+  assert.equal(fs.getGroupSourceAction('HiddenBody', 'incoming'), null)
+})
+
 test('group updates preserve slots outside the group and ignore unknown groups', () => {
   const { fs, renders } = setup({ modes: { Hair: 'original' } })
   const hairControl = fs.slotControlMap.Hair

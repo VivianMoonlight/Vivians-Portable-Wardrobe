@@ -130,6 +130,7 @@ export interface FsCtx {
   clearSelection: () => void
   applyFilteredOutfitToCharacter: (opts?: { outfitData?: unknown[] }) => boolean
   applyCurrentPreviewToCharacter: () => boolean
+  applyCurrentPreviewToSelfForced: () => boolean
   startThumbnailGeneration: (item: FileNode) => void
   refreshThumbnails: (items?: FileNode[] | null) => void
   refreshCloudQuotaStats: (snapshot?: unknown) => unknown
@@ -169,8 +170,10 @@ export interface WardrobeUi {
 export interface WbCtx {
   activeTab: string
   wardrobeUi: WardrobeUi
+  forceSelfApplyRevision: number
   setActiveTab: (tab: string) => void
   setWardrobeUi: (partial: Partial<WardrobeUi>) => void
+  setForceSelfApplyEnabled: (enabled: boolean) => boolean
 }
 
 /** Reactive access to the fileSystem store (live context). */

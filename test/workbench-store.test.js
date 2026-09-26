@@ -10,6 +10,7 @@ const source = await readFile(new URL('../src/stores/workbenchStore.js', import.
 const { code } = await transform(source, { format: 'cjs', sourcefile: 'workbenchStore.js' })
 const ACTIVE_TAB_KEY = 'vpw.workbench.activeTab'
 const WARDROBE_UI_KEY = 'vpw.workbench.wardrobeUi'
+const FORCE_SELF_APPLY_KEY = member => `vpw.forceSelfApply.v1.${member}`
 const MOBILE_UI_KEY = 'vpw.workbench.mobileUi'
 const defaultWardrobeUi = {
   searchScope: 'current',
@@ -19,7 +20,7 @@ const defaultWardrobeUi = {
   rightPanelCollapsed: false,
 }
 
-function loadStore(entries = {}, { failReads = false, failWrites = false } = {}) {
+function loadStore(entries = {}, { failReads = false, failWrites = false, memberNumber = 42 } = {}) {
   const saved = new Map(Object.entries(entries))
   const writes = []
   const localStorage = {
@@ -33,16 +34,17 @@ function loadStore(entries = {}, { failReads = false, failWrites = false } = {})
       saved.set(key, value)
     },
   }
+  const hostWindow = { localStorage, Player: { MemberNumber: memberNumber } }
   const module = { exports: {} }
   runInNewContext(code, {
     module,
     exports: module.exports,
     require(specifier) {
-      if (specifier === '@/utils/host-window.js') return { hostWindow: { localStorage } }
+      if (specifier === '@/utils/host-window.js') return { hostWindow }
       return require(specifier)
     },
   })
-  return { store: module.exports.useWorkbenchStore, saved, writes }
+  return { store: module.exports.useWorkbenchStore, isForceSelfApplyEnabled: module.exports.isForceSelfApplyEnabled, hostWindow, saved, writes }
 }
 
 function wardrobeUi(store) {
@@ -134,4 +136,48 @@ test('storage write failures do not prevent in-memory interactions', () => {
   assert.doesNotThrow(() => store.getState().setWardrobeUi({ searchScope: 'all' }))
   assert.equal(store.getState().activeTab, 'history')
   assert.equal(store.getState().wardrobeUi.searchScope, 'all')
+})
+
+test('force apply opt-in is off by default and scoped to the current BC account', () => {
+  const fixture = loadStore()
+  const { store, saved, writes, hostWindow, isForceSelfApplyEnabled } = fixture
+  assert.equal(isForceSelfApplyEnabled(), false)
+  assert.equal(store.getState().setForceSelfApplyEnabled(true), true)
+  assert.equal(isForceSelfApplyEnabled(), true)
+  assert.deepEqual(writes, [[FORCE_SELF_APPLY_KEY(42), '1']])
+
+  hostWindow.Player = { MemberNumber: 43 }
+  assert.equal(isForceSelfApplyEnabled(), false)
+  assert.equal(store.getState().setForceSelfApplyEnabled(true), true)
+  assert.equal(isForceSelfApplyEnabled(), true)
+  hostWindow.Player = { MemberNumber: 42 }
+  assert.equal(isForceSelfApplyEnabled(), true)
+  assert.equal(store.getState().setForceSelfApplyEnabled(false), true)
+  assert.equal(isForceSelfApplyEnabled(), false)
+  assert.equal(saved.get(FORCE_SELF_APPLY_KEY(43)), '1')
+  assert.equal(saved.get(FORCE_SELF_APPLY_KEY(42)), '0')
+
+  saved.set(FORCE_SELF_APPLY_KEY(42), '1')
+  assert.equal(isForceSelfApplyEnabled(), true, 'the execution guard reads the current setting each time')
+})
+
+test('force apply remains off without a valid account or readable local setting', () => {
+  for (const memberNumber of [null, 0, -1, '42']) {
+    const { store, writes, isForceSelfApplyEnabled } = loadStore({}, { memberNumber })
+    assert.equal(isForceSelfApplyEnabled(), false)
+    assert.equal(store.getState().setForceSelfApplyEnabled(true), false)
+    assert.deepEqual(writes, [])
+  }
+
+  const noMember = loadStore()
+  noMember.hostWindow.Player = null
+  assert.equal(noMember.isForceSelfApplyEnabled(), false)
+  assert.equal(noMember.store.getState().setForceSelfApplyEnabled(true), false)
+
+  const unreadable = loadStore({ [FORCE_SELF_APPLY_KEY(42)]: '1' }, { failReads: true })
+  assert.equal(unreadable.isForceSelfApplyEnabled(), false)
+  assert.equal(unreadable.store.getState().setForceSelfApplyEnabled(true), false)
+  const unwritable = loadStore({}, { failWrites: true })
+  assert.equal(unwritable.store.getState().setForceSelfApplyEnabled(true), false)
+  assert.equal(unwritable.isForceSelfApplyEnabled(), false)
 })

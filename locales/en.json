@@ -179,7 +179,7 @@
   "filterManager": {
     "ariaLabel": "Outfit adjustments",
     "inCharacter": "On character",
-    "applyFailed": "Could not apply. Check that the selected character currently allows outfit changes.",
+    "applyFailed": "Outfit change was not completed. Check the current appearance and permissions.",
     "hiddenBadge": "Hidden",
     "emptyItems": "No items in this group",
     "emptyGroups": "No slots to adjust",
@@ -534,6 +534,10 @@
     "tabStudio": "Studio",
     "tabSettings": "Settings",
     "themeSettings": "Theme settings",
+    "forceSelfApplyTitle": "Outfit controls",
+    "forceSelfApplyLabel": "Allow force apply to myself",
+    "forceSelfApplyDescription": "Shows an extra button for your character that tries to bypass BC clothing settings. The game may still reject changes. Saved on this browser only.",
+    "forceSelfApplySaveFailed": "Could not save this setting. Check browser storage and try again.",
     "themedNotAvailable": "Themed BC not detected, using default light theme",
     "themedModeDesc": "Themed mode uses colors from Themed BC plugin. Themed BC must be installed and enabled."
   },
@@ -746,6 +750,9 @@
     "adjustmentPreviewHint": "Changes update the preview only.",
     "applyHint": "Check the target and preview before applying.",
     "applyTo": "Apply to {name}",
-    "appliedTo": "Applied to {name}"
+    "appliedTo": "Applied to {name}",
+    "forceApplyTo": "Force apply to {name}",
+    "forceApplyAttempted": "Force apply attempted for {name}. Check the current appearance.",
+    "forceApplyFailed": "The game did not fully accept the outfit. Check your current appearance."
   }
 }

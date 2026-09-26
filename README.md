@@ -27,6 +27,10 @@ Selecting an outfit and adjusting the preview do not change the character. Apply
 
 选衣和微调只改变预览，实际换装仍受 BC 权限、锁具和资产可用性限制。
 
+For your own character, **Settings → Outfit controls → Allow force apply to myself** reveals a red **Force apply** button in the preview. This setting is off by default and stays in this browser for the current BC account. The button attempts to bypass BC clothing settings; the game may still reject or alter the result. Check your character after using it.
+
+如需对自己的角色尝试强制换装，可在 **设置 → 换装选项 → 允许对自己强制换装** 中开启，预览页便会显示红色 **强制应用** 按钮。此设置默认关闭，按当前 BC 账号保存在本机。游戏仍可能拒绝或调整换装结果，请在操作后检查角色外观。
+
 ## Organize and sync / 整理与同步
 
 - Save your current outfit or import outfits from **Import / Export**. Use **Manage tags** to create unique tag names, and an outfit's **⋯ → Edit tags** menu to add multiple tags.

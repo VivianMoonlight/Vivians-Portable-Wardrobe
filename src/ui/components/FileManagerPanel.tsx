@@ -10,6 +10,7 @@ import { HistoryViewer } from './HistoryViewer'
 import { OutfitAdjustmentsDialog } from './OutfitAdjustmentsDialog'
 import { SidePreview } from './SidePreview'
 import { MobileWardrobeShell } from './MobileWardrobeShell'
+import { WardrobeSettings } from './WardrobeSettings'
 
 interface FileManagerPanelProps {
   opened: boolean
@@ -316,7 +317,7 @@ export function FileManagerPanel({ opened, onClose }: FileManagerPanelProps) {
             </Tabs.Panel>
 
             <Tabs.Panel value="settings" style={{ flex: 1, paddingTop: 12 }}>
-              <SettingsPanel />
+              <WardrobeSettings />
             </Tabs.Panel>
           </Tabs>
         </Box>
@@ -464,25 +465,5 @@ function HistoryColumns({
       <ColumnSplitter onStart={startSplit('list', 'preview')} />
       {col(weights.preview, <SidePreview showApply={showApply} />)}
     </Flex>
-  )
-}
-
-function SettingsPanel() {
-  const { t } = useTranslation()
-  const theme = useTheme()
-  return (
-    <Box>
-      <Text fw={600} mb="sm">
-        {t('fileManagerPanel.themeSettings')}
-      </Text>
-      <Group>
-        <Button variant={!theme.isDark ? 'filled' : 'default'} onClick={() => theme.setColorScheme('light')}>
-          ☀ {t('fileManagerPanel.lightMode')}
-        </Button>
-        <Button variant={theme.isDark ? 'filled' : 'default'} onClick={() => theme.setColorScheme('dark')}>
-          ☾ {t('fileManagerPanel.darkMode')}
-        </Button>
-      </Group>
-    </Box>
   )
 }

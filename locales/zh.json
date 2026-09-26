@@ -179,7 +179,7 @@
   "filterManager": {
     "ariaLabel": "换装微调",
     "inCharacter": "角色已有",
-    "applyFailed": "应用失败，请确认所选角色当前允许换装。",
+    "applyFailed": "换装未完成，请检查当前外观和权限设置。",
     "hiddenBadge": "隐藏",
     "emptyItems": "此分组没有部件",
     "emptyGroups": "没有可微调的部位",
@@ -534,6 +534,10 @@
     "tabStudio": "Studio",
     "tabSettings": "设置",
     "themeSettings": "主题设置",
+    "forceSelfApplyTitle": "换装选项",
+    "forceSelfApplyLabel": "允许对自己强制换装",
+    "forceSelfApplyDescription": "开启后，仅在目标是自己时显示红色按钮，尝试越过 BC 换装设置。游戏仍可能拒绝更改。此设置只保存在本机。",
+    "forceSelfApplySaveFailed": "未能保存此设置。请检查浏览器存储后重试。",
     "themedNotAvailable": "未检测到 Themed BC，使用默认浅色主题",
     "themedModeDesc": "Themed 模式使用 Themed BC 的颜色配置，需要安装并启用 Themed BC 插件。"
   },
@@ -746,6 +750,9 @@
     "adjustmentPreviewHint": "调整只更新预览。",
     "applyHint": "确认目标角色和效果后，再应用。",
     "applyTo": "应用到「{name}」",
-    "appliedTo": "已应用到「{name}」"
+    "appliedTo": "已应用到「{name}」",
+    "forceApplyTo": "强制应用到「{name}」",
+    "forceApplyAttempted": "已尝试强制应用到「{name}」。请检查当前外观。",
+    "forceApplyFailed": "游戏未完整接受换装，请检查当前外观。"
   }
 }

@@ -6,6 +6,21 @@
 
 import LZString from 'lz-string';
 import { hostWindow } from './host-window.js';
+import { collectOutfitData } from './AssetApi.js';
+import { isHiddenBodySlot, preserveHiddenBodySlots } from '../services/hidden-body-slots.js';
+import { isForceSelfApplyEnabled } from '../stores/workbenchStore.js';
+
+function currentAppearanceBundle(character) {
+    if (typeof hostWindow.ServerAppearanceBundle === 'function') {
+        try {
+            const bundle = hostWindow.ServerAppearanceBundle(character.Appearance);
+            if (Array.isArray(bundle)) return bundle;
+        } catch (error) {
+            console.warn('[ExternalAdapter] Could not bundle current appearance:', error);
+        }
+    }
+    return collectOutfitData(character);
+}
 
 export const ExternalAdapter = {
     /**
@@ -156,8 +171,7 @@ export const ExternalAdapter = {
             return false;
         }
         try {
-            hostWindow.ServerAppearanceLoadFromBundle(C, family, bundle, memberNumber);
-            return true;
+            return hostWindow.ServerAppearanceLoadFromBundle(C, family, bundle, memberNumber) !== false;
         } catch (e) {
             console.error("[ExternalAdapter] ServerAppearanceLoadFromBundle failed:", e);
             return false;
@@ -545,7 +559,7 @@ export const ExternalAdapter = {
      * @param {Array} outfitBundle
      * @returns {{ ok: boolean, reason: string, messages: string[] }}
      */
-    validateOutfitBundleForCharacter(C, outfitBundle) {
+    validateOutfitBundleForCharacter(C, outfitBundle, { forceSelf = false } = {}) {
         const messages = [];
 
         if (!C) {
@@ -554,7 +568,10 @@ export const ExternalAdapter = {
         if (!Array.isArray(outfitBundle)) {
             return { ok: false, reason: 'invalid-bundle', messages: ["Outfit bundle must be an array"] };
         }
-        if (!ExternalAdapter.canChangeClothesOnCharacter(C)) {
+        if (forceSelf && (C !== hostWindow.Player || !isForceSelfApplyEnabled())) {
+            return { ok: false, reason: 'force-self-disabled', messages: ["Force apply is available only for the local player when enabled"] };
+        }
+        if (!forceSelf && !ExternalAdapter.canChangeClothesOnCharacter(C)) {
             return { ok: false, reason: 'target-not-interactable', messages: ["Cannot change clothes on this character"] };
         }
 
@@ -571,6 +588,15 @@ export const ExternalAdapter = {
             }
             byGroup.set(item.Group, item);
 
+            // These entries were copied from the live character, not selected
+            // by the outfit. BC may serialize their colors in another shape.
+            if (isHiddenBodySlot(item.Group)) {
+                if (!ExternalAdapter.assetGet(C.AssetFamily, item.Group, item.Name)) {
+                    messages.push(`Protected asset not available: ${item.Group}/${item.Name}`);
+                }
+                continue;
+            }
+
             const currentItem = appearance.find(a => a?.Asset?.Group?.Name === item.Group);
             const changesCurrentItem = !ExternalAdapter._bundleItemsEquivalent(currentItem, item);
             if (!changesCurrentItem) continue;
@@ -583,13 +609,14 @@ export const ExternalAdapter = {
             if (asset.BodyCosplay && C.OnlineSharedSettings?.BlockBodyCosplay && !ExternalAdapter.isSelfCharacter(C)) {
                 messages.push(`Body cosplay is blocked for target: ${item.Group}/${item.Name}`);
             }
-            if (!ExternalAdapter.canAccessBundleItem(C, item)) {
+            if (!forceSelf && !ExternalAdapter.canAccessBundleItem(C, item)) {
                 messages.push(`Asset is blocked or inaccessible: ${item.Group}/${item.Name}`);
             }
         }
 
         const lockedGroups = ExternalAdapter._collectLockedOrBlockedGroups(C);
         for (const group of lockedGroups) {
+            if (isHiddenBodySlot(group)) continue;
             const currentItem = appearance.find(a => a?.Asset?.Group?.Name === group);
             const bundleItem = byGroup.get(group);
             if (!ExternalAdapter._bundleItemsEquivalent(currentItem, bundleItem)) {
@@ -610,19 +637,30 @@ export const ExternalAdapter = {
      * @param {Array} outfitBundle - Outfit bundle to apply
      * @returns {boolean} True if successful, false otherwise
      */
-    applyOutfitToCharacter(C, outfitBundle) {
-        const validation = ExternalAdapter.validateOutfitBundleForCharacter(C, outfitBundle);
+    applyOutfitToCharacter(C, outfitBundle, { forceSelf = false } = {}) {
+        if (!C || !Array.isArray(outfitBundle)) return false;
+        if (forceSelf && (C !== hostWindow.Player || !isForceSelfApplyEnabled())) return false;
+
+        const protectedBundle = preserveHiddenBodySlots(currentAppearanceBundle(C), outfitBundle);
+        const validation = ExternalAdapter.validateOutfitBundleForCharacter(C, protectedBundle, { forceSelf });
         if (!validation.ok) {
             console.error("[ExternalAdapter] applyOutfitToCharacter: invalid outfit bundle", validation.messages);
             return false;
         }
 
+        const previousAppearance = C.Appearance;
         const success = ExternalAdapter.serverAppearanceLoad(
             C,
             C.AssetFamily,
-            outfitBundle,
+            protectedBundle,
             C.MemberNumber
         );
+
+        // BC can install a sanitized, partial appearance while returning false.
+        // Refresh that actual result so the character canvas and self sync agree.
+        if (!success && C.Appearance !== previousAppearance) {
+            ExternalAdapter.refreshCharacter(C);
+        }
 
         if (success) {
 
@@ -645,6 +683,11 @@ export const ExternalAdapter = {
         }
 
         return success;
+    },
+
+    /** Bypasses VPW's usual clothing permission precheck for the local player only. */
+    applyOutfitToSelfForced(C, outfitBundle) {
+        return ExternalAdapter.applyOutfitToCharacter(C, outfitBundle, { forceSelf: true });
     },
 
     sendRetriveOutfitNotification(C) {

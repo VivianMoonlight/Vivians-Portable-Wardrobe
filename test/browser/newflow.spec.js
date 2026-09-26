@@ -10,11 +10,15 @@ const incoming = {
 }
 
 /** Supply BC appearance metadata and spy only on the final game adapter boundary. */
-async function openFlowLibrary(page, { extras = 0, render = true } = {}) {
+async function openFlowLibrary(page, { extras = 0, render = true, hidden = false } = {}) {
   const errors = []
   page.on('pageerror', error => errors.push(error.message))
   await page.goto('/')
-  await page.evaluate(async ({ original, incoming, extras, render }) => {
+  await page.evaluate(async ({ original, incoming, extras, render, hidden }) => {
+    if (hidden) {
+      original = { ...original, Blush: 'Live blush', ArmsLeft: 'Live arm' }
+      incoming = { ...incoming, Blush: 'Saved blush', ArmsLeft: 'Saved arm', Fluids: 'Saved fluids' }
+    }
     const moduleUrl = suffix => performance.getEntriesByType('resource').map(entry => entry.name)
       .findLast(url => new URL(url).pathname.endsWith(suffix))
     const storeUrl = moduleUrl('/src/stores/fileSystemStore.js')
@@ -55,7 +59,7 @@ async function openFlowLibrary(page, { extras = 0, render = true } = {}) {
     for (let index = 0; index < extras; index++) {
       fs.addOutfit({ name: `Daywear ${String(index + 1).padStart(2, '0')}`, data, tagIds: [tagId], cloudSync: false })
     }
-  }, { original, incoming, extras, render })
+  }, { original, incoming, extras, render, hidden })
   await page.getByTitle("Vivian's Portable Wardrobe", { exact: true }).click()
   await expect(page.locator('.vpw-library-masonry')).toBeVisible()
   return errors
@@ -200,6 +204,27 @@ test('body shortcuts act once and a newly selected outfit starts with full repla
   await openAdjustments(page)
   await expectSource(page, 'ClothOuter', 'incoming')
   expect(await applicationCount(page)).toBe(0)
+  expect(errors).toEqual([])
+})
+
+test('hidden BC body slots stay live in preview and apply, and are absent from adjustments', async ({ page }) => {
+  const errors = await openFlowLibrary(page, { hidden: true })
+  await outfitCard(page, 'Teal day outfit').click()
+  await expect.poll(() => previewNames(page)).toEqual({ ...incoming, Blush: 'Live blush', ArmsLeft: 'Live arm' })
+  const adjustments = await openAdjustments(page)
+  expect(await page.evaluate(async () => {
+    const { useFileSystemStore } = await import(window.__flowProbe.storeUrl)
+    return useFileSystemStore.getState().filterSnapshot.groups.some(group => group.groupID === 'HiddenBody')
+  })).toBe(true)
+  await adjustments.getByRole('checkbox', { name: 'Show all slots' }).check()
+  await expect(adjustments.locator('[data-group-id="HiddenBody"]')).toHaveCount(0)
+  await expect(adjustments.locator('[data-slot-key="Blush"]')).toHaveCount(0)
+  await adjustments.getByRole('button', { name: 'Done adjusting', exact: true }).click()
+  await page.getByRole('button', { name: 'Apply to Tester', exact: true }).click()
+  const applied = await page.evaluate(() => Object.fromEntries(window.__flowProbe.applications[0].bundle.map(part => [part.Group, part.Name])))
+  expect(applied.Blush).toBe('Live blush')
+  expect(applied.ArmsLeft).toBe('Live arm')
+  expect(applied.Fluids).toBeUndefined()
   expect(errors).toEqual([])
 })
 

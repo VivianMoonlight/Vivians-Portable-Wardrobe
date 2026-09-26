@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { ActionIcon, Box, Button, Group, SegmentedControl, Stack, Text } from '@mantine/core'
 import { useTranslation } from 'react-i18next'
 import { getWb, useWbSelector } from '@/stores/hooks'
-import { useTheme } from '@/ui/theme/ThemeProvider'
 import { WardrobeWorkspace } from './WardrobeWorkspace'
+import { WardrobeSettings } from './WardrobeSettings'
 import { HistoryViewer } from './HistoryViewer'
 import { OutfitAdjustmentsPage } from './OutfitAdjustmentsDialog'
 import { SidePreview } from './SidePreview'
@@ -17,7 +17,6 @@ type Pane = 'preview' | 'list'
 export function MobileWardrobeShell({ onClose }: MobileWardrobeShellProps) {
   const { t } = useTranslation()
   const rawActiveTab = useWbSelector((wb) => wb.activeTab)
-  const theme = useTheme()
   const [pane, setPane] = useState<Pane>('list')
   const [adjustmentsOpen, setAdjustmentsOpen] = useState(false)
   const [wardrobeDetailOpen, setWardrobeDetailOpen] = useState(false)
@@ -52,23 +51,9 @@ export function MobileWardrobeShell({ onClose }: MobileWardrobeShellProps) {
       </Box>
 
       {mainTab === 'settings' && (
-        <Stack gap="sm" pt="md">
-          <Text fw={600}>{t('fileManagerPanel.themeSettings')}</Text>
-          <Group>
-            <Button
-              variant={!theme.isDark ? 'filled' : 'default'}
-              onClick={() => theme.setColorScheme('light')}
-            >
-              ☀ {t('fileManagerPanel.lightMode')}
-            </Button>
-            <Button
-              variant={theme.isDark ? 'filled' : 'default'}
-              onClick={() => theme.setColorScheme('dark')}
-            >
-              ☾ {t('fileManagerPanel.darkMode')}
-            </Button>
-          </Group>
-        </Stack>
+        <Box style={{ flex: 1, minHeight: 0, overflowY: 'auto' }} pt="md">
+          <WardrobeSettings />
+        </Box>
       )}
       {mainTab === 'history' && (
         adjustmentsOpen ? <Box style={{ flex: 1, minHeight: 0 }}>

@@ -4,8 +4,36 @@ import { hostWindow } from '@/utils/host-window.js'
 
 const ACTIVE_TAB_KEY = 'vpw.workbench.activeTab'
 const WARDROBE_UI_KEY = 'vpw.workbench.wardrobeUi'
+const FORCE_SELF_APPLY_KEY_PREFIX = 'vpw.forceSelfApply.v1.'
 
 const TABS = ['wardrobe', 'history', 'settings']
+
+function forceSelfApplyStorageKey() {
+  const memberNumber = hostWindow.Player?.MemberNumber
+  if (!Number.isSafeInteger(memberNumber) || memberNumber <= 0) return null
+  return `${FORCE_SELF_APPLY_KEY_PREFIX}${memberNumber}`
+}
+
+export function isForceSelfApplyEnabled() {
+  const key = forceSelfApplyStorageKey()
+  if (!key) return false
+  try {
+    return hostWindow.localStorage.getItem(key) === '1'
+  } catch {
+    return false
+  }
+}
+
+function saveForceSelfApplyEnabled(enabled) {
+  const key = forceSelfApplyStorageKey()
+  if (!key) return false
+  try {
+    hostWindow.localStorage.setItem(key, enabled ? '1' : '0')
+    return hostWindow.localStorage.getItem(key) === (enabled ? '1' : '0')
+  } catch {
+    return false
+  }
+}
 
 function safeLoadJson(key, fallback) {
   try {
@@ -55,7 +83,8 @@ function createInitialState() {
 
   return {
     activeTab,
-    wardrobeUi: normalizeWardrobeUi(safeLoadJson(WARDROBE_UI_KEY, defaultWardrobeUi))
+    wardrobeUi: normalizeWardrobeUi(safeLoadJson(WARDROBE_UI_KEY, defaultWardrobeUi)),
+    forceSelfApplyRevision: 0
   }
 }
 
@@ -79,6 +108,12 @@ const workbenchApi = createStore((set, get) => ({
 
     set({ wardrobeUi })
     safeSave(WARDROBE_UI_KEY, JSON.stringify(wardrobeUi))
+  },
+
+  setForceSelfApplyEnabled(enabled) {
+    if (typeof enabled !== 'boolean' || !saveForceSelfApplyEnabled(enabled)) return false
+    set({ forceSelfApplyRevision: get().forceSelfApplyRevision + 1 })
+    return true
   }
 }))
 

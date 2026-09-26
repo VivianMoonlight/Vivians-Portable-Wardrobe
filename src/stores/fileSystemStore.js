@@ -13,6 +13,7 @@ import { HistoryRecord } from '@/utils/history_record.js'
 import { ExternalAdapter } from '@/utils/external_adapters.js'
 import { applyPlayerCraftingToBundle } from '@/services/craft-resolver.js'
 import { isBodySlot } from '@/services/body-slots.js'
+import { isHiddenBodySlot } from '@/services/hidden-body-slots.js'
 import {
   normalizeSlotMode,
   getGroupNameFromPart,
@@ -48,6 +49,7 @@ function setScopeSlotModes(store, keys, mode) {
   const next = { ...current }
   let changed = false
   for (const key of keys) {
+    if (isHiddenBodySlot(key)) continue
     if (normalizeSlotMode(current[key]?.mode) === mode) continue
     next[key] = { mode, locked: false }
     changed = true
@@ -409,6 +411,7 @@ const fileSystemStoreDefinition = {
       const next = { ...(this.slotControlMap || {}) }
       let changed = false
       for (const key of this._collectKnownSlotKeys()) {
+        if (isHiddenBodySlot(key)) continue
         const prev = this.getSlotControlState(key)
         if (prev.locked) continue
         const nextMode = selected.has(key) ? SLOT_MODE_INCOMING : SLOT_MODE_EMPTY
@@ -476,11 +479,11 @@ const fileSystemStoreDefinition = {
       for (const key of keys) {
         const prev = current[key]
         if (!prev) {
-          next[key] = { mode: SLOT_MODE_INCOMING, locked: false }
+          next[key] = { mode: isHiddenBodySlot(key) ? SLOT_MODE_ORIGINAL : SLOT_MODE_INCOMING, locked: false }
           changed = true
           continue
         }
-        const nextMode = normalizeSlotMode(prev.mode)
+        const nextMode = isHiddenBodySlot(key) ? SLOT_MODE_ORIGINAL : normalizeSlotMode(prev.mode)
         if (nextMode !== prev.mode || !!prev.locked) {
           next[key] = { mode: nextMode, locked: false }
           changed = true
@@ -495,7 +498,8 @@ const fileSystemStoreDefinition = {
     },
 
     _resetSlotSources(mode) {
-      this.slotControlMap = Object.fromEntries(this._collectKnownSlotKeys().map(key => [key, { mode, locked: false }]))
+      this.slotControlMap = Object.fromEntries(this._collectKnownSlotKeys().map(key =>
+        [key, { mode: isHiddenBodySlot(key) ? SLOT_MODE_ORIGINAL : mode, locked: false }]))
       this.groupOperations = {}
       this._syncActiveFiltersFromSlotControls()
     },
@@ -605,7 +609,7 @@ const fileSystemStoreDefinition = {
       const next = {}
       let changed = false
       for (const key of this._collectKnownSlotKeys()) {
-        const mode = bodyKeys.has(key) ? SLOT_MODE_INCOMING : SLOT_MODE_ORIGINAL
+        const mode = bodyKeys.has(key) && !isHiddenBodySlot(key) ? SLOT_MODE_INCOMING : SLOT_MODE_ORIGINAL
         if (this.slotControlMap[key]?.mode !== mode) changed = true
         next[key] = { mode, locked: false }
       }
@@ -626,7 +630,7 @@ const fileSystemStoreDefinition = {
 
     getAllModeState(mode) {
       const { inCharacter, inIncoming } = this._presenceSets()
-      return scopeModeState(this._collectKnownSlotKeys(), normalizeSlotMode(mode), this.slotControlMap, inCharacter, inIncoming)
+      return scopeModeState(this._collectKnownSlotKeys().filter(key => !isHiddenBodySlot(key)), normalizeSlotMode(mode), this.slotControlMap, inCharacter, inIncoming)
     },
 
     getGroupModeState(groupID, mode) {
@@ -648,13 +652,13 @@ const fileSystemStoreDefinition = {
     getSlotControlState(key) {
       const slotState = this.slotControlMap?.[key]
       return {
-        mode: normalizeSlotMode(slotState?.mode),
+        mode: isHiddenBodySlot(key) ? SLOT_MODE_ORIGINAL : normalizeSlotMode(slotState?.mode),
         locked: false
       }
     },
 
     setSlotMode(key, mode) {
-      if (!key) return false
+      if (!key || isHiddenBodySlot(key)) return false
       this._ensureSlotControls()
 
       const prev = this.getSlotControlState(key)
@@ -706,7 +710,7 @@ const fileSystemStoreDefinition = {
       const groups = Array.isArray(this.filterSnapshot?.groups) ? this.filterSnapshot.groups : []
       const group = groups.find(g => g?.groupID === groupID)
       if (!group || !Array.isArray(group.itemList)) return []
-      return group.itemList.map(item => item?.key).filter(Boolean)
+      return group.itemList.map(item => item?.key).filter(key => key && !isHiddenBodySlot(key))
     },
 
     setGroupSlotLocks(groupID, locked = true) {
@@ -717,10 +721,11 @@ const fileSystemStoreDefinition = {
       return false
     },
 
-    applyFilteredOutfitToCharacter({ outfitData = null } = {}) {
+    applyFilteredOutfitToCharacter({ outfitData = null, forceSelf = false } = {}) {
       const rawCharacter = this.character ? identityRaw(this.character) : null
       const target = rawCharacter || hostWindow.CurrentCharacter || hostWindow.Player
       if (!target) return false
+      if (forceSelf && target !== hostWindow.Player) return false
 
       let bundle
       if (Array.isArray(outfitData)) {
@@ -730,7 +735,9 @@ const fileSystemStoreDefinition = {
         // Apply exactly what was previewed, even if crafting changes while open.
         bundle = cloneOutfitData(this.previewItem?.data)
       }
-      const ok = ExternalAdapter.applyOutfitToCharacter(target, bundle)
+      const ok = forceSelf
+        ? ExternalAdapter.applyOutfitToSelfForced(target, bundle)
+        : ExternalAdapter.applyOutfitToCharacter(target, bundle)
       // Keep the editing session's original source stable after applying.
       // Selecting another outfit or target captures the live character again.
       if (ok && Array.isArray(outfitData)) this.updatePreviewItem()
@@ -739,6 +746,11 @@ const fileSystemStoreDefinition = {
 
     applyCurrentPreviewToCharacter() {
       return this.applyFilteredOutfitToCharacter()
+    },
+
+    applyCurrentPreviewToSelfForced() {
+      if (!Array.isArray(this.previewItem?.data)) return false
+      return this.applyFilteredOutfitToCharacter({ forceSelf: true })
     },
 
     removeSelectedSlotsFromCharacter() {
@@ -868,6 +880,7 @@ const fileSystemStoreDefinition = {
       const next = { ...(this.slotControlMap || {}) }
       let changed = false
       for (const key of this._collectKnownSlotKeys()) {
+        if (isHiddenBodySlot(key)) continue
         const mode = this.getSlotControlState(key).mode
         const nextMode = mode === SLOT_MODE_EMPTY ? SLOT_MODE_INCOMING : SLOT_MODE_EMPTY
         if (mode !== nextMode) {

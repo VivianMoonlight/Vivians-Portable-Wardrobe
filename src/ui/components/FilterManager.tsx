@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { getFs, useFsSelector } from '@/stores/hooks'
 import { AssetApi } from '@/utils/AssetApi'
 import { OVERLAY_Z_INDEX } from '@/ui/z-index'
+import { isHiddenBodySlot } from '@/services/hidden-body-slots.js'
 import {
   SLOT_MODES,
   normalizeSlotMode,
@@ -68,7 +69,7 @@ function buildKnownSlotKeys(
     const key = getGroupNameFromPart(part)
     if (key) keys.add(key)
   }
-  return Array.from(keys)
+  return Array.from(keys).filter((key) => !isHiddenBodySlot(key))
 }
 
 function SourceButtons({
@@ -226,9 +227,9 @@ function FilterGroupCard({
 }) {
   const { t } = useTranslation()
   const name = t(`groupNames.${group.groupID}`, { defaultValue: group.displayName || group.groupID })
-  const items = (group.itemList ?? EMPTY_ITEMS).filter((item) =>
-    showAllSlots || presence[item.key]?.inCharacter || presence[item.key]?.inHover,
-  )
+  const items = (group.itemList ?? EMPTY_ITEMS).filter((item) => !isHiddenBodySlot(item.key) && (
+    showAllSlots || presence[item.key]?.inCharacter || presence[item.key]?.inHover
+  ))
   const contentID = useId()
 
   return (
@@ -305,15 +306,15 @@ export function FilterManager() {
       all: forKeys(knownKeys),
       groups: new Map(groups.map((group) => [
         group.groupID,
-        forKeys((group.itemList ?? EMPTY_ITEMS).map((item) => item.key)),
+        forKeys((group.itemList ?? EMPTY_ITEMS).map((item) => item.key).filter((key) => !isHiddenBodySlot(key))),
       ])),
     }
   }, [groups, knownKeys, slotControls, presenceSets])
   const visibleGroups = useMemo(() => groups.filter((group) => {
-    if (showAllSlots) return true
     if (group.isHiddenGroup) return false
+    if (showAllSlots) return true
     return (group.itemList ?? EMPTY_ITEMS).some((item) =>
-      presence[item.key]?.inCharacter || presence[item.key]?.inHover,
+      !isHiddenBodySlot(item.key) && (presence[item.key]?.inCharacter || presence[item.key]?.inHover),
     )
   }), [groups, presence, showAllSlots])
   const groupActions = useMemo(() => {
