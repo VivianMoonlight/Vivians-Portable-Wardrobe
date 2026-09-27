@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vivians Portable Wardrobe
 // @namespace    http://tampermonkey.net/
-// @version      0.10.1-react.13
+// @version      0.10.1-react.14
 // @author       VIVianMoonlight
 // @description  Portable Wardrobe for Bondage Club (React + Mantine, Shadow DOM isolated)
 // @downloadURL  https://cdn.jsdelivr.net/gh/VivianMoonlight/Vivians-Portable-Wardrobe@wardrobe-react/out/Vivians-Portable-Wardrobe.user.js
@@ -32,7 +32,7 @@
     return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
   };
   var require_main_001 = __commonJS({
-    "main-BV0pfCT5.js"(exports) {
+    "main-DusFjkA1.js"(exports) {
       function _mergeNamespaces(n, m) {
         for (var i = 0; i < m.length; i++) {
           const e = m[i];
@@ -9285,7 +9285,7 @@
       instance.hasLoadedNamespace;
       instance.loadNamespaces;
       instance.loadLanguages;
-      const version = "0.10.1-react.13";
+      const version = "0.10.1-react.14";
       var _unsafeWindow = /* @__PURE__ */ (() => typeof unsafeWindow != "undefined" ? unsafeWindow : void 0)();
       const hostWindow = typeof _unsafeWindow !== "undefined" ? _unsafeWindow : window;
       const doc = hostWindow.document;
@@ -9770,8 +9770,8 @@ One of mods you are using is using an old version of SDK. It will work for now b
       function getPartAssetName(part) {
         return part?.Name || part?.Asset?.Name || part?.Asset?.name || "";
       }
-      function getAssetDescriptionFromGame(groupName, assetName, character = null) {
-        if (!groupName || !assetName || typeof hostWindow?.AssetGet !== "function") return "";
+      function getAssetDescriptionFromGame(groupName2, assetName, character = null) {
+        if (!groupName2 || !assetName || typeof hostWindow?.AssetGet !== "function") return "";
         const families = [
           character?.AssetFamily,
           hostWindow?.Player?.AssetFamily,
@@ -9779,7 +9779,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
         ].filter(Boolean);
         for (const family of families) {
           try {
-            const asset = hostWindow.AssetGet(family, groupName, assetName);
+            const asset = hostWindow.AssetGet(family, groupName2, assetName);
             const dynamicDescription = typeof asset?.DynamicDescription === "function" ? asset.DynamicDescription(character || hostWindow?.Player) : "";
             const description = firstNonEmpty(asset?.Description, dynamicDescription);
             if (description) return description;
@@ -9797,14 +9797,14 @@ One of mods you are using is using an old version of SDK. It will work for now b
             return "";
           }
         })() : "";
-        const groupName = getPartGroupName(part);
+        const groupName2 = getPartGroupName(part);
         const assetName = getPartAssetName(part);
         return firstNonEmpty(
           part?.Craft?.Name,
           part?.Description,
           part?.Asset?.Description,
           directDynamicDescription,
-          getAssetDescriptionFromGame(groupName, assetName, character),
+          getAssetDescriptionFromGame(groupName2, assetName, character),
           assetName
         );
       }
@@ -15870,20 +15870,24 @@ One of mods you are using is using an old version of SDK. It will work for now b
         "Emoticon",
         "Fluids"
       ]);
-      function isHiddenBodySlot(groupName) {
-        return HIDDEN_BODY_SLOTS.has(groupName);
+      function isHiddenBodySlot(groupName2) {
+        return HIDDEN_BODY_SLOTS.has(groupName2);
+      }
+      function groupName(part) {
+        return typeof part?.Group === "string" ? part.Group : part?.Asset?.Group?.Name;
       }
       function preserveHiddenBodySlots(currentBundle = [], requestedBundle = []) {
         const original = /* @__PURE__ */ new Map();
         for (const part of currentBundle) {
-          if (!isHiddenBodySlot(part?.Group)) continue;
-          if (!original.has(part.Group)) original.set(part.Group, []);
-          original.get(part.Group).push(part);
+          const group = groupName(part);
+          if (!isHiddenBodySlot(group)) continue;
+          if (!original.has(group)) original.set(group, []);
+          original.get(group).push(part);
         }
         const result = [];
         const inserted = /* @__PURE__ */ new Set();
         for (const part of requestedBundle) {
-          const group = part?.Group;
+          const group = groupName(part);
           if (!isHiddenBodySlot(group)) {
             result.push(part);
             continue;
@@ -16219,14 +16223,14 @@ One of mods you are using is using an old version of SDK. It will work for now b
          * @param {string} groupName - Asset group name
          * @returns {object|null} Inventory item or null
          */
-        inventoryGet(C, groupName) {
-          if (!C || !groupName) return null;
+        inventoryGet(C, groupName2) {
+          if (!C || !groupName2) return null;
           if (typeof hostWindow.InventoryGet !== "function") {
             console.warn("[ExternalAdapter] InventoryGet not available");
             return null;
           }
           try {
-            return hostWindow.InventoryGet(C, groupName);
+            return hostWindow.InventoryGet(C, groupName2);
           } catch (e) {
             console.error("[ExternalAdapter] InventoryGet failed:", e);
             return null;
@@ -16259,7 +16263,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
          * @returns {object|null} Asset object or null
          */
         assetGet(family, group, name) {
-          if (!family || !group || !name) return null;
+          if (!family || !group || typeof name !== "string") return null;
           if (typeof hostWindow.AssetGet !== "function") {
             console.warn("[ExternalAdapter] AssetGet not available");
             return null;
@@ -16477,12 +16481,12 @@ One of mods you are using is using an old version of SDK. It will work for now b
             }
           };
           for (const item of appearance) {
-            const groupName = item?.Asset?.Group?.Name;
-            if (!groupName) continue;
-            const inventoryItem = ExternalAdapter.inventoryGet(C, groupName) || item;
+            const groupName2 = item?.Asset?.Group?.Name;
+            if (!groupName2) continue;
+            const inventoryItem = ExternalAdapter.inventoryGet(C, groupName2) || item;
             const locked = inventoryItem?.Property?.Effect?.includes?.("Lock") || item?.Property?.Effect?.includes?.("Lock") || ExternalAdapter.inventoryItemHasEffect(inventoryItem, "Lock");
-            if (!locked || groups.has(groupName)) continue;
-            groups.add(groupName);
+            if (!locked || groups.has(groupName2)) continue;
+            groups.add(groupName2);
             visitItem(item);
           }
           return groups;
@@ -16574,14 +16578,21 @@ One of mods you are using is using an old version of SDK. It will work for now b
             return false;
           }
           const previousAppearance = C.Appearance;
+          const liveAppearance = Array.isArray(previousAppearance) ? [...previousAppearance] : [];
           const success = ExternalAdapter.serverAppearanceLoad(
             C,
             C.AssetFamily,
             protectedBundle,
             C.MemberNumber
           );
-          if (!success && C.Appearance !== previousAppearance) {
+          const loadedAppearance = C.Appearance;
+          const appearanceChanged = loadedAppearance !== previousAppearance || Array.isArray(loadedAppearance) && (loadedAppearance.length !== liveAppearance.length || loadedAppearance.some((item, index2) => item !== liveAppearance[index2]));
+          if (appearanceChanged) {
+            C.Appearance = preserveHiddenBodySlots(liveAppearance, Array.isArray(loadedAppearance) ? loadedAppearance : []);
+          }
+          if (!success && appearanceChanged) {
             ExternalAdapter.refreshCharacter(C);
+            if (ExternalAdapter.isSelfCharacter(C)) ExternalAdapter.chatRoomUpdate(C);
           }
           if (success) {
             ExternalAdapter.refreshCharacter(C);
@@ -16702,8 +16713,8 @@ One of mods you are using is using an old version of SDK. It will work for now b
         }
         return null;
       }
-      function validateGroupMatch(craftEntry, groupName, player, assetGetFn) {
-        const expectedGroup = normalizeText(groupName);
+      function validateGroupMatch(craftEntry, groupName2, player, assetGetFn) {
+        const expectedGroup = normalizeText(groupName2);
         if (!expectedGroup) return false;
         const directGroup = extractGroupName(craftEntry);
         if (directGroup && directGroup === expectedGroup) {
@@ -16730,14 +16741,14 @@ One of mods you are using is using an old version of SDK. It will work for now b
       }
       function resolveCraftForAssetSlot({
         assetName,
-        groupName,
+        groupName: groupName2,
         player = null,
         playerCrafting = null,
         assetGet = null,
         cloneFn = deepClone
       } = {}) {
         const normalizedAssetName = normalizeText(assetName);
-        const normalizedGroupName = normalizeText(groupName);
+        const normalizedGroupName = normalizeText(groupName2);
         if (!normalizedAssetName || !normalizedGroupName) return null;
         const targetPlayer = player || hostWindow?.Player || null;
         const craftingList = Array.isArray(playerCrafting) ? playerCrafting : readPlayerCrafting(targetPlayer);
@@ -16796,14 +16807,14 @@ One of mods you are using is using an old version of SDK. It will work for now b
             continue;
           }
           const assetName = normalizeText(nextPart.Name || nextPart.Asset?.Name);
-          const groupName = extractGroupName(nextPart);
-          if (!assetName || !groupName) {
+          const groupName2 = extractGroupName(nextPart);
+          if (!assetName || !groupName2) {
             out.push(nextPart);
             continue;
           }
           const resolvedCraft = resolveCraftForAssetSlot({
             assetName,
-            groupName,
+            groupName: groupName2,
             player: targetPlayer,
             playerCrafting: craftingList,
             assetGet,
