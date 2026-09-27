@@ -6,7 +6,7 @@
     "dev": "vite --mode mock",
     "dev:userscript": "vite",
     "typecheck": "tsc --noEmit",
-    "test": "node --test test/*.test.js",
+    "test": "node --test --test-concurrency=2 test/*.test.js",
     "test:browser": "playwright test",
     "build": "vite build",
     "package:react": "node scripts/package-react.js",
@@ -34,6 +34,7 @@
     "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react": "^4.7.0",
     "esbuild": "0.27.7",
+    "fake-indexeddb": "^6.2.5",
     "typescript": "^5.9.3",
     "vite": "^7.3.5",
     "vite-plugin-monkey": "^6.0.1"

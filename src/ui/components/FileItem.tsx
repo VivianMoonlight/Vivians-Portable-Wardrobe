@@ -61,7 +61,7 @@ export const FileItem = memo(function FileItem({ item, tagNames, viewMode, cloud
     const name = (await dialog.prompt(t('fileItem.promptNewName'), item.name))?.trim()
     if (!name || name === item.name) return
     try {
-      if (!getFs().updateOutfit(item.id, { name })) await dialog.alert(t('library.itemUnavailable'))
+      if (!await getFs().updateOutfit(item.id, { name })) await dialog.alert(t('library.itemUnavailable'))
     } catch (error) { await reportError(error) }
   }
 
@@ -69,7 +69,7 @@ export const FileItem = memo(function FileItem({ item, tagNames, viewMode, cloud
     closeMenu()
     if (!await dialog.confirm(t('library.deleteOutfitConfirm', { name: item.name }))) return
     try {
-      if (!getFs().removeOutfit(item.id)) await dialog.alert(t('library.itemUnavailable'))
+      if (!await getFs().removeOutfit(item.id)) await dialog.alert(t('library.itemUnavailable'))
     } catch (error) { await reportError(error) }
   }
 
@@ -85,7 +85,7 @@ export const FileItem = memo(function FileItem({ item, tagNames, viewMode, cloud
     event.stopPropagation()
     if (cloudEnableBlocked && !isCloudSyncEnabled) return
     try {
-      if (!getFs().setOutfitCloudSync(item.id, !isCloudSyncEnabled)) await dialog.alert(t('library.itemUnavailable'))
+      if (!await getFs().setOutfitCloudSync(item.id, !isCloudSyncEnabled)) await dialog.alert(t('library.itemUnavailable'))
     } catch (error) { await reportError(error) }
   }
 

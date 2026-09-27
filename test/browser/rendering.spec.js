@@ -17,6 +17,7 @@ function figureSvg(color) {
 /** Test-only BC renderer; real browser Image objects deliver the asynchronous events. */
 async function installHost(page, outfits) {
   await page.goto('/')
+  await expect(page.getByTitle("Vivian's Portable Wardrobe", { exact: true })).toBeVisible()
   await page.evaluate(async (fixtures) => {
     const probe = window.__renderProbe = { loads: [], draws: 0, builds: 0, created: [], deleted: [], live: [], imagesLoaded: 0 }
     const imageCache = new Map()
@@ -80,11 +81,11 @@ async function installHost(page, outfits) {
     probe.storeUrl = moduleUrl('/src/stores/fileSystemStore.js')
     const { useFileSystemStore } = await import(probe.storeUrl)
     const fs = useFileSystemStore.getState()
-    for (const outfit of [...fs.outfits]) fs.removeOutfit(outfit.id)
+    for (const outfit of [...fs.outfits]) await fs.removeOutfit(outfit.id)
     const tags = new Map()
     for (const fixture of fixtures) {
-      if (!tags.has(fixture.tag)) tags.set(fixture.tag, fs.createTag(fixture.tag))
-      fs.addOutfit({
+      if (!tags.has(fixture.tag)) tags.set(fixture.tag, await fs.createTag(fixture.tag))
+      await fs.addOutfit({
         name: fixture.name, type: 'outfit', tagIds: [tags.get(fixture.tag)], cloudSync: false,
         data: [{ Name: fixture.name, Group: 'Cloth', Property: { imageUrl: fixture.url } }],
       })

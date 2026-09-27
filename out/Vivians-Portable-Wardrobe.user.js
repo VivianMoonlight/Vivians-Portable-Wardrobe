@@ -32,7 +32,7 @@
     return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
   };
   var require_main_001 = __commonJS({
-    "main-C2r7IXCJ.js"(exports) {
+    "main-rnJce4Q4.js"(exports) {
       function _mergeNamespaces(n, m) {
         for (var i = 0; i < m.length; i++) {
           const e = m[i];
@@ -12107,7 +12107,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
         if (value === null || typeof value !== "object") return value;
         return Object.fromEntries(Object.keys(value).sort(compareText).map((key) => [key, canonical$2(value[key])]));
       }
-      function same(left, right) {
+      function same$1(left, right) {
         if (left === absent || right === absent) return left === right;
         return JSON.stringify(canonical$2(left)) === JSON.stringify(canonical$2(right));
       }
@@ -12167,9 +12167,9 @@ One of mods you are using is using an old version of SDK. It will work for now b
         });
       }
       function chooseField(base, local, remote, details, conflicts) {
-        if (same(local, remote)) return local;
-        if (same(local, base)) return remote;
-        if (same(remote, base)) return local;
+        if (same$1(local, remote)) return local;
+        if (same$1(local, base)) return remote;
+        if (same$1(remote, base)) return local;
         addConflict(conflicts, { ...details, type: "concurrent-edit", base, local, remote });
         return local;
       }
@@ -12180,7 +12180,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
         return [.../* @__PURE__ */ new Set([...original, ...left, ...right])].filter((id) => original.has(id) ? left.has(id) && right.has(id) : left.has(id) || right.has(id)).sort(compareText);
       }
       function mergedRevision(index2, merged, candidates, replicaId) {
-        const matching = candidates.filter((candidate) => candidate && same(content(candidate), content(merged)));
+        const matching = candidates.filter((candidate) => candidate && same$1(content(candidate), content(merged)));
         if (matching.length) return clone$2(newestRevision(...matching.map((candidate) => candidate.rev)));
         return nextRevision(index2, replicaId);
       }
@@ -12209,7 +12209,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
         return merged;
       }
       function changedSince(baseRecord, candidate) {
-        return !!candidate && !same(content(baseRecord), content(candidate));
+        return !!candidate && !same$1(content(baseRecord), content(candidate));
       }
       function mergeCloudState(index2, id, baseState, localState, remoteState, conflicts, replicaId) {
         const local = localState || baseState;
@@ -12455,11 +12455,11 @@ One of mods you are using is using an old version of SDK. It will work for now b
       const equal = (left, right) => JSON.stringify(canonical$1(left)) === JSON.stringify(canonical$1(right));
       const own = (object, key) => Object.prototype.hasOwnProperty.call(object || {}, key);
       const V4_PROTOCOL = "VPW4";
-      function storageError(error) {
+      function storageError(error, indexed = false) {
         if (error?.name !== "QuotaExceededError" && error?.code !== 22 && error?.code !== 1014) return error;
         return Object.assign(
-          new Error("Browser rejected the local wardrobe write"),
-          { code: "local-storage-quota", cause: error }
+          new Error(indexed ? "Browser rejected the local wardrobe database write" : "Browser rejected the local wardrobe write"),
+          { code: indexed ? "indexeddb-quota" : "local-storage-quota", cause: error }
         );
       }
       function maxAppliedSequences(base, extra) {
@@ -12543,8 +12543,10 @@ One of mods you are using is using an old version of SDK. It will work for now b
         constructor({
           getPlayer,
           localStorage: localStorage2,
+          persistence = null,
           send,
           isOnline = () => true,
+          canWrite = () => true,
           onChange = () => {
           },
           setTimeout: schedule = globalThis.setTimeout,
@@ -12554,8 +12556,10 @@ One of mods you are using is using an old version of SDK. It will work for now b
         } = {}) {
           this.getPlayer = getPlayer;
           this.local = localStorage2;
+          this.persistence = persistence;
           this.send = send;
           this.isOnline = isOnline;
+          this.canWrite = canWrite;
           this.onChange = onChange;
           this.schedule = schedule;
           this.cancel = cancel;
@@ -12583,6 +12587,9 @@ One of mods you are using is using an old version of SDK. It will work for now b
           this.hostSettingSignatures = /* @__PURE__ */ new Map();
           this.remoteError = null;
           this.quota = null;
+          this.localRecoveryKeysOnDisk = /* @__PURE__ */ new Set();
+          this.unrecognizedLocalDocumentKey = null;
+          this.rawLegacySourceKeys = /* @__PURE__ */ new Set();
           this.status = {
             state: "idle",
             localSaved: false,
@@ -12592,9 +12599,34 @@ One of mods you are using is using an old version of SDK. It will work for now b
             lastSubmittedAt: null,
             lastVerifiedAt: null
           };
+          this.operationTail = Promise.resolve();
         }
         get key() {
           return `VPWardrobe_index_${this.member}`;
+        }
+        serialize(operation) {
+          const result = this.operationTail.then(operation, operation);
+          this.operationTail = result.catch(() => {
+          });
+          return result;
+        }
+        ensureWriter() {
+          if (accountId(this.getPlayer()) !== this.member || !this.canWrite(this.member)) {
+            throw new Error("Wardrobe account or writer tab changed; reopen before saving");
+          }
+        }
+        async database(operation) {
+          try {
+            return await operation();
+          } catch (error) {
+            if (error?.code === "indexeddb-error" || error?.code === "indexeddb-quota") throw error;
+            const quota = storageError(error, true);
+            if (quota !== error) throw quota;
+            throw Object.assign(
+              new Error(error?.message || "Local wardrobe database failed"),
+              { code: "indexeddb-error", cause: error }
+            );
+          }
         }
         hasSubmittedCurrentIndex() {
           const submission = this.document?.submission;
@@ -12605,7 +12637,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
           this.status = {
             ...this.status,
             ...patch,
-            recoveryAvailable: (this.document?.recoveryKeys?.length || 0) > 0
+            recoveryAvailable: (this.document?.recoveryKeys?.length || 0) > 0 || this.localRecoveryKeysOnDisk.size > 0 || this.unrecognizedLocalDocumentKey !== null || this.rawLegacySourceKeys.size > 0
           };
           this.onChange({ index: this.index, status: this.status, quota: this.quota });
         }
@@ -12630,17 +12662,41 @@ One of mods you are using is using an old version of SDK. It will work for now b
             if (previous !== base64) write(base64);
           }
         }
-        writeDocument(index2, changes = {}) {
+        async writeDocument(index2, changes = {}) {
+          this.ensureWriter();
           const document2 = { ...this.document, ...changes, index: index2 };
-          this.persistLocalPayload(this.key, document2);
+          if (this.persistence) await this.database(() => this.persistence.write(this.member, document2));
+          else this.persistLocalPayload(this.key, document2);
+          this.ensureWriter();
           this.document = document2;
           this.index = index2;
         }
-        readDocument(raw = this.local.getItem(this.key)) {
-          if (!raw) return null;
-          const document2 = decodeWardrobePayload(raw);
+        async writeDocumentWithArchive(index2, changes, reason, data) {
+          if (!this.persistence) {
+            await this.archive(reason, data);
+            return this.writeDocument(index2, changes);
+          }
+          this.ensureWriter();
+          const desiredKey = `${this.key}_recovery_${fingerprint(data)}`;
+          const document2 = { ...this.document, ...changes, index: index2 };
+          const result = await this.database(() => this.persistence.writeWithArchive(
+            this.member,
+            document2,
+            desiredKey,
+            { reason, data, createdAt: Date.now() }
+          ));
+          this.ensureWriter();
+          this.document = result.document;
+          this.index = index2;
+        }
+        async readDocument(raw) {
+          const document2 = this.persistence && raw === void 0 ? await this.database(() => this.persistence.read(this.member)) : decodeWardrobePayload(raw === void 0 ? this.local.getItem(this.key) : raw);
+          if (!document2) return null;
           validateWardrobeIndex(document2?.index);
           if (document2.baseCloudIndex) validateWardrobeIndex(document2.baseCloudIndex);
+          if (document2.recoveryKeys !== void 0 && (!Array.isArray(document2.recoveryKeys) || document2.recoveryKeys.some((key) => typeof key !== "string"))) {
+            throw new Error("Invalid local wardrobe recovery keys");
+          }
           for (const entry of document2.submittedVersions || []) {
             if (!Number.isSafeInteger(entry.sequence) || entry.sequence < 0) {
               throw new Error("Invalid local wardrobe submission sequence");
@@ -12675,8 +12731,22 @@ One of mods you are using is using an old version of SDK. It will work for now b
             }
           }
         }
-        archive(reason, data) {
+        async archive(reason, data) {
+          this.ensureWriter();
           const baseKey = `${this.key}_recovery_${fingerprint(data)}`;
+          if (this.persistence) {
+            const key2 = await this.database(() => this.persistence.archive(
+              this.member,
+              baseKey,
+              { reason, data, createdAt: Date.now() }
+            ));
+            this.ensureWriter();
+            this.document = {
+              ...this.document,
+              recoveryKeys: [.../* @__PURE__ */ new Set([...this.document.recoveryKeys || [], key2])]
+            };
+            return;
+          }
           let key = baseKey;
           let suffix = 0;
           while (this.local.getItem(key)) {
@@ -12687,19 +12757,42 @@ One of mods you are using is using an old version of SDK. It will work for now b
           if (!this.local.getItem(key)) {
             this.persistLocalPayload(key, { reason, data, createdAt: Date.now() });
           }
-          this.document.recoveryKeys = [.../* @__PURE__ */ new Set([...this.document.recoveryKeys || [], key])];
+          this.document = {
+            ...this.document,
+            recoveryKeys: [.../* @__PURE__ */ new Set([...this.document.recoveryKeys || [], key])]
+          };
         }
-        legacyLocalSources() {
-          const keys2 = [`VPWardrobe_VPWardrobe_local_${this.member}`, `VPWardrobe_${this.member}`, `VPWardrobe${this.member}`];
-          return keys2.flatMap((key) => {
+        legacySourceKeys() {
+          return [`VPWardrobe_VPWardrobe_local_${this.member}`, `VPWardrobe_${this.member}`, `VPWardrobe${this.member}`];
+        }
+        legacyLocalSources({ tolerateInvalid = false } = {}) {
+          return this.legacySourceKeys().flatMap((key) => {
             const raw = this.local.getItem(key);
             if (!raw) return [];
-            const value = decodeWardrobePayload(raw);
-            if (!isLegacyWardrobe(value)) throw new Error(`Unrecognized legacy wardrobe at ${key}`);
-            return [{ key, value, raw }];
+            try {
+              const value = decodeWardrobePayload(raw);
+              if (!isLegacyWardrobe(value)) throw new Error(`Unrecognized legacy wardrobe at ${key}`);
+              return [{ key, value, raw }];
+            } catch (error) {
+              if (tolerateInvalid) return [];
+              throw error;
+            }
           });
         }
-        open({ extensionSettings = this.getPlayer()?.ExtensionSettings, fresh = false } = {}) {
+        localRecoveryKeys(referenced = []) {
+          const prefix = `${this.key}_recovery_`;
+          const keys2 = new Set(referenced.filter((key) => typeof key === "string" && key.startsWith(prefix)));
+          if (typeof this.local.length !== "number" || typeof this.local.key !== "function") return [...keys2];
+          for (let index2 = 0; index2 < this.local.length; index2++) {
+            const key = this.local.key(index2);
+            if (typeof key === "string" && key.startsWith(prefix)) keys2.add(key);
+          }
+          return [...keys2];
+        }
+        open(options2) {
+          return this.serialize(() => this.openNow(options2));
+        }
+        async openNow({ extensionSettings = this.getPlayer()?.ExtensionSettings, fresh = false } = {}) {
           this.cancelPending();
           this.member = null;
           this.deviceId = null;
@@ -12730,6 +12823,9 @@ One of mods you are using is using an old version of SDK. It will work for now b
           this.hostSettingSignatures = /* @__PURE__ */ new Map();
           this.remoteError = null;
           this.quota = null;
+          this.localRecoveryKeysOnDisk = /* @__PURE__ */ new Set();
+          this.unrecognizedLocalDocumentKey = null;
+          this.rawLegacySourceKeys = /* @__PURE__ */ new Set();
           this.status = {
             state: "idle",
             localSaved: false,
@@ -12756,17 +12852,101 @@ One of mods you are using is using an old version of SDK. It will work for now b
               }
             }
             const storedRaw = this.local.getItem(this.key);
-            const stored = this.readDocument(storedRaw);
+            this.unrecognizedLocalDocumentKey = storedRaw ? this.key : null;
+            this.localRecoveryKeysOnDisk = new Set(this.localRecoveryKeys().filter((key) => this.local.getItem(key) !== null));
+            this.rawLegacySourceKeys = new Set(this.legacySourceKeys().filter((key) => this.local.getItem(key) !== null));
+            let localDocument = null;
+            let localError = null;
+            try {
+              localDocument = await this.readDocument(storedRaw);
+            } catch (error) {
+              localError = error;
+            }
+            if (localDocument) {
+              this.document = localDocument;
+              this.index = localDocument.index;
+            }
+            let stored = this.persistence ? await this.readDocument() : localDocument;
             if (stored) {
               this.document = stored;
               this.index = stored.index;
-              try {
-                this.compactLocalPayload(this.key, storedRaw, stored);
-              } catch {
-              }
-              this.compactRecoveryArchives(stored.recoveryKeys);
             }
-            this.deviceId = getOrCreateWardrobeDeviceId(this.local, Number(this.member));
+            if (this.persistence) {
+              const legacyEntries = [];
+              const archives = [];
+              for (const key of this.localRecoveryKeys([
+                ...stored?.recoveryKeys || [],
+                ...localDocument?.recoveryKeys || []
+              ])) {
+                const raw2 = this.local.getItem(key);
+                if (!raw2) continue;
+                this.localRecoveryKeysOnDisk.add(key);
+                try {
+                  const record = decodeWardrobePayload(raw2);
+                  if (typeof record.reason !== "string" || !own(record, "data")) {
+                    continue;
+                  }
+                  archives.push({ key, record });
+                  legacyEntries.push({ key, raw: raw2 });
+                } catch {
+                }
+              }
+              if (localError && !stored) throw localError;
+              if (localError && stored && storedRaw) this.unrecognizedLocalDocumentKey = this.key;
+              if (localDocument || archives.length) {
+                this.ensureWriter();
+                const migrated = await this.database(() => this.persistence.migrate(
+                  this.member,
+                  { document: localDocument, archives }
+                ));
+                this.ensureWriter();
+                stored = migrated.document;
+                if (localDocument) legacyEntries.push({ key: this.key, raw: storedRaw });
+                this.persistence.removeLegacyKeysIfUnchanged(this.local, legacyEntries);
+              }
+            } else if (localError) throw localError;
+            let legacySources = [];
+            if (this.persistence) {
+              legacySources = this.legacyLocalSources({ tolerateInvalid: true });
+            }
+            if (stored) {
+              this.document = stored;
+              this.index = stored.index;
+              if (!this.persistence) {
+                try {
+                  this.compactLocalPayload(this.key, storedRaw, stored);
+                } catch {
+                }
+                this.compactRecoveryArchives(stored.recoveryKeys);
+              }
+              if (legacySources.length) {
+                await this.archive("legacy-local-source", {
+                  local: legacySources.map(({ key, raw: raw2 }) => ({ key, raw: raw2 }))
+                });
+              }
+            }
+            if (this.persistence) {
+              const archives = await this.database(() => this.persistence.listArchives(this.member));
+              this.document = { ...this.document, recoveryKeys: [.../* @__PURE__ */ new Set([
+                ...this.document.recoveryKeys || [],
+                ...archives.map(({ key }) => key)
+              ])] };
+            }
+            if (this.persistence) {
+              let oldDeviceId = this.local.getItem(`VPW4_device_${this.member}`);
+              try {
+                if (oldDeviceId !== null) markerKeyForDevice(oldDeviceId);
+              } catch {
+                oldDeviceId = null;
+              }
+              this.ensureWriter();
+              this.deviceId = await this.database(() => this.persistence.getOrCreateMeta(
+                this.member,
+                "deviceId",
+                () => oldDeviceId || generateWardrobeDeviceId()
+              ));
+              this.ensureWriter();
+            } else this.deviceId = getOrCreateWardrobeDeviceId(this.local, Number(this.member));
             this.markerKey = markerKeyForDevice(this.deviceId);
             const raw = extensionSettings?.VPWardrobe;
             let online = null;
@@ -12776,19 +12956,19 @@ One of mods you are using is using an old version of SDK. It will work for now b
               this.remoteError = error;
             }
             if (!stored) {
-              const legacy = this.legacyLocalSources();
+              const legacy = this.persistence ? legacySources : this.legacyLocalSources();
               if (online?.kind === "v4" || online?.kind === "v3") this.index = online.index;
               else if (legacy.length) this.index = migrateLegacyWardrobe(legacy[0].value);
               else if (online?.kind === "legacy") this.index = online.index;
               if (legacy.length || online?.kind === "legacy" || online?.kind === "v3") {
-                this.archive("before-v4-migration", { local: legacy, onlineRaw: raw });
+                await this.archive("before-v4-migration", { local: this.persistence ? legacy.map(({ key, raw: raw2 }) => ({ key, raw: raw2 })) : legacy, onlineRaw: raw });
               }
               this.document.baseCloudIndex = online?.index || null;
               this.document.baseAppliedSeq = online?.a || {};
               this.document.baseCloudSequence = online?.a?.[this.deviceId] || 0;
             }
             if (stored?.protocolVersion === 4 && online && online.kind !== "v4" && online.kind !== "empty") {
-              this.archive("older-client-cloud-snapshot", { onlineRaw: raw });
+              await this.archive("older-client-cloud-snapshot", { onlineRaw: raw });
               this.remoteError = new Error("Older client replaced the v4 cloud snapshot; automatic upload stopped");
             }
             this.remoteRaw = raw;
@@ -12799,9 +12979,17 @@ One of mods you are using is using an old version of SDK. It will work for now b
               protocolVersion: this.document.protocolVersion || (online?.kind === "v4" ? 4 : void 0)
             };
             const nextDocument = { ...this.document, ...changes, index: this.index };
-            if (stored && this.local.getItem(this.key) === storedRaw && equal(decodeWardrobePayload(storedRaw), nextDocument)) {
+            if (stored && (this.persistence || this.local.getItem(this.key) === storedRaw) && equal(stored, nextDocument)) {
               this.document = nextDocument;
-            } else this.writeDocument(this.index, changes);
+            } else await this.writeDocument(this.index, changes);
+            this.ensureWriter();
+            if (this.persistence) this.persistence.removeLegacyKeysIfUnchanged(
+              this.local,
+              legacySources.map(({ key, raw: raw2 }) => ({ key, raw: raw2 }))
+            );
+            this.unrecognizedLocalDocumentKey = this.local.getItem(this.key) ? this.key : null;
+            this.localRecoveryKeysOnDisk = new Set(this.localRecoveryKeys().filter((key) => this.local.getItem(key) !== null));
+            this.rawLegacySourceKeys = new Set(this.legacySourceKeys().filter((key) => this.local.getItem(key) !== null));
             committed = true;
             this.measure();
             this.emit({
@@ -12812,10 +13000,10 @@ One of mods you are using is using an old version of SDK. It will work for now b
               conflicts: this.document.conflicts || [],
               error: this.remoteError?.message || ""
             });
-            if (fresh && !this.remoteError) return this.receiveCloud({ extensionSettings, fresh: true });
+            if (fresh && !this.remoteError) return await this.receiveCloudNow({ extensionSettings, fresh: true });
             return true;
           } catch (error) {
-            const reported = storageError(error);
+            const reported = storageError(error, !!this.persistence);
             this.emit({
               state: "error",
               error: reported.message,
@@ -12825,15 +13013,16 @@ One of mods you are using is using an old version of SDK. It will work for now b
             return committed;
           }
         }
-        ensureAccount() {
+        async ensureAccount() {
           if (accountId(this.getPlayer()) !== this.member) {
-            this.open();
+            await this.openNow();
             throw new Error("Account changed; repeat the action in the current wardrobe");
           }
           if (!this.status.localSaved) throw new Error(this.status.error || "Wardrobe storage is not ready");
         }
-        mergeStored() {
-          const stored = this.readDocument();
+        async mergeStored() {
+          const stored = await this.readDocument();
+          this.ensureWriter();
           if (stored) {
             this.index = mergeWardrobeIndexes(stored.index, this.index, { bothLocal: true });
             const recoveryKeys = [.../* @__PURE__ */ new Set([...this.document.recoveryKeys || [], ...stored.recoveryKeys || []])];
@@ -12842,12 +13031,15 @@ One of mods you are using is using an old version of SDK. It will work for now b
           }
         }
         apply(operations) {
-          this.ensureAccount();
+          return this.serialize(() => this.applyNow(operations));
+        }
+        async applyNow(operations) {
+          await this.ensureAccount();
           const before = this.index;
           let committed = false;
           try {
-            this.mergeStored();
-            this.observeHostChanges();
+            await this.mergeStored();
+            await this.observeHostChanges();
             if (this.remoteError) {
               this.cancelPending();
             }
@@ -12869,7 +13061,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
               projectWardrobeCloudIndex(next),
               projectWardrobeCloudIndex(this.index)
             );
-            this.writeDocument(visible2, {
+            await this.writeDocument(visible2, {
               pending,
               conflicts,
               conflictContext: context ? { ...context, local, result, resolvedChoices } : null
@@ -12886,19 +13078,20 @@ One of mods you are using is using an old version of SDK. It will work for now b
             if (pending && !this.remoteError && !this.document.conflicts?.length && !this.quota.isOverLimit) this.queue();
             return visible2;
           } catch (error) {
+            const reported = storageError(error, !!this.persistence);
             this.cancelPending();
             if (committed) {
               this.emit({
                 state: "error",
-                error: error.message,
-                errorCode: error.code || null,
+                error: reported.message,
+                errorCode: reported.code || null,
                 localSaved: true
               });
               return this.index;
             }
             this.index = this.document?.index || before;
-            this.emit({ state: "error", error: error.message, errorCode: error.code || null });
-            throw error;
+            this.emit({ state: "error", error: reported.message, errorCode: reported.code || null });
+            throw reported;
           }
         }
         observeSettings(extensionSettings, fresh) {
@@ -12917,11 +13110,11 @@ One of mods you are using is using an old version of SDK. It will work for now b
           }
           this.hostSettingSignatures = settingSignatures(this.getPlayer()?.ExtensionSettings);
         }
-        observeHostChanges() {
+        async observeHostChanges() {
           if (this.pendingRemote) {
             const observedHostRaw = this.lastObservedHostRaw;
             const hostSignatures = this.hostSettingSignatures;
-            if (!this.receiveCloud({ ...this.pendingRemote, schedule: false })) {
+            if (!await this.receiveCloudNow({ ...this.pendingRemote, schedule: false })) {
               throw new Error(this.status.error || "Cloud changes could not be saved locally");
             }
             this.lastObservedHostRaw = observedHostRaw;
@@ -12929,7 +13122,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
           }
           const settings = this.getPlayer()?.ExtensionSettings;
           if (settings?.VPWardrobe === this.lastObservedHostRaw && markerSignature(settings) === this.lastObservedMarkerSignature) return;
-          this.receiveCloud({ extensionSettings: settings, fresh: false, schedule: false });
+          await this.receiveCloudNow({ extensionSettings: settings, fresh: false, schedule: false });
         }
         proposal(settings = this.freshSettings || this.getPlayer()?.ExtensionSettings || {}) {
           const projection = projectWardrobeCloudIndex(this.index);
@@ -13022,7 +13215,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
           if (!retry) this.attempt = 0;
           this.timer = this.schedule(() => {
             this.timer = null;
-            this.flush();
+            return this.flush();
           }, delay);
         }
         retrySend() {
@@ -13032,19 +13225,22 @@ One of mods you are using is using an old version of SDK. It will work for now b
           const delay = Math.min(6e4, Math.round(baseDelay * (0.8 + 0.4 * this.random())));
           this.queue(delay, { retry: true });
         }
-        flush({ force = false } = {}) {
+        flush(options2) {
+          return this.serialize(() => this.flushNow(options2));
+        }
+        async flushNow({ force = false } = {}) {
           this.cancelPending({ resetAttempts: force });
           let transportFailed = false;
           try {
-            this.ensureAccount();
-            this.mergeStored();
-            this.observeHostChanges();
+            await this.ensureAccount();
+            await this.mergeStored();
+            await this.observeHostChanges();
             if (this.remoteError) throw this.remoteError;
             if (this.document.conflicts?.length) {
               this.emit({ state: "conflict", conflicts: this.document.conflicts, error: "" });
               return false;
             }
-            this.writeDocument(this.index);
+            await this.writeDocument(this.index);
             this.measure();
             if (this.quota.isOverLimit) {
               this.emit({ state: "quota", error: "" });
@@ -13067,7 +13263,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
             if (!force && payload === this.submittedRaw) {
               if (this.document.submission?.submittedAt == null) {
                 const time2 = Date.now();
-                this.writeDocument(this.index, {
+                await this.writeDocument(this.index, {
                   lastSubmittedPayload: payload,
                   lastSubmittedAt: time2,
                   submission: { ...proposal, submittedAt: time2 }
@@ -13087,17 +13283,23 @@ One of mods you are using is using an old version of SDK. It will work for now b
             const hadMarker = own(settings, this.markerKey);
             const previous = settings.VPWardrobe;
             const previousMarker = settings[this.markerKey];
+            const previousMarkerSignature = markerSignature(settings);
             const submittedVersions = [
               ...(this.document.submittedVersions || []).filter((entry) => entry.sequence !== proposal.marker.s),
               { sequence: proposal.marker.s, index: projectWardrobeCloudIndex(this.index) }
             ].slice(-8);
-            this.writeDocument(this.index, {
+            await this.writeDocument(this.index, {
               pending: true,
               protocolVersion: 4,
               markerSequence: proposal.marker.s,
               submittedVersions,
               submission: { ...proposal, submittedAt: null }
             });
+            this.ensureWriter();
+            if (this.getPlayer() !== player || player.ExtensionSettings !== settings || settings.VPWardrobe !== previous || markerSignature(settings) !== previousMarkerSignature) {
+              this.invalidateFreshness();
+              throw new Error("Wardrobe host session changed before upload; sign in again to reconcile");
+            }
             settings.VPWardrobe = payload;
             settings[this.markerKey] = markerValue;
             try {
@@ -13105,7 +13307,8 @@ One of mods you are using is using an old version of SDK. It will work for now b
                 "ExtensionSettings.VPWardrobe": payload,
                 [`ExtensionSettings.${this.markerKey}`]: markerValue
               };
-              if (this.send(fields) === false) throw new Error("The game did not accept the upload");
+              this.ensureWriter();
+              if (await this.send(fields, this.member) === false) throw new Error("The game did not accept the upload");
             } catch (error) {
               if (hadValue) settings.VPWardrobe = previous;
               else delete settings.VPWardrobe;
@@ -13120,7 +13323,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
             this.submittedRaw = payload;
             this.attempt = 0;
             const time = Date.now();
-            this.writeDocument(this.index, {
+            await this.writeDocument(this.index, {
               lastSubmittedPayload: payload,
               lastSubmittedAt: time,
               submission: { ...proposal, submittedAt: time }
@@ -13128,17 +13331,21 @@ One of mods you are using is using an old version of SDK. It will work for now b
             this.emit({ state: "submitted", localSaved: true, error: "", lastSubmittedAt: time });
             return true;
           } catch (error) {
-            this.emit({ state: "error", error: error.message, errorCode: error.code || null });
+            const reported = storageError(error, !!this.persistence);
+            this.emit({ state: "error", error: reported.message, errorCode: reported.code || null });
             if (transportFailed) this.retrySend();
             return false;
           }
         }
-        receiveCloud({ extensionSettings, fresh = false, memberNumber = this.getPlayer()?.MemberNumber, schedule = true } = {}) {
+        receiveCloud(event) {
+          return this.serialize(() => this.receiveCloudNow(event));
+        }
+        async receiveCloudNow({ extensionSettings, fresh = false, memberNumber = this.getPlayer()?.MemberNumber, schedule = true } = {}) {
           let committed = false;
           let beforeRemote = null;
           try {
             if (String(memberNumber) !== accountId(this.getPlayer())) return false;
-            if (String(memberNumber) !== this.member) return this.open({ extensionSettings, fresh });
+            if (String(memberNumber) !== this.member) return await this.openNow({ extensionSettings, fresh });
             this.cancelPending();
             const raw = extensionSettings?.VPWardrobe;
             const previousMarkerSignature = this.lastObservedMarkerSignature;
@@ -13159,12 +13366,12 @@ One of mods you are using is using an old version of SDK. It will work for now b
             const settled = maxAppliedSequences(online.a, this.document.discardedSeqByDevice);
             const missing = findUnappliedWardrobeMarkers(markers, settled);
             if (this.document.protocolVersion === 4 && online.kind !== "v4" && !(online.kind === "empty" && !this.document.lastVerifiedPayload)) {
-              this.archive("older-client-cloud-snapshot", { onlineRaw: raw });
+              await this.archive("older-client-cloud-snapshot", { onlineRaw: raw });
               throw new Error("Older client replaced the v4 cloud snapshot; automatic upload stopped");
             }
             this.remoteError = null;
             this.pendingRemote = { extensionSettings: { ...extensionSettings }, fresh, memberNumber };
-            this.mergeStored();
+            await this.mergeStored();
             beforeRemote = { index: this.index, document: { ...this.document } };
             const cloudSequence = online.a[this.deviceId] || 0;
             const knownVersion = (this.document.submittedVersions || []).find((entry) => entry.sequence === cloudSequence);
@@ -13205,7 +13412,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
             const verified = online.kind === "v4" && conflicts.length === 0 && sameCloud && discardsPublished && (!this.document.submission || (online.a[this.deviceId] || 0) >= this.document.submission.marker.s);
             this.remoteRaw = raw;
             if (!verified) this.submittedRaw = null;
-            this.writeDocument(merged, {
+            await this.writeDocument(merged, {
               pending: !verified,
               conflicts,
               conflictContext,
@@ -13237,23 +13444,27 @@ One of mods you are using is using an old version of SDK. It will work for now b
             if (schedule && !verified && !conflicts.length && !this.quota.isOverLimit) this.queue();
             return true;
           } catch (error) {
+            const reported = storageError(error, !!this.persistence);
             this.cancelPending();
             if (!committed && beforeRemote) {
               this.index = beforeRemote.index;
               this.document = beforeRemote.document;
             }
-            if (!beforeRemote || !committed) this.remoteError = error;
+            if (!beforeRemote || !committed) this.remoteError = reported;
             this.emit({
               state: "error",
-              error: error.message,
-              errorCode: error.code || null,
+              error: reported.message,
+              errorCode: reported.code || null,
               localSaved: committed || this.status.localSaved
             });
             return committed;
           }
         }
         resolveSyncConflict(resolutions) {
-          this.ensureAccount();
+          return this.serialize(() => this.resolveSyncConflictNow(resolutions));
+        }
+        async resolveSyncConflictNow(resolutions) {
+          await this.ensureAccount();
           if (!Array.isArray(resolutions) || !resolutions.length) {
             throw new Error("Choose a sync conflict to resolve");
           }
@@ -13286,29 +13497,34 @@ One of mods you are using is using an old version of SDK. It will work for now b
           const remainingDevice = this.document.conflicts.filter((conflict) => conflict.type === "missing-device" && !missingChoices.some((choice) => choice.id === conflict.id));
           const conflicts = [...updated.conflicts, ...remainingDevice];
           const next = remainingDevice.length ? quarantineCloudContent(updated.merged, context.local) : clone$1(updated.merged);
-          this.archive("sync-conflict-decision", {
+          const recovery = {
             resolutions,
             conflicts: this.document.conflicts,
             local: context.local,
             remote: context.remote,
             missing: context.missing
-          });
+          };
           const baseAppliedSeq = maxAppliedSequences(this.document.baseAppliedSeq, discarded);
-          this.writeDocument(next, {
-            pending: true,
-            conflicts,
-            conflictContext: conflicts.length ? {
-              ...context,
-              result: updated,
-              guardedRemote: context.remote,
-              missing: activeMissing,
-              resolvedChoices: allChoices
-            } : null,
-            baseCloudIndex: conflicts.length ? context.base : context.remote,
-            baseAppliedSeq,
-            discardedSeqByDevice: discarded,
-            submission: null
-          });
+          await this.writeDocumentWithArchive(
+            next,
+            {
+              pending: true,
+              conflicts,
+              conflictContext: conflicts.length ? {
+                ...context,
+                result: updated,
+                guardedRemote: context.remote,
+                missing: activeMissing,
+                resolvedChoices: allChoices
+              } : null,
+              baseCloudIndex: conflicts.length ? context.base : context.remote,
+              baseAppliedSeq,
+              discardedSeqByDevice: discarded,
+              submission: null
+            },
+            "sync-conflict-decision",
+            recovery
+          );
           this.submittedRaw = null;
           this.measure();
           this.emit({
@@ -13321,7 +13537,372 @@ One of mods you are using is using an old version of SDK. It will work for now b
           return next;
         }
         exportRecovery() {
+          return this.serialize(() => this.exportRecoveryNow());
+        }
+        async exportRecoveryNow() {
+          if (accountId(this.getPlayer()) !== this.member) {
+            throw new Error("Account changed; reopen the wardrobe before exporting recovery");
+          }
+          if (this.persistence) {
+            let archives = [];
+            let databaseError = null;
+            try {
+              archives = await this.database(() => this.persistence.listArchives(this.member));
+            } catch (error) {
+              databaseError = error;
+            }
+            const result = archives.map(({ key, record }) => ({ key, ...record }));
+            const archivedByKey = new Map(archives.map(({ key, record }) => [key, record]));
+            for (const key of this.localRecoveryKeys(this.document?.recoveryKeys || [])) {
+              const raw = this.local.getItem(key);
+              if (!raw) continue;
+              try {
+                const record = decodeWardrobePayload(raw);
+                if (typeof record.reason === "string" && own(record, "data")) {
+                  if (!archivedByKey.has(key) || !equal(record, archivedByKey.get(key))) {
+                    result.push({ key, ...record, source: "localStorage" });
+                  }
+                } else if (typeof record.reason !== "string" || !own(record, "data")) {
+                  result.push({ key, reason: "unreadable-legacy-recovery", data: { raw } });
+                }
+              } catch {
+                result.push({ key, reason: "unreadable-legacy-recovery", data: { raw } });
+              }
+            }
+            const primaryRaw = this.local.getItem(this.key);
+            if (primaryRaw) {
+              let reason = "legacy-local-document-raw";
+              try {
+                await this.readDocument(primaryRaw);
+              } catch {
+                reason = "unreadable-legacy-document";
+              }
+              result.push({ key: this.key, reason, data: { raw: primaryRaw } });
+            }
+            for (const key of this.legacySourceKeys()) {
+              const raw = this.local.getItem(key);
+              if (raw) result.push({ key, reason: "legacy-local-source-raw", data: { raw } });
+            }
+            if (databaseError && !result.length) throw databaseError;
+            return result;
+          }
           return (this.document?.recoveryKeys || []).map((key) => ({ key, ...decodeWardrobePayload(this.local.getItem(key)) }));
+        }
+      }
+      const DATABASE_NAME$1 = "VPWardrobeLocalWardrobe";
+      const STORE_NAME$1 = "records";
+      const documentKey = (member) => `document:${member}`;
+      const archivePrefix = (member) => `archive:${member}:`;
+      const metaKey = (member, key) => `meta:${member}:${key}`;
+      function accountKey(member) {
+        const value = String(member);
+        if (!/^(0|[1-9]\d*)$/.test(value) || !Number.isSafeInteger(Number(value))) {
+          throw new Error("Invalid wardrobe account");
+        }
+        return value;
+      }
+      function requiredKey(key) {
+        if (typeof key !== "string" || !key) throw new Error("Wardrobe storage key is required");
+        return key;
+      }
+      function same(left, right) {
+        const canonical2 = (value) => Array.isArray(value) ? value.map(canonical2) : value && typeof value === "object" ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical2(value[key])])) : value;
+        return JSON.stringify(canonical2(left)) === JSON.stringify(canonical2(right));
+      }
+      function removeLegacyKeysIfUnchanged(storage, entries) {
+        const removed = [];
+        for (const { key, raw } of entries) {
+          if (typeof key !== "string" || typeof raw !== "string") continue;
+          try {
+            if (storage.getItem(key) !== raw) continue;
+            storage.removeItem(key);
+            if (storage.getItem(key) === null) removed.push(key);
+          } catch {
+          }
+        }
+        return removed;
+      }
+      class WardrobePersistence {
+        constructor(getIndexedDB, canWrite = () => true) {
+          if (typeof canWrite !== "function") throw new Error("Wardrobe writer check must be a function");
+          this.getIndexedDB = getIndexedDB;
+          this.canWrite = canWrite;
+          this.database = null;
+          this.connection = null;
+        }
+        removeLegacyKeysIfUnchanged(storage, entries) {
+          return removeLegacyKeysIfUnchanged(storage, entries);
+        }
+        open() {
+          if (this.database) return this.database;
+          const indexedDB = this.getIndexedDB?.();
+          if (!indexedDB?.open) return Promise.reject(new Error("IndexedDB is unavailable"));
+          this.database = new Promise((resolve, reject) => {
+            const request = indexedDB.open(DATABASE_NAME$1, 1);
+            let blocked = false;
+            request.onupgradeneeded = () => {
+              if (!request.result.objectStoreNames.contains(STORE_NAME$1)) {
+                request.result.createObjectStore(STORE_NAME$1);
+              }
+            };
+            request.onsuccess = () => {
+              const database = request.result;
+              if (blocked) {
+                database.close();
+                return;
+              }
+              this.connection = database;
+              const invalidate = () => {
+                if (this.connection !== database) return;
+                database.close();
+                this.connection = null;
+                this.database = null;
+              };
+              database.onversionchange = invalidate;
+              database.onclose = invalidate;
+              resolve(database);
+            };
+            request.onerror = () => reject(request.error || new Error("Wardrobe database open failed"));
+            request.onblocked = () => {
+              blocked = true;
+              reject(new Error("Wardrobe database open blocked"));
+            };
+          }).catch((error) => {
+            this.database = null;
+            throw error;
+          });
+          return this.database;
+        }
+        async transact(mode, operation, member) {
+          const account = accountKey(member);
+          for (let attempt = 0; attempt < 2; attempt++) {
+            const database = await this.open();
+            try {
+              return await new Promise((resolve, reject) => {
+                let transaction;
+                let result;
+                let settled = false;
+                const fail = (error) => {
+                  if (settled) return;
+                  settled = true;
+                  try {
+                    transaction?.abort();
+                  } catch {
+                  }
+                  reject(error);
+                };
+                const request = (idbRequest, callback) => {
+                  idbRequest.onsuccess = () => {
+                    try {
+                      callback(idbRequest.result);
+                    } catch (error) {
+                      fail(error);
+                    }
+                  };
+                };
+                try {
+                  if (mode === "readwrite" && this.canWrite(account) !== true) {
+                    throw Object.assign(new Error("Wardrobe writer lock was lost"), { code: "writer-lost" });
+                  }
+                  transaction = database.transaction(STORE_NAME$1, mode);
+                  transaction.oncomplete = () => {
+                    if (settled) return;
+                    settled = true;
+                    resolve(result);
+                  };
+                  transaction.onerror = (event) => fail(transaction.error || event?.target?.error || new Error("Wardrobe database transaction failed"));
+                  transaction.onabort = () => fail(transaction.error || new Error("Wardrobe database transaction aborted"));
+                  operation(transaction.objectStore(STORE_NAME$1), request, (value) => {
+                    result = value;
+                  }, fail);
+                } catch (error) {
+                  fail(error);
+                }
+              });
+            } catch (error) {
+              if (attempt === 0 && error?.name === "InvalidStateError") {
+                this.connection?.close();
+                this.connection = null;
+                this.database = null;
+                continue;
+              }
+              throw error;
+            }
+          }
+        }
+        read(member) {
+          const key = documentKey(accountKey(member));
+          return this.transact("readonly", (store, request, result) => {
+            request(store.get(key), (value) => result(value ?? null));
+          }, member);
+        }
+        write(member, document2) {
+          const key = documentKey(accountKey(member));
+          if (!document2 || typeof document2 !== "object") throw new Error("Wardrobe document is required");
+          return this.transact("readwrite", (store, _request, result) => {
+            store.put(document2, key);
+            result(void 0);
+          }, member);
+        }
+        /** transform must be synchronous, so the transaction remains active. */
+        update(member, transform) {
+          const key = documentKey(accountKey(member));
+          if (typeof transform !== "function") throw new Error("Wardrobe update transform is required");
+          return this.transact("readwrite", (store, request, result) => {
+            request(store.get(key), (value) => {
+              const previous = value ?? null;
+              const document2 = transform(previous);
+              if (!document2 || typeof document2 !== "object") {
+                throw new Error("Wardrobe update must return a document");
+              }
+              store.put(document2, key);
+              result({ previous, document: document2 });
+            });
+          }, member);
+        }
+        readMeta(member, key) {
+          const storageKey = metaKey(accountKey(member), requiredKey(key));
+          return this.transact("readonly", (store, request, result) => {
+            request(store.get(storageKey), (value) => result(value ?? null));
+          }, member);
+        }
+        writeMeta(member, key, value) {
+          const storageKey = metaKey(accountKey(member), requiredKey(key));
+          return this.transact("readwrite", (store, _request, result) => {
+            store.put(value, storageKey);
+            result(void 0);
+          }, member);
+        }
+        getOrCreateMeta(member, key, create) {
+          const storageKey = metaKey(accountKey(member), requiredKey(key));
+          if (typeof create !== "function") throw new Error("Wardrobe metadata factory is required");
+          return this.transact("readwrite", (store, request, result) => {
+            request(store.get(storageKey), (value) => {
+              if (value !== void 0) return result(value);
+              const created = create();
+              store.put(created, storageKey);
+              result(created);
+            });
+          }, member);
+        }
+        /** Resolve archive-key collisions without overwriting a different recovery copy. */
+        saveArchive(store, request, prefix, desiredKey, record, done, suffix = 0) {
+          const key = suffix ? `${desiredKey}_${suffix}` : desiredKey;
+          request(store.get(prefix + key), (existing) => {
+            if (existing === void 0) {
+              store.put(record, prefix + key);
+              done(key);
+            } else if (same(existing?.data, record?.data)) {
+              done(key);
+            } else {
+              this.saveArchive(store, request, prefix, desiredKey, record, done, suffix + 1);
+            }
+          });
+        }
+        archive(member, desiredKey, record) {
+          const prefix = archivePrefix(accountKey(member));
+          requiredKey(desiredKey);
+          if (!record || typeof record !== "object" || !Object.hasOwn(record, "data")) {
+            throw new Error("Wardrobe recovery record is required");
+          }
+          return this.transact("readwrite", (store, request, result) => {
+            this.saveArchive(store, request, prefix, desiredKey, record, result);
+          }, member);
+        }
+        /** Keep a recovery decision and the document it protects in one commit. */
+        writeWithArchive(member, document2, desiredKey, record) {
+          const account = accountKey(member);
+          const primaryKey = documentKey(account);
+          const prefix = archivePrefix(account);
+          requiredKey(desiredKey);
+          if (!document2 || typeof document2 !== "object" || !record || typeof record !== "object" || !Object.hasOwn(record, "data")) {
+            throw new Error("Wardrobe document and recovery record are required");
+          }
+          return this.transact("readwrite", (store, request, result) => {
+            request(store.get(primaryKey), (current) => {
+              this.saveArchive(store, request, prefix, desiredKey, record, (archiveKey) => {
+                const saved = { ...document2, recoveryKeys: [.../* @__PURE__ */ new Set([
+                  ...current?.recoveryKeys || [],
+                  ...document2.recoveryKeys || [],
+                  archiveKey
+                ])] };
+                store.put(saved, primaryKey);
+                result({ document: saved, archiveKey });
+              });
+            });
+          }, member);
+        }
+        readArchive(member, key) {
+          const storageKey = archivePrefix(accountKey(member)) + requiredKey(key);
+          return this.transact("readonly", (store, request, result) => {
+            request(store.get(storageKey), (value) => result(value ?? null));
+          }, member);
+        }
+        listArchives(member) {
+          const prefix = archivePrefix(accountKey(member));
+          return this.transact("readonly", (store, request, result) => {
+            const archives = [];
+            const range = globalThis.IDBKeyRange?.bound(prefix, `${prefix}￿`);
+            request(store.openCursor(range), (cursor) => {
+              if (!cursor) return result(archives);
+              if (typeof cursor.key === "string" && cursor.key.startsWith(prefix)) {
+                archives.push({ key: cursor.key.slice(prefix.length), record: cursor.value });
+              }
+              cursor.continue();
+            });
+          }, member);
+        }
+        /** Copy localStorage data in one transaction; an existing IDB document always wins. */
+        migrate(member, { document: document2 = null, archives = [] } = {}) {
+          const account = accountKey(member);
+          const primaryKey = documentKey(account);
+          const prefix = archivePrefix(account);
+          if (!Array.isArray(archives)) throw new Error("Wardrobe migration archives must be an array");
+          for (const entry of archives) {
+            requiredKey(entry.key);
+            if (!entry.record || typeof entry.record !== "object" || !Object.hasOwn(entry.record, "data")) {
+              throw new Error("Wardrobe migration recovery record is required");
+            }
+          }
+          return this.transact("readwrite", (store, request, result) => {
+            request(store.get(primaryKey), (current) => {
+              const existing = current ?? null;
+              const migrated = [];
+              const remappedKeys = /* @__PURE__ */ new Map();
+              const pending = archives.map((entry) => ({ ...entry }));
+              const legacyDocumentArchived = Boolean(existing && document2 && !same(existing, document2));
+              if (legacyDocumentArchived) {
+                pending.push({
+                  key: `VPWardrobe_index_${account}_recovery_legacy_document`,
+                  record: { reason: "superseded-local-document", data: document2, createdAt: Date.now() }
+                });
+              }
+              const next = () => {
+                const entry = pending.shift();
+                if (entry) {
+                  this.saveArchive(store, request, prefix, entry.key, entry.record, (key) => {
+                    migrated.push(key);
+                    remappedKeys.set(entry.key, key);
+                    next();
+                  });
+                  return;
+                }
+                const primary = existing || document2;
+                if (!primary) {
+                  result({ document: null, archiveKeys: migrated, legacyDocumentArchived });
+                  return;
+                }
+                const recoveryKeys = [.../* @__PURE__ */ new Set([
+                  ...(primary.recoveryKeys || []).map((key) => existing ? key : remappedKeys.get(key) || key),
+                  ...migrated
+                ])];
+                const saved = { ...primary, recoveryKeys };
+                if (!existing || !same(saved, existing)) store.put(saved, primaryKey);
+                result({ document: saved, archiveKeys: migrated, legacyDocumentArchived });
+              };
+              next();
+            });
+          }, member);
         }
       }
       const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -13356,11 +13937,14 @@ One of mods you are using is using an old version of SDK. It will work for now b
       const wardrobeLibraryActions = {
         _getRepository() {
           if (!this._repository) {
+            const canWrite = (member) => hostWindow.__VPW_WARDROBE_LOCK_OWNER === true && String(hostWindow.Player?.MemberNumber) === String(member);
             this._repository = new WardrobeRepository({
               getPlayer: () => hostWindow.Player,
               localStorage: hostWindow.localStorage,
-              send: (fields) => {
-                if (hostWindow.__VPW_WARDROBE_LOCK_OWNER !== true || hostWindow.__VPW_WARDROBE_LOCK_MEMBER !== String(hostWindow.Player?.MemberNumber)) return false;
+              persistence: new WardrobePersistence(() => hostWindow.indexedDB, canWrite),
+              canWrite,
+              send: (fields, expectedMember) => {
+                if (hostWindow.__VPW_WARDROBE_LOCK_OWNER !== true || hostWindow.__VPW_WARDROBE_LOCK_MEMBER !== String(expectedMember) || String(hostWindow.Player?.MemberNumber) !== String(expectedMember)) return false;
                 if (typeof hostWindow.ServerSend !== "function") return false;
                 const keys2 = Object.keys(fields || {});
                 if (keys2.length !== 2 || !keys2.includes("ExtensionSettings.VPWardrobe") || !keys2.some((key) => /^ExtensionSettings\.VPW4_M_[0-9a-f]{32}$/.test(key))) {
@@ -13426,23 +14010,23 @@ One of mods you are using is using an old version of SDK. It will work for now b
           this.syncStatus = status;
           this.cloudQuota = quota || unavailableCloudQuota();
         },
-        loadAll() {
+        async loadAll() {
           const member = String(hostWindow.Player?.MemberNumber);
           this._persistedAttemptedMember = member;
-          const loaded = this._getRepository().open();
+          const loaded = await this._getRepository().open();
           this._persistedLoaded = loaded ? member : false;
           this.loadHistory();
           return loaded;
         },
-        receiveCloud(event) {
+        async receiveCloud(event) {
           const repository = this._getRepository();
-          const received = repository.receiveCloud({ ...event, fresh: true });
+          const received = await repository.receiveCloud({ ...event, fresh: true });
           if (repository.member !== null) {
             this._persistedLoaded = repository.status.localSaved ? repository.member : false;
           }
           return received;
         },
-        syncNow() {
+        async syncNow() {
           if (!this.syncStatus.localSaved) return this.loadAll();
           if (this.syncStatus.errorCode === "local-storage-quota") return this._getRepository().flush();
           return this._getRepository().flush({ force: true });
@@ -13457,42 +14041,42 @@ One of mods you are using is using an old version of SDK. It will work for now b
         selectTag(id) {
           this.selectedTagId = id;
         },
-        createTag(name) {
+        async createTag(name) {
           const id = newId();
-          this._getRepository().apply([{ type: "put-tag", id, name }]);
+          await this._getRepository().apply([{ type: "put-tag", id, name }]);
           return id;
         },
-        renameTag(id, name) {
-          this._getRepository().apply([{ type: "rename-tag", id, name }]);
+        async renameTag(id, name) {
+          await this._getRepository().apply([{ type: "rename-tag", id, name }]);
           return true;
         },
-        deleteTag(id) {
+        async deleteTag(id) {
           const ids2 = this.tags.find((tag) => tag.aliasIds.includes(id))?.aliasIds || [id];
-          this._getRepository().apply(ids2.map((id2) => ({ type: "delete-tag", id: id2 })));
+          await this._getRepository().apply(ids2.map((id2) => ({ type: "delete-tag", id: id2 })));
           return true;
         },
-        addOutfit(file) {
+        async addOutfit(file) {
           const id = newId();
           const { cloudSync = true, ...changes } = file;
           changes.tagIds ||= this.selectedTagId && this.selectedTagId !== "untagged" ? [this.selectedTagId] : [];
           const operations = [{ type: "put-outfit", id, changes }];
           if (!cloudSync) operations.push({ type: "set-cloud", id, enabled: false });
-          this._getRepository().apply(operations);
+          await this._getRepository().apply(operations);
           return id;
         },
-        updateOutfit(id, changes) {
-          this._getRepository().apply([{ type: "put-outfit", id, changes }]);
+        async updateOutfit(id, changes) {
+          await this._getRepository().apply([{ type: "put-outfit", id, changes }]);
           return true;
         },
-        removeOutfit(id) {
-          this._getRepository().apply([{ type: "delete-outfit", id }]);
+        async removeOutfit(id) {
+          await this._getRepository().apply([{ type: "delete-outfit", id }]);
           return true;
         },
         setOutfitTags(id, tagIds) {
           return this.updateOutfit(id, { tagIds });
         },
-        setOutfitCloudSync(id, enabled) {
-          this._getRepository().apply([{ type: "set-cloud", id, enabled }]);
+        async setOutfitCloudSync(id, enabled) {
+          await this._getRepository().apply([{ type: "set-cloud", id, enabled }]);
           return true;
         },
         exportWardrobe() {
@@ -13501,7 +14085,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
         exportRecovery() {
           return this._getRepository().exportRecovery();
         },
-        importWardrobe(parsed, { tagName: tagName2 = null } = {}) {
+        async importWardrobe(parsed, { tagName: tagName2 = null } = {}) {
           let incoming;
           if (isWardrobeIndex(parsed)) incoming = parsed;
           else if (isLegacyWardrobe(parsed?.fs || parsed)) incoming = migrateLegacyWardrobe(parsed.fs || parsed);
@@ -13535,7 +14119,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
             operations.push({ type: "put-outfit", id, changes });
             if (incoming.cloudState[oldId]?.enabled === false) operations.push({ type: "set-cloud", id, enabled: false });
           }
-          if (operations.length) this._getRepository().apply(operations);
+          if (operations.length) await this._getRepository().apply(operations);
           return { count: outfits.length };
         }
       };
@@ -34129,7 +34713,7 @@ ${lightForced}`;
           value
         }, children);
       }
-      const library$1 = { "searchPlaceholder": "Search outfits or tags…", "allOutfits": "All outfits", "untagged": "Untagged", "filterByTag": "Filter by tag", "manageTags": "Manage tags", "newTag": "New tag", "newTagPrompt": "Enter a unique tag name:", "renameTag": "Rename selected tag", "renameTagPrompt": "New tag name:", "deleteTag": "Delete selected tag", "deleteTagConfirm": 'Delete tag "{name}"? Your outfits will stay in the wardrobe.', "tagNameInvalid": "Enter a tag name that is different from your existing tags.", "editTags": "Edit tags", "editOutfitTags": "Tags for {name}", "tags": "Tags", "selectTags": "Select one or more tags", "noTags": "No matching tags. Create tags from Manage tags.", "multipleTagsHint": "An outfit can have multiple tags. Removing a tag does not delete the outfit.", "saveTags": "Save tags", "outfitCount": "{count} / {total} outfits", "empty": "Your wardrobe is empty", "noMatches": "No matching outfits", "clearFilters": "Clear all filters", "saveCharacter": "Save current outfit", "saveNamePrompt": "Name this outfit:", "saved": 'Saved "{name}" to this device. Check cloud status for sync progress.', "imported": "Imported {count} outfits to this device. Check cloud status for sync progress.", "nothingImported": "No outfits to import. Check that the imported data contains outfits.", "operationFailed": "The operation could not be completed: {error}", "itemUnavailable": "This outfit or tag is no longer available. Refresh your selection and try again.", "deleteOutfitConfirm": 'Delete "{name}"? It will be removed from this device, and the deletion will sync.', "previewOutfit": "Preview {name}", "outfitActions": "Actions for {name}", "moreActions": "More actions", "cloudIncluded": "Cloud enabled", "localOnly": "This device only", "localFork": "Saved local copy", "localForkHint": "Another device re-enabled cloud sync, so this device's edited version was kept as a local copy. It will not upload automatically. You can turn on cloud sync for this copy.", "cloudToggleTitle": "Include or exclude this outfit from cloud sync. Local copies are retained.", "cloudStorage": "Shared cloud storage", "otherExtensions": "Other extensions", "remainingCapacity": "Available: {amount}", "quotaAria": "{source}: {used} of {limit}", "quotaObservedLogin": "Last read from BC at login", "quotaObservedCache": "BC local cache estimate · not yet checked", "quotaObservedUnavailable": "Cloud usage has not been read yet", "observedRemaining": "Available at last read: {amount}", "proposedUpload": "Estimated next upload · not uploaded yet", "proposedRemaining": "Estimated available after upload: {amount}", "sharedQuotaInfo": "About shared cloud capacity", "sharedQuotaHint": "The wardrobe limits all extension settings to 180 kB (180000 bytes). The main figures show last-read usage; expand for the estimated next upload. VPW includes outfits and device markers.", "quotaWarning": "The estimated next upload is near the limit. Keep some outfits on this device only to reduce cloud use.", "quotaBlocked": "Upload paused: the proposed update exceeds the shared 180 kB or single-packet limit. Local outfits remain available. Reduce cloud-synced outfits, then retry.", "localSaved": "Saved on this device", "localUnsaved": "Not saved on this device", "localStorageQuotaTitle": "Browser rejected this local save", "localStorageQuotaHelp": "This edit or sync record was not confirmed saved. The cause may be this site's separate localStorage quota or a browser storage policy; this does not show how much disk space remains. It is separate from BC's 180 kB cloud limit. Export the currently readable backup, check this site's data, then retry. Do not clear all site data.", "localStorageUsage": "Estimated data already stored in this site's localStorage: VPW {wardrobe}, other data {other}, total {total}. The rejected write is not included.", "localStorageUsageUnavailable": "Could not read this site's stored localStorage usage.", "showLocalStorageDetails": "Show details", "hideLocalStorageDetails": "Hide details", "retryLocalSave": "Retry local save", "retrySync": "Retry upload", "exportLocalBackup": "Export local backup", "deviceLimit": "Cloud sync has 16 registered installations. This new installation can still save locally and export a backup; registered installations can continue syncing. Old registrations are not removed automatically.", "exportRecovery": "Export pre-migration backup", "conflict": { "review": "Review {count} conflicts", "title": "Review sync conflicts", "back": "Back to wardrobe", "intro": "Cloud uploads are paused until you choose what to keep. Your changes remain saved on this device.", "quarantineIntro": "A device change is missing from the cloud copy. Synced outfits are temporarily hidden and uploads are paused. Reopen the original device or explicitly discard the missing change.", "quarantined": "Synced outfits are temporarily hidden and cannot be previewed or applied. This-device-only outfits remain available. Saving, importing, and enabling cloud sync are paused until you resolve the missing change.", "hiddenEmpty": "Synced outfits are temporarily hidden. No this-device-only outfits are available.", "cloudEnablePaused": "Resolve the missing change before enabling cloud sync.", "paused": "Cloud upload paused. Review conflicting changes to continue.", "itemTitle": "{name} · {field}", "unnamed": "Item", "changed": "Changed", "deleted": "Deleted", "partCount": "{count} parts", "tagCount": "{count} tags", "thisDevice": "This device", "cloud": "Cloud copy", "chooseExplanation": "These versions changed separately. Choose which one to keep.", "deleteEditExplanation": "One device deleted this item while another edited it. Restoring the edit creates a new item.", "privacyExplanation": "One device kept this outfit locally while another enabled cloud sync. Choose which storage choice and outfit to keep.", "keepLocal": "Keep this device's version", "keepCloud": "Keep cloud version", "keepDeletion": "Keep deletion", "restoreAsNewOutfit": "Restore as new outfit", "restoreAsNewTag": "Restore as new tag", "missingTitle": "A reported change is missing", "missingExplanation": "A device reported a change, but its content is missing from the cloud copy. Reopen the wardrobe on the original device to recover it, or discard the missing change.", "waitForDevice": "Wait for original device", "discardMissing": "Discard missing change", "discardConfirm": "Stop waiting for this missing change? The cloud cannot restore its content. If the original device still has a local copy, you may recover it there.", "resolveFailed": "This conflict could not be resolved. Your local changes are still saved. Try again.", "fields": { "name": "Name", "data": "Outfit", "tagIds": "Tags", "cloudSync": "Cloud sync", "enabled": "Cloud sync", "$record": "Deletion and edit", "sequence": "Change record", "record": "Item", "deleted": "Deletion" } }, "sync": { "idle": "Cloud ready", "pending": "Saved locally", "submitted": "Sent (assumed saved)", "verified": "Verified against cloud data", "offline": "Offline · waiting to retry", "quota": "Upload paused · over limit", "error": "Sync needs attention", "conflict": "Conflict · upload paused" }, "selected": "Selected", "browseLibrary": "Browse wardrobe", "findTag": "Find a tag…", "storageFilter": "Cloud sync", "filters": "Filters", "storageDetails": "Storage details", "showResults": "Show {count} outfits" };
+      const library$1 = { "searchPlaceholder": "Search outfits or tags…", "allOutfits": "All outfits", "untagged": "Untagged", "filterByTag": "Filter by tag", "manageTags": "Manage tags", "newTag": "New tag", "newTagPrompt": "Enter a unique tag name:", "renameTag": "Rename selected tag", "renameTagPrompt": "New tag name:", "deleteTag": "Delete selected tag", "deleteTagConfirm": 'Delete tag "{name}"? Your outfits will stay in the wardrobe.', "tagNameInvalid": "Enter a tag name that is different from your existing tags.", "editTags": "Edit tags", "editOutfitTags": "Tags for {name}", "tags": "Tags", "selectTags": "Select one or more tags", "noTags": "No matching tags. Create tags from Manage tags.", "multipleTagsHint": "An outfit can have multiple tags. Removing a tag does not delete the outfit.", "saveTags": "Save tags", "outfitCount": "{count} / {total} outfits", "empty": "Your wardrobe is empty", "noMatches": "No matching outfits", "clearFilters": "Clear all filters", "saveCharacter": "Save current outfit", "saveNamePrompt": "Name this outfit:", "saved": 'Saved "{name}" to this device. Check cloud status for sync progress.', "imported": "Imported {count} outfits to this device. Check cloud status for sync progress.", "nothingImported": "No outfits to import. Check that the imported data contains outfits.", "operationFailed": "The operation could not be completed: {error}", "itemUnavailable": "This outfit or tag is no longer available. Refresh your selection and try again.", "deleteOutfitConfirm": 'Delete "{name}"? It will be removed from this device, and the deletion will sync.', "previewOutfit": "Preview {name}", "outfitActions": "Actions for {name}", "moreActions": "More actions", "cloudIncluded": "Cloud enabled", "localOnly": "This device only", "localFork": "Saved local copy", "localForkHint": "Another device re-enabled cloud sync, so this device's edited version was kept as a local copy. It will not upload automatically. You can turn on cloud sync for this copy.", "cloudToggleTitle": "Include or exclude this outfit from cloud sync. Local copies are retained.", "cloudStorage": "Shared cloud storage", "otherExtensions": "Other extensions", "remainingCapacity": "Available: {amount}", "quotaAria": "{source}: {used} of {limit}", "quotaObservedLogin": "Last read from BC at login", "quotaObservedCache": "BC local cache estimate · not yet checked", "quotaObservedUnavailable": "Cloud usage has not been read yet", "observedRemaining": "Available at last read: {amount}", "proposedUpload": "Estimated next upload · not uploaded yet", "proposedRemaining": "Estimated available after upload: {amount}", "sharedQuotaInfo": "About shared cloud capacity", "sharedQuotaHint": "The wardrobe limits all extension settings to 180 kB (180000 bytes). The main figures show last-read usage; expand for the estimated next upload. VPW includes outfits and device markers.", "quotaWarning": "The estimated next upload is near the limit. Keep some outfits on this device only to reduce cloud use.", "quotaBlocked": "Upload paused: the proposed update exceeds the shared 180 kB or single-packet limit. Local outfits remain available. Reduce cloud-synced outfits, then retry.", "localSaved": "Saved on this device", "localUnsaved": "Not saved on this device", "localStorageQuotaTitle": "Browser rejected this local save", "localStorageQuotaHelp": "This edit or sync record was not confirmed saved. The cause may be this site's separate localStorage quota or a browser storage policy; this does not show how much disk space remains. It is separate from BC's 180 kB cloud limit. Export the currently readable backup, check this site's data, then retry. Do not clear all site data.", "indexedDBSaveTitle": "Wardrobe database save failed", "indexedDBSaveHelp": "This wardrobe change was not confirmed saved. You can still export any readable data. Export a backup, then retry the local save. Do not clear all site data.", "localStorageUsage": "Estimated data stored in this site's localStorage: VPW {wardrobe}, other data {other}, total {total}.", "localStorageUsageNote": "Estimated from UTF-16 text length. Excludes the rejected write; not the actual quota or space left.", "localStorageUsageUnavailable": "Could not read this site's stored localStorage usage.", "localStorageCurrentIndex": "Wardrobe indexes (all accounts)", "localStorageRecovery": "Recovery archives", "localStorageOldHistory": "Older history", "localStorageLegacyWardrobe": "Older wardrobes", "localStorageOtherVpw": "Other VPW data", "localStorageOtherApps": "Other site data", "showLocalStorageDetails": "Show details", "hideLocalStorageDetails": "Hide details", "retryLocalSave": "Retry local save", "retrySync": "Retry upload", "exportLocalBackup": "Export local backup", "deviceLimit": "Cloud sync has 16 registered installations. This new installation can still save locally and export a backup; registered installations can continue syncing. Old registrations are not removed automatically.", "exportRecovery": "Export pre-migration backup", "conflict": { "review": "Review {count} conflicts", "title": "Review sync conflicts", "back": "Back to wardrobe", "intro": "Cloud uploads are paused until you choose what to keep. Your changes remain saved on this device.", "quarantineIntro": "A device change is missing from the cloud copy. Synced outfits are temporarily hidden and uploads are paused. Reopen the original device or explicitly discard the missing change.", "quarantined": "Synced outfits are temporarily hidden and cannot be previewed or applied. This-device-only outfits remain available. Saving, importing, and enabling cloud sync are paused until you resolve the missing change.", "hiddenEmpty": "Synced outfits are temporarily hidden. No this-device-only outfits are available.", "cloudEnablePaused": "Resolve the missing change before enabling cloud sync.", "paused": "Cloud upload paused. Review conflicting changes to continue.", "itemTitle": "{name} · {field}", "unnamed": "Item", "changed": "Changed", "deleted": "Deleted", "partCount": "{count} parts", "tagCount": "{count} tags", "thisDevice": "This device", "cloud": "Cloud copy", "chooseExplanation": "These versions changed separately. Choose which one to keep.", "deleteEditExplanation": "One device deleted this item while another edited it. Restoring the edit creates a new item.", "privacyExplanation": "One device kept this outfit locally while another enabled cloud sync. Choose which storage choice and outfit to keep.", "keepLocal": "Keep this device's version", "keepCloud": "Keep cloud version", "keepDeletion": "Keep deletion", "restoreAsNewOutfit": "Restore as new outfit", "restoreAsNewTag": "Restore as new tag", "missingTitle": "A reported change is missing", "missingExplanation": "A device reported a change, but its content is missing from the cloud copy. Reopen the wardrobe on the original device to recover it, or discard the missing change.", "waitForDevice": "Wait for original device", "discardMissing": "Discard missing change", "discardConfirm": "Stop waiting for this missing change? The cloud cannot restore its content. If the original device still has a local copy, you may recover it there.", "resolveFailed": "This conflict could not be resolved. Your local changes are still saved. Try again.", "fields": { "name": "Name", "data": "Outfit", "tagIds": "Tags", "cloudSync": "Cloud sync", "enabled": "Cloud sync", "$record": "Deletion and edit", "sequence": "Change record", "record": "Item", "deleted": "Deletion" } }, "sync": { "idle": "Cloud ready", "pending": "Saved locally", "submitted": "Sent (assumed saved)", "verified": "Verified against cloud data", "offline": "Offline · waiting to retry", "quota": "Upload paused · over limit", "error": "Sync needs attention", "conflict": "Conflict · upload paused" }, "selected": "Selected", "browseLibrary": "Browse wardrobe", "findTag": "Find a tag…", "storageFilter": "Cloud sync", "filters": "Filters", "storageDetails": "Storage details", "showResults": "Show {count} outfits" };
       const fileItem$1 = { "open": "Open", "rename": "Rename", "delete": "Delete", "apply": "Apply to Character", "sendToStudio": "Send to Studio", "cancel": "Cancel", "promptNewName": "New name", "confirmDelete": "Are you sure you want to delete this item?", "elementDefaultName": "Element", "sendError": "Send to Studio failed", "exportBCX": "Export as BCX", "cloudOn": "Cloud On", "cloudOff": "Cloud Off", "cloudToggleFileTitle": "Toggle cloud sync for this file", "cloudToggleFolderTitle": "Toggle cloud sync for this folder and its children" };
       const fileManager$1 = { "title": "Wardrobe", "newFolderTitle": "New folder", "restoreTitle": "Restore", "refreshThumbnails": "Refresh thumbnails", "closePanel": "Close panel", "promptNewFolderName": "New folder name", "goUp": "Go to parent folder", "parentFolder": "Parent folder", "dropToParentTitle": "Drop here to move to the parent folder", "searchPlaceholderCurrent": "Search in current folder...", "searchPlaceholderAll": "Search all folders...", "searchAria": "Search files", "clearSearch": "Clear search", "switchToGlobalSearch": "Switch to global search", "switchToCurrentSearch": "Switch to current-folder search", "emptyTip": "No matching files or folders", "scopeCurrent": "Current folder", "scopeAll": "Global", "sortBy": "Sort by", "sortToggle": "Sort", "sortToggleAria": "Cycle sort mode", "viewMode": "View mode", "viewCard": "Cards", "viewList": "List", "sortRecent": "Recent", "sortName": "Name", "sortType": "Type", "cloudUsageTitle": "Cloud Usage", "cloudUsageAria": "Cloud storage usage", "cloudUsageOk": "Within limit", "cloudUsageWarn": "Approaching limit", "cloudUsageOver": "Over 180KB limit", "filterAll": "All", "filterFolder": "Folders", "filterOutfit": "Outfits", "filterCharacter": "Character snapshots" };
       const filterManager$1 = { "ariaLabel": "Outfit adjustments", "inCharacter": "On character", "applyFailed": "Outfit change was not completed. Check the current appearance and permissions.", "hiddenBadge": "Hidden", "emptyItems": "No items in this group", "emptyGroups": "No slots to adjust", "legendToggle": "How it works", "slotModeShortOriginal": "Original", "slotModeShortIncoming": "Outfit", "slotModeShortEmpty": "Empty", "dotNone": "None", "noItemName": "None", "showAllSlots": "Show all slots", "collapseAllGroups": "Collapse all", "expandAllGroups": "Expand all", "sectionGlobal": "All slots", "operationAdd": "Add", "operationReplace": "Replace", "operationFullReplace": "Full replace", "groupProgressTooltip": "The next action depends on your preview: Add fills empty slots. Once filled, Replace overwrites this source's slots. Once matched, Full replace clears slots missing from this source. It stays complete after that.", "operationComplete": "Fully replaced", "restoreOriginalTooltip": "Restore every slot from the original character.", "replaceAllTooltip": "Use the selected outfit for every slot, clearing slots it does not contain.", "clearScopeTooltip": "Clear every slot in this range.", "replaceAllAction": "Replace all", "inSelectedOutfit": "In selected outfit", "slotControlLabel": "{name}: choose source", "preserveBodyTooltip": "Restore the original body, face, hairstyle and hair color for this preview. Keep all other slot choices.", "preserveBody": "Keep original body", "replaceBodyOnlyTooltip": "Use only the selected outfit's body, face, hairstyle and hair color. Restore all other slots from the original character.", "replaceBodyOnly": "Replace body only", "groupProgressHint": "Group buttons show the next action. Individual sliders choose a source directly.", "fullReplaceSourceHint": "Full replace clears slots missing from the source. Their sliders keep that source selected. Choose Empty to clear a slot manually.", "slotSourceHint": "Each row shows Original, Outfit, then Empty. Names identify the actual items. Blue dots mark original items; green dots mark slots only in the selected outfit." };
@@ -34185,7 +34769,7 @@ ${lightForced}`;
         wardrobeIO: wardrobeIO$1,
         outfitFlow: outfitFlow$1
       };
-      const library = { "searchPlaceholder": "搜索衣物或标签…", "allOutfits": "全部衣物", "untagged": "未加标签", "filterByTag": "按标签筛选", "manageTags": "管理标签", "newTag": "新建标签", "newTagPrompt": "输入唯一的标签名称：", "renameTag": "重命名当前标签", "renameTagPrompt": "新的标签名称：", "deleteTag": "删除当前标签", "deleteTagConfirm": "删除标签「{name}」？衣物会保留在衣橱中。", "tagNameInvalid": "请输入标签名称，并使用与现有标签不同的名称。", "editTags": "编辑标签", "editOutfitTags": "「{name}」的标签", "tags": "标签", "selectTags": "选择一个或多个标签", "noTags": "没有匹配标签，可在「管理标签」中新建。", "multipleTagsHint": "每件衣物可添加多个标签。移除标签不会删除衣物。", "saveTags": "保存标签", "outfitCount": "{count} / {total} 件衣物", "empty": "衣橱里还没有衣物", "noMatches": "没有符合条件的衣物", "clearFilters": "清除所有筛选", "saveCharacter": "保存当前穿着", "saveNamePrompt": "衣物名称：", "saved": "已将「{name}」保存到本机衣橱，云端进度请查看同步状态。", "imported": "已将 {count} 件衣物导入本机衣橱，云端进度请查看同步状态。", "nothingImported": "没有可导入的衣物。请检查导入内容是否为空。", "operationFailed": "操作未完成：{error}", "itemUnavailable": "这件衣物或标签已不可用，请重新选择后再试。", "deleteOutfitConfirm": "删除「{name}」？本机衣橱会删除它，并同步这次删除。", "previewOutfit": "预览「{name}」", "outfitActions": "「{name}」的操作", "moreActions": "更多操作", "cloudIncluded": "参与云同步", "localOnly": "仅保存在本机", "localFork": "保留的本机副本", "localForkHint": "另一台设备重新开启云同步时，这台设备修改过的版本被保留为本机副本。此副本不会自动上传，可手动开启云同步。", "cloudToggleTitle": "开启或关闭这件衣物的云同步，本机副本会保留。", "cloudStorage": "共享云端容量", "otherExtensions": "其他扩展", "remainingCapacity": "可用：{amount}", "quotaAria": "{source}：已用 {used}，上限 {limit}", "quotaObservedLogin": "最近一次登录从 BC 读取的占用", "quotaObservedCache": "BC 本机缓存估计，尚未核对", "quotaObservedUnavailable": "尚未读取到云端占用数据", "observedRemaining": "最近读取的可用空间：{amount}", "proposedUpload": "下次上传预计占用，尚未上传", "proposedRemaining": "预计上传后可用：{amount}", "sharedQuotaInfo": "共享云端容量说明", "sharedQuotaHint": "衣橱按 180 kB（180000 字节）控制全部扩展设置。上方显示最近读取的占用，展开可查看下次上传预计占用。VPW 包括衣物和设备标记。", "quotaWarning": "预计上传后接近容量上限。可将部分衣物设为仅保存在本机。", "quotaBlocked": "上传已暂停：预计更新超过 180 kB 的共享或单包限制。本机衣物仍可使用，请减少云同步衣物后重试。", "localSaved": "已保存到本机", "localUnsaved": "尚未保存到本机", "localStorageQuotaTitle": "浏览器拒绝了本次本机写入", "localStorageQuotaHelp": "这次修改或同步记录未确认保存。原因可能是此站点 localStorage 的独立配额或浏览器存储策略，不能据此判断磁盘空间；与 BC 云端 180 kB 限额无关。请先导出当前可读取的备份，再检查同站点数据并重试。不要直接清除整个站点数据。", "localStorageUsage": "此站点 localStorage 已存数据估算：VPW {wardrobe}，其他数据 {other}，合计 {total}。不包含这次被拒绝的写入。", "localStorageUsageUnavailable": "无法读取此站点的 localStorage 已存数据占用。", "showLocalStorageDetails": "查看详情", "hideLocalStorageDetails": "收起详情", "retryLocalSave": "重试本机保存", "retrySync": "重试上传", "exportLocalBackup": "导出本机备份", "deviceLimit": "云同步已登记 16 台安装环境。当前新设备仍可保存到本机并导出备份；已登记设备可继续同步。旧设备记录不会自动清除。", "exportRecovery": "导出迁移前备份", "conflict": { "review": "处理 {count} 处冲突", "title": "处理同步冲突", "back": "返回衣橱", "intro": "选择要保留的版本后，云端才能继续上传。你的修改仍保存在本机。", "quarantineIntro": "检测到云端缺少一次设备修改。同步衣物已暂时隐藏，上传暂停；请在原设备找回，或明确舍弃缺失修改。", "quarantined": "同步衣物暂时隐藏，不能预览或应用；仅本机衣物仍可使用。处理缺失修改前，保存、导入和开启云同步暂不可用。", "hiddenEmpty": "同步衣物已暂时隐藏，目前没有仅保存在本机的衣物。", "cloudEnablePaused": "请先处理缺失修改，再开启云同步。", "paused": "云端上传已暂停。处理冲突后可继续同步。", "itemTitle": "{name} · {field}", "unnamed": "项目", "changed": "已修改", "deleted": "已删除", "partCount": "{count} 个部件", "tagCount": "{count} 个标签", "thisDevice": "本机版本", "cloud": "云端版本", "chooseExplanation": "两边分别修改了这项内容，请选择要保留的版本。", "deleteEditExplanation": "一台设备删除了这项内容，另一台设备修改了它。选择修改版会以新项目恢复。", "privacyExplanation": "一台设备将这件衣物设为仅保存在本机，另一台开启了云同步。请选择要保留的存储设置和衣物版本。", "keepLocal": "保留本机版本", "keepCloud": "保留云端版本", "keepDeletion": "保留删除结果", "restoreAsNewOutfit": "作为新衣物恢复", "restoreAsNewTag": "作为新标签恢复", "missingTitle": "发现未合入的修改", "missingExplanation": "一台设备报告过修改，但云端衣橱里没有修改内容。可在原设备重新打开衣橱以找回，或明确舍弃这次修改。", "waitForDevice": "等待原设备", "discardMissing": "舍弃缺失修改", "discardConfirm": "确定不再等待这次缺失的修改？云端无法还原其内容；如果原设备仍保存它，可从那里找回。", "resolveFailed": "冲突未能处理。本机修改仍已保存，请重试。", "fields": { "name": "名称", "data": "衣物内容", "tagIds": "标签", "cloudSync": "云同步", "enabled": "云同步", "$record": "删除与修改", "sequence": "修改记录", "record": "项目", "deleted": "删除" } }, "sync": { "idle": "云同步就绪", "pending": "本机已保存", "submitted": "已提交（默认成功）", "verified": "已与云端核对", "offline": "离线，等待重试", "quota": "容量超限，上传暂停", "error": "同步需要处理", "conflict": "存在冲突，上传暂停" }, "selected": "已选择", "browseLibrary": "浏览衣橱", "findTag": "搜索标签…", "storageFilter": "云同步范围", "filters": "筛选", "storageDetails": "容量明细", "showResults": "查看 {count} 件衣物" };
+      const library = { "searchPlaceholder": "搜索衣物或标签…", "allOutfits": "全部衣物", "untagged": "未加标签", "filterByTag": "按标签筛选", "manageTags": "管理标签", "newTag": "新建标签", "newTagPrompt": "输入唯一的标签名称：", "renameTag": "重命名当前标签", "renameTagPrompt": "新的标签名称：", "deleteTag": "删除当前标签", "deleteTagConfirm": "删除标签「{name}」？衣物会保留在衣橱中。", "tagNameInvalid": "请输入标签名称，并使用与现有标签不同的名称。", "editTags": "编辑标签", "editOutfitTags": "「{name}」的标签", "tags": "标签", "selectTags": "选择一个或多个标签", "noTags": "没有匹配标签，可在「管理标签」中新建。", "multipleTagsHint": "每件衣物可添加多个标签。移除标签不会删除衣物。", "saveTags": "保存标签", "outfitCount": "{count} / {total} 件衣物", "empty": "衣橱里还没有衣物", "noMatches": "没有符合条件的衣物", "clearFilters": "清除所有筛选", "saveCharacter": "保存当前穿着", "saveNamePrompt": "衣物名称：", "saved": "已将「{name}」保存到本机衣橱，云端进度请查看同步状态。", "imported": "已将 {count} 件衣物导入本机衣橱，云端进度请查看同步状态。", "nothingImported": "没有可导入的衣物。请检查导入内容是否为空。", "operationFailed": "操作未完成：{error}", "itemUnavailable": "这件衣物或标签已不可用，请重新选择后再试。", "deleteOutfitConfirm": "删除「{name}」？本机衣橱会删除它，并同步这次删除。", "previewOutfit": "预览「{name}」", "outfitActions": "「{name}」的操作", "moreActions": "更多操作", "cloudIncluded": "参与云同步", "localOnly": "仅保存在本机", "localFork": "保留的本机副本", "localForkHint": "另一台设备重新开启云同步时，这台设备修改过的版本被保留为本机副本。此副本不会自动上传，可手动开启云同步。", "cloudToggleTitle": "开启或关闭这件衣物的云同步，本机副本会保留。", "cloudStorage": "共享云端容量", "otherExtensions": "其他扩展", "remainingCapacity": "可用：{amount}", "quotaAria": "{source}：已用 {used}，上限 {limit}", "quotaObservedLogin": "最近一次登录从 BC 读取的占用", "quotaObservedCache": "BC 本机缓存估计，尚未核对", "quotaObservedUnavailable": "尚未读取到云端占用数据", "observedRemaining": "最近读取的可用空间：{amount}", "proposedUpload": "下次上传预计占用，尚未上传", "proposedRemaining": "预计上传后可用：{amount}", "sharedQuotaInfo": "共享云端容量说明", "sharedQuotaHint": "衣橱按 180 kB（180000 字节）控制全部扩展设置。上方显示最近读取的占用，展开可查看下次上传预计占用。VPW 包括衣物和设备标记。", "quotaWarning": "预计上传后接近容量上限。可将部分衣物设为仅保存在本机。", "quotaBlocked": "上传已暂停：预计更新超过 180 kB 的共享或单包限制。本机衣物仍可使用，请减少云同步衣物后重试。", "localSaved": "已保存到本机", "localUnsaved": "尚未保存到本机", "localStorageQuotaTitle": "浏览器拒绝了本次本机写入", "localStorageQuotaHelp": "这次修改或同步记录未确认保存。原因可能是此站点 localStorage 的独立配额或浏览器存储策略，不能据此判断磁盘空间；与 BC 云端 180 kB 限额无关。请先导出当前可读取的备份，再检查同站点数据并重试。不要直接清除整个站点数据。", "indexedDBSaveTitle": "衣柜数据库写入失败", "indexedDBSaveHelp": "这次衣柜修改未确认保存。仍可导出当前能读取的数据。请先导出备份，再重试本机保存。不要清除整个站点数据。", "localStorageUsage": "此站点 localStorage 已存数据估算：VPW {wardrobe}，其他数据 {other}，合计 {total}。", "localStorageUsageNote": "按 UTF-16 字符长度估算；不含被拒绝的写入，也不是实际配额或剩余空间。", "localStorageUsageUnavailable": "无法读取此站点的 localStorage 已存数据占用。", "localStorageCurrentIndex": "衣柜索引（所有账号）", "localStorageRecovery": "恢复档案", "localStorageOldHistory": "旧版历史", "localStorageLegacyWardrobe": "旧版衣柜", "localStorageOtherVpw": "其他 VPW 数据", "localStorageOtherApps": "其他站点数据", "showLocalStorageDetails": "查看详情", "hideLocalStorageDetails": "收起详情", "retryLocalSave": "重试本机保存", "retrySync": "重试上传", "exportLocalBackup": "导出本机备份", "deviceLimit": "云同步已登记 16 台安装环境。当前新设备仍可保存到本机并导出备份；已登记设备可继续同步。旧设备记录不会自动清除。", "exportRecovery": "导出迁移前备份", "conflict": { "review": "处理 {count} 处冲突", "title": "处理同步冲突", "back": "返回衣橱", "intro": "选择要保留的版本后，云端才能继续上传。你的修改仍保存在本机。", "quarantineIntro": "检测到云端缺少一次设备修改。同步衣物已暂时隐藏，上传暂停；请在原设备找回，或明确舍弃缺失修改。", "quarantined": "同步衣物暂时隐藏，不能预览或应用；仅本机衣物仍可使用。处理缺失修改前，保存、导入和开启云同步暂不可用。", "hiddenEmpty": "同步衣物已暂时隐藏，目前没有仅保存在本机的衣物。", "cloudEnablePaused": "请先处理缺失修改，再开启云同步。", "paused": "云端上传已暂停。处理冲突后可继续同步。", "itemTitle": "{name} · {field}", "unnamed": "项目", "changed": "已修改", "deleted": "已删除", "partCount": "{count} 个部件", "tagCount": "{count} 个标签", "thisDevice": "本机版本", "cloud": "云端版本", "chooseExplanation": "两边分别修改了这项内容，请选择要保留的版本。", "deleteEditExplanation": "一台设备删除了这项内容，另一台设备修改了它。选择修改版会以新项目恢复。", "privacyExplanation": "一台设备将这件衣物设为仅保存在本机，另一台开启了云同步。请选择要保留的存储设置和衣物版本。", "keepLocal": "保留本机版本", "keepCloud": "保留云端版本", "keepDeletion": "保留删除结果", "restoreAsNewOutfit": "作为新衣物恢复", "restoreAsNewTag": "作为新标签恢复", "missingTitle": "发现未合入的修改", "missingExplanation": "一台设备报告过修改，但云端衣橱里没有修改内容。可在原设备重新打开衣橱以找回，或明确舍弃这次修改。", "waitForDevice": "等待原设备", "discardMissing": "舍弃缺失修改", "discardConfirm": "确定不再等待这次缺失的修改？云端无法还原其内容；如果原设备仍保存它，可从那里找回。", "resolveFailed": "冲突未能处理。本机修改仍已保存，请重试。", "fields": { "name": "名称", "data": "衣物内容", "tagIds": "标签", "cloudSync": "云同步", "enabled": "云同步", "$record": "删除与修改", "sequence": "修改记录", "record": "项目", "deleted": "删除" } }, "sync": { "idle": "云同步就绪", "pending": "本机已保存", "submitted": "已提交（默认成功）", "verified": "已与云端核对", "offline": "离线，等待重试", "quota": "容量超限，上传暂停", "error": "同步需要处理", "conflict": "存在冲突，上传暂停" }, "selected": "已选择", "browseLibrary": "浏览衣橱", "findTag": "搜索标签…", "storageFilter": "云同步范围", "filters": "筛选", "storageDetails": "容量明细", "showResults": "查看 {count} 件衣物" };
       const fileItem = { "open": "打开", "rename": "重命名", "delete": "删除", "apply": "应用到角色", "sendToStudio": "发送到 Studio", "cancel": "取消", "promptNewName": "新名字", "confirmDelete": "确认删除该项目吗？", "elementDefaultName": "元素", "sendError": "发送到 Studio 失败", "exportBCX": "导出为 BCX", "cloudOn": "云同步开", "cloudOff": "云同步关", "cloudToggleFileTitle": "切换此文件是否云同步", "cloudToggleFolderTitle": "切换此文件夹及其子项是否云同步" };
       const fileManager = { "title": "衣橱", "newFolderTitle": "新建文件夹", "restoreTitle": "恢复", "refreshThumbnails": "刷新缩略图", "closePanel": "关闭面板", "promptNewFolderName": "新建文件夹名", "goUp": "返回上一级", "parentFolder": "上一级", "dropToParentTitle": "拖到这里移到上一级文件夹", "searchPlaceholderCurrent": "在当前文件夹搜索...", "searchPlaceholderAll": "搜索所有文件夹...", "searchAria": "搜索文件", "clearSearch": "清除搜索", "switchToGlobalSearch": "切换到全局搜索", "switchToCurrentSearch": "切换到当前文件夹", "emptyTip": "没有匹配的文件/文件夹", "scopeCurrent": "当前目录", "scopeAll": "全局", "sortBy": "排序方式", "sortToggle": "排序", "sortToggleAria": "切换排序方式", "viewMode": "视图模式", "viewCard": "卡牌", "viewList": "列表", "sortRecent": "最近修改", "sortName": "名称", "sortType": "类型", "cloudUsageTitle": "云端占用", "cloudUsageAria": "云端容量占用", "cloudUsageOk": "容量正常", "cloudUsageWarn": "容量接近上限", "cloudUsageOver": "超出 180KB 上限", "filterAll": "全部", "filterFolder": "文件夹", "filterOutfit": "套装", "filterCharacter": "角色快照" };
       const filterManager = { "ariaLabel": "换装微调", "inCharacter": "角色已有", "applyFailed": "换装未完成，请检查当前外观和权限设置。", "hiddenBadge": "隐藏", "emptyItems": "此分组没有部件", "emptyGroups": "没有可微调的部位", "legendToggle": "操作说明", "slotModeShortOriginal": "原角色", "slotModeShortIncoming": "所选衣物", "slotModeShortEmpty": "置空", "dotNone": "无", "noItemName": "无", "showAllSlots": "显示全部部位", "collapseAllGroups": "全部收起", "expandAllGroups": "全部展开", "sectionGlobal": "全部部位", "operationAdd": "补入", "operationReplace": "覆盖", "operationFullReplace": "完全替换", "groupProgressTooltip": "按当前预览选择下一步：补入缺少的部位；已补齐时覆盖来源包含的部位；已覆盖时完全替换，清空来源没有的部位。完成后保持完全替换。", "operationComplete": "已完全替换", "restoreOriginalTooltip": "恢复原角色的全部部位。", "replaceAllTooltip": "全部使用所选衣物，清空其中没有的部位。", "clearScopeTooltip": "清空此范围内的所有部位。", "replaceAllAction": "完全替换", "inSelectedOutfit": "所选衣物中存在", "slotControlLabel": "{name}：选择来源", "preserveBodyTooltip": "恢复原角色的身体、面容、发型和发色，其他部位保持当前选择。仅修改本次预览。", "preserveBody": "保留原身形", "replaceBodyOnlyTooltip": "只使用所选衣物的身体、面容、发型和发色，其他部位恢复原角色。", "replaceBodyOnly": "只替换身形", "groupProgressHint": "分组按钮显示下一步操作；部件滑块直接选择来源。", "fullReplaceSourceHint": "完全替换后，来源没有的部位会清空，滑块仍保留该来源。手动选择“置空”才会切到空档。", "slotSourceHint": "每行依次为原角色、所选衣物和置空。名称显示该来源的实际部件；蓝点表示原角色有此部位，绿点表示仅所选衣物有此部位。" };
@@ -34524,7 +35108,7 @@ ${lightForced}`;
         }
         try {
           if (parsed.type !== "folder" && Array.isArray(parsed.data)) {
-            const id = fs.addOutfit({
+            const id = await fs.addOutfit({
               name: typeof parsed.name === "string" && parsed.name.trim() ? parsed.name.trim() : defaultFilename("imported"),
               type: typeof parsed.type === "string" ? parsed.type : "outfit",
               data: parsed.data,
@@ -34534,7 +35118,7 @@ ${lightForced}`;
             await reportImported(id ? 1 : 0, dialog2, t);
             return;
           }
-          const { count: count2 } = fs.importWardrobe(parsed);
+          const { count: count2 } = await fs.importWardrobe(parsed);
           await reportImported(count2, dialog2, t);
         } catch (error) {
           await reportFailure(error, dialog2, t);
@@ -34558,7 +35142,7 @@ ${lightForced}`;
                 const name = typeof slotName === "string" && slotName.trim() ? slotName.trim() : `Outfit_${index2}`;
                 return [{ name, type: "outfit", data }];
               });
-              const { count: count2 } = getFs().importWardrobe({ type: "folder", name: tagName2, children: outfits }, { tagName: tagName2 });
+              const { count: count2 } = await getFs().importWardrobe({ type: "folder", name: tagName2, children: outfits }, { tagName: tagName2 });
               await reportImported(count2, dialog2, t);
             } catch (error) {
               await reportFailure(error, dialog2, t);
@@ -34586,11 +35170,11 @@ ${lightForced}`;
               void reportFailure(error, dialog2, t);
             }
           };
-          const saveRecoveryBackup = () => {
+          const saveRecoveryBackup = async () => {
             try {
-              downloadJson(getFs().exportRecovery(), "vpw-recovery");
+              downloadJson(await getFs().exportRecovery(), "vpw-recovery");
             } catch (error) {
-              void reportFailure(error, dialog2, t);
+              await reportFailure(error, dialog2, t);
             }
           };
           const importBackup = () => {
@@ -34625,7 +35209,7 @@ ${lightForced}`;
             const name = await dialog2.prompt(t("library.saveNamePrompt"), defaultFilename("character"));
             if (!name?.trim()) return;
             try {
-              const id = fs.addOutfit({
+              const id = await fs.addOutfit({
                 name: name.trim(),
                 type: "character",
                 data: fs.characterItem,
@@ -34647,20 +35231,35 @@ ${lightForced}`;
           return { importPlayerWardrobe, importBCX, saveBackup, saveRecoveryBackup, importBackup, saveCharacterToFolder };
         }, [dialog2, t]);
       }
+      function categoryForKey(key) {
+        if (/^VPWardrobe_index_\d+_recovery_/i.test(key)) return "recoveryBytes";
+        if (/^VPWardrobe_index_\d+$/i.test(key)) return "currentIndexBytes";
+        if (/^VPWardrobe_VPWardrobe_history_/i.test(key)) return "oldHistoryBytes";
+        if (/^VPWardrobe_VPWardrobe_local_/i.test(key) || /^VPWardrobe_\d+$/i.test(key) || /^VPWardrobe\d+$/i.test(key)) {
+          return "legacyWardrobeBytes";
+        }
+        return /^vpw/i.test(key) ? "otherVpwBytes" : "otherAppsBytes";
+      }
       function estimateLocalStorageUsage(storage) {
         try {
-          let wardrobeBytes = 0;
-          let otherBytes = 0;
+          const categories = {
+            currentIndexBytes: 0,
+            recoveryBytes: 0,
+            oldHistoryBytes: 0,
+            legacyWardrobeBytes: 0,
+            otherVpwBytes: 0,
+            otherAppsBytes: 0
+          };
           for (let index2 = 0; index2 < storage.length; index2++) {
             const key = storage.key(index2);
             if (key === null) return null;
             const value = storage.getItem(key);
             if (value === null) return null;
-            const bytes = (key.length + value.length) * 2;
-            if (/^vpw/i.test(key)) wardrobeBytes += bytes;
-            else otherBytes += bytes;
+            categories[categoryForKey(key)] += (key.length + value.length) * 2;
           }
-          return { wardrobeBytes, otherBytes, totalBytes: wardrobeBytes + otherBytes };
+          const otherBytes = categories.otherAppsBytes;
+          const wardrobeBytes = Object.values(categories).reduce((total, bytes) => total + bytes, 0) - otherBytes;
+          return { wardrobeBytes, otherBytes, totalBytes: wardrobeBytes + otherBytes, categories };
         } catch {
           return null;
         }
@@ -34853,7 +35452,7 @@ ${lightForced}`;
           const name = (await dialog2.prompt(t("fileItem.promptNewName"), item.name))?.trim();
           if (!name || name === item.name) return;
           try {
-            if (!getFs().updateOutfit(item.id, { name })) await dialog2.alert(t("library.itemUnavailable"));
+            if (!await getFs().updateOutfit(item.id, { name })) await dialog2.alert(t("library.itemUnavailable"));
           } catch (error) {
             await reportError2(error);
           }
@@ -34862,7 +35461,7 @@ ${lightForced}`;
           closeMenu();
           if (!await dialog2.confirm(t("library.deleteOutfitConfirm", { name: item.name }))) return;
           try {
-            if (!getFs().removeOutfit(item.id)) await dialog2.alert(t("library.itemUnavailable"));
+            if (!await getFs().removeOutfit(item.id)) await dialog2.alert(t("library.itemUnavailable"));
           } catch (error) {
             await reportError2(error);
           }
@@ -34880,7 +35479,7 @@ ${lightForced}`;
           event.stopPropagation();
           if (cloudEnableBlocked && !isCloudSyncEnabled) return;
           try {
-            if (!getFs().setOutfitCloudSync(item.id, !isCloudSyncEnabled)) await dialog2.alert(t("library.itemUnavailable"));
+            if (!await getFs().setOutfitCloudSync(item.id, !isCloudSyncEnabled)) await dialog2.alert(t("library.itemUnavailable"));
           } catch (error) {
             await reportError2(error);
           }
@@ -35084,7 +35683,7 @@ ${lightForced}`;
           const key = `${conflict.kind}:${conflict.id}:${conflict.field}`;
           setResolving(key);
           try {
-            const ok = getFs().resolveSyncConflict([{ kind: conflict.kind, id: conflict.id, field: conflict.field, choice }]);
+            const ok = await getFs().resolveSyncConflict([{ kind: conflict.kind, id: conflict.id, field: conflict.field, choice }]);
             if (!ok) await dialog2.alert(t("library.conflict.resolveFailed"));
           } catch (error) {
             await dialog2.alert(t("library.operationFailed", { error: error instanceof Error ? error.message : String(error) }));
@@ -35178,6 +35777,14 @@ ${lightForced}`;
       function formatLocalStorageBytes(bytes) {
         return bytes < 1e3 ? `${bytes} B` : formatKB(bytes);
       }
+      const LOCAL_STORAGE_CATEGORIES = [
+        ["currentIndexBytes", "library.localStorageCurrentIndex"],
+        ["recoveryBytes", "library.localStorageRecovery"],
+        ["oldHistoryBytes", "library.localStorageOldHistory"],
+        ["legacyWardrobeBytes", "library.localStorageLegacyWardrobe"],
+        ["otherVpwBytes", "library.localStorageOtherVpw"],
+        ["otherAppsBytes", "library.localStorageOtherApps"]
+      ];
       function FileManager({ onSelectOutfit }) {
         const { t } = useTranslation();
         const dialog2 = useDialog();
@@ -35198,8 +35805,8 @@ ${lightForced}`;
         const [tagQuery, setTagQuery] = reactExports.useState("");
         const [cloudFilter, setCloudFilter] = reactExports.useState("all");
         const [quotaDetailsOpened, setQuotaDetailsOpened] = reactExports.useState(false);
-        const [localStorageDetailsOpened, setLocalStorageDetailsOpened] = reactExports.useState(false);
-        const localStorageDetailsId = reactExports.useId();
+        const [localSaveDetailsOpened, setLocalSaveDetailsOpened] = reactExports.useState(false);
+        const localSaveDetailsId = reactExports.useId();
         const [conflictReviewOpened, setConflictReviewOpened] = reactExports.useState(false);
         const conflicts = sync.conflicts ?? [];
         const cloudQuarantined = conflicts.some((conflict) => conflict.type === "missing-device");
@@ -35235,7 +35842,7 @@ ${lightForced}`;
           const name = await dialog2.prompt(t("library.newTagPrompt"));
           if (!name?.trim()) return;
           try {
-            const id = getFs().createTag(name.trim());
+            const id = await getFs().createTag(name.trim());
             if (id) getFs().selectTag(id);
             else await dialog2.alert(t("library.tagNameInvalid"));
           } catch (error) {
@@ -35247,7 +35854,7 @@ ${lightForced}`;
           const name = await dialog2.prompt(t("library.renameTagPrompt"), selectedTag.name);
           if (!name?.trim() || name.trim() === selectedTag.name) return;
           try {
-            if (!getFs().renameTag(selectedTag.id, name.trim())) await dialog2.alert(t("library.tagNameInvalid"));
+            if (!await getFs().renameTag(selectedTag.id, name.trim())) await dialog2.alert(t("library.tagNameInvalid"));
           } catch (error) {
             await reportError2(error);
           }
@@ -35255,7 +35862,7 @@ ${lightForced}`;
         const deleteTag = async () => {
           if (!selectedTag || !await dialog2.confirm(t("library.deleteTagConfirm", { name: selectedTag.name }))) return;
           try {
-            if (!getFs().deleteTag(selectedTag.id)) await dialog2.alert(t("library.itemUnavailable"));
+            if (!await getFs().deleteTag(selectedTag.id)) await dialog2.alert(t("library.itemUnavailable"));
           } catch (error) {
             await reportError2(error);
           }
@@ -35279,7 +35886,7 @@ ${lightForced}`;
               setEditingOutfit(null);
               return;
             }
-            if (!getFs().setOutfitTags(editingOutfit.id, editingTagIds)) {
+            if (!await getFs().setOutfitTags(editingOutfit.id, editingTagIds)) {
               await dialog2.alert(t("library.itemUnavailable"));
               return;
             }
@@ -35290,15 +35897,17 @@ ${lightForced}`;
         };
         const retrySync = async () => {
           try {
-            getFs().syncNow();
+            await getFs().syncNow();
           } catch (error) {
             await reportError2(error);
           }
         };
         const localStorageQuotaError = sync.errorCode === "local-storage-quota";
+        const indexedDBSaveError = sync.errorCode === "indexeddb-quota" || sync.errorCode === "indexeddb-error";
+        const localSaveError = localStorageQuotaError || indexedDBSaveError;
         reactExports.useEffect(() => {
-          if (!localStorageQuotaError) setLocalStorageDetailsOpened(false);
-        }, [localStorageQuotaError]);
+          if (!localSaveError) setLocalSaveDetailsOpened(false);
+        }, [localSaveError]);
         const localStorageUsage = reactExports.useMemo(() => {
           if (!localStorageQuotaError) return null;
           try {
@@ -35307,7 +35916,7 @@ ${lightForced}`;
             return null;
           }
         }, [localStorageQuotaError, sync]);
-        const observedQuota = localStorageQuotaError && quota.observedSource !== "login-response" ? void 0 : quota.observed;
+        const observedQuota = localSaveError && quota.observedSource !== "login-response" ? void 0 : quota.observed;
         const observedColor = observedQuota?.isOverLimit ? "red" : observedQuota?.isWarning ? "orange" : "teal";
         const proposedColor = quota.isOverLimit ? "red" : quota.isWarning ? "orange" : "teal";
         const syncColor = ["submitted", "verified"].includes(sync.state) ? "teal" : sync.state === "conflict" ? "orange" : ["error", "quota"].includes(sync.state) ? "red" : "gray";
@@ -35317,7 +35926,7 @@ ${lightForced}`;
           getFs().selectTag(null);
           setCloudFilter("all");
         };
-        const showQuotaDetails = quotaDetailsOpened || sync.state === "quota" || sync.state === "error" && !localStorageQuotaError;
+        const showQuotaDetails = quotaDetailsOpened || sync.state === "quota" || sync.state === "error" && !localSaveError;
         const tagFilterButton = (id, label, count2) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
           UnstyledButton,
           {
@@ -35378,7 +35987,7 @@ ${lightForced}`;
           /* @__PURE__ */ jsxRuntimeExports.jsx("style", { children: libraryStyles }),
           /* @__PURE__ */ jsxRuntimeExports.jsx(SyncConflictReview, { conflicts, mobile: true, onBack: () => setConflictReviewOpened(false) })
         ] });
-        return /* @__PURE__ */ jsxRuntimeExports.jsxs(Box, { className: "vpw-library-root", "data-local-storage-error": localStorageQuotaError || void 0, children: [
+        return /* @__PURE__ */ jsxRuntimeExports.jsxs(Box, { className: "vpw-library-root", "data-local-storage-error": localSaveError || void 0, children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("style", { children: libraryStyles }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { gap: 8, wrap: "nowrap", className: "vpw-library-search", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -35469,7 +36078,7 @@ ${lightForced}`;
               ] })
             ] })
           ] }),
-          localStorageQuotaError && /* @__PURE__ */ jsxRuntimeExports.jsx(
+          localSaveError && /* @__PURE__ */ jsxRuntimeExports.jsx(
             Paper,
             {
               withBorder: true,
@@ -35480,32 +36089,39 @@ ${lightForced}`;
               "data-compact": isMobile || void 0,
               children: /* @__PURE__ */ jsxRuntimeExports.jsxs(Stack, { gap: isMobile ? 4 : "xs", className: "vpw-library-local-alert-stack", children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { justify: "space-between", gap: 4, wrap: "nowrap", className: "vpw-library-local-alert-heading", children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "sm", fw: 700, c: "red", children: t("library.localStorageQuotaTitle") }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "sm", fw: 700, c: "red", children: t(indexedDBSaveError ? "library.indexedDBSaveTitle" : "library.localStorageQuotaTitle") }),
                   isMobile && /* @__PURE__ */ jsxRuntimeExports.jsx(
                     Button,
                     {
                       size: "compact-xs",
                       variant: "subtle",
-                      onClick: () => setLocalStorageDetailsOpened((opened) => !opened),
-                      "aria-expanded": localStorageDetailsOpened,
-                      "aria-controls": localStorageDetailsId,
-                      children: t(localStorageDetailsOpened ? "library.hideLocalStorageDetails" : "library.showLocalStorageDetails")
+                      onClick: () => setLocalSaveDetailsOpened((opened) => !opened),
+                      "aria-expanded": localSaveDetailsOpened,
+                      "aria-controls": localSaveDetailsId,
+                      children: t(localSaveDetailsOpened ? "library.hideLocalStorageDetails" : "library.showLocalStorageDetails")
                     }
                   )
                 ] }),
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
                   Box,
                   {
-                    id: localStorageDetailsId,
-                    hidden: isMobile && !localStorageDetailsOpened,
+                    id: localSaveDetailsId,
+                    hidden: isMobile && !localSaveDetailsOpened,
                     className: "vpw-library-local-alert-details",
                     children: /* @__PURE__ */ jsxRuntimeExports.jsxs(Stack, { gap: 4, children: [
-                      /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", children: t("library.localStorageQuotaHelp") }),
-                      /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "dimmed", children: localStorageUsage ? t("library.localStorageUsage", {
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", children: t(indexedDBSaveError ? "library.indexedDBSaveHelp" : "library.localStorageQuotaHelp") }),
+                      localStorageQuotaError && /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "dimmed", children: localStorageUsage ? t("library.localStorageUsage", {
                         wardrobe: formatLocalStorageBytes(localStorageUsage.wardrobeBytes),
                         other: formatLocalStorageBytes(localStorageUsage.otherBytes),
                         total: formatLocalStorageBytes(localStorageUsage.totalBytes)
-                      }) : t("library.localStorageUsageUnavailable") })
+                      }) : t("library.localStorageUsageUnavailable") }),
+                      localStorageUsage && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "dimmed", children: t("library.localStorageUsageNote") }),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(Box, { component: "dl", m: 0, style: { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", columnGap: 12, rowGap: 2 }, children: LOCAL_STORAGE_CATEGORIES.map(([category, label]) => /* @__PURE__ */ jsxRuntimeExports.jsxs(reactExports.Fragment, { children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { component: "dt", size: "xs", c: "dimmed", children: t(label) }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { component: "dd", size: "xs", m: 0, ta: "right", children: formatLocalStorageBytes(localStorageUsage.categories[category]) })
+                        ] }, category)) })
+                      ] })
                     ] })
                   }
                 ),
@@ -35534,7 +36150,7 @@ ${lightForced}`;
                 )
               ] }),
               /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { gap: 5, children: [
-                !localStorageQuotaError && /* @__PURE__ */ jsxRuntimeExports.jsx(Badge, { size: "sm", color: syncColor, variant: "light", children: t(`library.sync.${sync.state}`) }),
+                !localSaveError && /* @__PURE__ */ jsxRuntimeExports.jsx(Badge, { size: "sm", color: syncColor, variant: "light", children: t(`library.sync.${sync.state}`) }),
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
                   ActionIcon,
                   {
@@ -35580,13 +36196,13 @@ ${lightForced}`;
                 ] })
               ] })
             ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "dimmed", children: t("library.quotaObservedUnavailable") }),
-            !localStorageQuotaError && /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { justify: "space-between", gap: 4, className: "vpw-library-quota-secondary", children: [
+            !localSaveError && /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { justify: "space-between", gap: 4, className: "vpw-library-quota-secondary", children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: sync.localSaved ? "dimmed" : "red", children: t(sync.localSaved ? "library.localSaved" : "library.localUnsaved") }),
               conflicts.length > 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "light", color: "orange", size: "compact-xs", onClick: () => setConflictReviewOpened(true), children: t("library.conflict.review", { count: conflicts.length }) }) : sync.errorCode === "device-limit" ? /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "subtle", size: "compact-xs", onClick: actions.saveBackup, children: t("library.exportLocalBackup") }) : /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "subtle", size: "compact-xs", onClick: () => void retrySync(), children: t("library.retrySync") })
             ] }),
             /* @__PURE__ */ jsxRuntimeExports.jsx(Collapse, { in: showQuotaDetails, children: /* @__PURE__ */ jsxRuntimeExports.jsxs(Stack, { gap: 4, children: [
               observedQuota && /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "dimmed", children: t("library.observedRemaining", { amount: formatKB(observedQuota.remainingBytes) }) }),
-              !localStorageQuotaError && quota.proposalAvailable === true && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+              !localSaveError && quota.proposalAvailable === true && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", fw: 600, children: t("library.proposedUpload") }),
                 /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { justify: "space-between", gap: 4, children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsxs(Text, { size: "xs", children: [
@@ -35608,11 +36224,11 @@ ${lightForced}`;
               ] }),
               sync.recoveryAvailable && /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "subtle", size: "compact-xs", onClick: actions.saveRecoveryBackup, children: t("library.exportRecovery") })
             ] }) }),
-            !localStorageQuotaError && quota.isWarning && !quota.isOverLimit && /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "orange", children: t("library.quotaWarning") }),
+            !localSaveError && quota.isWarning && !quota.isOverLimit && /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "orange", children: t("library.quotaWarning") }),
             conflicts.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "orange", children: t("library.conflict.paused") }),
             sync.state === "quota" && /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "red", children: t("library.quotaBlocked") }),
             sync.errorCode === "device-limit" && /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "red", children: t("library.deviceLimit") }),
-            sync.error && !localStorageQuotaError && sync.errorCode !== "device-limit" && sync.state !== "quota" && sync.state !== "conflict" && /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "red", style: { overflowWrap: "anywhere" }, children: sync.error })
+            sync.error && !localSaveError && sync.errorCode !== "device-limit" && sync.state !== "quota" && sync.state !== "conflict" && /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "red", style: { overflowWrap: "anywhere" }, children: sync.error })
           ] }) }),
           /* @__PURE__ */ jsxRuntimeExports.jsx(
             Drawer,
@@ -36086,26 +36702,28 @@ ${lightForced}`;
         const dialog2 = useDialog();
         const character = useFsSelector((fs) => fs.character);
         const previewItem = useFsSelector((fs) => fs.previewItem);
+        const selectedOutfitId = useFsSelector((fs) => fs.lockedItem?.id ?? null);
         useWbSelector((wb) => wb.forceSelfApplyRevision);
         const [applied, setApplied] = reactExports.useState(null);
         const target = character || gameWindow.CurrentCharacter || gameWindow.Player;
         const name = target ? getCharacterName(target) : t("sidePreview.noTargetCharacter");
         const canForceSelfApply = target === gameWindow.Player && isForceSelfApplyEnabled();
+        const previewData = JSON.stringify(previewItem?.data ?? null);
         const applyCurrent = async () => {
           setApplied(null);
-          if (getFs().applyCurrentPreviewToCharacter()) setApplied({ name, preview: getFs().previewItem, character, forced: false });
+          if (getFs().applyCurrentPreviewToCharacter()) setApplied({ name, previewData, outfitId: selectedOutfitId, character, forced: false });
           else await dialog2.alert(t("filterManager.applyFailed"));
         };
         const forceApplyCurrent = async () => {
           setApplied(null);
           if (target !== gameWindow.Player || !isForceSelfApplyEnabled() || !Array.isArray(previewItem?.data)) return;
-          if (getFs().applyCurrentPreviewToSelfForced()) setApplied({ name, preview: getFs().previewItem, character, forced: true });
+          if (getFs().applyCurrentPreviewToSelfForced()) setApplied({ name, previewData, outfitId: selectedOutfitId, character, forced: true });
           else await dialog2.alert(t("outfitFlow.forceApplyFailed"));
         };
         return /* @__PURE__ */ jsxRuntimeExports.jsxs(Box, { w: "100%", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { fullWidth: true, disabled: !target || !Array.isArray(previewItem?.data), onClick: applyCurrent, children: t("outfitFlow.applyTo", { name }) }),
           canForceSelfApply && /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { fullWidth: true, color: "red", disabled: !Array.isArray(previewItem?.data), onClick: forceApplyCurrent, mt: "xs", children: t("outfitFlow.forceApplyTo", { name }) }),
-          applied?.preview === previewItem && applied.character === character && /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { role: "status", size: "xs", c: "teal", ta: "center", mt: 3, children: t(applied.forced ? "outfitFlow.forceApplyAttempted" : "outfitFlow.appliedTo", { name: applied.name }) })
+          applied?.previewData === previewData && applied.outfitId === selectedOutfitId && applied.character === character && /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { role: "status", size: "xs", c: "teal", ta: "center", mt: 3, children: t(applied.forced ? "outfitFlow.forceApplyAttempted" : "outfitFlow.appliedTo", { name: applied.name }) })
         ] });
       }
       function SidePreview({ showApply = false }) {
@@ -37552,32 +38170,44 @@ ${lightForced}`;
             }
           }
         };
+        let openingMember = null;
+        let activationTask = Promise.resolve();
         const activate = (member) => {
           if (pageHidden || !gameReady || !ownsOriginLock() || !/^\d+$/.test(member)) return;
-          if (desiredMember === member && loadedMember === member) return;
+          if (desiredMember === member && (loadedMember === member || openingMember === member)) return;
           const ticket = ++generation;
           desiredMember = member;
+          openingMember = member;
           w.__VPW_WARDROBE_LOCK_MEMBER = null;
           repository()?.invalidateFreshness();
           unmountApp();
-          if (ticket !== generation || String(w.Player?.MemberNumber) !== member) return;
-          try {
-            wardrobe.loadAll();
-            loadedMember = member;
-            w.__VPW_WARDROBE_LOCK_MEMBER = member;
-            const fresh = loginCapture.take({ member, player: w.Player, lockToken: lock.token() });
-            if (fresh) wardrobe.receiveCloud(fresh);
-            mountApp();
-            showStatus(fresh ? "" : message(
-              "衣柜已打开。重新登录 BC 后会核对云端并继续同步。",
-              "Wardrobe is open. Sign in to BC again to check the cloud before syncing."
-            ));
-          } catch (error) {
-            console.error("[VPW] wardrobe initialization failed", error);
-            w.__VPW_WARDROBE_LOCK_MEMBER = null;
-            unmountApp();
-            showStatus(message("衣柜启动失败。请刷新页面重试。", "Wardrobe could not start. Reload the page to retry."));
-          }
+          activationTask = activationTask.catch(() => {
+          }).then(async () => {
+            if (ticket !== generation || String(w.Player?.MemberNumber) !== member) return;
+            try {
+              await wardrobe.loadAll();
+              if (ticket !== generation || String(w.Player?.MemberNumber) !== member || !ownsOriginLock()) return;
+              loadedMember = member;
+              w.__VPW_WARDROBE_LOCK_MEMBER = member;
+              const fresh = loginCapture.take({ member, player: w.Player, lockToken: lock.token() });
+              if (fresh) await wardrobe.receiveCloud(fresh);
+              if (ticket !== generation || String(w.Player?.MemberNumber) !== member || !ownsOriginLock()) return;
+              mountApp();
+              showStatus(fresh ? "" : message(
+                "衣柜已打开。重新登录 BC 后会核对云端并继续同步。",
+                "Wardrobe is open. Sign in to BC again to check the cloud before syncing."
+              ));
+            } catch (error) {
+              if (ticket !== generation) return;
+              console.error("[VPW] wardrobe initialization failed", error);
+              w.__VPW_WARDROBE_LOCK_MEMBER = null;
+              unmountApp();
+              showStatus(message("衣柜启动失败。请刷新页面重试。", "Wardrobe could not start. Reload the page to retry."));
+            } finally {
+              if (ticket === generation) openingMember = null;
+            }
+          });
+          return activationTask;
         };
         const ownsOriginLock = () => lock.isHeldFor(LOCK_SCOPE);
         const acquireOriginLock = async () => {
@@ -37631,8 +38261,9 @@ ${lightForced}`;
             }
             const fresh = loginCapture.take({ member, player: w.Player, lockToken: lock.token() });
             if (fresh) {
-              wardrobe.receiveCloud(fresh);
-              showStatus("");
+              void wardrobe.receiveCloud(fresh).then((received) => {
+                if (received) showStatus("");
+              }).catch((error) => console.error("[VPW] cloud observation failed", error));
             } else {
               repository()?.invalidateFreshness();
               showStatus(message(
@@ -37641,14 +38272,7 @@ ${lightForced}`;
               ));
             }
           },
-          onStorage: (event) => {
-            if (!ownsWriter()) return;
-            const repo = repository();
-            if (!repo || event.key !== repo.key) return;
-            if (event.newValue === null) {
-              repo.cancelPending();
-              repo.emit({ state: "error", localSaved: false, error: "Local wardrobe storage was removed. Reopen the wardrobe to reload." });
-            } else repo.flush();
+          onStorage: () => {
           },
           onOnline: () => {
             if (!ownsWriter() || desiredMember !== loadedMember) return;

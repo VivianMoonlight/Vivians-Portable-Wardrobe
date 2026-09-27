@@ -98,22 +98,26 @@ export function ApplyOutfitButton() {
   const dialog = useDialog()
   const character = useFsSelector((fs) => fs.character)
   const previewItem = useFsSelector((fs) => fs.previewItem)
+  const selectedOutfitId = useFsSelector((fs) => fs.lockedItem?.id ?? null)
   useWbSelector((wb) => wb.forceSelfApplyRevision)
-  const [applied, setApplied] = useState<{ name: string; preview: unknown; character: unknown; forced: boolean } | null>(null)
+  const [applied, setApplied] = useState<{
+    name: string; previewData: string; outfitId: string | null; character: unknown; forced: boolean
+  } | null>(null)
   const target = character || gameWindow.CurrentCharacter || gameWindow.Player
   const name = target ? getCharacterName(target) : t('sidePreview.noTargetCharacter')
   const canForceSelfApply = target === gameWindow.Player && isForceSelfApplyEnabled()
+  const previewData = JSON.stringify(previewItem?.data ?? null)
 
   const applyCurrent = async () => {
     setApplied(null)
-    if (getFs().applyCurrentPreviewToCharacter()) setApplied({ name, preview: getFs().previewItem, character, forced: false })
+    if (getFs().applyCurrentPreviewToCharacter()) setApplied({ name, previewData, outfitId: selectedOutfitId, character, forced: false })
     else await dialog.alert(t('filterManager.applyFailed'))
   }
 
   const forceApplyCurrent = async () => {
     setApplied(null)
     if (target !== gameWindow.Player || !isForceSelfApplyEnabled() || !Array.isArray(previewItem?.data)) return
-    if (getFs().applyCurrentPreviewToSelfForced()) setApplied({ name, preview: getFs().previewItem, character, forced: true })
+    if (getFs().applyCurrentPreviewToSelfForced()) setApplied({ name, previewData, outfitId: selectedOutfitId, character, forced: true })
     else await dialog.alert(t('outfitFlow.forceApplyFailed'))
   }
 
@@ -125,7 +129,8 @@ export function ApplyOutfitButton() {
       {canForceSelfApply && <Button fullWidth color="red" disabled={!Array.isArray(previewItem?.data)} onClick={forceApplyCurrent} mt="xs">
         {t('outfitFlow.forceApplyTo', { name })}
       </Button>}
-      {applied?.preview === previewItem && applied.character === character && <Text role="status" size="xs" c="teal" ta="center" mt={3}>
+      {applied?.previewData === previewData && applied.outfitId === selectedOutfitId
+        && applied.character === character && <Text role="status" size="xs" c="teal" ta="center" mt={3}>
         {t(applied.forced ? 'outfitFlow.forceApplyAttempted' : 'outfitFlow.appliedTo', { name: applied.name })}
       </Text>}
     </Box>

@@ -96,33 +96,43 @@ function injectApp(): void {
     }
   }
 
+  let openingMember: string | null = null
+  let activationTask: Promise<void> = Promise.resolve()
   const activate = (member: string) => {
     if (disposed || pageHidden || !gameReady || !ownsOriginLock() || !/^\d+$/.test(member)) return
-    if (desiredMember === member && loadedMember === member) return
+    if (desiredMember === member && (loadedMember === member || openingMember === member)) return
     const ticket = ++generation
     desiredMember = member
+    openingMember = member
     w.__VPW_WARDROBE_LOCK_MEMBER = null
     repository()?.invalidateFreshness()
     unmountApp()
-    if (ticket !== generation || String(w.Player?.MemberNumber) !== member) return
-
-    try {
-      wardrobe.loadAll()
-      loadedMember = member
-      w.__VPW_WARDROBE_LOCK_MEMBER = member
-      const fresh = loginCapture.take({ member, player: w.Player, lockToken: lock.token() })
-      if (fresh) wardrobe.receiveCloud(fresh)
-      mountApp()
-      showStatus(fresh ? '' : message(
-        '衣柜已打开。重新登录 BC 后会核对云端并继续同步。',
-        'Wardrobe is open. Sign in to BC again to check the cloud before syncing.',
-      ))
-    } catch (error) {
-      console.error('[VPW] wardrobe initialization failed', error)
-      w.__VPW_WARDROBE_LOCK_MEMBER = null
-      unmountApp()
-      showStatus(message('衣柜启动失败。请刷新页面重试。', 'Wardrobe could not start. Reload the page to retry.'))
-    }
+    activationTask = activationTask.catch(() => {}).then(async () => {
+      if (ticket !== generation || String(w.Player?.MemberNumber) !== member) return
+      try {
+        await wardrobe.loadAll()
+        if (ticket !== generation || String(w.Player?.MemberNumber) !== member || !ownsOriginLock()) return
+        loadedMember = member
+        w.__VPW_WARDROBE_LOCK_MEMBER = member
+        const fresh = loginCapture.take({ member, player: w.Player, lockToken: lock.token() })
+        if (fresh) await wardrobe.receiveCloud(fresh)
+        if (ticket !== generation || String(w.Player?.MemberNumber) !== member || !ownsOriginLock()) return
+        mountApp()
+        showStatus(fresh ? '' : message(
+          '衣柜已打开。重新登录 BC 后会核对云端并继续同步。',
+          'Wardrobe is open. Sign in to BC again to check the cloud before syncing.',
+        ))
+      } catch (error) {
+        if (ticket !== generation) return
+        console.error('[VPW] wardrobe initialization failed', error)
+        w.__VPW_WARDROBE_LOCK_MEMBER = null
+        unmountApp()
+        showStatus(message('衣柜启动失败。请刷新页面重试。', 'Wardrobe could not start. Reload the page to retry.'))
+      } finally {
+        if (ticket === generation) openingMember = null
+      }
+    })
+    return activationTask
   }
   const ownsOriginLock = () => lock.isHeldFor(LOCK_SCOPE)
 
@@ -181,8 +191,9 @@ function injectApp(): void {
       }
       const fresh = loginCapture.take({ member, player: w.Player, lockToken: lock.token() })
       if (fresh) {
-        wardrobe.receiveCloud(fresh)
-        showStatus('')
+        void wardrobe.receiveCloud(fresh).then((received: boolean) => {
+          if (received) showStatus('')
+        }).catch((error: unknown) => console.error('[VPW] cloud observation failed', error))
       } else {
         repository()?.invalidateFreshness()
         showStatus(message(
@@ -191,15 +202,7 @@ function injectApp(): void {
         ))
       }
     },
-    onStorage: (event: StorageEvent) => {
-      if (!ownsWriter()) return
-      const repo = repository()
-      if (!repo || event.key !== repo.key) return
-      if (event.newValue === null) {
-        repo.cancelPending()
-        repo.emit({ state: 'error', localSaved: false, error: 'Local wardrobe storage was removed. Reopen the wardrobe to reload.' })
-      } else repo.flush()
-    },
+    onStorage: () => {},
     onOnline: () => {
       if (!ownsWriter() || desiredMember !== loadedMember) return
       repository()?.invalidateFreshness()

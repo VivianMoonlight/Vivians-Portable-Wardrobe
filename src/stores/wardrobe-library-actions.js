@@ -2,6 +2,7 @@ import { hostWindow } from '@/utils/host-window.js'
 import { HistoryRecord } from '@/utils/history_record.js'
 import { AssetApi } from '@/utils/AssetApi'
 import { WardrobeRepository } from '@/services/WardrobeRepository.js'
+import { WardrobePersistence } from '@/services/wardrobe-persistence.js'
 import { createWardrobeIndex, isWardrobeIndex, listWardrobeOutfits, listWardrobeTags } from '@/services/wardrobe-index.js'
 import { migrateLegacyWardrobe, isLegacyWardrobe } from '@/services/wardrobe-migration.js'
 import { EXTENSION_QUOTA_BYTES } from '@/services/extension-quota.js'
@@ -34,12 +35,17 @@ export function createLibraryState() {
 export const wardrobeLibraryActions = {
   _getRepository() {
     if (!this._repository) {
+      const canWrite = member => hostWindow.__VPW_WARDROBE_LOCK_OWNER === true
+        && String(hostWindow.Player?.MemberNumber) === String(member)
       this._repository = new WardrobeRepository({
         getPlayer: () => hostWindow.Player,
         localStorage: hostWindow.localStorage,
-        send: fields => {
+        persistence: new WardrobePersistence(() => hostWindow.indexedDB, canWrite),
+        canWrite,
+        send: (fields, expectedMember) => {
           if (hostWindow.__VPW_WARDROBE_LOCK_OWNER !== true
-            || hostWindow.__VPW_WARDROBE_LOCK_MEMBER !== String(hostWindow.Player?.MemberNumber)) return false
+            || hostWindow.__VPW_WARDROBE_LOCK_MEMBER !== String(expectedMember)
+            || String(hostWindow.Player?.MemberNumber) !== String(expectedMember)) return false
           if (typeof hostWindow.ServerSend !== 'function') return false
           const keys = Object.keys(fields || {})
           if (keys.length !== 2 || !keys.includes('ExtensionSettings.VPWardrobe')
@@ -107,25 +113,25 @@ export const wardrobeLibraryActions = {
     this.cloudQuota = quota || unavailableCloudQuota()
   },
 
-  loadAll() {
+  async loadAll() {
     const member = String(hostWindow.Player?.MemberNumber)
     this._persistedAttemptedMember = member
-    const loaded = this._getRepository().open()
+    const loaded = await this._getRepository().open()
     this._persistedLoaded = loaded ? member : false
     this.loadHistory()
     return loaded
   },
 
-  receiveCloud(event) {
+  async receiveCloud(event) {
     const repository = this._getRepository()
-    const received = repository.receiveCloud({ ...event, fresh: true })
+    const received = await repository.receiveCloud({ ...event, fresh: true })
     if (repository.member !== null) {
       this._persistedLoaded = repository.status.localSaved ? repository.member : false
     }
     return received
   },
 
-  syncNow() {
+  async syncNow() {
     if (!this.syncStatus.localSaved) return this.loadAll()
     if (this.syncStatus.errorCode === 'local-storage-quota') return this._getRepository().flush()
     return this._getRepository().flush({ force: true })
@@ -136,46 +142,46 @@ export const wardrobeLibraryActions = {
     return this.cloudQuota
   },
   selectTag(id) { this.selectedTagId = id },
-  createTag(name) {
+  async createTag(name) {
     const id = newId()
-    this._getRepository().apply([{ type: 'put-tag', id, name }])
+    await this._getRepository().apply([{ type: 'put-tag', id, name }])
     return id
   },
-  renameTag(id, name) {
-    this._getRepository().apply([{ type: 'rename-tag', id, name }])
+  async renameTag(id, name) {
+    await this._getRepository().apply([{ type: 'rename-tag', id, name }])
     return true
   },
-  deleteTag(id) {
+  async deleteTag(id) {
     const ids = this.tags.find(tag => tag.aliasIds.includes(id))?.aliasIds || [id]
-    this._getRepository().apply(ids.map(id => ({ type: 'delete-tag', id })))
+    await this._getRepository().apply(ids.map(id => ({ type: 'delete-tag', id })))
     return true
   },
-  addOutfit(file) {
+  async addOutfit(file) {
     const id = newId()
     const { cloudSync = true, ...changes } = file
     changes.tagIds ||= this.selectedTagId && this.selectedTagId !== 'untagged' ? [this.selectedTagId] : []
     const operations = [{ type: 'put-outfit', id, changes }]
     if (!cloudSync) operations.push({ type: 'set-cloud', id, enabled: false })
-    this._getRepository().apply(operations)
+    await this._getRepository().apply(operations)
     return id
   },
-  updateOutfit(id, changes) {
-    this._getRepository().apply([{ type: 'put-outfit', id, changes }])
+  async updateOutfit(id, changes) {
+    await this._getRepository().apply([{ type: 'put-outfit', id, changes }])
     return true
   },
-  removeOutfit(id) {
-    this._getRepository().apply([{ type: 'delete-outfit', id }])
+  async removeOutfit(id) {
+    await this._getRepository().apply([{ type: 'delete-outfit', id }])
     return true
   },
   setOutfitTags(id, tagIds) { return this.updateOutfit(id, { tagIds }) },
-  setOutfitCloudSync(id, enabled) {
-    this._getRepository().apply([{ type: 'set-cloud', id, enabled }])
+  async setOutfitCloudSync(id, enabled) {
+    await this._getRepository().apply([{ type: 'set-cloud', id, enabled }])
     return true
   },
   exportWardrobe() { return clone(this.wardrobeIndex) },
   exportRecovery() { return this._getRepository().exportRecovery() },
 
-  importWardrobe(parsed, { tagName = null } = {}) {
+  async importWardrobe(parsed, { tagName = null } = {}) {
     let incoming
     if (isWardrobeIndex(parsed)) incoming = parsed
     else if (isLegacyWardrobe(parsed?.fs || parsed)) incoming = migrateLegacyWardrobe(parsed.fs || parsed)
@@ -210,7 +216,7 @@ export const wardrobeLibraryActions = {
       operations.push({ type: 'put-outfit', id, changes })
       if (incoming.cloudState[oldId]?.enabled === false) operations.push({ type: 'set-cloud', id, enabled: false })
     }
-    if (operations.length) this._getRepository().apply(operations)
+    if (operations.length) await this._getRepository().apply(operations)
     return { count: outfits.length }
   },
 }

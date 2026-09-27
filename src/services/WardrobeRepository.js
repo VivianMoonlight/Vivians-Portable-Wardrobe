@@ -6,7 +6,7 @@ import {
 import { isLegacyWardrobe, migrateLegacyWardrobe } from './wardrobe-migration.js'
 import { measureExtensionQuota, measureObservedExtensionQuota } from './extension-quota.js'
 import {
-  getOrCreateWardrobeDeviceId, markerKeyForDevice, createWardrobeSyncMarker,
+  getOrCreateWardrobeDeviceId, generateWardrobeDeviceId, markerKeyForDevice, createWardrobeSyncMarker,
   encodeWardrobeSyncMarker, decodeWardrobeSyncMarker, readWardrobeSyncMarkers,
   findUnappliedWardrobeMarkers, MAX_WARDROBE_DEVICE_MARKERS,
 } from './wardrobe-sync-marker.js'
@@ -23,10 +23,11 @@ const equal = (left, right) => JSON.stringify(canonical(left)) === JSON.stringif
 const own = (object, key) => Object.prototype.hasOwnProperty.call(object || {}, key)
 const V4_PROTOCOL = 'VPW4'
 
-function storageError(error) {
+function storageError(error, indexed = false) {
   if (error?.name !== 'QuotaExceededError' && error?.code !== 22 && error?.code !== 1014) return error
-  return Object.assign(new Error('Browser rejected the local wardrobe write'),
-    { code: 'local-storage-quota', cause: error })
+  return Object.assign(new Error(indexed ? 'Browser rejected the local wardrobe database write'
+    : 'Browser rejected the local wardrobe write'),
+  { code: indexed ? 'indexeddb-quota' : 'local-storage-quota', cause: error })
 }
 
 function maxAppliedSequences(base, extra) {
@@ -115,13 +116,16 @@ function fingerprint(raw) {
 
 /** Local durable outbox with a game transport that does not acknowledge writes. */
 export class WardrobeRepository {
-  constructor({ getPlayer, localStorage, send, isOnline = () => true,
+  constructor({ getPlayer, localStorage, persistence = null, send, isOnline = () => true,
+    canWrite = () => true,
     onChange = () => {}, setTimeout: schedule = globalThis.setTimeout,
     clearTimeout: cancel = globalThis.clearTimeout, replicaId = null, random = Math.random } = {}) {
     this.getPlayer = getPlayer
     this.local = localStorage
+    this.persistence = persistence
     this.send = send
     this.isOnline = isOnline
+    this.canWrite = canWrite
     this.onChange = onChange
     this.schedule = schedule
     this.cancel = cancel
@@ -149,11 +153,38 @@ export class WardrobeRepository {
     this.hostSettingSignatures = new Map()
     this.remoteError = null
     this.quota = null
+    this.localRecoveryKeysOnDisk = new Set()
+    this.unrecognizedLocalDocumentKey = null
+    this.rawLegacySourceKeys = new Set()
     this.status = { state: 'idle', localSaved: false, error: '', conflicts: [], recoveryAvailable: false,
       lastSubmittedAt: null, lastVerifiedAt: null }
+    this.operationTail = Promise.resolve()
   }
 
   get key() { return `VPWardrobe_index_${this.member}` }
+
+  serialize(operation) {
+    const result = this.operationTail.then(operation, operation)
+    this.operationTail = result.catch(() => {})
+    return result
+  }
+
+  ensureWriter() {
+    if (accountId(this.getPlayer()) !== this.member || !this.canWrite(this.member)) {
+      throw new Error('Wardrobe account or writer tab changed; reopen before saving')
+    }
+  }
+
+  async database(operation) {
+    try { return await operation() }
+    catch (error) {
+      if (error?.code === 'indexeddb-error' || error?.code === 'indexeddb-quota') throw error
+      const quota = storageError(error, true)
+      if (quota !== error) throw quota
+      throw Object.assign(new Error(error?.message || 'Local wardrobe database failed'),
+        { code: 'indexeddb-error', cause: error })
+    }
+  }
 
   hasSubmittedCurrentIndex() {
     const submission = this.document?.submission
@@ -164,7 +195,9 @@ export class WardrobeRepository {
   emit(patch = {}) {
     if (patch.state && patch.state !== 'error') patch.errorCode = null
     this.status = { ...this.status, ...patch,
-      recoveryAvailable: (this.document?.recoveryKeys?.length || 0) > 0 }
+      recoveryAvailable: (this.document?.recoveryKeys?.length || 0) > 0
+        || this.localRecoveryKeysOnDisk.size > 0 || this.unrecognizedLocalDocumentKey !== null
+        || this.rawLegacySourceKeys.size > 0 }
     this.onChange({ index: this.index, status: this.status, quota: this.quota })
   }
 
@@ -186,18 +219,43 @@ export class WardrobeRepository {
     }
   }
 
-  writeDocument(index, changes = {}) {
+  async writeDocument(index, changes = {}) {
+    this.ensureWriter()
     const document = { ...this.document, ...changes, index }
-    this.persistLocalPayload(this.key, document)
+    if (this.persistence) await this.database(() => this.persistence.write(this.member, document))
+    else this.persistLocalPayload(this.key, document)
+    this.ensureWriter()
     this.document = document
     this.index = index
   }
 
-  readDocument(raw = this.local.getItem(this.key)) {
-    if (!raw) return null
-    const document = decodeWardrobePayload(raw)
+  async writeDocumentWithArchive(index, changes, reason, data) {
+    if (!this.persistence) {
+      await this.archive(reason, data)
+      return this.writeDocument(index, changes)
+    }
+    this.ensureWriter()
+    const desiredKey = `${this.key}_recovery_${fingerprint(data)}`
+    const document = { ...this.document, ...changes, index }
+    const result = await this.database(() => this.persistence.writeWithArchive(this.member,
+      document, desiredKey, { reason, data, createdAt: Date.now() }))
+    this.ensureWriter()
+    this.document = result.document
+    this.index = index
+  }
+
+  async readDocument(raw) {
+    const document = this.persistence && raw === undefined
+      ? await this.database(() => this.persistence.read(this.member))
+      : decodeWardrobePayload(raw === undefined ? this.local.getItem(this.key) : raw)
+    if (!document) return null
     validateWardrobeIndex(document?.index)
     if (document.baseCloudIndex) validateWardrobeIndex(document.baseCloudIndex)
+    if (document.recoveryKeys !== undefined
+      && (!Array.isArray(document.recoveryKeys)
+        || document.recoveryKeys.some(key => typeof key !== 'string'))) {
+      throw new Error('Invalid local wardrobe recovery keys')
+    }
     for (const entry of document.submittedVersions || []) {
       if (!Number.isSafeInteger(entry.sequence) || entry.sequence < 0) {
         throw new Error('Invalid local wardrobe submission sequence')
@@ -230,8 +288,17 @@ export class WardrobeRepository {
     }
   }
 
-  archive(reason, data) {
+  async archive(reason, data) {
+    this.ensureWriter()
     const baseKey = `${this.key}_recovery_${fingerprint(data)}`
+    if (this.persistence) {
+      const key = await this.database(() => this.persistence.archive(this.member, baseKey,
+        { reason, data, createdAt: Date.now() }))
+      this.ensureWriter()
+      this.document = { ...this.document,
+        recoveryKeys: [...new Set([...(this.document.recoveryKeys || []), key])] }
+      return
+    }
     let key = baseKey
     let suffix = 0
     // Hashes only name backups; compare their contents before reusing a key.
@@ -243,21 +310,43 @@ export class WardrobeRepository {
     if (!this.local.getItem(key)) {
       this.persistLocalPayload(key, { reason, data, createdAt: Date.now() })
     }
-    this.document.recoveryKeys = [...new Set([...(this.document.recoveryKeys || []), key])]
+    this.document = { ...this.document,
+      recoveryKeys: [...new Set([...(this.document.recoveryKeys || []), key])] }
   }
 
-  legacyLocalSources() {
-    const keys = [`VPWardrobe_VPWardrobe_local_${this.member}`, `VPWardrobe_${this.member}`, `VPWardrobe${this.member}`]
-    return keys.flatMap(key => {
+  legacySourceKeys() {
+    return [`VPWardrobe_VPWardrobe_local_${this.member}`, `VPWardrobe_${this.member}`, `VPWardrobe${this.member}`]
+  }
+
+  legacyLocalSources({ tolerateInvalid = false } = {}) {
+    return this.legacySourceKeys().flatMap(key => {
       const raw = this.local.getItem(key)
       if (!raw) return []
-      const value = decodeWardrobePayload(raw)
-      if (!isLegacyWardrobe(value)) throw new Error(`Unrecognized legacy wardrobe at ${key}`)
-      return [{ key, value, raw }]
+      try {
+        const value = decodeWardrobePayload(raw)
+        if (!isLegacyWardrobe(value)) throw new Error(`Unrecognized legacy wardrobe at ${key}`)
+        return [{ key, value, raw }]
+      } catch (error) {
+        if (tolerateInvalid) return []
+        throw error
+      }
     })
   }
 
-  open({ extensionSettings = this.getPlayer()?.ExtensionSettings, fresh = false } = {}) {
+  localRecoveryKeys(referenced = []) {
+    const prefix = `${this.key}_recovery_`
+    const keys = new Set(referenced.filter(key => typeof key === 'string' && key.startsWith(prefix)))
+    if (typeof this.local.length !== 'number' || typeof this.local.key !== 'function') return [...keys]
+    for (let index = 0; index < this.local.length; index++) {
+      const key = this.local.key(index)
+      if (typeof key === 'string' && key.startsWith(prefix)) keys.add(key)
+    }
+    return [...keys]
+  }
+
+  open(options) { return this.serialize(() => this.openNow(options)) }
+
+  async openNow({ extensionSettings = this.getPlayer()?.ExtensionSettings, fresh = false } = {}) {
     this.cancelPending()
     this.member = null
     this.deviceId = null
@@ -281,6 +370,9 @@ export class WardrobeRepository {
     this.hostSettingSignatures = new Map()
     this.remoteError = null
     this.quota = null
+    this.localRecoveryKeysOnDisk = new Set()
+    this.unrecognizedLocalDocumentKey = null
+    this.rawLegacySourceKeys = new Set()
     this.status = { state: 'idle', localSaved: false, error: '', conflicts: [], recoveryAvailable: false,
       lastSubmittedAt: null, lastVerifiedAt: null }
     let committed = false
@@ -294,34 +386,106 @@ export class WardrobeRepository {
         } catch { /* A malformed cloud setting must not hide the saved local index. */ }
       }
       const storedRaw = this.local.getItem(this.key)
-      const stored = this.readDocument(storedRaw)
+      this.unrecognizedLocalDocumentKey = storedRaw ? this.key : null
+      this.localRecoveryKeysOnDisk = new Set(this.localRecoveryKeys()
+        .filter(key => this.local.getItem(key) !== null))
+      this.rawLegacySourceKeys = new Set(this.legacySourceKeys()
+        .filter(key => this.local.getItem(key) !== null))
+      let localDocument = null
+      let localError = null
+      try { localDocument = await this.readDocument(storedRaw) }
+      catch (error) { localError = error }
+      if (localDocument) {
+        this.document = localDocument
+        this.index = localDocument.index
+      }
+      let stored = this.persistence ? await this.readDocument() : localDocument
       if (stored) {
         this.document = stored
         this.index = stored.index
-        // Release space in existing keys before allocating a device marker.
-        try { this.compactLocalPayload(this.key, storedRaw, stored) }
-        catch { /* An unchanged legacy document remains readable if compaction is refused. */ }
-        this.compactRecoveryArchives(stored.recoveryKeys)
       }
-      this.deviceId = getOrCreateWardrobeDeviceId(this.local, Number(this.member))
+      if (this.persistence) {
+        const legacyEntries = []
+        const archives = []
+        for (const key of this.localRecoveryKeys([
+          ...(stored?.recoveryKeys || []), ...(localDocument?.recoveryKeys || []),
+        ])) {
+          const raw = this.local.getItem(key)
+          if (!raw) continue
+          this.localRecoveryKeysOnDisk.add(key)
+          try {
+            const record = decodeWardrobePayload(raw)
+            if (typeof record.reason !== 'string' || !own(record, 'data')) {
+              continue
+            }
+            archives.push({ key, record })
+            legacyEntries.push({ key, raw })
+          } catch { /* Leave the raw key available for recovery export. */ }
+        }
+        if (localError && !stored) throw localError
+        if (localError && stored && storedRaw) this.unrecognizedLocalDocumentKey = this.key
+        if (localDocument || archives.length) {
+          this.ensureWriter()
+          const migrated = await this.database(() => this.persistence.migrate(this.member,
+            { document: localDocument, archives }))
+          this.ensureWriter()
+          stored = migrated.document
+          if (localDocument) legacyEntries.push({ key: this.key, raw: storedRaw })
+          this.persistence.removeLegacyKeysIfUnchanged(this.local, legacyEntries)
+        }
+      } else if (localError) throw localError
+      let legacySources = []
+      if (this.persistence) {
+        legacySources = this.legacyLocalSources({ tolerateInvalid: true })
+      }
+      if (stored) {
+        this.document = stored
+        this.index = stored.index
+        if (!this.persistence) {
+          // Preserve the older localStorage path for existing direct repository clients.
+          try { this.compactLocalPayload(this.key, storedRaw, stored) }
+          catch { /* An unchanged legacy document remains readable if compaction is refused. */ }
+          this.compactRecoveryArchives(stored.recoveryKeys)
+        }
+        if (legacySources.length) {
+          await this.archive('legacy-local-source', {
+            local: legacySources.map(({ key, raw }) => ({ key, raw })) })
+        }
+      }
+      if (this.persistence) {
+        const archives = await this.database(() => this.persistence.listArchives(this.member))
+        this.document = { ...this.document, recoveryKeys: [...new Set([
+          ...(this.document.recoveryKeys || []), ...archives.map(({ key }) => key),
+        ])] }
+      }
+      if (this.persistence) {
+        let oldDeviceId = this.local.getItem(`VPW4_device_${this.member}`)
+        try { if (oldDeviceId !== null) markerKeyForDevice(oldDeviceId) }
+        catch { oldDeviceId = null /* Keep the malformed legacy key untouched. */ }
+        this.ensureWriter()
+        this.deviceId = await this.database(() => this.persistence.getOrCreateMeta(this.member, 'deviceId',
+          () => oldDeviceId || generateWardrobeDeviceId()))
+        this.ensureWriter()
+      } else this.deviceId = getOrCreateWardrobeDeviceId(this.local, Number(this.member))
       this.markerKey = markerKeyForDevice(this.deviceId)
       const raw = extensionSettings?.VPWardrobe
       let online = null
       try { online = cloudSnapshot(raw) } catch (error) { this.remoteError = error }
       if (!stored) {
-        const legacy = this.legacyLocalSources()
+        const legacy = this.persistence ? legacySources : this.legacyLocalSources()
         if (online?.kind === 'v4' || online?.kind === 'v3') this.index = online.index
         else if (legacy.length) this.index = migrateLegacyWardrobe(legacy[0].value)
         else if (online?.kind === 'legacy') this.index = online.index
         if (legacy.length || online?.kind === 'legacy' || online?.kind === 'v3') {
-          this.archive('before-v4-migration', { local: legacy, onlineRaw: raw })
+          await this.archive('before-v4-migration', { local: this.persistence
+            ? legacy.map(({ key, raw }) => ({ key, raw })) : legacy, onlineRaw: raw })
         }
         this.document.baseCloudIndex = online?.index || null
         this.document.baseAppliedSeq = online?.a || {}
         this.document.baseCloudSequence = online?.a?.[this.deviceId] || 0
       }
       if (stored?.protocolVersion === 4 && online && online.kind !== 'v4' && online.kind !== 'empty') {
-        this.archive('older-client-cloud-snapshot', { onlineRaw: raw })
+        await this.archive('older-client-cloud-snapshot', { onlineRaw: raw })
         this.remoteError = new Error('Older client replaced the v4 cloud snapshot; automatic upload stopped')
       }
       this.remoteRaw = raw
@@ -330,10 +494,18 @@ export class WardrobeRepository {
       const changes = { pending: this.document.pending || online?.kind !== 'v4',
         protocolVersion: this.document.protocolVersion || (online?.kind === 'v4' ? 4 : undefined) }
       const nextDocument = { ...this.document, ...changes, index: this.index }
-      if (stored && this.local.getItem(this.key) === storedRaw
-        && equal(decodeWardrobePayload(storedRaw), nextDocument)) {
+      if (stored && (this.persistence || this.local.getItem(this.key) === storedRaw)
+        && equal(stored, nextDocument)) {
         this.document = nextDocument
-      } else this.writeDocument(this.index, changes)
+      } else await this.writeDocument(this.index, changes)
+      this.ensureWriter()
+      if (this.persistence) this.persistence.removeLegacyKeysIfUnchanged(this.local,
+        legacySources.map(({ key, raw }) => ({ key, raw })))
+      this.unrecognizedLocalDocumentKey = this.local.getItem(this.key) ? this.key : null
+      this.localRecoveryKeysOnDisk = new Set(this.localRecoveryKeys()
+        .filter(key => this.local.getItem(key) !== null))
+      this.rawLegacySourceKeys = new Set(this.legacySourceKeys()
+        .filter(key => this.local.getItem(key) !== null))
       committed = true
       this.measure()
       this.emit({ localSaved: true, lastSubmittedAt: this.document.lastSubmittedAt || null,
@@ -341,26 +513,27 @@ export class WardrobeRepository {
         state: this.remoteError ? 'error' : this.document.conflicts?.length ? 'conflict'
           : this.quota.isOverLimit ? 'quota' : this.hasSubmittedCurrentIndex() ? 'submitted' : 'pending',
         conflicts: this.document.conflicts || [], error: this.remoteError?.message || '' })
-      if (fresh && !this.remoteError) return this.receiveCloud({ extensionSettings, fresh: true })
+      if (fresh && !this.remoteError) return await this.receiveCloudNow({ extensionSettings, fresh: true })
       return true
     } catch (error) {
-      const reported = storageError(error)
+      const reported = storageError(error, !!this.persistence)
       this.emit({ state: 'error', error: reported.message, errorCode: reported.code || null,
         localSaved: committed })
       return committed
     }
   }
 
-  ensureAccount() {
+  async ensureAccount() {
     if (accountId(this.getPlayer()) !== this.member) {
-      this.open()
+      await this.openNow()
       throw new Error('Account changed; repeat the action in the current wardrobe')
     }
     if (!this.status.localSaved) throw new Error(this.status.error || 'Wardrobe storage is not ready')
   }
 
-  mergeStored() {
-    const stored = this.readDocument()
+  async mergeStored() {
+    const stored = await this.readDocument()
+    this.ensureWriter()
     if (stored) {
       // This is the same device's durable copy, including newer private edits
       // from another tab. It is the local side of the directional cloud merge.
@@ -371,13 +544,15 @@ export class WardrobeRepository {
     }
   }
 
-  apply(operations) {
-    this.ensureAccount()
+  apply(operations) { return this.serialize(() => this.applyNow(operations)) }
+
+  async applyNow(operations) {
+    await this.ensureAccount()
     const before = this.index
     let committed = false
     try {
-      this.mergeStored()
-      this.observeHostChanges()
+      await this.mergeStored()
+      await this.observeHostChanges()
       if (this.remoteError) {
         // A damaged remote replica blocks uploads, but local editing remains
         // available. Never treat the unreadable replica as an empty wardrobe.
@@ -407,7 +582,7 @@ export class WardrobeRepository {
         ? quarantineCloudContent(next, local) : next
       const pending = this.document.pending || !equal(projectWardrobeCloudIndex(next),
         projectWardrobeCloudIndex(this.index))
-      this.writeDocument(visible, { pending, conflicts,
+      await this.writeDocument(visible, { pending, conflicts,
         conflictContext: context ? { ...context, local, result, resolvedChoices } : null })
       committed = true
       this.sessionLocalEdit = true
@@ -419,15 +594,16 @@ export class WardrobeRepository {
       if (pending && !this.remoteError && !this.document.conflicts?.length && !this.quota.isOverLimit) this.queue()
       return visible
     } catch (error) {
+      const reported = storageError(error, !!this.persistence)
       this.cancelPending()
       if (committed) {
-        this.emit({ state: 'error', error: error.message, errorCode: error.code || null,
+        this.emit({ state: 'error', error: reported.message, errorCode: reported.code || null,
           localSaved: true })
         return this.index
       }
       this.index = this.document?.index || before
-      this.emit({ state: 'error', error: error.message, errorCode: error.code || null })
-      throw error
+      this.emit({ state: 'error', error: reported.message, errorCode: reported.code || null })
+      throw reported
     }
   }
 
@@ -445,11 +621,11 @@ export class WardrobeRepository {
     this.hostSettingSignatures = settingSignatures(this.getPlayer()?.ExtensionSettings)
   }
 
-  observeHostChanges() {
+  async observeHostChanges() {
     if (this.pendingRemote) {
       const observedHostRaw = this.lastObservedHostRaw
       const hostSignatures = this.hostSettingSignatures
-      if (!this.receiveCloud({ ...this.pendingRemote, schedule: false })) {
+      if (!await this.receiveCloudNow({ ...this.pendingRemote, schedule: false })) {
         throw new Error(this.status.error || 'Cloud changes could not be saved locally')
       }
       // Replaying an older observation must not consume a host update that
@@ -460,7 +636,7 @@ export class WardrobeRepository {
     const settings = this.getPlayer()?.ExtensionSettings
     if (settings?.VPWardrobe === this.lastObservedHostRaw
       && markerSignature(settings) === this.lastObservedMarkerSignature) return
-    this.receiveCloud({ extensionSettings: settings, fresh: false, schedule: false })
+    await this.receiveCloudNow({ extensionSettings: settings, fresh: false, schedule: false })
   }
 
   proposal(settings = this.freshSettings || this.getPlayer()?.ExtensionSettings || {}) {
@@ -548,7 +724,7 @@ export class WardrobeRepository {
   queue(delay = 800, { retry = false } = {}) {
     if (this.timer !== null) this.cancel(this.timer)
     if (!retry) this.attempt = 0
-    this.timer = this.schedule(() => { this.timer = null; this.flush() }, delay)
+    this.timer = this.schedule(() => { this.timer = null; return this.flush() }, delay)
   }
 
   retrySend() {
@@ -559,19 +735,21 @@ export class WardrobeRepository {
     this.queue(delay, { retry: true })
   }
 
-  flush({ force = false } = {}) {
+  flush(options) { return this.serialize(() => this.flushNow(options)) }
+
+  async flushNow({ force = false } = {}) {
     this.cancelPending({ resetAttempts: force })
     let transportFailed = false
     try {
-      this.ensureAccount()
-      this.mergeStored()
-      this.observeHostChanges()
+      await this.ensureAccount()
+      await this.mergeStored()
+      await this.observeHostChanges()
       if (this.remoteError) throw this.remoteError
       if (this.document.conflicts?.length) {
         this.emit({ state: 'conflict', conflicts: this.document.conflicts, error: '' })
         return false
       }
-      this.writeDocument(this.index)
+      await this.writeDocument(this.index)
       this.measure()
       if (this.quota.isOverLimit) {
         this.emit({ state: 'quota', error: '' })
@@ -594,7 +772,7 @@ export class WardrobeRepository {
       if (!force && payload === this.submittedRaw) {
         if (this.document.submission?.submittedAt == null) {
           const time = Date.now()
-          this.writeDocument(this.index, { lastSubmittedPayload: payload, lastSubmittedAt: time,
+          await this.writeDocument(this.index, { lastSubmittedPayload: payload, lastSubmittedAt: time,
             submission: { ...proposal, submittedAt: time } })
         }
         this.emit({ state: 'submitted', localSaved: true, error: '',
@@ -607,18 +785,27 @@ export class WardrobeRepository {
       const hadMarker = own(settings, this.markerKey)
       const previous = settings.VPWardrobe
       const previousMarker = settings[this.markerKey]
+      const previousMarkerSignature = markerSignature(settings)
       const submittedVersions = [...(this.document.submittedVersions || [])
         .filter(entry => entry.sequence !== proposal.marker.s),
       { sequence: proposal.marker.s, index: projectWardrobeCloudIndex(this.index) }].slice(-8)
-      this.writeDocument(this.index, { pending: true, protocolVersion: 4,
+      await this.writeDocument(this.index, { pending: true, protocolVersion: 4,
         markerSequence: proposal.marker.s, submittedVersions,
         submission: { ...proposal, submittedAt: null } })
+      this.ensureWriter()
+      if (this.getPlayer() !== player || player.ExtensionSettings !== settings
+        || settings.VPWardrobe !== previous
+        || markerSignature(settings) !== previousMarkerSignature) {
+        this.invalidateFreshness()
+        throw new Error('Wardrobe host session changed before upload; sign in again to reconcile')
+      }
       settings.VPWardrobe = payload
       settings[this.markerKey] = markerValue
       try {
         const fields = { 'ExtensionSettings.VPWardrobe': payload,
           [`ExtensionSettings.${this.markerKey}`]: markerValue }
-        if (this.send(fields) === false) throw new Error('The game did not accept the upload')
+        this.ensureWriter()
+        if (await this.send(fields, this.member) === false) throw new Error('The game did not accept the upload')
       } catch (error) {
         if (hadValue) settings.VPWardrobe = previous
         else delete settings.VPWardrobe
@@ -633,23 +820,26 @@ export class WardrobeRepository {
       this.submittedRaw = payload
       this.attempt = 0
       const time = Date.now()
-      this.writeDocument(this.index, { lastSubmittedPayload: payload, lastSubmittedAt: time,
+      await this.writeDocument(this.index, { lastSubmittedPayload: payload, lastSubmittedAt: time,
         submission: { ...proposal, submittedAt: time } })
       this.emit({ state: 'submitted', localSaved: true, error: '', lastSubmittedAt: time })
       return true
     } catch (error) {
-      this.emit({ state: 'error', error: error.message, errorCode: error.code || null })
+      const reported = storageError(error, !!this.persistence)
+      this.emit({ state: 'error', error: reported.message, errorCode: reported.code || null })
       if (transportFailed) this.retrySend()
       return false
     }
   }
 
-  receiveCloud({ extensionSettings, fresh = false, memberNumber = this.getPlayer()?.MemberNumber, schedule = true } = {}) {
+  receiveCloud(event) { return this.serialize(() => this.receiveCloudNow(event)) }
+
+  async receiveCloudNow({ extensionSettings, fresh = false, memberNumber = this.getPlayer()?.MemberNumber, schedule = true } = {}) {
     let committed = false
     let beforeRemote = null
     try {
       if (String(memberNumber) !== accountId(this.getPlayer())) return false
-      if (String(memberNumber) !== this.member) return this.open({ extensionSettings, fresh })
+      if (String(memberNumber) !== this.member) return await this.openNow({ extensionSettings, fresh })
       this.cancelPending()
       const raw = extensionSettings?.VPWardrobe
       const previousMarkerSignature = this.lastObservedMarkerSignature
@@ -672,12 +862,12 @@ export class WardrobeRepository {
       const missing = findUnappliedWardrobeMarkers(markers, settled)
       if (this.document.protocolVersion === 4 && online.kind !== 'v4'
         && !(online.kind === 'empty' && !this.document.lastVerifiedPayload)) {
-        this.archive('older-client-cloud-snapshot', { onlineRaw: raw })
+        await this.archive('older-client-cloud-snapshot', { onlineRaw: raw })
         throw new Error('Older client replaced the v4 cloud snapshot; automatic upload stopped')
       }
       this.remoteError = null
       this.pendingRemote = { extensionSettings: { ...extensionSettings }, fresh, memberNumber }
-      this.mergeStored()
+      await this.mergeStored()
       beforeRemote = { index: this.index, document: { ...this.document } }
       const cloudSequence = online.a[this.deviceId] || 0
       const knownVersion = (this.document.submittedVersions || [])
@@ -720,7 +910,7 @@ export class WardrobeRepository {
         && (!this.document.submission || (online.a[this.deviceId] || 0) >= this.document.submission.marker.s)
       this.remoteRaw = raw
       if (!verified) this.submittedRaw = null
-      this.writeDocument(merged, { pending: !verified, conflicts, conflictContext,
+      await this.writeDocument(merged, { pending: !verified, conflicts, conflictContext,
         baseCloudIndex: conflicts.length ? base : online.index,
         baseCloudSequence: conflicts.length ? this.document.baseCloudSequence : cloudSequence,
         baseAppliedSeq: settled, protocolVersion: online.kind === 'v4' ? 4 : this.document.protocolVersion,
@@ -744,20 +934,23 @@ export class WardrobeRepository {
       if (schedule && !verified && !conflicts.length && !this.quota.isOverLimit) this.queue()
       return true
     } catch (error) {
+      const reported = storageError(error, !!this.persistence)
       this.cancelPending()
       if (!committed && beforeRemote) {
         this.index = beforeRemote.index
         this.document = beforeRemote.document
       }
-      if (!beforeRemote || !committed) this.remoteError = error
-      this.emit({ state: 'error', error: error.message, errorCode: error.code || null,
+      if (!beforeRemote || !committed) this.remoteError = reported
+      this.emit({ state: 'error', error: reported.message, errorCode: reported.code || null,
         localSaved: committed || this.status.localSaved })
       return committed
     }
   }
 
-  resolveSyncConflict(resolutions) {
-    this.ensureAccount()
+  resolveSyncConflict(resolutions) { return this.serialize(() => this.resolveSyncConflictNow(resolutions)) }
+
+  async resolveSyncConflictNow(resolutions) {
+    await this.ensureAccount()
     if (!Array.isArray(resolutions) || !resolutions.length) {
       throw new Error('Choose a sync conflict to resolve')
     }
@@ -795,14 +988,15 @@ export class WardrobeRepository {
     const next = remainingDevice.length
       ? quarantineCloudContent(updated.merged, context.local) : clone(updated.merged)
     // Recovery records preserve both candidates and the explicit decision.
-    this.archive('sync-conflict-decision', { resolutions, conflicts: this.document.conflicts,
-      local: context.local, remote: context.remote, missing: context.missing })
+    const recovery = { resolutions, conflicts: this.document.conflicts,
+      local: context.local, remote: context.remote, missing: context.missing }
     const baseAppliedSeq = maxAppliedSequences(this.document.baseAppliedSeq, discarded)
-    this.writeDocument(next, { pending: true, conflicts,
+    await this.writeDocumentWithArchive(next, { pending: true, conflicts,
       conflictContext: conflicts.length ? { ...context, result: updated,
         guardedRemote: context.remote, missing: activeMissing, resolvedChoices: allChoices } : null,
       baseCloudIndex: conflicts.length ? context.base : context.remote,
-      baseAppliedSeq, discardedSeqByDevice: discarded, submission: null })
+      baseAppliedSeq, discardedSeqByDevice: discarded, submission: null },
+    'sync-conflict-decision', recovery)
     this.submittedRaw = null
     this.measure()
     this.emit({ state: conflicts.length ? 'conflict' : this.quota.isOverLimit ? 'quota' : 'pending',
@@ -811,7 +1005,47 @@ export class WardrobeRepository {
     return next
   }
 
-  exportRecovery() {
+  exportRecovery() { return this.serialize(() => this.exportRecoveryNow()) }
+
+  async exportRecoveryNow() {
+    if (accountId(this.getPlayer()) !== this.member) {
+      throw new Error('Account changed; reopen the wardrobe before exporting recovery')
+    }
+    if (this.persistence) {
+      let archives = []
+      let databaseError = null
+      try { archives = await this.database(() => this.persistence.listArchives(this.member)) }
+      catch (error) { databaseError = error }
+      const result = archives.map(({ key, record }) => ({ key, ...record }))
+      const archivedByKey = new Map(archives.map(({ key, record }) => [key, record]))
+      for (const key of this.localRecoveryKeys(this.document?.recoveryKeys || [])) {
+        const raw = this.local.getItem(key)
+        if (!raw) continue
+        try {
+          const record = decodeWardrobePayload(raw)
+          if (typeof record.reason === 'string' && own(record, 'data')) {
+            if (!archivedByKey.has(key) || !equal(record, archivedByKey.get(key))) {
+              result.push({ key, ...record, source: 'localStorage' })
+            }
+          } else if (typeof record.reason !== 'string' || !own(record, 'data')) {
+            result.push({ key, reason: 'unreadable-legacy-recovery', data: { raw } })
+          }
+        } catch { result.push({ key, reason: 'unreadable-legacy-recovery', data: { raw } }) }
+      }
+      const primaryRaw = this.local.getItem(this.key)
+      if (primaryRaw) {
+        let reason = 'legacy-local-document-raw'
+        try { await this.readDocument(primaryRaw) }
+        catch { reason = 'unreadable-legacy-document' }
+        result.push({ key: this.key, reason, data: { raw: primaryRaw } })
+      }
+      for (const key of this.legacySourceKeys()) {
+        const raw = this.local.getItem(key)
+        if (raw) result.push({ key, reason: 'legacy-local-source-raw', data: { raw } })
+      }
+      if (databaseError && !result.length) throw databaseError
+      return result
+    }
     return (this.document?.recoveryKeys || []).map(key => ({ key, ...decodeWardrobePayload(this.local.getItem(key)) }))
   }
 }

@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState } from 'react'
+import { Fragment, useEffect, useId, useMemo, useState } from 'react'
 import { ActionIcon, Badge, Box, Button, Collapse, Drawer, Group, Menu, Modal, MultiSelect, Paper, Progress, Select, Stack, Text, TextInput, Tooltip, UnstyledButton } from '@mantine/core'
 import { useTranslation } from 'react-i18next'
 import { getFs, getWb, useFsSelector, useWbSelector, type WardrobeOutfit } from '@/stores/hooks'
@@ -19,6 +19,15 @@ function formatKB(bytes: number): string {
 function formatLocalStorageBytes(bytes: number): string {
   return bytes < 1000 ? `${bytes} B` : formatKB(bytes)
 }
+
+const LOCAL_STORAGE_CATEGORIES = [
+  ['currentIndexBytes', 'library.localStorageCurrentIndex'],
+  ['recoveryBytes', 'library.localStorageRecovery'],
+  ['oldHistoryBytes', 'library.localStorageOldHistory'],
+  ['legacyWardrobeBytes', 'library.localStorageLegacyWardrobe'],
+  ['otherVpwBytes', 'library.localStorageOtherVpw'],
+  ['otherAppsBytes', 'library.localStorageOtherApps'],
+] as const
 
 interface FileManagerProps {
   onSelectOutfit?: (item: WardrobeOutfit) => void
@@ -44,8 +53,8 @@ export function FileManager({ onSelectOutfit }: FileManagerProps) {
   const [tagQuery, setTagQuery] = useState('')
   const [cloudFilter, setCloudFilter] = useState<'all' | 'cloud' | 'local'>('all')
   const [quotaDetailsOpened, setQuotaDetailsOpened] = useState(false)
-  const [localStorageDetailsOpened, setLocalStorageDetailsOpened] = useState(false)
-  const localStorageDetailsId = useId()
+  const [localSaveDetailsOpened, setLocalSaveDetailsOpened] = useState(false)
+  const localSaveDetailsId = useId()
   const [conflictReviewOpened, setConflictReviewOpened] = useState(false)
   const conflicts = sync.conflicts ?? []
   const cloudQuarantined = conflicts.some((conflict) => conflict.type === 'missing-device')
@@ -87,7 +96,7 @@ export function FileManager({ onSelectOutfit }: FileManagerProps) {
     const name = await dialog.prompt(t('library.newTagPrompt'))
     if (!name?.trim()) return
     try {
-      const id = getFs().createTag(name.trim())
+      const id = await getFs().createTag(name.trim())
       if (id) getFs().selectTag(id)
       else await dialog.alert(t('library.tagNameInvalid'))
     } catch (error) { await reportError(error) }
@@ -98,14 +107,14 @@ export function FileManager({ onSelectOutfit }: FileManagerProps) {
     const name = await dialog.prompt(t('library.renameTagPrompt'), selectedTag.name)
     if (!name?.trim() || name.trim() === selectedTag.name) return
     try {
-      if (!getFs().renameTag(selectedTag.id, name.trim())) await dialog.alert(t('library.tagNameInvalid'))
+      if (!await getFs().renameTag(selectedTag.id, name.trim())) await dialog.alert(t('library.tagNameInvalid'))
     } catch (error) { await reportError(error) }
   }
 
   const deleteTag = async () => {
     if (!selectedTag || !await dialog.confirm(t('library.deleteTagConfirm', { name: selectedTag.name }))) return
     try {
-      if (!getFs().deleteTag(selectedTag.id)) await dialog.alert(t('library.itemUnavailable'))
+      if (!await getFs().deleteTag(selectedTag.id)) await dialog.alert(t('library.itemUnavailable'))
     } catch (error) { await reportError(error) }
   }
 
@@ -129,7 +138,7 @@ export function FileManager({ onSelectOutfit }: FileManagerProps) {
         setEditingOutfit(null)
         return
       }
-      if (!getFs().setOutfitTags(editingOutfit.id, editingTagIds)) {
+      if (!await getFs().setOutfitTags(editingOutfit.id, editingTagIds)) {
         await dialog.alert(t('library.itemUnavailable'))
         return
       }
@@ -138,18 +147,20 @@ export function FileManager({ onSelectOutfit }: FileManagerProps) {
   }
 
   const retrySync = async () => {
-    try { getFs().syncNow() } catch (error) { await reportError(error) }
+    try { await getFs().syncNow() } catch (error) { await reportError(error) }
   }
 
   const localStorageQuotaError = sync.errorCode === 'local-storage-quota'
+  const indexedDBSaveError = sync.errorCode === 'indexeddb-quota' || sync.errorCode === 'indexeddb-error'
+  const localSaveError = localStorageQuotaError || indexedDBSaveError
   useEffect(() => {
-    if (!localStorageQuotaError) setLocalStorageDetailsOpened(false)
-  }, [localStorageQuotaError])
+    if (!localSaveError) setLocalSaveDetailsOpened(false)
+  }, [localSaveError])
   const localStorageUsage = useMemo(() => {
     if (!localStorageQuotaError) return null
     try { return estimateLocalStorageUsage(hostWindow.localStorage) } catch { return null }
   }, [localStorageQuotaError, sync])
-  const observedQuota = localStorageQuotaError && quota.observedSource !== 'login-response'
+  const observedQuota = localSaveError && quota.observedSource !== 'login-response'
     ? undefined : quota.observed
   const observedColor = observedQuota?.isOverLimit ? 'red' : observedQuota?.isWarning ? 'orange' : 'teal'
   const proposedColor = quota.isOverLimit ? 'red' : quota.isWarning ? 'orange' : 'teal'
@@ -157,7 +168,7 @@ export function FileManager({ onSelectOutfit }: FileManagerProps) {
     : ['error', 'quota'].includes(sync.state) ? 'red' : 'gray'
   const activeFilterCount = Number(!!selectedTagId) + Number(cloudFilter !== 'all')
   const clearFilters = () => { setSearchQuery(''); getFs().selectTag(null); setCloudFilter('all') }
-  const showQuotaDetails = quotaDetailsOpened || sync.state === 'quota' || (sync.state === 'error' && !localStorageQuotaError)
+  const showQuotaDetails = quotaDetailsOpened || sync.state === 'quota' || (sync.state === 'error' && !localSaveError)
 
   const tagFilterButton = (id: string | null, label: string, count: number) => (
     <UnstyledButton key={id ?? 'all'} className="vpw-library-filter-option" aria-pressed={selectedTagId === id}
@@ -204,7 +215,7 @@ export function FileManager({ onSelectOutfit }: FileManagerProps) {
   </Box>
 
   return (
-    <Box className="vpw-library-root" data-local-storage-error={localStorageQuotaError || undefined}>
+    <Box className="vpw-library-root" data-local-storage-error={localSaveError || undefined}>
       <style>{libraryStyles}</style>
       <Group gap={8} wrap="nowrap" className="vpw-library-search">
         <TextInput style={{ flex: 1, minWidth: 0 }} value={searchQuery} onChange={(event) => setSearchQuery(event.currentTarget.value)}
@@ -285,27 +296,36 @@ export function FileManager({ onSelectOutfit }: FileManagerProps) {
         </Box>
       </Box>
 
-      {localStorageQuotaError && <Paper withBorder radius="md" p={isMobile ? 8 : 'sm'} role="alert"
+      {localSaveError && <Paper withBorder radius="md" p={isMobile ? 8 : 'sm'} role="alert"
         className="vpw-library-local-alert" data-compact={isMobile || undefined}>
         <Stack gap={isMobile ? 4 : 'xs'} className="vpw-library-local-alert-stack">
           <Group justify="space-between" gap={4} wrap="nowrap" className="vpw-library-local-alert-heading">
-            <Text size="sm" fw={700} c="red">{t('library.localStorageQuotaTitle')}</Text>
-            {isMobile && <Button size="compact-xs" variant="subtle" onClick={() => setLocalStorageDetailsOpened((opened) => !opened)}
-              aria-expanded={localStorageDetailsOpened} aria-controls={localStorageDetailsId}>
-              {t(localStorageDetailsOpened ? 'library.hideLocalStorageDetails' : 'library.showLocalStorageDetails')}
+            <Text size="sm" fw={700} c="red">{t(indexedDBSaveError ? 'library.indexedDBSaveTitle' : 'library.localStorageQuotaTitle')}</Text>
+            {isMobile && <Button size="compact-xs" variant="subtle" onClick={() => setLocalSaveDetailsOpened((opened) => !opened)}
+              aria-expanded={localSaveDetailsOpened} aria-controls={localSaveDetailsId}>
+              {t(localSaveDetailsOpened ? 'library.hideLocalStorageDetails' : 'library.showLocalStorageDetails')}
             </Button>}
           </Group>
-          <Box id={localStorageDetailsId} hidden={isMobile && !localStorageDetailsOpened}
+          <Box id={localSaveDetailsId} hidden={isMobile && !localSaveDetailsOpened}
             className="vpw-library-local-alert-details">
             <Stack gap={4}>
-              <Text size="xs">{t('library.localStorageQuotaHelp')}</Text>
-              <Text size="xs" c="dimmed">{localStorageUsage
+              <Text size="xs">{t(indexedDBSaveError ? 'library.indexedDBSaveHelp' : 'library.localStorageQuotaHelp')}</Text>
+              {localStorageQuotaError && <Text size="xs" c="dimmed">{localStorageUsage
                 ? t('library.localStorageUsage', {
                   wardrobe: formatLocalStorageBytes(localStorageUsage.wardrobeBytes),
                   other: formatLocalStorageBytes(localStorageUsage.otherBytes),
                   total: formatLocalStorageBytes(localStorageUsage.totalBytes),
                 })
-                : t('library.localStorageUsageUnavailable')}</Text>
+                : t('library.localStorageUsageUnavailable')}</Text>}
+              {localStorageUsage && <>
+                <Text size="xs" c="dimmed">{t('library.localStorageUsageNote')}</Text>
+                <Box component="dl" m={0} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', columnGap: 12, rowGap: 2 }}>
+                  {LOCAL_STORAGE_CATEGORIES.map(([category, label]) => <Fragment key={category}>
+                    <Text component="dt" size="xs" c="dimmed">{t(label)}</Text>
+                    <Text component="dd" size="xs" m={0} ta="right">{formatLocalStorageBytes(localStorageUsage.categories[category])}</Text>
+                  </Fragment>)}
+                </Box>
+              </>}
             </Stack>
           </Box>
           <Group gap="xs" className="vpw-library-local-alert-actions">
@@ -326,7 +346,7 @@ export function FileManager({ onSelectOutfit }: FileManagerProps) {
               </Tooltip>
             </Group>
             <Group gap={5}>
-              {!localStorageQuotaError && <Badge size="sm" color={syncColor} variant="light">{t(`library.sync.${sync.state}`)}</Badge>}
+              {!localSaveError && <Badge size="sm" color={syncColor} variant="light">{t(`library.sync.${sync.state}`)}</Badge>}
               <ActionIcon variant="subtle" size="xs" onClick={() => setQuotaDetailsOpened((opened) => !opened)}
                 aria-label={t('library.storageDetails', { defaultValue: 'Storage details' })} aria-expanded={showQuotaDetails}>
                 {showQuotaDetails ? '⌄' : '⌃'}
@@ -345,7 +365,7 @@ export function FileManager({ onSelectOutfit }: FileManagerProps) {
               <Text size="xs" fw={600} c={observedColor}>{formatKB(observedQuota.totalBytes)} / {formatKB(observedQuota.limitBytes)}</Text>
             </Group>
           </> : <Text size="xs" c="dimmed">{t('library.quotaObservedUnavailable')}</Text>}
-          {!localStorageQuotaError && <Group justify="space-between" gap={4} className="vpw-library-quota-secondary">
+          {!localSaveError && <Group justify="space-between" gap={4} className="vpw-library-quota-secondary">
             <Text size="xs" c={sync.localSaved ? 'dimmed' : 'red'}>{t(sync.localSaved ? 'library.localSaved' : 'library.localUnsaved')}</Text>
             {conflicts.length > 0
               ? <Button variant="light" color="orange" size="compact-xs" onClick={() => setConflictReviewOpened(true)}>
@@ -358,7 +378,7 @@ export function FileManager({ onSelectOutfit }: FileManagerProps) {
           <Collapse in={showQuotaDetails}>
             <Stack gap={4}>
               {observedQuota && <Text size="xs" c="dimmed">{t('library.observedRemaining', { amount: formatKB(observedQuota.remainingBytes) })}</Text>}
-              {!localStorageQuotaError && quota.proposalAvailable === true && <>
+              {!localSaveError && quota.proposalAvailable === true && <>
               <Text size="xs" fw={600}>{t('library.proposedUpload')}</Text>
               <Group justify="space-between" gap={4}>
                 <Text size="xs">VPW {formatKB(quota.wardrobeBytes)}</Text>
@@ -370,11 +390,11 @@ export function FileManager({ onSelectOutfit }: FileManagerProps) {
               {sync.recoveryAvailable && <Button variant="subtle" size="compact-xs" onClick={actions.saveRecoveryBackup}>{t('library.exportRecovery')}</Button>}
             </Stack>
           </Collapse>
-          {!localStorageQuotaError && quota.isWarning && !quota.isOverLimit && <Text size="xs" c="orange">{t('library.quotaWarning')}</Text>}
+          {!localSaveError && quota.isWarning && !quota.isOverLimit && <Text size="xs" c="orange">{t('library.quotaWarning')}</Text>}
           {conflicts.length > 0 && <Text size="xs" c="orange">{t('library.conflict.paused')}</Text>}
           {sync.state === 'quota' && <Text size="xs" c="red">{t('library.quotaBlocked')}</Text>}
           {sync.errorCode === 'device-limit' && <Text size="xs" c="red">{t('library.deviceLimit')}</Text>}
-          {sync.error && !localStorageQuotaError && sync.errorCode !== 'device-limit' && sync.state !== 'quota' && sync.state !== 'conflict'
+          {sync.error && !localSaveError && sync.errorCode !== 'device-limit' && sync.state !== 'quota' && sync.state !== 'conflict'
             && <Text size="xs" c="red" style={{ overflowWrap: 'anywhere' }}>{sync.error}</Text>}
         </Stack>
       </Paper>

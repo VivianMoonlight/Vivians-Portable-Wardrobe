@@ -14,8 +14,8 @@ async function openWardrobeWithOutfit(page) {
     window.AssetGroupMap = new Map([['Cloth', { Name: 'Cloth', Description: 'Cloth', Category: 'Appearance', Clothing: true }]])
     window.AssetGroup = [...window.AssetGroupMap.values()]
     const fs = useFileSystemStore.getState()
-    for (const outfit of [...fs.outfits]) fs.removeOutfit(outfit.id)
-    fs.addOutfit({ name: 'Force test outfit', data: [{ Group: 'Cloth', Name: 'New shirt' }], tagIds: [], cloudSync: false })
+    for (const outfit of [...fs.outfits]) await fs.removeOutfit(outfit.id)
+    await fs.addOutfit({ name: 'Force test outfit', data: [{ Group: 'Cloth', Name: 'New shirt' }], tagIds: [], cloudSync: false })
     ExternalAdapter.applyOutfitToSelfForced = () => {
       window.__forceUiProbe.calls++
       return true
@@ -41,6 +41,12 @@ test('force apply stays hidden until enabled and disappears for a player-like no
   await expect(forceButton).toBeVisible()
   await forceButton.click()
   await expect.poll(() => page.evaluate(() => window.__forceUiProbe.calls)).toBe(1)
+  await expect(page.locator('.vpw-preview-actions').getByRole('status')).toContainText('Force apply attempted for Tester')
+  await page.evaluate(async () => {
+    const { useFileSystemStore } = await import(window.__forceUiProbe.storeUrl)
+    const fs = useFileSystemStore.getState()
+    fs.previewItem = { ...fs.previewItem, data: structuredClone(fs.previewItem.data) }
+  })
   await expect(page.locator('.vpw-preview-actions').getByRole('status')).toContainText('Force apply attempted for Tester')
 
   await page.evaluate(async () => {

@@ -61,7 +61,7 @@ async function applyImportedData(
 
   try {
     if (parsed.type !== 'folder' && Array.isArray(parsed.data)) {
-      const id = fs.addOutfit({
+      const id = await fs.addOutfit({
         name: typeof parsed.name === 'string' && parsed.name.trim() ? parsed.name.trim() : defaultFilename('imported'),
         type: typeof parsed.type === 'string' ? parsed.type : 'outfit',
         data: parsed.data,
@@ -71,7 +71,7 @@ async function applyImportedData(
       await reportImported(id ? 1 : 0, dialog, t)
       return
     }
-    const { count } = fs.importWardrobe(parsed)
+    const { count } = await fs.importWardrobe(parsed)
     await reportImported(count, dialog, t)
   } catch (error) {
     await reportFailure(error, dialog, t)
@@ -82,7 +82,7 @@ export interface WardrobeActions {
   importPlayerWardrobe: () => Promise<void>
   importBCX: () => Promise<void>
   saveBackup: () => void
-  saveRecoveryBackup: () => void
+  saveRecoveryBackup: () => Promise<void>
   importBackup: () => void
   saveCharacterToFolder: () => Promise<void>
 }
@@ -106,7 +106,7 @@ export function useWardrobeActions(): WardrobeActions {
           const name = typeof slotName === 'string' && slotName.trim() ? slotName.trim() : `Outfit_${index}`
           return [{ name, type: 'outfit', data }]
         })
-        const { count } = getFs().importWardrobe({ type: 'folder', name: tagName, children: outfits }, { tagName })
+        const { count } = await getFs().importWardrobe({ type: 'folder', name: tagName, children: outfits }, { tagName })
         await reportImported(count, dialog, t)
       } catch (error) {
         await reportFailure(error, dialog, t)
@@ -137,11 +137,11 @@ export function useWardrobeActions(): WardrobeActions {
       }
     }
 
-    const saveRecoveryBackup = () => {
+    const saveRecoveryBackup = async () => {
       try {
-        downloadJson(getFs().exportRecovery(), 'vpw-recovery')
+        downloadJson(await getFs().exportRecovery(), 'vpw-recovery')
       } catch (error) {
-        void reportFailure(error, dialog, t)
+        await reportFailure(error, dialog, t)
       }
     }
 
@@ -179,7 +179,7 @@ export function useWardrobeActions(): WardrobeActions {
       const name = await dialog.prompt(t('library.saveNamePrompt'), defaultFilename('character'))
       if (!name?.trim()) return
       try {
-        const id = fs.addOutfit({
+        const id = await fs.addOutfit({
           name: name.trim(), type: 'character', data: fs.characterItem,
           tagIds: fs.selectedTagId && fs.selectedTagId !== 'untagged' ? [fs.selectedTagId] : [],
         })

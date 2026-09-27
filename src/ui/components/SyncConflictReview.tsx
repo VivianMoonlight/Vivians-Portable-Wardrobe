@@ -61,7 +61,7 @@ export function SyncConflictReview({ conflicts, mobile, onBack }: SyncConflictRe
     const key = `${conflict.kind}:${conflict.id}:${conflict.field}`
     setResolving(key)
     try {
-      const ok = getFs().resolveSyncConflict([{ kind: conflict.kind, id: conflict.id, field: conflict.field, choice }])
+      const ok = await getFs().resolveSyncConflict([{ kind: conflict.kind, id: conflict.id, field: conflict.field, choice }])
       if (!ok) await dialog.alert(t('library.conflict.resolveFailed'))
     } catch (error) {
       await dialog.alert(t('library.operationFailed', { error: error instanceof Error ? error.message : String(error) }))

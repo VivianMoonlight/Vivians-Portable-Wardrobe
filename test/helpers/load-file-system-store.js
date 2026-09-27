@@ -2,6 +2,7 @@ import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import { runInNewContext } from 'node:vm'
 import { build } from 'esbuild'
+import { IDBFactory } from 'fake-indexeddb'
 
 const require = createRequire(import.meta.url)
 const { outputFiles } = await build({
@@ -34,6 +35,7 @@ export function loadFileSystemStore() {
     Player: { MemberNumber: 42, ExtensionSettings: {} },
     __VPW_WARDROBE_LOCK_OWNER: true,
     __VPW_WARDROBE_LOCK_MEMBER: '42',
+    indexedDB: new IDBFactory(),
     localStorage: {
       getItem: (key) => saved.get(key) ?? null,
       setItem(key, value) {

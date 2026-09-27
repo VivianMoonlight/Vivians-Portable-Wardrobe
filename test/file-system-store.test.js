@@ -504,7 +504,7 @@ test('divergent legacy history is archived losslessly before its localStorage ke
 test('initialization previews the character before metadata resolves and preserves a selection made while waiting', async () => {
   const { fs, hostWindow, renders } = loadFileSystemStore()
   fs.history.filter = ['Cloth', 'Shoes']
-  assert.equal(fs.loadAll(), true)
+  assert.equal(await fs.loadAll(), true)
   renders.length = 0
   hostWindow.Player.Appearance = [{
     Asset: { Name: 'initial-shirt', Group: { Name: 'Cloth', Category: 'Appearance' } },
@@ -581,7 +581,7 @@ test('switching targets resolves active group operations against the new target 
   for (const source of ['incoming', 'original']) {
     for (let clicks = 1; clicks <= 3; clicks++) {
       const { fs, candidate, hostWindow } = setup()
-      fs.loadAll()
+      await fs.loadAll()
       hostWindow.Player.Appearance = [appearance('Cloth', 'initial-shirt'), appearance('Gloves', 'initial-gloves'), appearance('HairFront', 'initial-hair')]
       fs.selectOutfit(candidate)
       fs.replaceAllFromSource(source === 'incoming' ? 'original' : 'incoming')
@@ -606,7 +606,7 @@ test('switching targets resolves active group operations against the new target 
 
 test('switching targets does not resurrect a group policy cleared by a manual part choice', async () => {
   const { fs, candidate, hostWindow } = setup()
-  fs.loadAll()
+  await fs.loadAll()
   const appearance = (Group, Name) => ({ Asset: { Name, Group: { Name: Group, Category: 'Appearance' } } })
   hostWindow.Player.Appearance = [appearance('Cloth', 'initial-shirt')]
   fs.selectOutfit(candidate)

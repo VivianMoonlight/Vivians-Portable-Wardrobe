@@ -40,117 +40,117 @@ function device(server, { saved = new Map(), cachedSettings = server.settings, r
   }
 }
 
-test('a stale Player cache cannot verify or re-upload outfits deleted and renamed on another device', () => {
+test('a stale Player cache cannot verify or re-upload outfits deleted and renamed on another device', async () => {
   const server = { settings: {} }
   const a = device(server)
-  a.repo.open()
-  assert.equal(a.login(), true)
-  a.repo.apply([put('deleted', 'Old outfit'), put('renamed', 'Old name')])
-  assert.equal(a.repo.flush(), true)
+  await a.repo.open()
+  assert.equal(await a.login(), true)
+  await a.repo.apply([put('deleted', 'Old outfit'), put('renamed', 'Old name')])
+  assert.equal(await a.repo.flush(), true)
 
   const bSaved = new Map()
   const b = device(server, { saved: bSaved, replicaId: 'b' })
-  assert.equal(b.repo.open(), true)
-  assert.equal(b.login(), true)
+  assert.equal(await b.repo.open(), true)
+  assert.equal(await b.login(), true)
   assert.equal(b.repo.status.state, 'verified')
   const staleSettings = copy(b.player.ExtensionSettings)
 
-  a.repo.apply([
+  await a.repo.apply([
     { type: 'delete-outfit', id: 'deleted' },
     { type: 'put-outfit', id: 'renamed', changes: { name: 'New name' } },
   ])
-  assert.equal(a.repo.flush(), true)
+  assert.equal(await a.repo.flush(), true)
   const updatedCloud = server.settings.VPWardrobe
 
   const reopened = device(server, { saved: bSaved, cachedSettings: staleSettings, replicaId: 'b-new-session' })
-  assert.equal(reopened.repo.open(), true)
+  assert.equal(await reopened.repo.open(), true)
   assert.equal(reopened.repo.status.state, 'pending')
   assert.equal(reopened.timers.size, 0, 'Opening from Player must not queue a stale upload')
   assert.ok(reopened.document().lastVerifiedPayload, 'The prior session had a verification record')
-  assert.equal(reopened.repo.flush({ force: true }), false, 'Manual retry also waits when only the cached payload is known')
+  assert.equal(await reopened.repo.flush({ force: true }), false, 'Manual retry also waits when only the cached payload is known')
   assert.equal(reopened.sends(), 0)
   assert.equal(server.settings.VPWardrobe, updatedCloud)
 
-  assert.equal(reopened.login(), true)
+  assert.equal(await reopened.login(), true)
   assert.equal(reopened.repo.status.state, 'verified')
   assert.equal(reopened.repo.index.outfits.deleted, undefined)
   assert.ok(reopened.repo.index.tombstones.outfits.deleted)
   assert.equal(reopened.repo.index.outfits.renamed.name, 'New name')
-  assert.equal(reopened.repo.flush(), true)
+  assert.equal(await reopened.repo.flush(), true)
   assert.equal(reopened.sends(), 0)
 })
 
-test('a genuine edit after provisional open stays local until a fresh login response', () => {
+test('a genuine edit after provisional open stays local until a fresh login response', async () => {
   const server = { settings: {} }
   const d = device(server)
-  assert.equal(d.repo.open(), true)
+  assert.equal(await d.repo.open(), true)
   assert.equal(d.repo.status.state, 'pending')
-  assert.equal(d.repo.flush({ force: true }), false)
+  assert.equal(await d.repo.flush({ force: true }), false)
   assert.equal(d.sends(), 0)
-  d.repo.apply([put('new', 'New outfit')])
-  assert.equal(d.repo.flush(), false)
+  await d.repo.apply([put('new', 'New outfit')])
+  assert.equal(await d.repo.flush(), false)
   assert.equal(d.repo.status.state, 'pending')
   assert.equal(d.sends(), 0)
   assert.equal(d.document().index.outfits.new.name, 'New outfit')
-  assert.equal(d.login(), true)
-  assert.equal(d.repo.flush(), true)
+  assert.equal(await d.login(), true)
+  assert.equal(await d.repo.flush(), true)
   assert.equal(d.sends(), 1)
   assert.equal(decodeWardrobePayload(server.settings.VPWardrobe).index.outfits.new.name, 'New outfit')
-  assert.equal(d.login(), true)
+  assert.equal(await d.login(), true)
   assert.equal(d.repo.status.state, 'verified')
 })
 
-test('a private-only edit does not re-upload an unchanged provisional cloud projection', () => {
+test('a private-only edit does not re-upload an unchanged provisional cloud projection', async () => {
   const server = { settings: {} }
   const saved = new Map()
   const a = device(server, { saved })
-  a.repo.open()
-  assert.equal(a.login(), true)
-  a.repo.apply([put('private', 'Original')])
-  a.repo.flush()
-  a.repo.apply([{ type: 'set-cloud', id: 'private', enabled: false }])
-  a.repo.flush()
+  await a.repo.open()
+  assert.equal(await a.login(), true)
+  await a.repo.apply([put('private', 'Original')])
+  await a.repo.flush()
+  await a.repo.apply([{ type: 'set-cloud', id: 'private', enabled: false }])
+  await a.repo.flush()
   const cloudBefore = server.settings.VPWardrobe
 
   const reopened = device(server, { saved, cachedSettings: server.settings, replicaId: 'new-session' })
-  reopened.repo.open()
-  reopened.repo.apply([{ type: 'put-outfit', id: 'private', changes: { name: 'Private edit' } }])
-  assert.equal(reopened.repo.flush({ force: true }), false)
+  await reopened.repo.open()
+  await reopened.repo.apply([{ type: 'put-outfit', id: 'private', changes: { name: 'Private edit' } }])
+  assert.equal(await reopened.repo.flush({ force: true }), false)
   assert.equal(reopened.sends(), 0)
   assert.equal(server.settings.VPWardrobe, cloudBefore)
   assert.equal(reopened.repo.index.outfits.private.name, 'Private edit')
-  assert.equal(reopened.login(), true)
+  assert.equal(await reopened.login(), true)
   assert.equal(reopened.repo.status.state, 'verified')
   assert.equal(reopened.repo.index.outfits.private.name, 'Private edit')
 })
 
-test('a stale tab keeps its private edit as a local-only fork after a shared-storage cloud re-enable', () => {
+test('a stale tab keeps its private edit as a local-only fork after a shared-storage cloud re-enable', async () => {
   const server = { settings: {} }
   const saved = new Map()
   const a = device(server, { saved, replicaId: 'tab-a' })
-  a.repo.open()
-  assert.equal(a.login(), true)
-  a.repo.apply([put('outfit', 'Public shirt')])
-  a.repo.flush()
-  a.repo.apply([{ type: 'set-cloud', id: 'outfit', enabled: false }])
-  a.repo.flush()
+  await a.repo.open()
+  assert.equal(await a.login(), true)
+  await a.repo.apply([put('outfit', 'Public shirt')])
+  await a.repo.flush()
+  await a.repo.apply([{ type: 'set-cloud', id: 'outfit', enabled: false }])
+  await a.repo.flush()
 
   const b = device(server, { saved, replicaId: 'tab-b' })
-  b.repo.open()
-  assert.equal(b.login(), true)
-  b.repo.apply([put('outfit', 'Private dress')])
+  await b.repo.open()
+  assert.equal(await b.login(), true)
+  await b.repo.apply([put('outfit', 'Private dress')])
   const privateIndex = b.repo.index
   const publicIndex = applyWardrobeOperations(a.repo.index,
     [{ type: 'set-cloud', id: 'outfit', enabled: true }], { replicaId: 'tab-a' })
   saved.set(b.repo.key, encode({ ...b.document(), index: publicIndex, pending: true }))
 
-  b.repo.apply([put('other', 'Other outfit')])
+  await b.repo.apply([put('other', 'Other outfit')])
   const fork = Object.values(b.repo.index.outfits).find(outfit => outfit.vpwLocalFork?.sourceId === 'outfit')
   assert.ok(fork)
   assert.equal(fork.name, privateIndex.outfits.outfit.name)
   assert.equal(b.repo.index.cloudState[fork.id].enabled, false)
   assert.equal(b.repo.index.outfits.outfit.name, 'Public shirt')
-  assert.equal(b.repo.flush(), true)
+  assert.equal(await b.repo.flush(), true)
   const cloud = decodeWardrobePayload(server.settings.VPWardrobe).index
   assert.equal(cloud.outfits.outfit.name, 'Public shirt')
   assert.equal(cloud.outfits[fork.id], undefined)

@@ -14,6 +14,7 @@ async function openFlowLibrary(page, { extras = 0, render = true, hidden = false
   const errors = []
   page.on('pageerror', error => errors.push(error.message))
   await page.goto('/')
+  await expect(page.getByTitle("Vivian's Portable Wardrobe", { exact: true })).toBeVisible()
   await page.evaluate(async ({ original, incoming, extras, render, hidden }) => {
     if (hidden) {
       original = { ...original, Blush: 'Live blush', ArmsLeft: 'Live arm' }
@@ -51,13 +52,13 @@ async function openFlowLibrary(page, { extras = 0, render = true, hidden = false
         return { dispose() {} }
       },
     }
-    for (const outfit of [...fs.outfits]) fs.removeOutfit(outfit.id)
-    const tagId = fs.createTag('Daywear')
+    for (const outfit of [...fs.outfits]) await fs.removeOutfit(outfit.id)
+    const tagId = await fs.createTag('Daywear')
     const data = Object.entries(incoming).map(([Group, Name]) => ({ Group, Name }))
-    fs.addOutfit({ name: 'Teal day outfit', data, tagIds: [tagId], cloudSync: false })
-    fs.addOutfit({ name: 'Evening outfit', data, tagIds: [], cloudSync: false })
+    await fs.addOutfit({ name: 'Teal day outfit', data, tagIds: [tagId], cloudSync: false })
+    await fs.addOutfit({ name: 'Evening outfit', data, tagIds: [], cloudSync: false })
     for (let index = 0; index < extras; index++) {
-      fs.addOutfit({ name: `Daywear ${String(index + 1).padStart(2, '0')}`, data, tagIds: [tagId], cloudSync: false })
+      await fs.addOutfit({ name: `Daywear ${String(index + 1).padStart(2, '0')}`, data, tagIds: [tagId], cloudSync: false })
     }
   }, { original, incoming, extras, render, hidden })
   await page.getByTitle("Vivian's Portable Wardrobe", { exact: true }).click()
@@ -220,6 +221,7 @@ test('hidden BC body slots stay live in preview and apply, and are absent from a
   await expect(adjustments.locator('[data-group-id="HiddenBody"]')).toHaveCount(0)
   await expect(adjustments.locator('[data-slot-key="Blush"]')).toHaveCount(0)
   await adjustments.getByRole('button', { name: 'Done adjusting', exact: true }).click()
+  await expect(adjustments).toBeHidden()
   await page.getByRole('button', { name: 'Apply to Tester', exact: true }).click()
   const applied = await page.evaluate(() => Object.fromEntries(window.__flowProbe.applications[0].bundle.map(part => [part.Group, part.Name])))
   expect(applied.Blush).toBe('Live blush')
@@ -440,7 +442,7 @@ test('short mobile filter drawer keeps its result action visible with many tags'
   await page.evaluate(async () => {
     const { useFileSystemStore } = await import(window.__flowProbe.storeUrl)
     for (let index = 0; index < 15; index++) {
-      useFileSystemStore.getState().createTag(`Collection ${index + 1} / A longer seasonal wardrobe label`)
+      await useFileSystemStore.getState().createTag(`Collection ${index + 1} / A longer seasonal wardrobe label`)
     }
   })
   await page.getByRole('button', { name: 'Filters', exact: true }).click()
