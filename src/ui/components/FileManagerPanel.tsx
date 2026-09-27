@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPoi
 import { ActionIcon, Box, Button, CloseButton, Divider, Flex, Group, Modal, Paper, Portal, Tabs, Text, Tooltip } from '@mantine/core'
 import { useTranslation } from 'react-i18next'
 import { hostWindow } from '@/utils/host-window.js'
-import { getFs, getWb, useWbSelector } from '@/stores/hooks'
+import { getFs, getWb, useFsSelector, useWbSelector } from '@/stores/hooks'
 import { useTheme } from '@/ui/theme/ThemeProvider'
 import { useIsMobile } from '@/ui/hooks/useIsMobile'
 import { WardrobeWorkspace } from './WardrobeWorkspace'
@@ -36,6 +36,9 @@ function fitPanelHeight(value: number, top = PANEL_MARGIN): number {
 export function FileManagerPanel({ opened, onClose }: FileManagerPanelProps) {
   const { t } = useTranslation()
   const rawActiveTab = useWbSelector((wb) => wb.activeTab)
+  const historyStorageStatus = useFsSelector((fs) => fs.historyStorageStatus)
+  const historyNeedsAttention = historyStorageStatus === 'error'
+    || historyStorageStatus === 'conflict' || historyStorageStatus === 'archived'
   const theme = useTheme()
   const isMobile = useIsMobile()
   const [adjustmentsOpen, setAdjustmentsOpen] = useState(false)
@@ -280,7 +283,10 @@ export function FileManagerPanel({ opened, onClose }: FileManagerPanelProps) {
             <Group justify="space-between">
               <Tabs.List>
                 <Tabs.Tab value="wardrobe">{t('fileManagerPanel.tabWardrobe')}</Tabs.Tab>
-                <Tabs.Tab value="history">{t('fileManagerPanel.tabHistory')}</Tabs.Tab>
+                <Tabs.Tab value="history">
+                  {t('fileManagerPanel.tabHistory')}
+                  {historyNeedsAttention && <Text span c={historyStorageStatus === 'archived' ? 'blue' : 'red'} aria-label={t(historyStorageStatus === 'archived' ? 'historyViewer.archivedReminder' : 'historyViewer.attentionRequired')}> ●</Text>}
+                </Tabs.Tab>
                 <Tabs.Tab value="settings">{t('fileManagerPanel.tabSettings')}</Tabs.Tab>
               </Tabs.List>
               <Group gap="xs">

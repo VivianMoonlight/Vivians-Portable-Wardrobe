@@ -29,8 +29,9 @@ export class HistoryRecord {
         if (!recordA || !recordB || !recordA.data || !recordB.data) {
             return false;
         }
-        const filterdA = recordA.data.filter(item => this.filter.includes(item.Group)).sort((a, b) => a.Group.localeCompare(b.Group));
-        const filterdB = recordB.data.filter(item => this.filter.includes(item.Group)).sort((a, b) => a.Group.localeCompare(b.Group));
+        const included = item => !this.filter.length || this.filter.includes(item.Group);
+        const filterdA = recordA.data.filter(included).sort((a, b) => a.Group.localeCompare(b.Group));
+        const filterdB = recordB.data.filter(included).sort((a, b) => a.Group.localeCompare(b.Group));
         if (filterdA.length !== filterdB.length) {
             return false;
         }

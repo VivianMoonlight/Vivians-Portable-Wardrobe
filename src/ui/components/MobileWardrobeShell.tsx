@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { ActionIcon, Box, Button, Group, SegmentedControl, Stack, Text } from '@mantine/core'
 import { useTranslation } from 'react-i18next'
-import { getWb, useWbSelector } from '@/stores/hooks'
+import { getWb, useFsSelector, useWbSelector } from '@/stores/hooks'
 import { WardrobeWorkspace } from './WardrobeWorkspace'
 import { WardrobeSettings } from './WardrobeSettings'
 import { HistoryViewer } from './HistoryViewer'
@@ -17,6 +17,9 @@ type Pane = 'preview' | 'list'
 export function MobileWardrobeShell({ onClose }: MobileWardrobeShellProps) {
   const { t } = useTranslation()
   const rawActiveTab = useWbSelector((wb) => wb.activeTab)
+  const historyStorageStatus = useFsSelector((fs) => fs.historyStorageStatus)
+  const historyNeedsAttention = historyStorageStatus === 'error'
+    || historyStorageStatus === 'conflict' || historyStorageStatus === 'archived'
   const [pane, setPane] = useState<Pane>('list')
   const [adjustmentsOpen, setAdjustmentsOpen] = useState(false)
   const [wardrobeDetailOpen, setWardrobeDetailOpen] = useState(false)
@@ -40,7 +43,7 @@ export function MobileWardrobeShell({ onClose }: MobileWardrobeShellProps) {
         onChange={(v) => getWb().setActiveTab(v)}
         data={[
           { value: 'wardrobe', label: t('fileManagerPanel.tabWardrobe') },
-          { value: 'history', label: t('fileManagerPanel.tabHistory') },
+          { value: 'history', label: <>{t('fileManagerPanel.tabHistory')}{historyNeedsAttention && <span aria-label={t(historyStorageStatus === 'archived' ? 'historyViewer.archivedReminder' : 'historyViewer.attentionRequired')} style={{ color: historyStorageStatus === 'archived' ? 'var(--mantine-color-blue-6)' : 'var(--mantine-color-red-6)', marginLeft: 3 }}>●</span>}</> },
           { value: 'settings', label: t('fileManagerPanel.tabSettings') },
         ]}
       />

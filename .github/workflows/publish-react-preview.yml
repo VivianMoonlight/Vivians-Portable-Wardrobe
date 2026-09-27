@@ -1,0 +1,85 @@
+name: Publish React preview
+
+on:
+  push:
+    branches:
+      - wardrobe-react
+
+permissions:
+  contents: write
+
+concurrency:
+  group: react-preview-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: ${{ !contains(github.event.head_commit.message, '[skip react publish]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check that this push is still the branch head
+        id: head
+        env:
+          PUSH_SHA: ${{ github.sha }}
+        run: |
+          git fetch origin +refs/heads/wardrobe-react:refs/remotes/origin/wardrobe-react
+          branch_head="$(git rev-parse refs/remotes/origin/wardrobe-react)"
+          if [ "$branch_head" = "$PUSH_SHA" ]; then
+            echo 'mode=build' >> "$GITHUB_OUTPUT"
+          elif [ "$(git rev-parse "${branch_head}^" 2>/dev/null)" = "$PUSH_SHA" ] && git show -s --format=%s "$branch_head" | grep -Fq '[skip react publish]'; then
+            git checkout --detach "$branch_head"
+            echo 'This push was already packaged; retrying CDN verification.'
+            echo 'mode=verify' >> "$GITHUB_OUTPUT"
+          else
+            echo 'A newer push will publish the current branch head.'
+            echo 'mode=skip' >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.head.outputs.mode != 'skip'
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        if: steps.head.outputs.mode == 'build'
+        run: npm ci
+
+      - name: Prepare version and verify source
+        if: steps.head.outputs.mode == 'build'
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          node scripts/prepare-react-publish.js "$BEFORE_SHA"
+          npm run typecheck
+          npm test
+
+      - name: Build and verify userscripts
+        if: steps.head.outputs.mode == 'build'
+        run: |
+          npm run package:react
+          node scripts/verify-react-package.js
+          git diff --check
+
+      - name: Publish artifacts to the branch
+        if: steps.head.outputs.mode == 'build'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git add package.json package-lock.json ViviansPortableWardrobeReactLoader.user.js out/ViviansPortableWardrobeReactLoader.user.js out/Vivians-Portable-Wardrobe.user.js
+          if ! git diff --cached --quiet; then
+            version="$(node -p "require('./package.json').version")"
+            git -c user.name='VIVianMoonlight' -c user.email='VIVianMoonlight@users.noreply.github.com' commit -m "chore: publish React preview ${version} [skip react publish]"
+            authorization="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+            git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $authorization" push origin HEAD:wardrobe-react
+          fi
+
+      - name: Refresh and verify jsDelivr
+        if: steps.head.outputs.mode != 'skip'
+        run: node scripts/purge-react-cdn.js

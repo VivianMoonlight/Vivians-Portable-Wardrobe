@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vivians Portable Wardrobe
 // @namespace    http://tampermonkey.net/
-// @version      0.10.1-react.9
+// @version      0.10.1-react.10
 // @author       VIVianMoonlight
 // @description  Portable Wardrobe for Bondage Club (React + Mantine, Shadow DOM isolated)
 // @downloadURL  https://cdn.jsdelivr.net/gh/VivianMoonlight/Vivians-Portable-Wardrobe@wardrobe-react/out/Vivians-Portable-Wardrobe.user.js
@@ -32,7 +32,7 @@
     return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
   };
   var require_main_001 = __commonJS({
-    "main-BnacH517.js"(exports) {
+    "main-C2r7IXCJ.js"(exports) {
       function _mergeNamespaces(n, m) {
         for (var i = 0; i < m.length; i++) {
           const e = m[i];
@@ -9285,7 +9285,7 @@
       instance.hasLoadedNamespace;
       instance.loadNamespaces;
       instance.loadLanguages;
-      const version = "0.10.1-react.9";
+      const version = "0.10.1-react.10";
       var _unsafeWindow = /* @__PURE__ */ (() => typeof unsafeWindow != "undefined" ? unsafeWindow : void 0)();
       const hostWindow = typeof _unsafeWindow !== "undefined" ? _unsafeWindow : window;
       const doc = hostWindow.document;
@@ -10096,6 +10096,463 @@ One of mods you are using is using an old version of SDK. It will work for now b
         React.useDebugValue(slice);
         return slice;
       }
+      var lzString = { exports: {} };
+      var hasRequiredLzString;
+      function requireLzString() {
+        if (hasRequiredLzString) return lzString.exports;
+        hasRequiredLzString = 1;
+        (function(module2) {
+          var LZString2 = (function() {
+            var f = String.fromCharCode;
+            var keyStrBase64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
+            var keyStrUriSafe = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+-$";
+            var baseReverseDic = {};
+            function getBaseValue2(alphabet, character) {
+              if (!baseReverseDic[alphabet]) {
+                baseReverseDic[alphabet] = {};
+                for (var i = 0; i < alphabet.length; i++) {
+                  baseReverseDic[alphabet][alphabet.charAt(i)] = i;
+                }
+              }
+              return baseReverseDic[alphabet][character];
+            }
+            var LZString3 = {
+              compressToBase64: function(input) {
+                if (input == null) return "";
+                var res = LZString3._compress(input, 6, function(a) {
+                  return keyStrBase64.charAt(a);
+                });
+                switch (res.length % 4) {
+                  // To produce valid Base64
+                  default:
+                  // When could this happen ?
+                  case 0:
+                    return res;
+                  case 1:
+                    return res + "===";
+                  case 2:
+                    return res + "==";
+                  case 3:
+                    return res + "=";
+                }
+              },
+              decompressFromBase64: function(input) {
+                if (input == null) return "";
+                if (input == "") return null;
+                return LZString3._decompress(input.length, 32, function(index2) {
+                  return getBaseValue2(keyStrBase64, input.charAt(index2));
+                });
+              },
+              compressToUTF16: function(input) {
+                if (input == null) return "";
+                return LZString3._compress(input, 15, function(a) {
+                  return f(a + 32);
+                }) + " ";
+              },
+              decompressFromUTF16: function(compressed) {
+                if (compressed == null) return "";
+                if (compressed == "") return null;
+                return LZString3._decompress(compressed.length, 16384, function(index2) {
+                  return compressed.charCodeAt(index2) - 32;
+                });
+              },
+              //compress into uint8array (UCS-2 big endian format)
+              compressToUint8Array: function(uncompressed) {
+                var compressed = LZString3.compress(uncompressed);
+                var buf = new Uint8Array(compressed.length * 2);
+                for (var i = 0, TotalLen = compressed.length; i < TotalLen; i++) {
+                  var current_value = compressed.charCodeAt(i);
+                  buf[i * 2] = current_value >>> 8;
+                  buf[i * 2 + 1] = current_value % 256;
+                }
+                return buf;
+              },
+              //decompress from uint8array (UCS-2 big endian format)
+              decompressFromUint8Array: function(compressed) {
+                if (compressed === null || compressed === void 0) {
+                  return LZString3.decompress(compressed);
+                } else {
+                  var buf = new Array(compressed.length / 2);
+                  for (var i = 0, TotalLen = buf.length; i < TotalLen; i++) {
+                    buf[i] = compressed[i * 2] * 256 + compressed[i * 2 + 1];
+                  }
+                  var result = [];
+                  buf.forEach(function(c) {
+                    result.push(f(c));
+                  });
+                  return LZString3.decompress(result.join(""));
+                }
+              },
+              //compress into a string that is already URI encoded
+              compressToEncodedURIComponent: function(input) {
+                if (input == null) return "";
+                return LZString3._compress(input, 6, function(a) {
+                  return keyStrUriSafe.charAt(a);
+                });
+              },
+              //decompress from an output of compressToEncodedURIComponent
+              decompressFromEncodedURIComponent: function(input) {
+                if (input == null) return "";
+                if (input == "") return null;
+                input = input.replace(/ /g, "+");
+                return LZString3._decompress(input.length, 32, function(index2) {
+                  return getBaseValue2(keyStrUriSafe, input.charAt(index2));
+                });
+              },
+              compress: function(uncompressed) {
+                return LZString3._compress(uncompressed, 16, function(a) {
+                  return f(a);
+                });
+              },
+              _compress: function(uncompressed, bitsPerChar, getCharFromInt) {
+                if (uncompressed == null) return "";
+                var i, value, context_dictionary = {}, context_dictionaryToCreate = {}, context_c = "", context_wc = "", context_w = "", context_enlargeIn = 2, context_dictSize = 3, context_numBits = 2, context_data = [], context_data_val = 0, context_data_position = 0, ii;
+                for (ii = 0; ii < uncompressed.length; ii += 1) {
+                  context_c = uncompressed.charAt(ii);
+                  if (!Object.prototype.hasOwnProperty.call(context_dictionary, context_c)) {
+                    context_dictionary[context_c] = context_dictSize++;
+                    context_dictionaryToCreate[context_c] = true;
+                  }
+                  context_wc = context_w + context_c;
+                  if (Object.prototype.hasOwnProperty.call(context_dictionary, context_wc)) {
+                    context_w = context_wc;
+                  } else {
+                    if (Object.prototype.hasOwnProperty.call(context_dictionaryToCreate, context_w)) {
+                      if (context_w.charCodeAt(0) < 256) {
+                        for (i = 0; i < context_numBits; i++) {
+                          context_data_val = context_data_val << 1;
+                          if (context_data_position == bitsPerChar - 1) {
+                            context_data_position = 0;
+                            context_data.push(getCharFromInt(context_data_val));
+                            context_data_val = 0;
+                          } else {
+                            context_data_position++;
+                          }
+                        }
+                        value = context_w.charCodeAt(0);
+                        for (i = 0; i < 8; i++) {
+                          context_data_val = context_data_val << 1 | value & 1;
+                          if (context_data_position == bitsPerChar - 1) {
+                            context_data_position = 0;
+                            context_data.push(getCharFromInt(context_data_val));
+                            context_data_val = 0;
+                          } else {
+                            context_data_position++;
+                          }
+                          value = value >> 1;
+                        }
+                      } else {
+                        value = 1;
+                        for (i = 0; i < context_numBits; i++) {
+                          context_data_val = context_data_val << 1 | value;
+                          if (context_data_position == bitsPerChar - 1) {
+                            context_data_position = 0;
+                            context_data.push(getCharFromInt(context_data_val));
+                            context_data_val = 0;
+                          } else {
+                            context_data_position++;
+                          }
+                          value = 0;
+                        }
+                        value = context_w.charCodeAt(0);
+                        for (i = 0; i < 16; i++) {
+                          context_data_val = context_data_val << 1 | value & 1;
+                          if (context_data_position == bitsPerChar - 1) {
+                            context_data_position = 0;
+                            context_data.push(getCharFromInt(context_data_val));
+                            context_data_val = 0;
+                          } else {
+                            context_data_position++;
+                          }
+                          value = value >> 1;
+                        }
+                      }
+                      context_enlargeIn--;
+                      if (context_enlargeIn == 0) {
+                        context_enlargeIn = Math.pow(2, context_numBits);
+                        context_numBits++;
+                      }
+                      delete context_dictionaryToCreate[context_w];
+                    } else {
+                      value = context_dictionary[context_w];
+                      for (i = 0; i < context_numBits; i++) {
+                        context_data_val = context_data_val << 1 | value & 1;
+                        if (context_data_position == bitsPerChar - 1) {
+                          context_data_position = 0;
+                          context_data.push(getCharFromInt(context_data_val));
+                          context_data_val = 0;
+                        } else {
+                          context_data_position++;
+                        }
+                        value = value >> 1;
+                      }
+                    }
+                    context_enlargeIn--;
+                    if (context_enlargeIn == 0) {
+                      context_enlargeIn = Math.pow(2, context_numBits);
+                      context_numBits++;
+                    }
+                    context_dictionary[context_wc] = context_dictSize++;
+                    context_w = String(context_c);
+                  }
+                }
+                if (context_w !== "") {
+                  if (Object.prototype.hasOwnProperty.call(context_dictionaryToCreate, context_w)) {
+                    if (context_w.charCodeAt(0) < 256) {
+                      for (i = 0; i < context_numBits; i++) {
+                        context_data_val = context_data_val << 1;
+                        if (context_data_position == bitsPerChar - 1) {
+                          context_data_position = 0;
+                          context_data.push(getCharFromInt(context_data_val));
+                          context_data_val = 0;
+                        } else {
+                          context_data_position++;
+                        }
+                      }
+                      value = context_w.charCodeAt(0);
+                      for (i = 0; i < 8; i++) {
+                        context_data_val = context_data_val << 1 | value & 1;
+                        if (context_data_position == bitsPerChar - 1) {
+                          context_data_position = 0;
+                          context_data.push(getCharFromInt(context_data_val));
+                          context_data_val = 0;
+                        } else {
+                          context_data_position++;
+                        }
+                        value = value >> 1;
+                      }
+                    } else {
+                      value = 1;
+                      for (i = 0; i < context_numBits; i++) {
+                        context_data_val = context_data_val << 1 | value;
+                        if (context_data_position == bitsPerChar - 1) {
+                          context_data_position = 0;
+                          context_data.push(getCharFromInt(context_data_val));
+                          context_data_val = 0;
+                        } else {
+                          context_data_position++;
+                        }
+                        value = 0;
+                      }
+                      value = context_w.charCodeAt(0);
+                      for (i = 0; i < 16; i++) {
+                        context_data_val = context_data_val << 1 | value & 1;
+                        if (context_data_position == bitsPerChar - 1) {
+                          context_data_position = 0;
+                          context_data.push(getCharFromInt(context_data_val));
+                          context_data_val = 0;
+                        } else {
+                          context_data_position++;
+                        }
+                        value = value >> 1;
+                      }
+                    }
+                    context_enlargeIn--;
+                    if (context_enlargeIn == 0) {
+                      context_enlargeIn = Math.pow(2, context_numBits);
+                      context_numBits++;
+                    }
+                    delete context_dictionaryToCreate[context_w];
+                  } else {
+                    value = context_dictionary[context_w];
+                    for (i = 0; i < context_numBits; i++) {
+                      context_data_val = context_data_val << 1 | value & 1;
+                      if (context_data_position == bitsPerChar - 1) {
+                        context_data_position = 0;
+                        context_data.push(getCharFromInt(context_data_val));
+                        context_data_val = 0;
+                      } else {
+                        context_data_position++;
+                      }
+                      value = value >> 1;
+                    }
+                  }
+                  context_enlargeIn--;
+                  if (context_enlargeIn == 0) {
+                    context_enlargeIn = Math.pow(2, context_numBits);
+                    context_numBits++;
+                  }
+                }
+                value = 2;
+                for (i = 0; i < context_numBits; i++) {
+                  context_data_val = context_data_val << 1 | value & 1;
+                  if (context_data_position == bitsPerChar - 1) {
+                    context_data_position = 0;
+                    context_data.push(getCharFromInt(context_data_val));
+                    context_data_val = 0;
+                  } else {
+                    context_data_position++;
+                  }
+                  value = value >> 1;
+                }
+                while (true) {
+                  context_data_val = context_data_val << 1;
+                  if (context_data_position == bitsPerChar - 1) {
+                    context_data.push(getCharFromInt(context_data_val));
+                    break;
+                  } else context_data_position++;
+                }
+                return context_data.join("");
+              },
+              decompress: function(compressed) {
+                if (compressed == null) return "";
+                if (compressed == "") return null;
+                return LZString3._decompress(compressed.length, 32768, function(index2) {
+                  return compressed.charCodeAt(index2);
+                });
+              },
+              _decompress: function(length, resetValue, getNextValue) {
+                var dictionary = [], enlargeIn = 4, dictSize = 4, numBits = 3, entry = "", result = [], i, w2, bits, resb, maxpower, power, c, data = { val: getNextValue(0), position: resetValue, index: 1 };
+                for (i = 0; i < 3; i += 1) {
+                  dictionary[i] = i;
+                }
+                bits = 0;
+                maxpower = Math.pow(2, 2);
+                power = 1;
+                while (power != maxpower) {
+                  resb = data.val & data.position;
+                  data.position >>= 1;
+                  if (data.position == 0) {
+                    data.position = resetValue;
+                    data.val = getNextValue(data.index++);
+                  }
+                  bits |= (resb > 0 ? 1 : 0) * power;
+                  power <<= 1;
+                }
+                switch (bits) {
+                  case 0:
+                    bits = 0;
+                    maxpower = Math.pow(2, 8);
+                    power = 1;
+                    while (power != maxpower) {
+                      resb = data.val & data.position;
+                      data.position >>= 1;
+                      if (data.position == 0) {
+                        data.position = resetValue;
+                        data.val = getNextValue(data.index++);
+                      }
+                      bits |= (resb > 0 ? 1 : 0) * power;
+                      power <<= 1;
+                    }
+                    c = f(bits);
+                    break;
+                  case 1:
+                    bits = 0;
+                    maxpower = Math.pow(2, 16);
+                    power = 1;
+                    while (power != maxpower) {
+                      resb = data.val & data.position;
+                      data.position >>= 1;
+                      if (data.position == 0) {
+                        data.position = resetValue;
+                        data.val = getNextValue(data.index++);
+                      }
+                      bits |= (resb > 0 ? 1 : 0) * power;
+                      power <<= 1;
+                    }
+                    c = f(bits);
+                    break;
+                  case 2:
+                    return "";
+                }
+                dictionary[3] = c;
+                w2 = c;
+                result.push(c);
+                while (true) {
+                  if (data.index > length) {
+                    return "";
+                  }
+                  bits = 0;
+                  maxpower = Math.pow(2, numBits);
+                  power = 1;
+                  while (power != maxpower) {
+                    resb = data.val & data.position;
+                    data.position >>= 1;
+                    if (data.position == 0) {
+                      data.position = resetValue;
+                      data.val = getNextValue(data.index++);
+                    }
+                    bits |= (resb > 0 ? 1 : 0) * power;
+                    power <<= 1;
+                  }
+                  switch (c = bits) {
+                    case 0:
+                      bits = 0;
+                      maxpower = Math.pow(2, 8);
+                      power = 1;
+                      while (power != maxpower) {
+                        resb = data.val & data.position;
+                        data.position >>= 1;
+                        if (data.position == 0) {
+                          data.position = resetValue;
+                          data.val = getNextValue(data.index++);
+                        }
+                        bits |= (resb > 0 ? 1 : 0) * power;
+                        power <<= 1;
+                      }
+                      dictionary[dictSize++] = f(bits);
+                      c = dictSize - 1;
+                      enlargeIn--;
+                      break;
+                    case 1:
+                      bits = 0;
+                      maxpower = Math.pow(2, 16);
+                      power = 1;
+                      while (power != maxpower) {
+                        resb = data.val & data.position;
+                        data.position >>= 1;
+                        if (data.position == 0) {
+                          data.position = resetValue;
+                          data.val = getNextValue(data.index++);
+                        }
+                        bits |= (resb > 0 ? 1 : 0) * power;
+                        power <<= 1;
+                      }
+                      dictionary[dictSize++] = f(bits);
+                      c = dictSize - 1;
+                      enlargeIn--;
+                      break;
+                    case 2:
+                      return result.join("");
+                  }
+                  if (enlargeIn == 0) {
+                    enlargeIn = Math.pow(2, numBits);
+                    numBits++;
+                  }
+                  if (dictionary[c]) {
+                    entry = dictionary[c];
+                  } else {
+                    if (c === dictSize) {
+                      entry = w2 + w2.charAt(0);
+                    } else {
+                      return null;
+                    }
+                  }
+                  result.push(entry);
+                  dictionary[dictSize++] = w2 + entry.charAt(0);
+                  enlargeIn--;
+                  w2 = entry;
+                  if (enlargeIn == 0) {
+                    enlargeIn = Math.pow(2, numBits);
+                    numBits++;
+                  }
+                }
+              }
+            };
+            return LZString3;
+          })();
+          if (module2 != null) {
+            module2.exports = LZString2;
+          } else if (typeof angular !== "undefined" && angular != null) {
+            angular.module("LZString", []).factory("LZString", function() {
+              return LZString2;
+            });
+          }
+        })(lzString);
+        return lzString.exports;
+      }
+      var lzStringExports = requireLzString();
+      const LZString = /* @__PURE__ */ getDefaultExportFromCjs(lzStringExports);
       class FileSystem {
         /**
          * Creates new file system with named root folder
@@ -10840,8 +11297,9 @@ One of mods you are using is using an old version of SDK. It will work for now b
           if (!recordA || !recordB || !recordA.data || !recordB.data) {
             return false;
           }
-          const filterdA = recordA.data.filter((item) => this.filter.includes(item.Group)).sort((a, b) => a.Group.localeCompare(b.Group));
-          const filterdB = recordB.data.filter((item) => this.filter.includes(item.Group)).sort((a, b) => a.Group.localeCompare(b.Group));
+          const included = (item) => !this.filter.length || this.filter.includes(item.Group);
+          const filterdA = recordA.data.filter(included).sort((a, b) => a.Group.localeCompare(b.Group));
+          const filterdB = recordB.data.filter(included).sort((a, b) => a.Group.localeCompare(b.Group));
           if (filterdA.length !== filterdB.length) {
             return false;
           }
@@ -10915,463 +11373,6 @@ One of mods you are using is using an old version of SDK. It will work for now b
           this.fs.fromJSON(json);
         }
       }
-      var lzString = { exports: {} };
-      var hasRequiredLzString;
-      function requireLzString() {
-        if (hasRequiredLzString) return lzString.exports;
-        hasRequiredLzString = 1;
-        (function(module2) {
-          var LZString2 = (function() {
-            var f = String.fromCharCode;
-            var keyStrBase64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
-            var keyStrUriSafe = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+-$";
-            var baseReverseDic = {};
-            function getBaseValue2(alphabet, character) {
-              if (!baseReverseDic[alphabet]) {
-                baseReverseDic[alphabet] = {};
-                for (var i = 0; i < alphabet.length; i++) {
-                  baseReverseDic[alphabet][alphabet.charAt(i)] = i;
-                }
-              }
-              return baseReverseDic[alphabet][character];
-            }
-            var LZString3 = {
-              compressToBase64: function(input) {
-                if (input == null) return "";
-                var res = LZString3._compress(input, 6, function(a) {
-                  return keyStrBase64.charAt(a);
-                });
-                switch (res.length % 4) {
-                  // To produce valid Base64
-                  default:
-                  // When could this happen ?
-                  case 0:
-                    return res;
-                  case 1:
-                    return res + "===";
-                  case 2:
-                    return res + "==";
-                  case 3:
-                    return res + "=";
-                }
-              },
-              decompressFromBase64: function(input) {
-                if (input == null) return "";
-                if (input == "") return null;
-                return LZString3._decompress(input.length, 32, function(index2) {
-                  return getBaseValue2(keyStrBase64, input.charAt(index2));
-                });
-              },
-              compressToUTF16: function(input) {
-                if (input == null) return "";
-                return LZString3._compress(input, 15, function(a) {
-                  return f(a + 32);
-                }) + " ";
-              },
-              decompressFromUTF16: function(compressed) {
-                if (compressed == null) return "";
-                if (compressed == "") return null;
-                return LZString3._decompress(compressed.length, 16384, function(index2) {
-                  return compressed.charCodeAt(index2) - 32;
-                });
-              },
-              //compress into uint8array (UCS-2 big endian format)
-              compressToUint8Array: function(uncompressed) {
-                var compressed = LZString3.compress(uncompressed);
-                var buf = new Uint8Array(compressed.length * 2);
-                for (var i = 0, TotalLen = compressed.length; i < TotalLen; i++) {
-                  var current_value = compressed.charCodeAt(i);
-                  buf[i * 2] = current_value >>> 8;
-                  buf[i * 2 + 1] = current_value % 256;
-                }
-                return buf;
-              },
-              //decompress from uint8array (UCS-2 big endian format)
-              decompressFromUint8Array: function(compressed) {
-                if (compressed === null || compressed === void 0) {
-                  return LZString3.decompress(compressed);
-                } else {
-                  var buf = new Array(compressed.length / 2);
-                  for (var i = 0, TotalLen = buf.length; i < TotalLen; i++) {
-                    buf[i] = compressed[i * 2] * 256 + compressed[i * 2 + 1];
-                  }
-                  var result = [];
-                  buf.forEach(function(c) {
-                    result.push(f(c));
-                  });
-                  return LZString3.decompress(result.join(""));
-                }
-              },
-              //compress into a string that is already URI encoded
-              compressToEncodedURIComponent: function(input) {
-                if (input == null) return "";
-                return LZString3._compress(input, 6, function(a) {
-                  return keyStrUriSafe.charAt(a);
-                });
-              },
-              //decompress from an output of compressToEncodedURIComponent
-              decompressFromEncodedURIComponent: function(input) {
-                if (input == null) return "";
-                if (input == "") return null;
-                input = input.replace(/ /g, "+");
-                return LZString3._decompress(input.length, 32, function(index2) {
-                  return getBaseValue2(keyStrUriSafe, input.charAt(index2));
-                });
-              },
-              compress: function(uncompressed) {
-                return LZString3._compress(uncompressed, 16, function(a) {
-                  return f(a);
-                });
-              },
-              _compress: function(uncompressed, bitsPerChar, getCharFromInt) {
-                if (uncompressed == null) return "";
-                var i, value, context_dictionary = {}, context_dictionaryToCreate = {}, context_c = "", context_wc = "", context_w = "", context_enlargeIn = 2, context_dictSize = 3, context_numBits = 2, context_data = [], context_data_val = 0, context_data_position = 0, ii;
-                for (ii = 0; ii < uncompressed.length; ii += 1) {
-                  context_c = uncompressed.charAt(ii);
-                  if (!Object.prototype.hasOwnProperty.call(context_dictionary, context_c)) {
-                    context_dictionary[context_c] = context_dictSize++;
-                    context_dictionaryToCreate[context_c] = true;
-                  }
-                  context_wc = context_w + context_c;
-                  if (Object.prototype.hasOwnProperty.call(context_dictionary, context_wc)) {
-                    context_w = context_wc;
-                  } else {
-                    if (Object.prototype.hasOwnProperty.call(context_dictionaryToCreate, context_w)) {
-                      if (context_w.charCodeAt(0) < 256) {
-                        for (i = 0; i < context_numBits; i++) {
-                          context_data_val = context_data_val << 1;
-                          if (context_data_position == bitsPerChar - 1) {
-                            context_data_position = 0;
-                            context_data.push(getCharFromInt(context_data_val));
-                            context_data_val = 0;
-                          } else {
-                            context_data_position++;
-                          }
-                        }
-                        value = context_w.charCodeAt(0);
-                        for (i = 0; i < 8; i++) {
-                          context_data_val = context_data_val << 1 | value & 1;
-                          if (context_data_position == bitsPerChar - 1) {
-                            context_data_position = 0;
-                            context_data.push(getCharFromInt(context_data_val));
-                            context_data_val = 0;
-                          } else {
-                            context_data_position++;
-                          }
-                          value = value >> 1;
-                        }
-                      } else {
-                        value = 1;
-                        for (i = 0; i < context_numBits; i++) {
-                          context_data_val = context_data_val << 1 | value;
-                          if (context_data_position == bitsPerChar - 1) {
-                            context_data_position = 0;
-                            context_data.push(getCharFromInt(context_data_val));
-                            context_data_val = 0;
-                          } else {
-                            context_data_position++;
-                          }
-                          value = 0;
-                        }
-                        value = context_w.charCodeAt(0);
-                        for (i = 0; i < 16; i++) {
-                          context_data_val = context_data_val << 1 | value & 1;
-                          if (context_data_position == bitsPerChar - 1) {
-                            context_data_position = 0;
-                            context_data.push(getCharFromInt(context_data_val));
-                            context_data_val = 0;
-                          } else {
-                            context_data_position++;
-                          }
-                          value = value >> 1;
-                        }
-                      }
-                      context_enlargeIn--;
-                      if (context_enlargeIn == 0) {
-                        context_enlargeIn = Math.pow(2, context_numBits);
-                        context_numBits++;
-                      }
-                      delete context_dictionaryToCreate[context_w];
-                    } else {
-                      value = context_dictionary[context_w];
-                      for (i = 0; i < context_numBits; i++) {
-                        context_data_val = context_data_val << 1 | value & 1;
-                        if (context_data_position == bitsPerChar - 1) {
-                          context_data_position = 0;
-                          context_data.push(getCharFromInt(context_data_val));
-                          context_data_val = 0;
-                        } else {
-                          context_data_position++;
-                        }
-                        value = value >> 1;
-                      }
-                    }
-                    context_enlargeIn--;
-                    if (context_enlargeIn == 0) {
-                      context_enlargeIn = Math.pow(2, context_numBits);
-                      context_numBits++;
-                    }
-                    context_dictionary[context_wc] = context_dictSize++;
-                    context_w = String(context_c);
-                  }
-                }
-                if (context_w !== "") {
-                  if (Object.prototype.hasOwnProperty.call(context_dictionaryToCreate, context_w)) {
-                    if (context_w.charCodeAt(0) < 256) {
-                      for (i = 0; i < context_numBits; i++) {
-                        context_data_val = context_data_val << 1;
-                        if (context_data_position == bitsPerChar - 1) {
-                          context_data_position = 0;
-                          context_data.push(getCharFromInt(context_data_val));
-                          context_data_val = 0;
-                        } else {
-                          context_data_position++;
-                        }
-                      }
-                      value = context_w.charCodeAt(0);
-                      for (i = 0; i < 8; i++) {
-                        context_data_val = context_data_val << 1 | value & 1;
-                        if (context_data_position == bitsPerChar - 1) {
-                          context_data_position = 0;
-                          context_data.push(getCharFromInt(context_data_val));
-                          context_data_val = 0;
-                        } else {
-                          context_data_position++;
-                        }
-                        value = value >> 1;
-                      }
-                    } else {
-                      value = 1;
-                      for (i = 0; i < context_numBits; i++) {
-                        context_data_val = context_data_val << 1 | value;
-                        if (context_data_position == bitsPerChar - 1) {
-                          context_data_position = 0;
-                          context_data.push(getCharFromInt(context_data_val));
-                          context_data_val = 0;
-                        } else {
-                          context_data_position++;
-                        }
-                        value = 0;
-                      }
-                      value = context_w.charCodeAt(0);
-                      for (i = 0; i < 16; i++) {
-                        context_data_val = context_data_val << 1 | value & 1;
-                        if (context_data_position == bitsPerChar - 1) {
-                          context_data_position = 0;
-                          context_data.push(getCharFromInt(context_data_val));
-                          context_data_val = 0;
-                        } else {
-                          context_data_position++;
-                        }
-                        value = value >> 1;
-                      }
-                    }
-                    context_enlargeIn--;
-                    if (context_enlargeIn == 0) {
-                      context_enlargeIn = Math.pow(2, context_numBits);
-                      context_numBits++;
-                    }
-                    delete context_dictionaryToCreate[context_w];
-                  } else {
-                    value = context_dictionary[context_w];
-                    for (i = 0; i < context_numBits; i++) {
-                      context_data_val = context_data_val << 1 | value & 1;
-                      if (context_data_position == bitsPerChar - 1) {
-                        context_data_position = 0;
-                        context_data.push(getCharFromInt(context_data_val));
-                        context_data_val = 0;
-                      } else {
-                        context_data_position++;
-                      }
-                      value = value >> 1;
-                    }
-                  }
-                  context_enlargeIn--;
-                  if (context_enlargeIn == 0) {
-                    context_enlargeIn = Math.pow(2, context_numBits);
-                    context_numBits++;
-                  }
-                }
-                value = 2;
-                for (i = 0; i < context_numBits; i++) {
-                  context_data_val = context_data_val << 1 | value & 1;
-                  if (context_data_position == bitsPerChar - 1) {
-                    context_data_position = 0;
-                    context_data.push(getCharFromInt(context_data_val));
-                    context_data_val = 0;
-                  } else {
-                    context_data_position++;
-                  }
-                  value = value >> 1;
-                }
-                while (true) {
-                  context_data_val = context_data_val << 1;
-                  if (context_data_position == bitsPerChar - 1) {
-                    context_data.push(getCharFromInt(context_data_val));
-                    break;
-                  } else context_data_position++;
-                }
-                return context_data.join("");
-              },
-              decompress: function(compressed) {
-                if (compressed == null) return "";
-                if (compressed == "") return null;
-                return LZString3._decompress(compressed.length, 32768, function(index2) {
-                  return compressed.charCodeAt(index2);
-                });
-              },
-              _decompress: function(length, resetValue, getNextValue) {
-                var dictionary = [], enlargeIn = 4, dictSize = 4, numBits = 3, entry = "", result = [], i, w2, bits, resb, maxpower, power, c, data = { val: getNextValue(0), position: resetValue, index: 1 };
-                for (i = 0; i < 3; i += 1) {
-                  dictionary[i] = i;
-                }
-                bits = 0;
-                maxpower = Math.pow(2, 2);
-                power = 1;
-                while (power != maxpower) {
-                  resb = data.val & data.position;
-                  data.position >>= 1;
-                  if (data.position == 0) {
-                    data.position = resetValue;
-                    data.val = getNextValue(data.index++);
-                  }
-                  bits |= (resb > 0 ? 1 : 0) * power;
-                  power <<= 1;
-                }
-                switch (bits) {
-                  case 0:
-                    bits = 0;
-                    maxpower = Math.pow(2, 8);
-                    power = 1;
-                    while (power != maxpower) {
-                      resb = data.val & data.position;
-                      data.position >>= 1;
-                      if (data.position == 0) {
-                        data.position = resetValue;
-                        data.val = getNextValue(data.index++);
-                      }
-                      bits |= (resb > 0 ? 1 : 0) * power;
-                      power <<= 1;
-                    }
-                    c = f(bits);
-                    break;
-                  case 1:
-                    bits = 0;
-                    maxpower = Math.pow(2, 16);
-                    power = 1;
-                    while (power != maxpower) {
-                      resb = data.val & data.position;
-                      data.position >>= 1;
-                      if (data.position == 0) {
-                        data.position = resetValue;
-                        data.val = getNextValue(data.index++);
-                      }
-                      bits |= (resb > 0 ? 1 : 0) * power;
-                      power <<= 1;
-                    }
-                    c = f(bits);
-                    break;
-                  case 2:
-                    return "";
-                }
-                dictionary[3] = c;
-                w2 = c;
-                result.push(c);
-                while (true) {
-                  if (data.index > length) {
-                    return "";
-                  }
-                  bits = 0;
-                  maxpower = Math.pow(2, numBits);
-                  power = 1;
-                  while (power != maxpower) {
-                    resb = data.val & data.position;
-                    data.position >>= 1;
-                    if (data.position == 0) {
-                      data.position = resetValue;
-                      data.val = getNextValue(data.index++);
-                    }
-                    bits |= (resb > 0 ? 1 : 0) * power;
-                    power <<= 1;
-                  }
-                  switch (c = bits) {
-                    case 0:
-                      bits = 0;
-                      maxpower = Math.pow(2, 8);
-                      power = 1;
-                      while (power != maxpower) {
-                        resb = data.val & data.position;
-                        data.position >>= 1;
-                        if (data.position == 0) {
-                          data.position = resetValue;
-                          data.val = getNextValue(data.index++);
-                        }
-                        bits |= (resb > 0 ? 1 : 0) * power;
-                        power <<= 1;
-                      }
-                      dictionary[dictSize++] = f(bits);
-                      c = dictSize - 1;
-                      enlargeIn--;
-                      break;
-                    case 1:
-                      bits = 0;
-                      maxpower = Math.pow(2, 16);
-                      power = 1;
-                      while (power != maxpower) {
-                        resb = data.val & data.position;
-                        data.position >>= 1;
-                        if (data.position == 0) {
-                          data.position = resetValue;
-                          data.val = getNextValue(data.index++);
-                        }
-                        bits |= (resb > 0 ? 1 : 0) * power;
-                        power <<= 1;
-                      }
-                      dictionary[dictSize++] = f(bits);
-                      c = dictSize - 1;
-                      enlargeIn--;
-                      break;
-                    case 2:
-                      return result.join("");
-                  }
-                  if (enlargeIn == 0) {
-                    enlargeIn = Math.pow(2, numBits);
-                    numBits++;
-                  }
-                  if (dictionary[c]) {
-                    entry = dictionary[c];
-                  } else {
-                    if (c === dictSize) {
-                      entry = w2 + w2.charAt(0);
-                    } else {
-                      return null;
-                    }
-                  }
-                  result.push(entry);
-                  dictionary[dictSize++] = w2 + entry.charAt(0);
-                  enlargeIn--;
-                  w2 = entry;
-                  if (enlargeIn == 0) {
-                    enlargeIn = Math.pow(2, numBits);
-                    numBits++;
-                  }
-                }
-              }
-            };
-            return LZString3;
-          })();
-          if (module2 != null) {
-            module2.exports = LZString2;
-          } else if (typeof angular !== "undefined" && angular != null) {
-            angular.module("LZString", []).factory("LZString", function() {
-              return LZString2;
-            });
-          }
-        })(lzString);
-        return lzString.exports;
-      }
-      var lzStringExports = requireLzString();
-      const LZString$1 = /* @__PURE__ */ getDefaultExportFromCjs(lzStringExports);
       const WARDROBE_INDEX_VERSION = 3;
       const hasOwn = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
       const isObject$4 = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
@@ -12447,9 +12448,9 @@ One of mods you are using is using an old version of SDK. It will work for now b
         return { merged, conflicts: remaining, canUpload: remaining.length === 0 };
       }
       const clone$1 = (value) => JSON.parse(JSON.stringify(value));
-      const encode = (value) => LZString$1.compressToBase64(JSON.stringify(value));
+      const encode = (value) => LZString.compressToBase64(JSON.stringify(value));
       const LOCAL_PAYLOAD_PREFIX = "VPW-LZ16:";
-      const encodeLocal = (value) => LOCAL_PAYLOAD_PREFIX + LZString$1.compressToUTF16(JSON.stringify(value));
+      const encodeLocal = (value) => LOCAL_PAYLOAD_PREFIX + LZString.compressToUTF16(JSON.stringify(value));
       const canonical$1 = (value) => Array.isArray(value) ? value.map(canonical$1) : value && typeof value === "object" ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical$1(value[key])])) : value;
       const equal = (left, right) => JSON.stringify(canonical$1(left)) === JSON.stringify(canonical$1(right));
       const own = (object, key) => Object.prototype.hasOwnProperty.call(object || {}, key);
@@ -12513,7 +12514,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
         if (typeof raw === "object") return requireObject(clone$1(raw));
         if (typeof raw !== "string") throw new Error("Invalid wardrobe storage value");
         if (raw.startsWith(LOCAL_PAYLOAD_PREFIX)) {
-          const json2 = LZString$1.decompressFromUTF16(raw.slice(LOCAL_PAYLOAD_PREFIX.length));
+          const json2 = LZString.decompressFromUTF16(raw.slice(LOCAL_PAYLOAD_PREFIX.length));
           if (!json2) throw new Error("Wardrobe data could not be decoded");
           return requireObject(JSON.parse(json2));
         }
@@ -12523,7 +12524,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
         } catch {
         }
         if (parsed !== void 0) return requireObject(parsed);
-        const json = LZString$1.decompressFromBase64(raw);
+        const json = LZString.decompressFromBase64(raw);
         if (!json) throw new Error("Wardrobe data could not be decoded");
         return requireObject(JSON.parse(json));
       }
@@ -14017,6 +14018,131 @@ One of mods you are using is using an old version of SDK. It will work for now b
           }
         }
       }
+      const DATABASE_NAME = "VPWardrobeLocalHistory";
+      const STORE_NAME = "history";
+      const legacyCopiesKey = (member) => `legacyCopies:${member}`;
+      class HistoryPersistence {
+        constructor(getIndexedDB) {
+          this.getIndexedDB = getIndexedDB;
+          this.database = null;
+          this.connection = null;
+        }
+        open() {
+          if (this.database) return this.database;
+          const indexedDB = this.getIndexedDB();
+          if (!indexedDB?.open) return Promise.reject(new Error("IndexedDB is unavailable"));
+          this.database = new Promise((resolve, reject) => {
+            const request = indexedDB.open(DATABASE_NAME, 1);
+            let blocked = false;
+            request.onupgradeneeded = () => {
+              if (!request.result.objectStoreNames.contains(STORE_NAME)) {
+                request.result.createObjectStore(STORE_NAME);
+              }
+            };
+            request.onsuccess = () => {
+              const database = request.result;
+              if (blocked) {
+                database.close();
+                return;
+              }
+              this.connection = database;
+              const invalidate = () => {
+                if (this.connection !== database) return;
+                database.close();
+                this.connection = null;
+                this.database = null;
+              };
+              database.onversionchange = invalidate;
+              database.onclose = invalidate;
+              resolve(database);
+            };
+            request.onerror = () => reject(request.error || new Error("IndexedDB open failed"));
+            request.onblocked = () => {
+              blocked = true;
+              reject(new Error("IndexedDB open blocked"));
+            };
+          }).catch((error) => {
+            this.database = null;
+            throw error;
+          });
+          return this.database;
+        }
+        async read(member) {
+          const database = await this.open();
+          return new Promise((resolve, reject) => {
+            let transaction;
+            try {
+              transaction = database.transaction(STORE_NAME, "readonly");
+            } catch (error) {
+              this.database = null;
+              reject(error);
+              return;
+            }
+            const request = transaction.objectStore(STORE_NAME).get(member);
+            transaction.oncomplete = () => resolve(request.result ?? null);
+            transaction.onerror = () => reject(transaction.error || new Error("History read failed"));
+            transaction.onabort = () => reject(transaction.error || new Error("History read aborted"));
+          });
+        }
+        async write(member, data) {
+          const database = await this.open();
+          return new Promise((resolve, reject) => {
+            let transaction;
+            try {
+              transaction = database.transaction(STORE_NAME, "readwrite");
+            } catch (error) {
+              this.database = null;
+              reject(error);
+              return;
+            }
+            transaction.objectStore(STORE_NAME).put(data, member);
+            transaction.oncomplete = () => resolve();
+            transaction.onerror = () => reject(transaction.error || new Error("History save failed"));
+            transaction.onabort = () => reject(transaction.error || new Error("History save aborted"));
+          });
+        }
+        async archiveLegacy(member, raw) {
+          const database = await this.open();
+          return new Promise((resolve, reject) => {
+            let transaction;
+            try {
+              transaction = database.transaction(STORE_NAME, "readwrite");
+            } catch (error) {
+              this.database = null;
+              reject(error);
+              return;
+            }
+            const store = transaction.objectStore(STORE_NAME);
+            const key = legacyCopiesKey(member);
+            const request = store.get(key);
+            request.onsuccess = () => {
+              const copies = Array.isArray(request.result) ? request.result : [];
+              if (copies.some((copy2) => copy2.raw === raw)) return;
+              store.put([...copies, { raw, archivedAt: (/* @__PURE__ */ new Date()).toISOString() }], key);
+            };
+            transaction.oncomplete = () => resolve();
+            transaction.onerror = () => reject(transaction.error || new Error("History archive failed"));
+            transaction.onabort = () => reject(transaction.error || new Error("History archive aborted"));
+          });
+        }
+        async listLegacyArchives(member) {
+          const database = await this.open();
+          return new Promise((resolve, reject) => {
+            let transaction;
+            try {
+              transaction = database.transaction(STORE_NAME, "readonly");
+            } catch (error) {
+              this.database = null;
+              reject(error);
+              return;
+            }
+            const request = transaction.objectStore(STORE_NAME).get(legacyCopiesKey(member));
+            transaction.oncomplete = () => resolve(Array.isArray(request.result) ? request.result : []);
+            transaction.onerror = () => reject(transaction.error || new Error("History archive read failed"));
+            transaction.onabort = () => reject(transaction.error || new Error("History archive read aborted"));
+          });
+        }
+      }
       const sessions = /* @__PURE__ */ new Map();
       let capturing = null;
       let hooksActive = false;
@@ -14645,7 +14771,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
          */
         exportOutfitAsBCX(name, dataList) {
           const normalizedData = Array.isArray(dataList) ? dataList : [];
-          const code = LZString$1.compressToBase64(JSON.stringify(normalizedData));
+          const code = LZString.compressToBase64(JSON.stringify(normalizedData));
           this.copyTextToClipboard(code);
           return code;
         },
@@ -15507,8 +15633,133 @@ One of mods you are using is using an old version of SDK. It will work for now b
       const SLOT_MODE_ORIGINAL = "original";
       const SLOT_MODE_INCOMING = "incoming";
       const HISTORY_STORAGE_FORMAT = "~VPWH1:";
-      function isStorageQuotaError(error) {
-        return error?.name === "QuotaExceededError" || error?.code === 22 || error?.code === 1014;
+      function isHistoryTree(data) {
+        return data && typeof data === "object" && Array.isArray(data.children);
+      }
+      function sameHistoryRecords(left, right) {
+        if (!isHistoryTree(left) || !isHistoryTree(right)) return false;
+        const records = (data) => data.children.map((record) => [record?.name, record?.data]);
+        return JSON.stringify(records(left)) === JSON.stringify(records(right));
+      }
+      function decodeHistoryRaw(raw) {
+        try {
+          const json = raw.startsWith(HISTORY_STORAGE_FORMAT) ? LZString.decompressFromUTF16(raw.slice(HISTORY_STORAGE_FORMAT.length)) : LZString.decompressFromBase64(raw);
+          return json ? JSON.parse(json) : null;
+        } catch {
+          return null;
+        }
+      }
+      function historyStorageState(session) {
+        if (session.legacyConflict) return "conflict";
+        return session.archivedLegacy ? "archived" : "ready";
+      }
+      function isActiveHistorySession(store, session) {
+        return store._historySession === session;
+      }
+      function reportHistoryStorageFailure(store, session, error) {
+        session.status = "error";
+        if (isActiveHistorySession(store, session)) store.historyStorageStatus = "error";
+        if (!session.warned) {
+          session.warned = true;
+          console.warn("[VPW] History storage unavailable; recent changes remain in this tab", error);
+        }
+      }
+      function applyHistoryOperations(history2, operations) {
+        for (const operation of operations) {
+          if (operation.kind === "replace") {
+            history2.fromJSON(operation.data);
+            continue;
+          }
+          const records = history2.getAllRecords();
+          if (operation.kind === "clear") {
+            records.length = 0;
+          } else if (operation.kind === "delete") {
+            const index2 = records.findIndex((record) => record.name === operation.name && JSON.stringify(record.data) === operation.data);
+            if (index2 !== -1) records.splice(index2, 1);
+          } else if (operation.kind === "add") {
+            records.unshift(operation.entry);
+            if (records.length > history2.MaxRecords) records.length = history2.MaxRecords;
+          }
+        }
+      }
+      function flushHistorySession(store, session) {
+        if (!session.loaded || !session.legacySettled || session.writing || session.status === "error") return;
+        session.writing = true;
+        session.writePromise = (async () => {
+          while (session.savedRevision < session.dirtyRevision) {
+            const revision = session.dirtyRevision;
+            await store._historyPersistence.write(session.member, session.history.toJSON());
+            session.savedRevision = revision;
+          }
+          session.status = historyStorageState(session);
+          if (isActiveHistorySession(store, session)) store.historyStorageStatus = session.status;
+        })().catch((error) => reportHistoryStorageFailure(store, session, error)).finally(() => {
+          session.writing = false;
+        });
+      }
+      async function settleLegacyHistory(store, session) {
+        try {
+          const localStorage2 = store._historyLocalStorage;
+          const raw = localStorage2.getItem(session.key);
+          if (raw === null) {
+            session.legacyConflict = false;
+          } else {
+            if (raw !== session.legacyRaw) {
+              session.legacyRaw = raw;
+              session.legacyData = decodeHistoryRaw(raw);
+              session.legacyNeedsArchive = true;
+            }
+            if (session.legacyNeedsArchive) {
+              await store._historyPersistence.archiveLegacy(session.member, raw);
+              session.archivedLegacy = true;
+            }
+            if (localStorage2.getItem(session.key) === raw) localStorage2.removeItem(session.key);
+            session.legacyConflict = localStorage2.getItem(session.key) !== null;
+          }
+        } catch (error) {
+          session.legacyConflict = true;
+          if (!session.warnedArchive) {
+            session.warnedArchive = true;
+            console.warn("[VPW] Older history copy remains in localStorage", error);
+          }
+        }
+        session.legacySettled = true;
+        session.status = historyStorageState(session);
+        if (isActiveHistorySession(store, session)) store.historyStorageStatus = session.status;
+        if (session.dirtyRevision > session.savedRevision) flushHistorySession(store, session);
+      }
+      async function loadHistorySession(store, session) {
+        try {
+          let data = await store._historyPersistence.read(session.member);
+          if (data !== null && !isHistoryTree(data)) throw new Error("Stored history is invalid");
+          const archives = await store._historyPersistence.listLegacyArchives(session.member);
+          session.archivedLegacy = archives.length > 0;
+          const hasStoredHistory = data !== null;
+          if (data === null && session.legacyRaw !== null) {
+            if (!isHistoryTree(session.legacyData)) throw new Error("Legacy history is invalid");
+            await store._historyPersistence.write(session.member, session.legacyData);
+            data = session.legacyData;
+          }
+          if (data === null && session.legacyRaw === null && session.initialData.children.length) {
+            data = session.initialData;
+          }
+          const history2 = session.history;
+          if (data) history2.fromJSON(data);
+          else history2.clear();
+          applyHistoryOperations(history2, session.pendingOperations);
+          session.pendingOperations.length = 0;
+          session.history = history2;
+          session.loaded = true;
+          session.legacyNeedsArchive = hasStoredHistory && session.legacyRaw !== null && !sameHistoryRecords(data, session.legacyData);
+          session.status = "loading";
+          if (isActiveHistorySession(store, session)) {
+            store.history = history2;
+            store.historyVersion = (store.historyVersion || 0) + 1;
+          }
+          await settleLegacyHistory(store, session);
+        } catch (error) {
+          reportHistoryStorageFailure(store, session, error);
+        }
       }
       function buildPartNameMapBySlot$1(parts = [], character = null) {
         const grouped = groupPartsBySlot(parts);
@@ -15574,22 +15825,16 @@ One of mods you are using is using an old version of SDK. It will work for now b
           fileTreeVersion: 0,
           history: new HistoryRecord("History", 100),
           historyVersion: 0,
+          historyStorageStatus: "loading",
+          _historySession: null,
+          _historyPersistence: new HistoryPersistence(() => hostWindow.indexedDB),
+          _historyLocalStorage: hostWindow.localStorage,
           renderer: new RenderService({ drawCallbacks: RenderApi }),
           thumbnailRefreshVersion: 0,
           character: null,
           storage: new StorageAdapter({
             local: {
-              get: (k) => hostWindow.localStorage.getItem(k),
-              set: (k, val) => {
-                try {
-                  hostWindow.localStorage.setItem(k, val);
-                } catch (error) {
-                  if (!isStorageQuotaError(error) || !val.startsWith(HISTORY_STORAGE_FORMAT)) throw error;
-                  const serialized = LZString.decompressFromUTF16(val.slice(HISTORY_STORAGE_FORMAT.length));
-                  if (serialized === null) throw error;
-                  hostWindow.localStorage.setItem(k, LZString.compressToBase64(serialized));
-                }
-              }
+              get: (k) => hostWindow.localStorage.getItem(k)
             },
             compressor: {
               compress: (str) => HISTORY_STORAGE_FORMAT + LZString.compressToUTF16(str),
@@ -15676,7 +15921,11 @@ One of mods you are using is using an old version of SDK. It will work for now b
             }
             this._historyFilterInitPromise = (async () => {
               try {
-                await this.history.initFilter();
+                const initializing = this.history;
+                await initializing.initFilter();
+                if (this.history !== initializing && initializing.filter?.length) {
+                  this.history.filter = initializing.filter;
+                }
               } catch (e) {
                 console.warn("history.initFilter failed", e);
               }
@@ -16287,8 +16536,10 @@ One of mods you are using is using an old version of SDK. It will work for now b
           addToHistory(data) {
             if (!data || !Array.isArray(data) || data.length === 0) return;
             try {
+              if (!this._historySession || this._historySession.member !== getPlayerMemberSuffix()) this.loadHistory();
               const entry = this.history.addRecord(JSON.parse(JSON.stringify(data)));
               if (!entry) return;
+              if (!this._historySession.loaded) this._historySession.pendingOperations.push({ kind: "add", entry });
               this.historyVersion = (this.historyVersion || 0) + 1;
               this.saveHistory();
             } catch (e) {
@@ -16311,11 +16562,17 @@ One of mods you are using is using an old version of SDK. It will work for now b
            */
           deleteHistoryRecord(record) {
             try {
+              if (!this._historySession || this._historySession.member !== getPlayerMemberSuffix()) this.loadHistory();
               const root = this.history.fs.getNode([this.history.fs.root.name]);
               if (!root || !root.children) return false;
               const idx = root.children.findIndex((r2) => r2 === record);
               if (idx === -1) return false;
               root.children.splice(idx, 1);
+              if (!this._historySession.loaded) this._historySession.pendingOperations.push({
+                kind: "delete",
+                name: record.name,
+                data: JSON.stringify(record.data)
+              });
               this.historyVersion = (this.historyVersion || 0) + 1;
               this.saveHistory();
               return true;
@@ -16329,8 +16586,10 @@ One of mods you are using is using an old version of SDK. It will work for now b
            */
           clearHistory() {
             try {
+              if (!this._historySession || this._historySession.member !== getPlayerMemberSuffix()) this.loadHistory();
               const hadRecords = this.getHistoryRecords().length > 0;
               this.history.clear();
+              if (!this._historySession.loaded) this._historySession.pendingOperations.push({ kind: "clear" });
               if (hadRecords) {
                 this.historyVersion = (this.historyVersion || 0) + 1;
               }
@@ -16355,32 +16614,107 @@ One of mods you are using is using an old version of SDK. It will work for now b
            * Save history to storage
            */
           saveHistory() {
-            try {
-              const historyData = this.history.toJSON();
-              const key = buildPlayerScopedStorageKey("VPWardrobe_history");
-              this.storage.saveLocal(key, historyData);
-            } catch (e) {
-              console.warn("saveHistory failed", e);
+            if (!this._historySession || this._historySession.member !== getPlayerMemberSuffix()) this.loadHistory();
+            const session = this._historySession;
+            if (!session.loaded && session.pendingOperations.length === 0) {
+              session.pendingOperations.push({ kind: "replace", data: this.history.toJSON() });
             }
+            session.dirtyRevision++;
+            if (session.loaded) flushHistorySession(this, session);
           },
           /**
            * Load history from storage
            */
           loadHistory() {
+            const member = getPlayerMemberSuffix();
+            if (this._historySession?.member === member) return this._historySession.readyPromise;
+            if (this._historySession) {
+              const previousFilter = this.history.filter;
+              this.history = new HistoryRecord("History", 100);
+              this.history.filter = previousFilter;
+            }
+            const logicalKey = buildPlayerScopedStorageKey("VPWardrobe_history");
+            const key = this.storage.prefix + logicalKey;
+            let legacyRaw = null;
+            let legacyData = null;
             try {
-              const key = buildPlayerScopedStorageKey("VPWardrobe_history");
-              const previous = hostWindow.localStorage.getItem(this.storage.prefix + key);
-              const historyData = this.storage.loadLocal(key);
-              if (historyData) {
-                this.history.fromJSON(historyData);
-                this.historyVersion = (this.historyVersion || 0) + 1;
-                if (previous && !previous.startsWith(HISTORY_STORAGE_FORMAT)) {
-                  this.storage.saveLocal(key, historyData);
+              legacyRaw = this._historyLocalStorage.getItem(key);
+              if (legacyRaw !== null) {
+                legacyData = decodeHistoryRaw(legacyRaw);
+                if (isHistoryTree(legacyData)) {
+                  this.history.fromJSON(legacyData);
+                  this.historyVersion = (this.historyVersion || 0) + 1;
                 }
               }
-            } catch (e) {
-              console.warn("loadHistory failed", e);
+            } catch (error) {
+              console.warn("[VPW] Could not read local history", error);
             }
+            const session = {
+              member,
+              key,
+              logicalKey,
+              legacyRaw,
+              legacyData,
+              history: this.history,
+              initialData: this.history.toJSON(),
+              pendingOperations: [],
+              dirtyRevision: 0,
+              savedRevision: 0,
+              loaded: false,
+              writing: false,
+              status: "loading",
+              warned: false,
+              warnedArchive: false,
+              legacyConflict: false,
+              legacyNeedsArchive: false,
+              legacySettled: false,
+              archivedLegacy: false,
+              readyPromise: null,
+              writePromise: null
+            };
+            this._historySession = session;
+            this.historyStorageStatus = "loading";
+            session.readyPromise = loadHistorySession(this, session);
+            return session.readyPromise;
+          },
+          retryHistoryStorage() {
+            const session = this._historySession;
+            if (!session || session.status !== "error" && session.status !== "conflict") return false;
+            session.status = "loading";
+            this.historyStorageStatus = "loading";
+            if (session.loaded && session.legacyConflict) {
+              session.readyPromise = settleLegacyHistory(this, session);
+            } else if (session.loaded) flushHistorySession(this, session);
+            else session.readyPromise = loadHistorySession(this, session);
+            return true;
+          },
+          async exportHistoryBackup() {
+            if (!this._historySession || this._historySession.member !== getPlayerMemberSuffix()) this.loadHistory();
+            const session = this._historySession;
+            await session.readyPromise;
+            let archivedLegacyCopies = [];
+            let archivesUnavailable = false;
+            try {
+              archivedLegacyCopies = (await this._historyPersistence.listLegacyArchives(session.member)).map((copy2) => ({ ...copy2, data: decodeHistoryRaw(copy2.raw) }));
+            } catch {
+              archivesUnavailable = true;
+            }
+            let unarchivedLegacyRaw = null;
+            try {
+              unarchivedLegacyRaw = this._historyLocalStorage.getItem(session.key);
+            } catch {
+              archivesUnavailable = true;
+            }
+            return {
+              format: "VPW-history-backup",
+              version: 1,
+              exportedAt: (/* @__PURE__ */ new Date()).toISOString(),
+              current: session.history.toJSON(),
+              archivedLegacyCopies,
+              unarchivedLegacyRaw,
+              unarchivedLegacyData: unarchivedLegacyRaw ? decodeHistoryRaw(unarchivedLegacyRaw) : null,
+              archivesUnavailable
+            };
           }
         }
       };
@@ -24209,7 +24543,7 @@ ${lightForced}`;
           item
         } : {}, [enabled, reference, floating, item]);
       }
-      var classes$x = { "root": "m_d57069b5", "content": "m_b1336c6", "viewport": "m_c0783ff9", "viewportInner": "m_f8f631dd", "scrollbar": "m_c44ba933", "thumb": "m_d8b5e363", "corner": "m_21657268" };
+      var classes$y = { "root": "m_d57069b5", "content": "m_b1336c6", "viewport": "m_c0783ff9", "viewportInner": "m_f8f631dd", "scrollbar": "m_c44ba933", "thumb": "m_d8b5e363", "corner": "m_21657268" };
       const [ScrollAreaProvider, useScrollAreaContext] = createSafeContext(
         "ScrollArea.Root component was not found in tree"
       );
@@ -24909,7 +25243,7 @@ ${lightForced}`;
         type: "hover",
         scrollbars: "xy"
       };
-      const varsResolver$B = createVarsResolver(
+      const varsResolver$C = createVarsResolver(
         (_, { scrollbarSize, overscrollBehavior, scrollbars }) => {
           let overrideOverscrollBehavior = overscrollBehavior;
           if (overscrollBehavior && scrollbars) {
@@ -24957,7 +25291,7 @@ ${lightForced}`;
         const getStyles2 = useStyles({
           name: "ScrollArea",
           props,
-          classes: classes$x,
+          classes: classes$y,
           className,
           style,
           classNames,
@@ -24965,7 +25299,7 @@ ${lightForced}`;
           unstyled,
           attributes,
           vars,
-          varsResolver: varsResolver$B
+          varsResolver: varsResolver$C
         });
         const localViewportRef = reactExports.useRef(null);
         const combinedViewportRef = useMergeRefs([viewportRef, localViewportRef]);
@@ -25152,11 +25486,11 @@ ${lightForced}`;
           }
         ) });
       });
-      ScrollArea.classes = classes$x;
+      ScrollArea.classes = classes$y;
       ScrollAreaAutosize.displayName = "@mantine/core/ScrollAreaAutosize";
-      ScrollAreaAutosize.classes = classes$x;
+      ScrollAreaAutosize.classes = classes$y;
       ScrollArea.Autosize = ScrollAreaAutosize;
-      var classes$w = { "root": "m_87cf2631" };
+      var classes$x = { "root": "m_87cf2631" };
       const defaultProps$I = {
         __staticSelector: "UnstyledButton"
       };
@@ -25177,7 +25511,7 @@ ${lightForced}`;
           const getStyles2 = useStyles({
             name: __staticSelector,
             props,
-            classes: classes$w,
+            classes: classes$x,
             className,
             style,
             classNames,
@@ -25197,15 +25531,15 @@ ${lightForced}`;
           );
         }
       );
-      UnstyledButton.classes = classes$w;
+      UnstyledButton.classes = classes$x;
       UnstyledButton.displayName = "@mantine/core/UnstyledButton";
-      var classes$v = { "root": "m_515a97f8" };
+      var classes$w = { "root": "m_515a97f8" };
       const VisuallyHidden = factory((_props, ref) => {
         const props = useProps("VisuallyHidden", null, _props);
         const { classNames, className, style, styles: styles2, unstyled, vars, attributes, ...others } = props;
         const getStyles2 = useStyles({
           name: "VisuallyHidden",
-          classes: classes$v,
+          classes: classes$w,
           props,
           className,
           style,
@@ -25216,10 +25550,10 @@ ${lightForced}`;
         });
         return /* @__PURE__ */ jsxRuntimeExports.jsx(Box, { component: "span", ref, ...getStyles2("root"), ...others });
       });
-      VisuallyHidden.classes = classes$v;
+      VisuallyHidden.classes = classes$w;
       VisuallyHidden.displayName = "@mantine/core/VisuallyHidden";
-      var classes$u = { "root": "m_1b7284a3" };
-      const varsResolver$A = createVarsResolver((_, { radius, shadow }) => ({
+      var classes$v = { "root": "m_1b7284a3" };
+      const varsResolver$B = createVarsResolver((_, { radius, shadow }) => ({
         root: {
           "--paper-radius": radius === void 0 ? void 0 : getRadius(radius),
           "--paper-shadow": getShadow(shadow)
@@ -25245,7 +25579,7 @@ ${lightForced}`;
         const getStyles2 = useStyles({
           name: "Paper",
           props,
-          classes: classes$u,
+          classes: classes$v,
           className,
           style,
           classNames,
@@ -25253,7 +25587,7 @@ ${lightForced}`;
           unstyled,
           attributes,
           vars,
-          varsResolver: varsResolver$A
+          varsResolver: varsResolver$B
         });
         return /* @__PURE__ */ jsxRuntimeExports.jsx(
           Box,
@@ -25266,7 +25600,7 @@ ${lightForced}`;
           }
         );
       });
-      Paper.classes = classes$u;
+      Paper.classes = classes$v;
       Paper.displayName = "@mantine/core/Paper";
       function horizontalSide(placement, arrowY, arrowOffset, arrowPosition) {
         if (placement === "center" || arrowPosition === "center") {
@@ -25407,11 +25741,11 @@ ${lightForced}`;
         }
         return position;
       }
-      var classes$t = { "root": "m_9814e45f" };
+      var classes$u = { "root": "m_9814e45f" };
       const defaultProps$H = {
         zIndex: getDefaultZIndex("modal")
       };
-      const varsResolver$z = createVarsResolver(
+      const varsResolver$A = createVarsResolver(
         (_, { gradient, color, backgroundOpacity, blur, radius, zIndex }) => ({
           root: {
             "--overlay-bg": gradient || (color !== void 0 || backgroundOpacity !== void 0) && rgba(color || "#000", backgroundOpacity ?? 0.6) || void 0,
@@ -25446,7 +25780,7 @@ ${lightForced}`;
         const getStyles2 = useStyles({
           name: "Overlay",
           props,
-          classes: classes$t,
+          classes: classes$u,
           className,
           style,
           classNames,
@@ -25454,11 +25788,11 @@ ${lightForced}`;
           unstyled,
           attributes,
           vars,
-          varsResolver: varsResolver$z
+          varsResolver: varsResolver$A
         });
         return /* @__PURE__ */ jsxRuntimeExports.jsx(Box, { ref, ...getStyles2("root"), mod: [{ center, fixed }, mod], ...others, children });
       });
-      Overlay.classes = classes$t;
+      Overlay.classes = classes$u;
       Overlay.displayName = "@mantine/core/Overlay";
       function createPortalNode(props) {
         const node = document.createElement("div");
@@ -25802,7 +26136,7 @@ ${lightForced}`;
       const [PopoverContextProvider, usePopoverContext] = createSafeContext(
         "Popover component was not found in the tree"
       );
-      var classes$s = { "dropdown": "m_38a85659", "arrow": "m_a31dc6c1", "overlay": "m_3d7bc908" };
+      var classes$t = { "dropdown": "m_38a85659", "arrow": "m_a31dc6c1", "overlay": "m_3d7bc908" };
       function FocusTrap({
         children,
         active = true,
@@ -25925,7 +26259,7 @@ ${lightForced}`;
           }
         ) });
       });
-      PopoverDropdown.classes = classes$s;
+      PopoverDropdown.classes = classes$t;
       PopoverDropdown.displayName = "@mantine/core/PopoverDropdown";
       const defaultProps$F = {
         refProp: "ref",
@@ -26124,7 +26458,7 @@ ${lightForced}`;
         __staticSelector: "Popover",
         width: "max-content"
       };
-      const varsResolver$y = createVarsResolver((_, { radius, shadow }) => ({
+      const varsResolver$z = createVarsResolver((_, { radius, shadow }) => ({
         dropdown: {
           "--popover-radius": radius === void 0 ? void 0 : getRadius(radius),
           "--popover-shadow": getShadow(shadow)
@@ -26187,14 +26521,14 @@ ${lightForced}`;
         const getStyles2 = useStyles({
           name: __staticSelector,
           props,
-          classes: classes$s,
+          classes: classes$t,
           classNames,
           styles: styles2,
           unstyled,
           attributes,
           rootSelector: "dropdown",
           vars,
-          varsResolver: varsResolver$y
+          varsResolver: varsResolver$z
         });
         const { resolvedStyles } = useResolvedStylesApi({ classNames, styles: styles2, props });
         const [dropdownVisible, setDropdownVisible] = reactExports.useState(opened ?? defaultOpened ?? false);
@@ -26341,20 +26675,20 @@ ${lightForced}`;
       Popover.Dropdown = PopoverDropdown;
       Popover.displayName = "@mantine/core/Popover";
       Popover.extend = (input) => input;
-      var classes$r = { "root": "m_5ae2e3c", "barsLoader": "m_7a2bd4cd", "bar": "m_870bb79", "bars-loader-animation": "m_5d2b3b9d", "dotsLoader": "m_4e3f22d7", "dot": "m_870c4af", "loader-dots-animation": "m_aac34a1", "ovalLoader": "m_b34414df", "oval-loader-animation": "m_f8e89c4b" };
-      const Bars = reactExports.forwardRef(({ className, ...others }, ref) => /* @__PURE__ */ jsxRuntimeExports.jsxs(Box, { component: "span", className: clsx(classes$r.barsLoader, className), ...others, ref, children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: classes$r.bar }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: classes$r.bar }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: classes$r.bar })
+      var classes$s = { "root": "m_5ae2e3c", "barsLoader": "m_7a2bd4cd", "bar": "m_870bb79", "bars-loader-animation": "m_5d2b3b9d", "dotsLoader": "m_4e3f22d7", "dot": "m_870c4af", "loader-dots-animation": "m_aac34a1", "ovalLoader": "m_b34414df", "oval-loader-animation": "m_f8e89c4b" };
+      const Bars = reactExports.forwardRef(({ className, ...others }, ref) => /* @__PURE__ */ jsxRuntimeExports.jsxs(Box, { component: "span", className: clsx(classes$s.barsLoader, className), ...others, ref, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: classes$s.bar }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: classes$s.bar }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: classes$s.bar })
       ] }));
       Bars.displayName = "@mantine/core/Bars";
-      const Dots = reactExports.forwardRef(({ className, ...others }, ref) => /* @__PURE__ */ jsxRuntimeExports.jsxs(Box, { component: "span", className: clsx(classes$r.dotsLoader, className), ...others, ref, children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: classes$r.dot }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: classes$r.dot }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: classes$r.dot })
+      const Dots = reactExports.forwardRef(({ className, ...others }, ref) => /* @__PURE__ */ jsxRuntimeExports.jsxs(Box, { component: "span", className: clsx(classes$s.dotsLoader, className), ...others, ref, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: classes$s.dot }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: classes$s.dot }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: classes$s.dot })
       ] }));
       Dots.displayName = "@mantine/core/Dots";
-      const Oval = reactExports.forwardRef(({ className, ...others }, ref) => /* @__PURE__ */ jsxRuntimeExports.jsx(Box, { component: "span", className: clsx(classes$r.ovalLoader, className), ...others, ref }));
+      const Oval = reactExports.forwardRef(({ className, ...others }, ref) => /* @__PURE__ */ jsxRuntimeExports.jsx(Box, { component: "span", className: clsx(classes$s.ovalLoader, className), ...others, ref }));
       Oval.displayName = "@mantine/core/Oval";
       const defaultLoaders = {
         bars: Bars,
@@ -26365,7 +26699,7 @@ ${lightForced}`;
         loaders: defaultLoaders,
         type: "oval"
       };
-      const varsResolver$x = createVarsResolver((theme, { size: size2, color }) => ({
+      const varsResolver$y = createVarsResolver((theme, { size: size2, color }) => ({
         root: {
           "--loader-size": getSize(size2, "loader-size"),
           "--loader-color": color ? getThemeColor(color, theme) : void 0
@@ -26392,7 +26726,7 @@ ${lightForced}`;
         const getStyles2 = useStyles({
           name: "Loader",
           props,
-          classes: classes$r,
+          classes: classes$s,
           className,
           style,
           classNames,
@@ -26400,7 +26734,7 @@ ${lightForced}`;
           unstyled,
           attributes,
           vars,
-          varsResolver: varsResolver$x
+          varsResolver: varsResolver$y
         });
         if (children) {
           return /* @__PURE__ */ jsxRuntimeExports.jsx(Box, { ...getStyles2("root"), ref, ...others, children });
@@ -26418,13 +26752,13 @@ ${lightForced}`;
         );
       });
       Loader.defaultLoaders = defaultLoaders;
-      Loader.classes = classes$r;
+      Loader.classes = classes$s;
       Loader.displayName = "@mantine/core/Loader";
-      var classes$q = { "root": "m_8d3f4000", "icon": "m_8d3afb97", "loader": "m_302b9fb1", "group": "m_1a0f1b21", "groupSection": "m_437b6484" };
+      var classes$r = { "root": "m_8d3f4000", "icon": "m_8d3afb97", "loader": "m_302b9fb1", "group": "m_1a0f1b21", "groupSection": "m_437b6484" };
       const defaultProps$C = {
         orientation: "horizontal"
       };
-      const varsResolver$w = createVarsResolver((_, { borderWidth }) => ({
+      const varsResolver$x = createVarsResolver((_, { borderWidth }) => ({
         group: { "--ai-border-width": rem(borderWidth) }
       }));
       const ActionIconGroup = factory((_props, ref) => {
@@ -26446,7 +26780,7 @@ ${lightForced}`;
         const getStyles2 = useStyles({
           name: "ActionIconGroup",
           props,
-          classes: classes$q,
+          classes: classes$r,
           className,
           style,
           classNames,
@@ -26454,7 +26788,7 @@ ${lightForced}`;
           unstyled,
           attributes,
           vars,
-          varsResolver: varsResolver$w,
+          varsResolver: varsResolver$x,
           rootSelector: "group"
         });
         return /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -26469,9 +26803,9 @@ ${lightForced}`;
           }
         );
       });
-      ActionIconGroup.classes = classes$q;
+      ActionIconGroup.classes = classes$r;
       ActionIconGroup.displayName = "@mantine/core/ActionIconGroup";
-      const varsResolver$v = createVarsResolver(
+      const varsResolver$w = createVarsResolver(
         (theme, { radius, color, gradient, variant, autoContrast, size: size2 }) => {
           const colors = theme.variantColorResolver({
             color: color || theme.primaryColor,
@@ -26512,7 +26846,7 @@ ${lightForced}`;
         const getStyles2 = useStyles({
           name: "ActionIconGroupSection",
           props,
-          classes: classes$q,
+          classes: classes$r,
           className,
           style,
           classNames,
@@ -26520,14 +26854,14 @@ ${lightForced}`;
           unstyled,
           attributes,
           vars,
-          varsResolver: varsResolver$v,
+          varsResolver: varsResolver$w,
           rootSelector: "groupSection"
         });
         return /* @__PURE__ */ jsxRuntimeExports.jsx(Box, { ...getStyles2("groupSection"), ref, variant, ...others });
       });
-      ActionIconGroupSection.classes = classes$q;
+      ActionIconGroupSection.classes = classes$r;
       ActionIconGroupSection.displayName = "@mantine/core/ActionIconGroupSection";
-      const varsResolver$u = createVarsResolver(
+      const varsResolver$v = createVarsResolver(
         (theme, { size: size2, radius, variant, gradient, color, autoContrast }) => {
           const colors = theme.variantColorResolver({
             color: color || theme.primaryColor,
@@ -26579,13 +26913,13 @@ ${lightForced}`;
           props,
           className,
           style,
-          classes: classes$q,
+          classes: classes$r,
           classNames,
           styles: styles2,
           unstyled,
           attributes,
           vars,
-          varsResolver: varsResolver$u
+          varsResolver: varsResolver$v
         });
         return /* @__PURE__ */ jsxRuntimeExports.jsxs(
           UnstyledButton,
@@ -26605,7 +26939,7 @@ ${lightForced}`;
           }
         );
       });
-      ActionIcon.classes = classes$q;
+      ActionIcon.classes = classes$r;
       ActionIcon.displayName = "@mantine/core/ActionIcon";
       ActionIcon.Group = ActionIconGroup;
       ActionIcon.GroupSection = ActionIconGroupSection;
@@ -26632,11 +26966,11 @@ ${lightForced}`;
         )
       );
       CloseIcon.displayName = "@mantine/core/CloseIcon";
-      var classes$p = { "root": "m_86a44da5", "root--subtle": "m_220c80f2" };
+      var classes$q = { "root": "m_86a44da5", "root--subtle": "m_220c80f2" };
       const defaultProps$B = {
         variant: "subtle"
       };
-      const varsResolver$t = createVarsResolver((_, { size: size2, radius, iconSize }) => ({
+      const varsResolver$u = createVarsResolver((_, { size: size2, radius, iconSize }) => ({
         root: {
           "--cb-size": getSize(size2, "cb-size"),
           "--cb-radius": radius === void 0 ? void 0 : getRadius(radius),
@@ -26669,13 +27003,13 @@ ${lightForced}`;
           props,
           className,
           style,
-          classes: classes$p,
+          classes: classes$q,
           classNames,
           styles: styles2,
           unstyled,
           attributes,
           vars,
-          varsResolver: varsResolver$t
+          varsResolver: varsResolver$u
         });
         return /* @__PURE__ */ jsxRuntimeExports.jsxs(
           UnstyledButton,
@@ -26694,12 +27028,12 @@ ${lightForced}`;
           }
         );
       });
-      CloseButton.classes = classes$p;
+      CloseButton.classes = classes$q;
       CloseButton.displayName = "@mantine/core/CloseButton";
       function filterFalsyChildren(children) {
         return reactExports.Children.toArray(children).filter(Boolean);
       }
-      var classes$o = { "root": "m_4081bf90" };
+      var classes$p = { "root": "m_4081bf90" };
       const defaultProps$A = {
         preventGrowOverflow: true,
         gap: "md",
@@ -26707,7 +27041,7 @@ ${lightForced}`;
         justify: "flex-start",
         wrap: "wrap"
       };
-      const varsResolver$s = createVarsResolver(
+      const varsResolver$t = createVarsResolver(
         (_, { grow, preventGrowOverflow, gap, align, justify, wrap }, { childWidth }) => ({
           root: {
             "--group-child-width": grow && preventGrowOverflow ? childWidth : void 0,
@@ -26751,13 +27085,13 @@ ${lightForced}`;
           stylesCtx,
           className,
           style,
-          classes: classes$o,
+          classes: classes$p,
           classNames,
           styles: styles2,
           unstyled,
           attributes,
           vars,
-          varsResolver: varsResolver$s
+          varsResolver: varsResolver$t
         });
         return /* @__PURE__ */ jsxRuntimeExports.jsx(
           Box,
@@ -26772,7 +27106,7 @@ ${lightForced}`;
           }
         );
       });
-      Group.classes = classes$o;
+      Group.classes = classes$p;
       Group.displayName = "@mantine/core/Group";
       const [ModalBaseProvider, useModalBaseContext] = createSafeContext(
         "ModalBase component was not found in tree"
@@ -26904,7 +27238,7 @@ ${lightForced}`;
         }
       );
       ModalBase.displayName = "@mantine/core/ModalBase";
-      var classes$n = { "title": "m_615af6c9", "header": "m_b5489c3c", "inner": "m_60c222c7", "content": "m_fd1ab0aa", "close": "m_606cb269", "body": "m_5df29311" };
+      var classes$o = { "title": "m_615af6c9", "header": "m_b5489c3c", "inner": "m_60c222c7", "content": "m_fd1ab0aa", "close": "m_606cb269", "body": "m_5df29311" };
       function useModalBodyId() {
         const ctx = useModalBaseContext();
         reactExports.useEffect(() => {
@@ -26923,7 +27257,7 @@ ${lightForced}`;
               ref,
               ...others,
               id: bodyId,
-              className: clsx({ [classes$n.body]: !ctx.unstyled }, className)
+              className: clsx({ [classes$o.body]: !ctx.unstyled }, className)
             }
           );
         }
@@ -26941,7 +27275,7 @@ ${lightForced}`;
                 ctx.onClose();
                 onClick?.(event);
               },
-              className: clsx({ [classes$n.close]: !ctx.unstyled }, className),
+              className: clsx({ [classes$o.close]: !ctx.unstyled }, className),
               unstyled: ctx.unstyled
             }
           );
@@ -26970,7 +27304,7 @@ ${lightForced}`;
                 "div",
                 {
                   ...innerProps,
-                  className: clsx({ [classes$n.inner]: !ctx.unstyled }, innerProps.className),
+                  className: clsx({ [classes$o.inner]: !ctx.unstyled }, innerProps.className),
                   children: /* @__PURE__ */ jsxRuntimeExports.jsx(FocusTrap, { active: ctx.opened && ctx.trapFocus, innerRef: ref, children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                     Paper,
                     {
@@ -26982,7 +27316,7 @@ ${lightForced}`;
                       "aria-describedby": ctx.bodyMounted ? ctx.getBodyId() : void 0,
                       "aria-labelledby": ctx.titleMounted ? ctx.getTitleId() : void 0,
                       style: [style, transitionStyles],
-                      className: clsx({ [classes$n.content]: !ctx.unstyled }, className),
+                      className: clsx({ [classes$o.content]: !ctx.unstyled }, className),
                       unstyled: ctx.unstyled,
                       children: others.children
                     }
@@ -27002,7 +27336,7 @@ ${lightForced}`;
             {
               component: "header",
               ref,
-              className: clsx({ [classes$n.header]: !ctx.unstyled }, className),
+              className: clsx({ [classes$o.header]: !ctx.unstyled }, className),
               ...others
             }
           );
@@ -27065,7 +27399,7 @@ ${lightForced}`;
             {
               component: "h2",
               ref,
-              className: clsx({ [classes$n.title]: !ctx.unstyled }, className),
+              className: clsx({ [classes$o.title]: !ctx.unstyled }, className),
               ...others,
               id
             }
@@ -27079,7 +27413,7 @@ ${lightForced}`;
       const [InputContext, useInputContext] = createOptionalContext({
         size: "sm"
       });
-      var classes$m = { "wrapper": "m_6c018570", "input": "m_8fb7ebe7", "section": "m_82577fc2", "placeholder": "m_88bacfd0", "root": "m_46b77525", "label": "m_8fdc1311", "required": "m_78a94662", "error": "m_8f816625", "description": "m_fe47ce59" };
+      var classes$n = { "wrapper": "m_6c018570", "input": "m_8fb7ebe7", "section": "m_82577fc2", "placeholder": "m_88bacfd0", "root": "m_46b77525", "label": "m_8fdc1311", "required": "m_78a94662", "error": "m_8f816625", "description": "m_fe47ce59" };
       const InputClearButton = factory((_props, ref) => {
         const props = useProps("InputClearButton", null, _props);
         const { size: size2, variant, vars, classNames, styles: styles2, ...others } = props;
@@ -27147,7 +27481,7 @@ ${lightForced}`;
         inputId: void 0,
         labelId: void 0
       });
-      const varsResolver$r = createVarsResolver((_, { size: size2 }) => ({
+      const varsResolver$s = createVarsResolver((_, { size: size2 }) => ({
         description: {
           "--input-description-size": size2 === void 0 ? void 0 : `calc(${getFontSize(size2)} - ${rem(2)})`
         }
@@ -27172,7 +27506,7 @@ ${lightForced}`;
         const _getStyles = useStyles({
           name: ["InputWrapper", __staticSelector],
           props,
-          classes: classes$m,
+          classes: classes$n,
           className,
           style,
           classNames,
@@ -27181,7 +27515,7 @@ ${lightForced}`;
           attributes,
           rootSelector: "description",
           vars,
-          varsResolver: varsResolver$r
+          varsResolver: varsResolver$s
         });
         const getStyles2 = __inheritStyles && ctx?.getStyles || _getStyles;
         return /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -27196,9 +27530,9 @@ ${lightForced}`;
           }
         );
       });
-      InputDescription.classes = classes$m;
+      InputDescription.classes = classes$n;
       InputDescription.displayName = "@mantine/core/InputDescription";
-      const varsResolver$q = createVarsResolver((_, { size: size2 }) => ({
+      const varsResolver$r = createVarsResolver((_, { size: size2 }) => ({
         error: {
           "--input-error-size": size2 === void 0 ? void 0 : `calc(${getFontSize(size2)} - ${rem(2)})`
         }
@@ -27222,7 +27556,7 @@ ${lightForced}`;
         const _getStyles = useStyles({
           name: ["InputWrapper", __staticSelector],
           props,
-          classes: classes$m,
+          classes: classes$n,
           className,
           style,
           classNames,
@@ -27231,7 +27565,7 @@ ${lightForced}`;
           attributes,
           rootSelector: "error",
           vars,
-          varsResolver: varsResolver$q
+          varsResolver: varsResolver$r
         });
         const ctx = useInputWrapperContext();
         const getStyles2 = __inheritStyles && ctx?.getStyles || _getStyles;
@@ -27247,12 +27581,12 @@ ${lightForced}`;
           }
         );
       });
-      InputError.classes = classes$m;
+      InputError.classes = classes$n;
       InputError.displayName = "@mantine/core/InputError";
       const defaultProps$z = {
         labelElement: "label"
       };
-      const varsResolver$p = createVarsResolver((_, { size: size2 }) => ({
+      const varsResolver$q = createVarsResolver((_, { size: size2 }) => ({
         label: {
           "--input-label-size": getFontSize(size2),
           "--input-asterisk-color": void 0
@@ -27282,7 +27616,7 @@ ${lightForced}`;
         const _getStyles = useStyles({
           name: ["InputWrapper", __staticSelector],
           props,
-          classes: classes$m,
+          classes: classes$n,
           className,
           style,
           classNames,
@@ -27291,7 +27625,7 @@ ${lightForced}`;
           attributes,
           rootSelector: "label",
           vars,
-          varsResolver: varsResolver$p
+          varsResolver: varsResolver$q
         });
         const ctx = useInputWrapperContext();
         const getStyles2 = ctx?.getStyles || _getStyles;
@@ -27319,7 +27653,7 @@ ${lightForced}`;
           }
         );
       });
-      InputLabel.classes = classes$m;
+      InputLabel.classes = classes$n;
       InputLabel.displayName = "@mantine/core/InputLabel";
       const InputPlaceholder = factory((_props, ref) => {
         const props = useProps("InputPlaceholder", null, _props);
@@ -27340,7 +27674,7 @@ ${lightForced}`;
         const getStyles2 = useStyles({
           name: ["InputPlaceholder", __staticSelector],
           props,
-          classes: classes$m,
+          classes: classes$n,
           className,
           style,
           classNames,
@@ -27361,7 +27695,7 @@ ${lightForced}`;
           }
         );
       });
-      InputPlaceholder.classes = classes$m;
+      InputPlaceholder.classes = classes$n;
       InputPlaceholder.displayName = "@mantine/core/InputPlaceholder";
       function getInputOffsets(inputWrapperOrder, { hasDescription, hasError }) {
         const inputIndex = inputWrapperOrder.findIndex((part) => part === "input");
@@ -27376,7 +27710,7 @@ ${lightForced}`;
         inputContainer: (children) => children,
         inputWrapperOrder: ["label", "description", "input", "error"]
       };
-      const varsResolver$o = createVarsResolver((_, { size: size2 }) => ({
+      const varsResolver$p = createVarsResolver((_, { size: size2 }) => ({
         label: {
           "--input-label-size": getFontSize(size2),
           "--input-asterisk-color": void 0
@@ -27421,7 +27755,7 @@ ${lightForced}`;
         const getStyles2 = useStyles({
           name: ["InputWrapper", __staticSelector],
           props: __stylesApiProps || props,
-          classes: classes$m,
+          classes: classes$n,
           className,
           style,
           classNames,
@@ -27429,7 +27763,7 @@ ${lightForced}`;
           unstyled,
           attributes,
           vars,
-          varsResolver: varsResolver$o
+          varsResolver: varsResolver$p
         });
         const sharedProps = {
           size: size2,
@@ -27521,7 +27855,7 @@ ${lightForced}`;
           }
         );
       });
-      InputWrapper.classes = classes$m;
+      InputWrapper.classes = classes$n;
       InputWrapper.displayName = "@mantine/core/InputWrapper";
       const defaultProps$x = {
         variant: "default",
@@ -27531,7 +27865,7 @@ ${lightForced}`;
         withErrorStyles: true,
         size: "sm"
       };
-      const varsResolver$n = createVarsResolver((_, props, ctx) => ({
+      const varsResolver$o = createVarsResolver((_, props, ctx) => ({
         wrapper: {
           "--input-margin-top": ctx.offsetTop ? "calc(var(--mantine-spacing-xs) / 2)" : void 0,
           "--input-margin-bottom": ctx.offsetBottom ? "calc(var(--mantine-spacing-xs) / 2)" : void 0,
@@ -27590,7 +27924,7 @@ ${lightForced}`;
         const getStyles2 = useStyles({
           name: ["Input", __staticSelector],
           props: __stylesApiProps || props,
-          classes: classes$m,
+          classes: classes$n,
           className,
           style,
           classNames,
@@ -27600,7 +27934,7 @@ ${lightForced}`;
           stylesCtx,
           rootSelector: "wrapper",
           vars,
-          varsResolver: varsResolver$n
+          varsResolver: varsResolver$o
         });
         const ariaAttributes = withAria ? {
           required,
@@ -27678,7 +28012,7 @@ ${lightForced}`;
           }
         ) });
       });
-      Input.classes = classes$m;
+      Input.classes = classes$n;
       Input.Wrapper = InputWrapper;
       Input.Label = InputLabel;
       Input.Error = InputError;
@@ -27782,7 +28116,7 @@ ${lightForced}`;
         wrap: { type: "identity", property: "flexWrap" },
         direction: { type: "identity", property: "flexDirection" }
       };
-      var classes$l = { "root": "m_8bffd616" };
+      var classes$m = { "root": "m_8bffd616" };
       const Flex = polymorphicFactory((_props, ref) => {
         const props = useProps("Flex", null, _props);
         const {
@@ -27804,7 +28138,7 @@ ${lightForced}`;
         } = props;
         const getStyles2 = useStyles({
           name: "Flex",
-          classes: classes$l,
+          classes: classes$m,
           props,
           className,
           style,
@@ -27843,9 +28177,9 @@ ${lightForced}`;
           )
         ] });
       });
-      Flex.classes = classes$l;
+      Flex.classes = classes$m;
       Flex.displayName = "@mantine/core/Flex";
-      var classes$k = { "root": "m_96b553a6" };
+      var classes$l = { "root": "m_96b553a6" };
       function isParent(parentElement, childElement) {
         if (!childElement || !parentElement) {
           return false;
@@ -27957,7 +28291,7 @@ ${lightForced}`;
         );
         return { initialized, hidden: hidden2 };
       }
-      const varsResolver$m = createVarsResolver(
+      const varsResolver$n = createVarsResolver(
         (_theme, { transitionDuration }) => ({
           root: {
             "--transition-duration": typeof transitionDuration === "number" ? `${transitionDuration}ms` : transitionDuration
@@ -27983,7 +28317,7 @@ ${lightForced}`;
         } = props;
         const getStyles2 = useStyles({
           name: "FloatingIndicator",
-          classes: classes$k,
+          classes: classes$l,
           props,
           className,
           style,
@@ -27992,7 +28326,7 @@ ${lightForced}`;
           unstyled,
           attributes,
           vars,
-          varsResolver: varsResolver$m
+          varsResolver: varsResolver$n
         });
         const innerRef = reactExports.useRef(null);
         const { initialized, hidden: hidden2 } = useFloatingIndicator({
@@ -28008,7 +28342,7 @@ ${lightForced}`;
         return /* @__PURE__ */ jsxRuntimeExports.jsx(Box, { ref: mergedRef, mod: [{ initialized, hidden: hidden2 }, mod], ...getStyles2("root"), ...others });
       });
       FloatingIndicator.displayName = "@mantine/core/FloatingIndicator";
-      FloatingIndicator.classes = classes$k;
+      FloatingIndicator.classes = classes$l;
       function useDelayedHover({ open, close, openDelay, closeDelay }) {
         const openTimeout = reactExports.useRef(-1);
         const closeTimeout = reactExports.useRef(-1);
@@ -28057,6 +28391,100 @@ ${lightForced}`;
         );
       }
       AccordionChevron.displayName = "@mantine/core/AccordionChevron";
+      var classes$k = { "root": "m_66836ed3", "wrapper": "m_a5d60502", "body": "m_667c2793", "title": "m_6a03f287", "label": "m_698f4f23", "icon": "m_667f2a6a", "message": "m_7fa78076", "closeButton": "m_87f54839" };
+      const varsResolver$m = createVarsResolver(
+        (theme, { radius, color, variant, autoContrast }) => {
+          const colors = theme.variantColorResolver({
+            color: color || theme.primaryColor,
+            theme,
+            variant: variant || "light",
+            autoContrast
+          });
+          return {
+            root: {
+              "--alert-radius": radius === void 0 ? void 0 : getRadius(radius),
+              "--alert-bg": color || variant ? colors.background : void 0,
+              "--alert-color": colors.color,
+              "--alert-bd": color || variant ? colors.border : void 0
+            }
+          };
+        }
+      );
+      const Alert = factory((_props, ref) => {
+        const props = useProps("Alert", null, _props);
+        const {
+          classNames,
+          className,
+          style,
+          styles: styles2,
+          unstyled,
+          vars,
+          radius,
+          color,
+          title,
+          children,
+          id,
+          icon,
+          withCloseButton,
+          onClose,
+          closeButtonLabel,
+          variant,
+          autoContrast,
+          role,
+          attributes,
+          ...others
+        } = props;
+        const getStyles2 = useStyles({
+          name: "Alert",
+          classes: classes$k,
+          props,
+          className,
+          style,
+          classNames,
+          styles: styles2,
+          unstyled,
+          attributes,
+          vars,
+          varsResolver: varsResolver$m
+        });
+        const rootId = useId$1(id);
+        const titleId = title && `${rootId}-title` || void 0;
+        const bodyId = `${rootId}-body`;
+        return /* @__PURE__ */ jsxRuntimeExports.jsx(
+          Box,
+          {
+            id: rootId,
+            ...getStyles2("root", { variant }),
+            variant,
+            ref,
+            role: role || "alert",
+            ...others,
+            "aria-describedby": children ? bodyId : void 0,
+            "aria-labelledby": title ? titleId : void 0,
+            children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { ...getStyles2("wrapper"), children: [
+              icon && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { ...getStyles2("icon"), children: icon }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { ...getStyles2("body"), children: [
+                title && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { ...getStyles2("title"), "data-with-close-button": withCloseButton || void 0, children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { id: titleId, ...getStyles2("label"), children: title }) }),
+                children && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { id: bodyId, ...getStyles2("message"), "data-variant": variant, children })
+              ] }),
+              withCloseButton && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                CloseButton,
+                {
+                  ...getStyles2("closeButton"),
+                  onClick: onClose,
+                  variant: "transparent",
+                  size: 16,
+                  iconSize: 16,
+                  "aria-label": closeButtonLabel,
+                  unstyled
+                }
+              )
+            ] })
+          }
+        );
+      });
+      Alert.classes = classes$k;
+      Alert.displayName = "@mantine/core/Alert";
       var classes$j = { "root": "m_b6d8b162" };
       function getTextTruncate(truncate) {
         if (truncate === "start") {
@@ -33714,7 +34142,7 @@ ${lightForced}`;
       const history$1 = { "title": "History", "clear": "Clear", "clearTitle": "Clear all history", "clearConfirmMessage": "Are you sure you want to clear all history? This cannot be undone.", "currentState": "Current State", "timelineSubtitle": "Browse and jump between edit states", "undoCount": "Undo", "redoCount": "Redo", "undoAction": "Undo", "redoAction": "Redo", "totalStates": "Total", "emptyState": "No history yet. Your changes will be tracked here.", "justNow": "Just now", "minutesAgo": "{count} min ago", "hoursAgo": "{count} hours ago", "undoItem": "Previous state", "redoItem": "Future state", "pastTag": "Past", "futureTag": "Future", "currentTag": "Now", "scrollHint": "Scroll horizontally to browse more states", "jumpLatest": "Jump to latest", "hasFutureState": "Future states available", "stateChange": "State Change", "initialState": "Initial State", "actionTypeLabels": { "part": { "updateMetadata": "Update part metadata", "updateProperty": "Update part properties", "applyLayerDeltas": "Apply part layer changes" }, "layer": { "batchApplyLayerDeltas": "Apply layer batch changes" }, "batch": { "updateOpacity": "Batch update opacity", "updateOffset": "Batch update offset", "updateColor": "Batch update color", "updatePriority": "Batch update priority" }, "palette": { "applyColor": "Apply color", "applyTag": "Apply palette tag", "applyTagOffset": "Apply tag offset", "resetTagOffset": "Reset tag offset", "updateTag": "Update palette tag", "createTagAndReplace": "Create tag and replace", "renameTagReferences": "Rename tag references", "deleteTag": "Delete palette tag", "clear": "Clear palette", "savedColor": { "add": "Add saved color", "update": "Update saved color", "delete": "Delete saved color", "clear": "Clear saved colors" } }, "stack": { "add": "Add stack", "remove": "Remove stack", "move": "Move stack", "clear": "Clear stacks", "rename": "Rename stack" }, "asset": { "apply": "Apply asset" } }, "actionScopeLabels": { "part": "Part", "layer": "Layer", "batch": "Batch", "palette": "Palette", "stack": "Stack", "asset": "Asset" }, "operationContentLabels": { "color": "Color", "opacity": "Opacity", "shift": "Shift", "order": "Order", "layer": "Layer", "property": "Property", "tag": "Tag", "general": "Edit" } };
       const groupNames$1 = { "Item": "Item", "Cosplay": "Cosplay", "Hair": "Hair", "Headwear": "Headwear", "Face": "Face", "Markings": "Markings / Tattoos", "ClothUpper": "Upper Clothing", "ClothLower": "Lower Clothing", "Hands": "Hands", "Feet": "Feet", "Accessories": "Accessories", "HiddenBody": "Hidden Body Parts", "Appearance": "Appearance" };
       const fileManagerPanel$1 = { "ariaLabel": "Wardrobe panel", "title": "Portable wardrobe", "saveBackup": "Save backup", "importBackup": "Import backup", "saveCharacter": "Save current outfit", "importBCX": "Import from BCX", "importPlayerWardrobe": "Import player wardrobe", "settings": "Settings", "toggleFilters": "Adjust outfit", "lightMode": "Light mode", "darkMode": "Dark mode", "themedMode": "Themed mode", "toggleTheme": "Switch theme", "tabAriaLabel": "Workbench tabs", "tabWardrobe": "Wardrobe", "tabHistory": "History", "tabStudio": "Studio", "tabSettings": "Settings", "themeSettings": "Theme settings", "forceSelfApplyTitle": "Outfit controls", "forceSelfApplyLabel": "Allow force apply to myself", "forceSelfApplyDescription": "Shows an extra button for your character that tries to bypass BC clothing settings. The game may still reject changes. Saved on this browser only.", "forceSelfApplySaveFailed": "Could not save this setting. Check browser storage and try again.", "themedNotAvailable": "Themed BC not detected, using default light theme", "themedModeDesc": "Themed mode uses colors from Themed BC plugin. Themed BC must be installed and enabled." };
-      const historyViewer$1 = { "title": "History", "toggleToHistory": "View History", "toggleToFileManager": "View wardrobe", "clearAll": "Clear All", "clearAllConfirm": "Are you sure you want to clear all history? This cannot be undone.", "deleteRecord": "Delete", "deleteConfirm": "Delete this history record?", "delete": "Delete", "searchPlaceholder": "Search history records...", "clearSearch": "Clear", "timeFilter": "Time filters", "filterAll": "All", "filterToday": "Today", "filterWeek": "Last 7 days", "loadRecord": "Load this record", "apply": "Apply", "cancel": "Cancel", "loadToPreview": "Load to preview", "recordedAt": "Recorded at", "emptyState": "No history records yet. Your outfit changes will be automatically recorded here.", "recordCount": "{count} records" };
+      const historyViewer$1 = { "title": "History", "toggleToHistory": "View History", "toggleToFileManager": "View wardrobe", "clearAll": "Clear All", "clearAllConfirm": "Clear the current history? Archived older copies remain available through Export history. This cannot be undone.", "deleteRecord": "Delete", "deleteConfirm": "Delete this history record?", "delete": "Delete", "searchPlaceholder": "Search history records...", "clearSearch": "Clear", "timeFilter": "Time filters", "filterAll": "All", "filterToday": "Today", "filterWeek": "Last 7 days", "loadRecord": "Load this record", "apply": "Apply", "cancel": "Cancel", "loadToPreview": "Load to preview", "recordedAt": "Recorded at", "emptyState": "No history records yet. Your outfit changes will be automatically recorded here.", "recordCount": "{count} records", "saveFailedTitle": "History changes were not saved", "saveFailedHelp": "Recent changes may be lost if you refresh. Check this site's storage permissions, then retry.", "retrySave": "Retry saving", "copiesDifferTitle": "Older history copy is still stored locally", "copiesDifferHelp": "The browser could not archive it. It may still use limited local storage. Retry, or export both copies now.", "retryArchive": "Retry archive", "copyArchivedTitle": "Older history copy preserved", "copyArchivedHelp": "Both copies are in the browser database. Export a history backup to keep them outside this browser.", "exportHistory": "Export history", "exportPartial": "History exported, but archived copies could not be read. Keep this site's data and retry later.", "exportFailed": "Could not export history. Try again.", "attentionRequired": "History storage needs attention", "archivedReminder": "Archived history copy available to export" };
       const sidePreview$1 = { "ariaLabel": "Character preview", "hint": "Check the preview, then apply it to the selected character.", "targetCharacter": "Target character", "noTargetCharacter": "No available character", "renderFailed": "The preview could not load. Try again.", "retry": "Reload preview", "loading": "Loading preview" };
       const stackDetail$1 = { "ariaLabel": "Stack Detail Panel", "title": "Details", "name": "Name", "group": "Group", "color": "Color", "property": "Property", "overridePriority": "OverridePriority", "opacity": "Opacity", "typeRecord": "TypeRecord", "offset": "Offset", "craft": "Craft", "craftSummary": "Craft (summary)", "download": "Download", "downloadTitle": "Download entire element", "copy": "Copy", "copyTitle": "Copy entire element JSON", "placeholder": "Select a stack item to view details", "unnamed": "(unnamed)" };
       const assetRender$1 = { "ariaLabel": "Asset Render Panel", "title": "Asset Render", "part": "Part:", "asset": "Asset:", "placeholder": "Select a part to view asset rendering", "loading": "Loading…", "retry": "Retry", "stop": "Stop" };
@@ -33770,7 +34198,7 @@ ${lightForced}`;
       const history = { "title": "历史记录", "clear": "清空", "clearTitle": "清空所有历史记录", "clearConfirmMessage": "确定要清空所有历史记录吗？此操作无法撤销。", "currentState": "当前状态", "timelineSubtitle": "浏览并跳转到任意编辑状态", "undoCount": "可撤销", "redoCount": "可重做", "undoAction": "撤销", "redoAction": "重做", "totalStates": "总数", "emptyState": "暂无历史记录。您的更改将在此处跟踪。", "justNow": "刚刚", "minutesAgo": "{count} 分钟前", "hoursAgo": "{count} 小时前", "undoItem": "之前的状态", "redoItem": "未来的状态", "pastTag": "过去", "futureTag": "未来", "currentTag": "当前", "scrollHint": "横向滚动可查看更多状态", "jumpLatest": "跳至最新", "hasFutureState": "存在可重做状态", "stateChange": "状态变更", "initialState": "初始状态", "actionTypeLabels": { "part": { "updateMetadata": "更新部件元数据", "updateProperty": "更新部件属性", "applyLayerDeltas": "应用部件图层改动" }, "layer": { "batchApplyLayerDeltas": "批量应用图层改动" }, "batch": { "updateOpacity": "批量更新不透明度", "updateOffset": "批量更新偏移", "updateColor": "批量更新颜色", "updatePriority": "批量更新优先级" }, "palette": { "applyColor": "应用颜色", "applyTag": "应用调色标签", "applyTagOffset": "应用标签偏移", "resetTagOffset": "重置标签偏移", "updateTag": "更新调色标签", "createTagAndReplace": "创建标签并替换", "renameTagReferences": "重命名标签引用", "deleteTag": "删除调色标签", "clear": "清空调色板", "savedColor": { "add": "添加收藏颜色", "update": "更新收藏颜色", "delete": "删除收藏颜色", "clear": "清空收藏颜色" } }, "stack": { "add": "新增堆栈", "remove": "删除堆栈", "move": "移动堆栈", "clear": "清空堆栈", "rename": "重命名堆栈" }, "asset": { "apply": "应用资源" } }, "actionScopeLabels": { "part": "部件", "layer": "图层", "batch": "批量", "palette": "调色", "stack": "堆栈", "asset": "资源" }, "operationContentLabels": { "color": "颜色", "opacity": "透明度", "shift": "位移", "order": "顺序", "layer": "图层", "property": "属性", "tag": "标签", "general": "编辑" } };
       const groupNames = { "Item": "道具", "Cosplay": "Cosplay", "Hair": "头发", "Headwear": "头饰", "Face": "面部", "Markings": "痕迹/纹身", "ClothUpper": "上身服装", "ClothLower": "下身服装", "Hands": "手部", "Feet": "足部", "Accessories": "配饰", "HiddenBody": "隐藏身体部件", "Appearance": "外观" };
       const fileManagerPanel = { "ariaLabel": "衣橱面板", "title": "随身衣橱", "saveBackup": "保存备份", "importBackup": "备份导入", "saveCharacter": "保存当前穿着", "importBCX": "从 BCX 导入", "importPlayerWardrobe": "导入玩家衣柜", "settings": "设置", "toggleFilters": "微调部位", "lightMode": "浅色模式", "darkMode": "深色模式", "themedMode": "Themed 模式", "toggleTheme": "切换主题", "tabAriaLabel": "工作台标签", "tabWardrobe": "衣橱", "tabHistory": "历史", "tabStudio": "Studio", "tabSettings": "设置", "themeSettings": "主题设置", "forceSelfApplyTitle": "换装选项", "forceSelfApplyLabel": "允许对自己强制换装", "forceSelfApplyDescription": "开启后，仅在目标是自己时显示红色按钮，尝试越过 BC 换装设置。游戏仍可能拒绝更改。此设置只保存在本机。", "forceSelfApplySaveFailed": "未能保存此设置。请检查浏览器存储后重试。", "themedNotAvailable": "未检测到 Themed BC，使用默认浅色主题", "themedModeDesc": "Themed 模式使用 Themed BC 的颜色配置，需要安装并启用 Themed BC 插件。" };
-      const historyViewer = { "title": "历史记录", "toggleToHistory": "查看历史", "toggleToFileManager": "查看衣橱", "clearAll": "清空全部", "clearAllConfirm": "确定要清空所有历史记录吗？此操作无法撤销。", "deleteRecord": "删除", "deleteConfirm": "确定要删除此历史记录吗？", "delete": "删除", "searchPlaceholder": "搜索历史记录...", "clearSearch": "清除", "timeFilter": "时间筛选", "filterAll": "全部", "filterToday": "今天", "filterWeek": "近7天", "loadRecord": "载入此记录", "apply": "应用", "cancel": "取消", "loadToPreview": "加载到预览", "recordedAt": "记录于", "emptyState": "暂无历史记录。您的装扮更改将自动记录在此。", "recordCount": "{count} 条记录" };
+      const historyViewer = { "title": "历史记录", "toggleToHistory": "查看历史", "toggleToFileManager": "查看衣橱", "clearAll": "清空全部", "clearAllConfirm": "清空当前历史记录？旧版归档副本仍可通过“导出历史”保存。此操作无法撤销。", "deleteRecord": "删除", "deleteConfirm": "确定要删除此历史记录吗？", "delete": "删除", "searchPlaceholder": "搜索历史记录...", "clearSearch": "清除", "timeFilter": "时间筛选", "filterAll": "全部", "filterToday": "今天", "filterWeek": "近7天", "loadRecord": "载入此记录", "apply": "应用", "cancel": "取消", "loadToPreview": "加载到预览", "recordedAt": "记录于", "emptyState": "暂无历史记录。您的装扮更改将自动记录在此。", "recordCount": "{count} 条记录", "saveFailedTitle": "历史记录未能保存", "saveFailedHelp": "刷新后可能丢失本次更改。请检查本站的存储权限，然后重试。", "retrySave": "重试保存", "copiesDifferTitle": "旧版历史副本仍占本机空间", "copiesDifferHelp": "浏览器暂未能归档它。请重试，或先导出包含两份记录的历史备份。", "retryArchive": "重试归档", "copyArchivedTitle": "旧版历史副本已保留", "copyArchivedHelp": "两份记录已存入浏览器数据库。可导出历史备份，另存到浏览器外。", "exportHistory": "导出历史", "exportPartial": "历史已导出，但未能读取归档副本。请保留本站数据，稍后重试。", "exportFailed": "无法导出历史，请重试。", "attentionRequired": "历史记录存储需要处理", "archivedReminder": "有旧版历史副本可导出" };
       const sidePreview = { "ariaLabel": "角色预览", "hint": "确认目标角色和预览效果后，再应用。", "targetCharacter": "目标角色", "noTargetCharacter": "无可用角色", "renderFailed": "预览加载失败，请重试。", "retry": "重新加载预览", "loading": "正在加载预览" };
       const stackDetail = { "ariaLabel": "Stack 详细信息面板", "title": "详细信息", "name": "名称", "group": "分组", "color": "颜色", "property": "属性", "overridePriority": "覆盖优先级", "opacity": "不透明度", "typeRecord": "类型记录", "offset": "偏移", "craft": "Craft", "craftSummary": "Craft（摘要）", "download": "下载", "downloadTitle": "下载整个 element", "copy": "复制", "copyTitle": "复制整个 element JSON", "placeholder": "请选择一个 stack 项查看详细信息", "unnamed": "（未命名）" };
       const assetRender = { "ariaLabel": "Asset 渲染面板", "title": "Asset 渲染", "part": "Part：", "asset": "Asset：", "placeholder": "选择一个 part 来查看 asset 渲染", "loading": "加载中…", "retry": "重试", "stop": "停止" };
@@ -34141,7 +34569,7 @@ ${lightForced}`;
             if (!code?.trim()) return;
             let parsed;
             try {
-              const decompressed = LZString$1.decompressFromBase64(code.trim());
+              const decompressed = LZString.decompressFromBase64(code.trim());
               if (!decompressed) throw new Error("BCX code could not be decoded");
               parsed = JSON.parse(decompressed);
             } catch (error) {
@@ -36102,6 +36530,7 @@ ${lightForced}`;
         const { t } = useTranslation();
         const dialog2 = useDialog();
         const historyVersion = useFsSelector((fs) => fs.historyVersion);
+        const historyStorageStatus = useFsSelector((fs) => fs.historyStorageStatus);
         const [records, setRecords] = reactExports.useState(() => getFs().getHistoryRecords());
         const [searchQuery, setSearchQuery] = reactExports.useState("");
         const [timeFilter, setTimeFilter] = reactExports.useState("all");
@@ -36172,6 +36601,26 @@ ${lightForced}`;
             refresh();
           }
         };
+        const exportHistory = async () => {
+          try {
+            const backup = await getFs().exportHistoryBackup();
+            const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const link = doc.createElement("a");
+            try {
+              link.href = url;
+              link.download = `vpw-history_${(/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-")}.json`;
+              doc.body.appendChild(link);
+              link.click();
+            } finally {
+              link.remove();
+              URL.revokeObjectURL(url);
+            }
+            if (backup.archivesUnavailable) await dialog2.alert(t("historyViewer.exportPartial"));
+          } catch {
+            await dialog2.alert(t("historyViewer.exportFailed"));
+          }
+        };
         return /* @__PURE__ */ jsxRuntimeExports.jsxs(Stack, { gap: "sm", h: "100%", style: { minHeight: 0 }, children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { justify: "space-between", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsxs(Text, { fw: 600, children: [
@@ -36183,11 +36632,23 @@ ${lightForced}`;
                 ")"
               ] })
             ] }),
-            records.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs(Button, { variant: "subtle", color: "red", size: "xs", onClick: clearAll, children: [
-              "🗑 ",
-              t("historyViewer.clearAll")
+            /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { gap: "xs", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "subtle", size: "xs", onClick: exportHistory, children: t("historyViewer.exportHistory") }),
+              records.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs(Button, { variant: "subtle", color: "red", size: "xs", onClick: clearAll, children: [
+                "🗑 ",
+                t("historyViewer.clearAll")
+              ] })
             ] })
           ] }),
+          historyStorageStatus === "error" && /* @__PURE__ */ jsxRuntimeExports.jsxs(Alert, { color: "red", title: t("historyViewer.saveFailedTitle"), role: "alert", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "sm", children: t("historyViewer.saveFailedHelp") }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { mt: "xs", size: "xs", color: "red", variant: "light", onClick: () => getFs().retryHistoryStorage(), children: t("historyViewer.retrySave") })
+          ] }),
+          historyStorageStatus === "conflict" && /* @__PURE__ */ jsxRuntimeExports.jsxs(Alert, { color: "yellow", title: t("historyViewer.copiesDifferTitle"), role: "status", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "sm", children: t("historyViewer.copiesDifferHelp") }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { mt: "xs", size: "xs", color: "yellow", variant: "light", onClick: () => getFs().retryHistoryStorage(), children: t("historyViewer.retryArchive") })
+          ] }),
+          historyStorageStatus === "archived" && /* @__PURE__ */ jsxRuntimeExports.jsx(Alert, { color: "blue", title: t("historyViewer.copyArchivedTitle"), role: "status", children: t("historyViewer.copyArchivedHelp") }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { gap: "sm", wrap: "nowrap", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               TextInput,
@@ -36352,6 +36813,8 @@ ${lightForced}`;
       function MobileWardrobeShell({ onClose }) {
         const { t } = useTranslation();
         const rawActiveTab = useWbSelector((wb) => wb.activeTab);
+        const historyStorageStatus = useFsSelector((fs) => fs.historyStorageStatus);
+        const historyNeedsAttention = historyStorageStatus === "error" || historyStorageStatus === "conflict" || historyStorageStatus === "archived";
         const [pane, setPane] = reactExports.useState("list");
         const [adjustmentsOpen, setAdjustmentsOpen] = reactExports.useState(false);
         const [wardrobeDetailOpen, setWardrobeDetailOpen] = reactExports.useState(false);
@@ -36371,7 +36834,10 @@ ${lightForced}`;
                 onChange: (v) => getWb().setActiveTab(v),
                 data: [
                   { value: "wardrobe", label: t("fileManagerPanel.tabWardrobe") },
-                  { value: "history", label: t("fileManagerPanel.tabHistory") },
+                  { value: "history", label: /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+                    t("fileManagerPanel.tabHistory"),
+                    historyNeedsAttention && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { "aria-label": t(historyStorageStatus === "archived" ? "historyViewer.archivedReminder" : "historyViewer.attentionRequired"), style: { color: historyStorageStatus === "archived" ? "var(--mantine-color-blue-6)" : "var(--mantine-color-red-6)", marginLeft: 3 }, children: "●" })
+                  ] }) },
                   { value: "settings", label: t("fileManagerPanel.tabSettings") }
                 ]
               }
@@ -36417,6 +36883,8 @@ ${lightForced}`;
       function FileManagerPanel({ opened, onClose }) {
         const { t } = useTranslation();
         const rawActiveTab = useWbSelector((wb) => wb.activeTab);
+        const historyStorageStatus = useFsSelector((fs) => fs.historyStorageStatus);
+        const historyNeedsAttention = historyStorageStatus === "error" || historyStorageStatus === "conflict" || historyStorageStatus === "archived";
         const theme = useTheme();
         const isMobile = useIsMobile();
         const [adjustmentsOpen, setAdjustmentsOpen] = reactExports.useState(false);
@@ -36638,7 +37106,10 @@ ${lightForced}`;
                       /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { justify: "space-between", children: [
                         /* @__PURE__ */ jsxRuntimeExports.jsxs(Tabs.List, { children: [
                           /* @__PURE__ */ jsxRuntimeExports.jsx(Tabs.Tab, { value: "wardrobe", children: t("fileManagerPanel.tabWardrobe") }),
-                          /* @__PURE__ */ jsxRuntimeExports.jsx(Tabs.Tab, { value: "history", children: t("fileManagerPanel.tabHistory") }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs(Tabs.Tab, { value: "history", children: [
+                            t("fileManagerPanel.tabHistory"),
+                            historyNeedsAttention && /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { span: true, c: historyStorageStatus === "archived" ? "blue" : "red", "aria-label": t(historyStorageStatus === "archived" ? "historyViewer.archivedReminder" : "historyViewer.attentionRequired"), children: " ●" })
+                          ] }),
                           /* @__PURE__ */ jsxRuntimeExports.jsx(Tabs.Tab, { value: "settings", children: t("fileManagerPanel.tabSettings") })
                         ] }),
                         /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { gap: "xs", children: [

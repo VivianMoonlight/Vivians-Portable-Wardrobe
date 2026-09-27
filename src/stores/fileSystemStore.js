@@ -1,8 +1,10 @@
 import { createStore } from 'zustand/vanilla'
 import { useStore } from 'zustand'
+import LZString from 'lz-string'
 import { createLibraryState, wardrobeLibraryActions } from './wardrobe-library-actions.js'
 import { RenderService } from '@/services/RenderService'
 import { StorageAdapter } from '@/services/StorageAdapter'
+import { HistoryPersistence } from '@/services/history-persistence.js'
 import { RenderApi } from '@/utils/RenderApi'
 import { FilterService } from '@/services/FilterService'
 import { fetchFilterData } from '@/utils/filter_api'
@@ -31,8 +33,147 @@ const SLOT_MODE_ORIGINAL = 'original'
 const SLOT_MODE_INCOMING = 'incoming'
 const HISTORY_STORAGE_FORMAT = '~VPWH1:'
 
-function isStorageQuotaError(error) {
-  return error?.name === 'QuotaExceededError' || error?.code === 22 || error?.code === 1014
+function isHistoryTree(data) {
+  return data && typeof data === 'object' && Array.isArray(data.children)
+}
+
+function sameHistoryRecords(left, right) {
+  if (!isHistoryTree(left) || !isHistoryTree(right)) return false
+  const records = data => data.children.map(record => [record?.name, record?.data])
+  return JSON.stringify(records(left)) === JSON.stringify(records(right))
+}
+
+function decodeHistoryRaw(raw) {
+  try {
+    const json = raw.startsWith(HISTORY_STORAGE_FORMAT)
+      ? LZString.decompressFromUTF16(raw.slice(HISTORY_STORAGE_FORMAT.length))
+      : LZString.decompressFromBase64(raw)
+    return json ? JSON.parse(json) : null
+  } catch {
+    return null
+  }
+}
+
+function historyStorageState(session) {
+  if (session.legacyConflict) return 'conflict'
+  return session.archivedLegacy ? 'archived' : 'ready'
+}
+
+function isActiveHistorySession(store, session) {
+  return store._historySession === session
+}
+
+function reportHistoryStorageFailure(store, session, error) {
+  session.status = 'error'
+  if (isActiveHistorySession(store, session)) store.historyStorageStatus = 'error'
+  if (!session.warned) {
+    session.warned = true
+    console.warn('[VPW] History storage unavailable; recent changes remain in this tab', error)
+  }
+}
+
+function applyHistoryOperations(history, operations) {
+  for (const operation of operations) {
+    if (operation.kind === 'replace') {
+      history.fromJSON(operation.data)
+      continue
+    }
+    const records = history.getAllRecords()
+    if (operation.kind === 'clear') {
+      records.length = 0
+    } else if (operation.kind === 'delete') {
+      const index = records.findIndex(record => record.name === operation.name
+        && JSON.stringify(record.data) === operation.data)
+      if (index !== -1) records.splice(index, 1)
+    } else if (operation.kind === 'add') {
+      records.unshift(operation.entry)
+      if (records.length > history.MaxRecords) records.length = history.MaxRecords
+    }
+  }
+}
+
+function flushHistorySession(store, session) {
+  if (!session.loaded || !session.legacySettled || session.writing || session.status === 'error') return
+  session.writing = true
+  session.writePromise = (async () => {
+    while (session.savedRevision < session.dirtyRevision) {
+      const revision = session.dirtyRevision
+      await store._historyPersistence.write(session.member, session.history.toJSON())
+      session.savedRevision = revision
+    }
+    session.status = historyStorageState(session)
+    if (isActiveHistorySession(store, session)) store.historyStorageStatus = session.status
+  })().catch(error => reportHistoryStorageFailure(store, session, error)).finally(() => {
+    session.writing = false
+  })
+}
+
+async function settleLegacyHistory(store, session) {
+  try {
+    const localStorage = store._historyLocalStorage
+    const raw = localStorage.getItem(session.key)
+    if (raw === null) {
+      session.legacyConflict = false
+    } else {
+      if (raw !== session.legacyRaw) {
+        session.legacyRaw = raw
+        session.legacyData = decodeHistoryRaw(raw)
+        session.legacyNeedsArchive = true
+      }
+      if (session.legacyNeedsArchive) {
+        await store._historyPersistence.archiveLegacy(session.member, raw)
+        session.archivedLegacy = true
+      }
+      if (localStorage.getItem(session.key) === raw) localStorage.removeItem(session.key)
+      session.legacyConflict = localStorage.getItem(session.key) !== null
+    }
+  } catch (error) {
+    session.legacyConflict = true
+    if (!session.warnedArchive) {
+      session.warnedArchive = true
+      console.warn('[VPW] Older history copy remains in localStorage', error)
+    }
+  }
+  session.legacySettled = true
+  session.status = historyStorageState(session)
+  if (isActiveHistorySession(store, session)) store.historyStorageStatus = session.status
+  if (session.dirtyRevision > session.savedRevision) flushHistorySession(store, session)
+}
+
+async function loadHistorySession(store, session) {
+  try {
+    let data = await store._historyPersistence.read(session.member)
+    if (data !== null && !isHistoryTree(data)) throw new Error('Stored history is invalid')
+    const archives = await store._historyPersistence.listLegacyArchives(session.member)
+    session.archivedLegacy = archives.length > 0
+    const hasStoredHistory = data !== null
+    if (data === null && session.legacyRaw !== null) {
+      if (!isHistoryTree(session.legacyData)) throw new Error('Legacy history is invalid')
+      await store._historyPersistence.write(session.member, session.legacyData)
+      data = session.legacyData
+    }
+    if (data === null && session.legacyRaw === null && session.initialData.children.length) {
+      data = session.initialData
+    }
+
+    const history = session.history
+    if (data) history.fromJSON(data)
+    else history.clear()
+    applyHistoryOperations(history, session.pendingOperations)
+    session.pendingOperations.length = 0
+    session.history = history
+    session.loaded = true
+    session.legacyNeedsArchive = hasStoredHistory && session.legacyRaw !== null
+      && !sameHistoryRecords(data, session.legacyData)
+    session.status = 'loading'
+    if (isActiveHistorySession(store, session)) {
+      store.history = history
+      store.historyVersion = (store.historyVersion || 0) + 1
+    }
+    await settleLegacyHistory(store, session)
+  } catch (error) {
+    reportHistoryStorageFailure(store, session, error)
+  }
 }
 
 function buildPartNameMapBySlot(parts = [], character = null) {
@@ -113,22 +254,16 @@ const fileSystemStoreDefinition = {
     fileTreeVersion: 0,
     history: new HistoryRecord('History', 100),
     historyVersion: 0,
+    historyStorageStatus: 'loading',
+    _historySession: null,
+    _historyPersistence: new HistoryPersistence(() => hostWindow.indexedDB),
+    _historyLocalStorage: hostWindow.localStorage,
     renderer: new RenderService({ drawCallbacks: RenderApi }),
     thumbnailRefreshVersion: 0,
     character: null,
     storage: new StorageAdapter({
       local: {
-        get: (k) => hostWindow.localStorage.getItem(k),
-        set: (k, val) => {
-          try {
-            hostWindow.localStorage.setItem(k, val)
-          } catch (error) {
-            if (!isStorageQuotaError(error) || !val.startsWith(HISTORY_STORAGE_FORMAT)) throw error
-            const serialized = LZString.decompressFromUTF16(val.slice(HISTORY_STORAGE_FORMAT.length))
-            if (serialized === null) throw error
-            hostWindow.localStorage.setItem(k, LZString.compressToBase64(serialized))
-          }
-        }
+        get: (k) => hostWindow.localStorage.getItem(k)
       },
       compressor: {
         compress: (str) => HISTORY_STORAGE_FORMAT + LZString.compressToUTF16(str),
@@ -241,7 +376,11 @@ const fileSystemStoreDefinition = {
 
       this._historyFilterInitPromise = (async () => {
         try {
-          await this.history.initFilter()
+          const initializing = this.history
+          await initializing.initFilter()
+          if (this.history !== initializing && initializing.filter?.length) {
+            this.history.filter = initializing.filter
+          }
         } catch (e) {
           console.warn('history.initFilter failed', e)
         }
@@ -963,8 +1102,10 @@ const fileSystemStoreDefinition = {
     addToHistory(data) {
       if (!data || !Array.isArray(data) || data.length === 0) return
       try {
+        if (!this._historySession || this._historySession.member !== getPlayerMemberSuffix()) this.loadHistory()
         const entry = this.history.addRecord(JSON.parse(JSON.stringify(data)))
         if (!entry) return
+        if (!this._historySession.loaded) this._historySession.pendingOperations.push({ kind: 'add', entry })
         this.historyVersion = (this.historyVersion || 0) + 1
         this.saveHistory()
       } catch (e) {
@@ -989,11 +1130,15 @@ const fileSystemStoreDefinition = {
      */
     deleteHistoryRecord(record) {
       try {
+        if (!this._historySession || this._historySession.member !== getPlayerMemberSuffix()) this.loadHistory()
         const root = this.history.fs.getNode([this.history.fs.root.name])
         if (!root || !root.children) return false
         const idx = root.children.findIndex(r => r === record)
         if (idx === -1) return false
         root.children.splice(idx, 1)
+        if (!this._historySession.loaded) this._historySession.pendingOperations.push({
+          kind: 'delete', name: record.name, data: JSON.stringify(record.data),
+        })
         this.historyVersion = (this.historyVersion || 0) + 1
         this.saveHistory()
         return true
@@ -1008,8 +1153,10 @@ const fileSystemStoreDefinition = {
      */
     clearHistory() {
       try {
+        if (!this._historySession || this._historySession.member !== getPlayerMemberSuffix()) this.loadHistory()
         const hadRecords = this.getHistoryRecords().length > 0
         this.history.clear()
+        if (!this._historySession.loaded) this._historySession.pendingOperations.push({ kind: 'clear' })
         if (hadRecords) {
           this.historyVersion = (this.historyVersion || 0) + 1
         }
@@ -1036,32 +1183,91 @@ const fileSystemStoreDefinition = {
      * Save history to storage
      */
     saveHistory() {
-      try {
-        const historyData = this.history.toJSON()
-        const key = buildPlayerScopedStorageKey('VPWardrobe_history')
-        this.storage.saveLocal(key, historyData)
-      } catch (e) {
-        console.warn('saveHistory failed', e)
+      if (!this._historySession || this._historySession.member !== getPlayerMemberSuffix()) this.loadHistory()
+      const session = this._historySession
+      if (!session.loaded && session.pendingOperations.length === 0) {
+        session.pendingOperations.push({ kind: 'replace', data: this.history.toJSON() })
       }
+      session.dirtyRevision++
+      if (session.loaded) flushHistorySession(this, session)
     },
 
     /**
      * Load history from storage
      */
     loadHistory() {
+      const member = getPlayerMemberSuffix()
+      if (this._historySession?.member === member) return this._historySession.readyPromise
+      if (this._historySession) {
+        const previousFilter = this.history.filter
+        this.history = new HistoryRecord('History', 100)
+        this.history.filter = previousFilter
+      }
+      const logicalKey = buildPlayerScopedStorageKey('VPWardrobe_history')
+      const key = this.storage.prefix + logicalKey
+      let legacyRaw = null
+      let legacyData = null
       try {
-        const key = buildPlayerScopedStorageKey('VPWardrobe_history')
-        const previous = hostWindow.localStorage.getItem(this.storage.prefix + key)
-        const historyData = this.storage.loadLocal(key)
-        if (historyData) {
-          this.history.fromJSON(historyData)
-          this.historyVersion = (this.historyVersion || 0) + 1
-          if (previous && !previous.startsWith(HISTORY_STORAGE_FORMAT)) {
-            this.storage.saveLocal(key, historyData)
+        legacyRaw = this._historyLocalStorage.getItem(key)
+        if (legacyRaw !== null) {
+          legacyData = decodeHistoryRaw(legacyRaw)
+          if (isHistoryTree(legacyData)) {
+            this.history.fromJSON(legacyData)
+            this.historyVersion = (this.historyVersion || 0) + 1
           }
         }
-      } catch (e) {
-        console.warn('loadHistory failed', e)
+      } catch (error) {
+        console.warn('[VPW] Could not read local history', error)
+      }
+      const session = {
+        member, key, logicalKey, legacyRaw, legacyData, history: this.history,
+        initialData: this.history.toJSON(),
+        pendingOperations: [], dirtyRevision: 0, savedRevision: 0,
+        loaded: false, writing: false, status: 'loading', warned: false, warnedArchive: false,
+        legacyConflict: false, legacyNeedsArchive: false, legacySettled: false, archivedLegacy: false,
+        readyPromise: null, writePromise: null,
+      }
+      this._historySession = session
+      this.historyStorageStatus = 'loading'
+      session.readyPromise = loadHistorySession(this, session)
+      return session.readyPromise
+    },
+
+    retryHistoryStorage() {
+      const session = this._historySession
+      if (!session || (session.status !== 'error' && session.status !== 'conflict')) return false
+      session.status = 'loading'
+      this.historyStorageStatus = 'loading'
+      if (session.loaded && session.legacyConflict) {
+        session.readyPromise = settleLegacyHistory(this, session)
+      } else if (session.loaded) flushHistorySession(this, session)
+      else session.readyPromise = loadHistorySession(this, session)
+      return true
+    },
+
+    async exportHistoryBackup() {
+      if (!this._historySession || this._historySession.member !== getPlayerMemberSuffix()) this.loadHistory()
+      const session = this._historySession
+      await session.readyPromise
+      let archivedLegacyCopies = []
+      let archivesUnavailable = false
+      try {
+        archivedLegacyCopies = (await this._historyPersistence.listLegacyArchives(session.member))
+          .map(copy => ({ ...copy, data: decodeHistoryRaw(copy.raw) }))
+      } catch {
+        archivesUnavailable = true
+      }
+      let unarchivedLegacyRaw = null
+      try {
+        unarchivedLegacyRaw = this._historyLocalStorage.getItem(session.key)
+      } catch {
+        archivesUnavailable = true
+      }
+      return {
+        format: 'VPW-history-backup', version: 1, exportedAt: new Date().toISOString(),
+        current: session.history.toJSON(), archivedLegacyCopies,
+        unarchivedLegacyRaw, unarchivedLegacyData: unarchivedLegacyRaw ? decodeHistoryRaw(unarchivedLegacyRaw) : null,
+        archivesUnavailable,
       }
     }
   }

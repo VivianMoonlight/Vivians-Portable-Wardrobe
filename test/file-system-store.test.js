@@ -332,65 +332,173 @@ test('history preview clones data, keeps slot choices and locking, and does not 
   assert.equal(renders.length, 1)
 })
 
-test('history saves in the local UTF-16 format and restores the same records', () => {
-  const { fs, hostWindow } = setup()
-  const record = [part('Cloth', 'saved-shirt'), part('Shoes', 'saved-shoes')]
-  fs.history.addRecord(record)
-  const expected = JSON.parse(JSON.stringify(fs.history.toJSON()))
+function memoryHistoryStorage(fs) {
+  const records = new Map()
+  const archives = new Map()
+  fs._historyPersistence = {
+    async read(member) { return records.get(member) ?? null },
+    async write(member, data) { records.set(member, JSON.parse(JSON.stringify(data))) },
+    async archiveLegacy(member, raw) {
+      const copies = archives.get(member) || []
+      if (!copies.some(copy => copy.raw === raw)) archives.set(member, [...copies, { raw, archivedAt: 'test' }])
+    },
+    async listLegacyArchives(member) { return archives.get(member) || [] },
+  }
+  return records
+}
 
-  fs.saveHistory()
-  const key = 'VPWardrobe_VPWardrobe_history_42'
-  const saved = hostWindow.localStorage.getItem(key)
-  assert.ok(saved.startsWith('~VPWH1:'))
-  assert.deepEqual(JSON.parse(LZString.decompressFromUTF16(saved.slice('~VPWH1:'.length))), expected)
+test('history writes to IndexedDB and restores without using localStorage', async () => {
+  const { fs, hostWindow, writes } = setup()
+  const records = memoryHistoryStorage(fs)
+  await fs.loadHistory()
+  const record = [part('Cloth', 'saved-shirt'), part('Shoes', 'saved-shoes')]
+  fs.addToHistory(record)
+  await fs._historySession.writePromise
+
+  assert.deepEqual(JSON.parse(JSON.stringify(records.get('42').children[0].data)), record)
+  assert.equal(hostWindow.localStorage.getItem('VPWardrobe_VPWardrobe_history_42'), null)
+  assert.deepEqual(writes, [])
 
   fs.history.clear()
-  fs.loadHistory()
+  fs._historySession = null
+  await fs.loadHistory()
   assert.deepEqual(JSON.parse(JSON.stringify(fs.getHistoryRecords()[0].data)), record)
 })
 
-test('loading Base64 history migrates it to UTF-16 without losing records', () => {
+test('legacy Base64 history is deleted only after IndexedDB commit', async () => {
   const { fs, hostWindow } = setup()
+  const records = memoryHistoryStorage(fs)
   fs.history.addRecord([part('Cloth', 'legacy-shirt')])
   const expected = JSON.parse(JSON.stringify(fs.history.toJSON()))
   const key = 'VPWardrobe_VPWardrobe_history_42'
   const legacy = LZString.compressToBase64(JSON.stringify(expected))
   hostWindow.localStorage.setItem(key, legacy)
   fs.history.clear()
-
-  fs.loadHistory()
-
-  assert.deepEqual(JSON.parse(JSON.stringify(fs.getHistoryRecords()[0].data)), expected.children[0].data)
-  const migrated = hostWindow.localStorage.getItem(key)
-  assert.ok(migrated.startsWith('~VPWH1:'))
-  assert.deepEqual(JSON.parse(LZString.decompressFromUTF16(migrated.slice('~VPWH1:'.length))), expected)
-})
-
-test('history falls back to Base64 when a UTF-8 byte quota rejects UTF-16', () => {
-  const { fs, hostWindow } = setup()
-  const record = Array.from({ length: 20 }, (_, index) => part(`Cloth${index}`, `shirt-${index}`))
-  fs.history.addRecord(record)
-  const json = JSON.stringify(fs.history.toJSON())
-  const utf16 = '~VPWH1:' + LZString.compressToUTF16(json)
-  const base64 = LZString.compressToBase64(json)
-  const bytes = value => new TextEncoder().encode(value).length
-  assert.ok(bytes(utf16) > bytes(base64))
-  const originalSetItem = hostWindow.localStorage.setItem
-  hostWindow.localStorage.setItem = (key, value) => {
-    if (bytes(value) > bytes(base64)) {
-      throw Object.assign(new Error('Local storage quota reached'), { name: 'QuotaExceededError' })
-    }
-    originalSetItem(key, value)
+  let completeWrite
+  let signalWrite
+  const writeStarted = new Promise(resolve => { signalWrite = resolve })
+  fs._historyPersistence.write = async (member, data) => {
+    signalWrite()
+    await new Promise(resolve => { completeWrite = resolve })
+    records.set(member, JSON.parse(JSON.stringify(data)))
   }
 
-  fs.saveHistory()
+  const loading = fs.loadHistory()
+  await writeStarted
+  assert.equal(hostWindow.localStorage.getItem(key), legacy)
+  assert.equal(typeof completeWrite, 'function')
+  completeWrite()
+  await loading
 
+  assert.equal(hostWindow.localStorage.getItem(key), null)
+  assert.deepEqual(JSON.parse(JSON.stringify(records.get('42').children[0].data)), expected.children[0].data)
+  assert.deepEqual(JSON.parse(JSON.stringify(fs.getHistoryRecords()[0].data)), expected.children[0].data)
+})
+
+test('IndexedDB failure preserves legacy history and does not repeat localStorage quota writes', async () => {
+  const { fs, hostWindow, writes } = setup()
   const key = 'VPWardrobe_VPWardrobe_history_42'
-  assert.equal(hostWindow.localStorage.getItem(key), base64)
+  fs.history.addRecord([part('Cloth', 'legacy-shirt')])
+  const legacy = LZString.compressToBase64(JSON.stringify(fs.history.toJSON()))
+  hostWindow.localStorage.setItem(key, legacy)
   fs.history.clear()
+  fs._historyPersistence = {
+    async read() { throw new Error('IndexedDB blocked') },
+    async write() { throw new Error('IndexedDB blocked') },
+  }
+  await fs.loadHistory()
+  fs.addToHistory([part('Cloth', 'new-shirt')])
+  fs.addToHistory([part('Cloth', 'another-shirt')])
+
+  assert.equal(fs.historyStorageStatus, 'error')
+  assert.equal(hostWindow.localStorage.getItem(key), legacy)
+  assert.equal(writes.length, 1)
+  assert.equal(fs.getHistoryRecords().length, 3)
+})
+
+test('history changes during migration replay before saving and stay with their account', async () => {
+  const { fs, hostWindow } = setup()
+  const records = memoryHistoryStorage(fs)
+  let releaseRead
+  fs._historyPersistence.read = async member => {
+    if (member === '42') await new Promise(resolve => { releaseRead = resolve })
+    return records.get(member) ?? null
+  }
+  const loading = fs.loadHistory()
+  fs.addToHistory([part('Cloth', 'member-42')])
+  const session42 = fs._historySession
+  hostWindow.Player.MemberNumber = 43
   fs.loadHistory()
-  assert.deepEqual(JSON.parse(JSON.stringify(fs.getHistoryRecords()[0].data)), record)
-  assert.equal(hostWindow.localStorage.getItem(key), base64)
+  fs.addToHistory([part('Cloth', 'member-43')])
+  releaseRead()
+  await loading
+  await session42.writePromise
+  await fs._historySession.readyPromise
+  await fs._historySession.writePromise
+
+  assert.deepEqual(records.get('42').children[0].data[0].Name, 'member-42')
+  assert.deepEqual(records.get('43').children[0].data[0].Name, 'member-43')
+  assert.equal(fs.getHistoryRecords()[0].data[0].Name, 'member-43')
+})
+
+test('distinct history changes are kept while the comparison filter is still loading', async () => {
+  const { fs } = loadFileSystemStore()
+  const records = memoryHistoryStorage(fs)
+  let releaseFilter
+  fs.history.initFilter = async function () {
+    await new Promise(resolve => { releaseFilter = resolve })
+    this.filter = ['Cloth']
+  }
+  const initializing = fs._ensureHistoryFilterInitialized()
+  const initialHistory = fs.history
+  await fs.loadHistory()
+  assert.equal(fs.history, initialHistory)
+  releaseFilter()
+  await initializing
+  assert.deepEqual(Array.from(fs.history.filter), ['Cloth'])
+
+  fs.history.filter = []
+  fs.addToHistory([part('Cloth', 'first-shirt')])
+  fs.addToHistory([part('Cloth', 'second-shirt')])
+  await fs._historySession.writePromise
+  assert.deepEqual(records.get('42').children.map(record => record.data[0].Name),
+    ['second-shirt', 'first-shirt'])
+})
+
+test('divergent legacy history is archived losslessly before its localStorage key is removed', async () => {
+  const { fs, hostWindow } = setup()
+  const records = memoryHistoryStorage(fs)
+  fs.history.addRecord([part('Cloth', 'legacy-shirt')])
+  const oldCopy = fs.history.toJSON()
+  const raw = '~VPWH1:' + LZString.compressToUTF16(JSON.stringify(oldCopy))
+  const key = 'VPWardrobe_VPWardrobe_history_42'
+  hostWindow.localStorage.setItem(key, raw)
+  fs.history.clear()
+  const activeCopy = JSON.parse(JSON.stringify(oldCopy))
+  activeCopy.children[0].data[0].Name = 'database-shirt'
+  records.set('42', activeCopy)
+  let failArchive = true
+  const originalArchive = fs._historyPersistence.archiveLegacy
+  fs._historyPersistence.archiveLegacy = async (member, value) => {
+    if (failArchive) throw new Error('Archive transaction aborted')
+    return originalArchive(member, value)
+  }
+
+  await fs.loadHistory()
+  assert.equal(fs.historyStorageStatus, 'conflict')
+  assert.equal(hostWindow.localStorage.getItem(key), raw)
+  assert.equal(fs.getHistoryRecords()[0].data[0].Name, 'database-shirt')
+
+  failArchive = false
+  assert.equal(fs.retryHistoryStorage(), true)
+  await fs._historySession.readyPromise
+  assert.equal(hostWindow.localStorage.getItem(key), null)
+  assert.equal(fs.historyStorageStatus, 'archived')
+  const backup = await fs.exportHistoryBackup()
+  assert.equal(backup.current.children[0].data[0].Name, 'database-shirt')
+  assert.equal(backup.archivedLegacyCopies[0].raw, raw)
+  assert.equal(backup.archivedLegacyCopies[0].data.children[0].data[0].Name, 'legacy-shirt')
+  assert.equal(backup.archivesUnavailable, false)
 })
 
 test('initialization previews the character before metadata resolves and preserves a selection made while waiting', async () => {

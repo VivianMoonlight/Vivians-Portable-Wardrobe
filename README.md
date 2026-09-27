@@ -14,6 +14,14 @@ Install the loader **once from the link above**. In the script manager it appear
 
 请从上面的链接**安装一次加载器**；脚本管理器中应显示 **Vivians Portable Wardrobe (React Preview Loader)**。它通过 `@updateURL` 更新自身，并在打开游戏时加载该分支的主程序。如果之前安装过 React 主包或旧版 VPW，请停用旧脚本，避免同时运行两份衣橱。
 
+Publishing a push to `wardrobe-react` now builds a new userscript version, refreshes both CDN files and checks that the CDN serves the committed artifacts. A local Git commit alone is not a release. The game must be reloaded to run the new bundle. Your userscript manager controls when it checks for and installs loader updates; in [Tampermonkey 5.5+](https://www.tampermonkey.net/changelog.php?locale=en&more=true&show=fire), enable **Automatic installation** if you want the loader's displayed version to update without a prompt.
+
+推送到 `wardrobe-react` 后，发布流程会生成新版脚本、刷新两个 CDN 文件并核对线上内容；只在本机提交 Git 不会发布。刷新游戏页面才会运行新版主包。加载器在脚本管理器中显示的版本仍取决于管理器的检查和安装设置；[Tampermonkey 5.5+](https://www.tampermonkey.net/changelog.php?locale=en&more=true&show=fire) 如需无提示安装更新，请开启 **Automatic installation（自动安装）**。
+
+If an earlier loader still has `feat/wardrobe-react` in `@updateURL`, or was installed by pasting a Markdown-formatted URL such as `[https://…](https://…)`, install it once from the direct link above. Those older update addresses cannot discover this branch's releases.
+
+如果已安装加载器的 `@updateURL` 仍包含 `feat/wardrobe-react`，或曾把 `[https://…](https://…)` 这样的 Markdown 链接直接粘贴进去，请从上面的直链重新安装一次；这些旧地址无法发现当前分支的更新。
+
 ## Find, preview, apply / 找衣物、预览、应用
 
 1. Open the wardrobe from the floating button. Search outfits or tags, then use the tag and cloud filters to narrow the results.

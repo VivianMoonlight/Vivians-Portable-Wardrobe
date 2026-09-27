@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties, type MouseEvent } from 'react'
-import { ActionIcon, Box, Button, Group, Paper, Portal, Stack, Text, TextInput } from '@mantine/core'
+import { ActionIcon, Alert, Box, Button, Group, Paper, Portal, Stack, Text, TextInput } from '@mantine/core'
 import { useTranslation } from 'react-i18next'
-import { hostWindow } from '@/utils/host-window.js'
+import { doc, hostWindow } from '@/utils/host-window.js'
 import { ExternalAdapter } from '@/utils/external_adapters.js'
 import { getFs, useFsSelector, type FileNode } from '@/stores/hooks'
 import { useDialog } from '@/ui/dialog/DialogProvider'
@@ -45,6 +45,7 @@ export function HistoryViewer() {
   const { t } = useTranslation()
   const dialog = useDialog()
   const historyVersion = useFsSelector((fs) => fs.historyVersion)
+  const historyStorageStatus = useFsSelector((fs) => fs.historyStorageStatus)
   const [records, setRecords] = useState<HistoryRecord[]>(() => getFs().getHistoryRecords() as HistoryRecord[])
   const [searchQuery, setSearchQuery] = useState('')
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('all')
@@ -125,6 +126,27 @@ export function HistoryViewer() {
     }
   }
 
+  const exportHistory = async () => {
+    try {
+      const backup = await getFs().exportHistoryBackup()
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const link = doc.createElement('a')
+      try {
+        link.href = url
+        link.download = `vpw-history_${new Date().toISOString().replace(/[:.]/g, '-')}.json`
+        doc.body.appendChild(link)
+        link.click()
+      } finally {
+        link.remove()
+        URL.revokeObjectURL(url)
+      }
+      if (backup.archivesUnavailable) await dialog.alert(t('historyViewer.exportPartial'))
+    } catch {
+      await dialog.alert(t('historyViewer.exportFailed'))
+    }
+  }
+
   return (
     <Stack gap="sm" h="100%" style={{ minHeight: 0 }}>
       <Group justify="space-between">
@@ -136,12 +158,39 @@ export function HistoryViewer() {
             </Text>
           )}
         </Text>
-        {records.length > 0 && (
-          <Button variant="subtle" color="red" size="xs" onClick={clearAll}>
-            🗑 {t('historyViewer.clearAll')}
+        <Group gap="xs">
+          <Button variant="subtle" size="xs" onClick={exportHistory}>
+            {t('historyViewer.exportHistory')}
           </Button>
-        )}
+          {records.length > 0 && (
+            <Button variant="subtle" color="red" size="xs" onClick={clearAll}>
+              🗑 {t('historyViewer.clearAll')}
+            </Button>
+          )}
+        </Group>
       </Group>
+
+      {historyStorageStatus === 'error' && (
+        <Alert color="red" title={t('historyViewer.saveFailedTitle')} role="alert">
+          <Text size="sm">{t('historyViewer.saveFailedHelp')}</Text>
+          <Button mt="xs" size="xs" color="red" variant="light" onClick={() => getFs().retryHistoryStorage()}>
+            {t('historyViewer.retrySave')}
+          </Button>
+        </Alert>
+      )}
+      {historyStorageStatus === 'conflict' && (
+        <Alert color="yellow" title={t('historyViewer.copiesDifferTitle')} role="status">
+          <Text size="sm">{t('historyViewer.copiesDifferHelp')}</Text>
+          <Button mt="xs" size="xs" color="yellow" variant="light" onClick={() => getFs().retryHistoryStorage()}>
+            {t('historyViewer.retryArchive')}
+          </Button>
+        </Alert>
+      )}
+      {historyStorageStatus === 'archived' && (
+        <Alert color="blue" title={t('historyViewer.copyArchivedTitle')} role="status">
+          {t('historyViewer.copyArchivedHelp')}
+        </Alert>
+      )}
 
       <Group gap="sm" wrap="nowrap">
         <TextInput

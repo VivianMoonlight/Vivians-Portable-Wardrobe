@@ -40,6 +40,9 @@ export function loadFileSystemStore() {
         saved.set(key, value)
         writes.push([key, value])
       },
+      removeItem(key) {
+        saved.delete(key)
+      },
     },
     setTimeout,
     clearTimeout,
@@ -64,6 +67,17 @@ export function loadFileSystemStore() {
 
   const hook = module.exports.useFileSystemStore
   const fs = hook.getState()
+  const historySaved = new Map()
+  const historyArchives = new Map()
+  fs._historyPersistence = {
+    async read(member) { return historySaved.get(member) ?? null },
+    async write(member, data) { historySaved.set(member, JSON.parse(JSON.stringify(data))) },
+    async archiveLegacy(member, raw) {
+      const copies = historyArchives.get(member) || []
+      if (!copies.some(copy => copy.raw === raw)) historyArchives.set(member, [...copies, { raw, archivedAt: 'test' }])
+    },
+    async listLegacyArchives(member) { return historyArchives.get(member) || [] },
+  }
   const renders = []
   fs.renderer = { renderPreviewWithItem: (item) => renders.push(item) }
   return {

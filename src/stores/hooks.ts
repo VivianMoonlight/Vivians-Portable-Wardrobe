@@ -97,6 +97,7 @@ export interface FsCtx {
   selectedTagId: string | null
   fileTreeVersion: number
   historyVersion: number
+  historyStorageStatus: 'loading' | 'ready' | 'archived' | 'conflict' | 'error'
   renderer: any
   character: any
   characterItem: unknown[]
@@ -140,6 +141,17 @@ export interface FsCtx {
   loadHistoryRecord: (record: unknown) => void
   deleteHistoryRecord: (record: unknown) => boolean
   clearHistory: () => void
+  retryHistoryStorage: () => boolean
+  exportHistoryBackup: () => Promise<{
+    format: string
+    version: number
+    exportedAt: string
+    current: unknown
+    archivedLegacyCopies: Array<{ raw: string; data: unknown; archivedAt: string }>
+    unarchivedLegacyRaw: string | null
+    unarchivedLegacyData: unknown
+    archivesUnavailable: boolean
+  }>
   // filters / slot controls
   filterSnapshot: { groups?: unknown[]; visibleGroups?: unknown[]; items?: unknown[] }
   groupOperations: Record<string, { mode: 'original' | 'incoming'; operation: 'add' | 'replace' | 'full-replace'; baseModes: Record<string, 'original' | 'incoming' | 'empty'> }>
