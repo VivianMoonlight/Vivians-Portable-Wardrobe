@@ -159,9 +159,21 @@ export class WardrobeRepository {
     this.status = { state: 'idle', localSaved: false, error: '', conflicts: [], recoveryAvailable: false,
       lastSubmittedAt: null, lastVerifiedAt: null }
     this.operationTail = Promise.resolve()
+    this.cloudflareMode = false
   }
 
   get key() { return `VPWardrobe_index_${this.member}` }
+
+  setCloudflareMode(enabled) {
+    this.cloudflareMode = Boolean(enabled)
+    this.cancelPending()
+    if (!this.cloudflareMode || this.member === null || !this.status.localSaved) return
+    this.remoteError = null
+    this.pendingRemote = null
+    this.measure()
+    this.emit({ state: this.document.conflicts?.length ? 'conflict' : 'pending', error: '',
+      conflicts: this.document.conflicts || [] })
+  }
 
   serialize(operation) {
     const result = this.operationTail.then(operation, operation)
@@ -251,6 +263,11 @@ export class WardrobeRepository {
     if (!document) return null
     validateWardrobeIndex(document?.index)
     if (document.baseCloudIndex) validateWardrobeIndex(document.baseCloudIndex)
+    if (document.cloudflareBaseIndex) validateWardrobeIndex(document.cloudflareBaseIndex)
+    if (document.cloudflareRevision !== undefined
+      && (!Number.isSafeInteger(document.cloudflareRevision) || document.cloudflareRevision < 0)) {
+      throw new Error('Invalid Cloudflare wardrobe revision')
+    }
     if (document.recoveryKeys !== undefined
       && (!Array.isArray(document.recoveryKeys)
         || document.recoveryKeys.some(key => typeof key !== 'string'))) {
@@ -468,6 +485,31 @@ export class WardrobeRepository {
         this.ensureWriter()
       } else this.deviceId = getOrCreateWardrobeDeviceId(this.local, Number(this.member))
       this.markerKey = markerKeyForDevice(this.deviceId)
+      if (this.cloudflareMode) {
+        if (!stored && legacySources.length) {
+          this.index = migrateLegacyWardrobe(legacySources[0].value)
+          await this.archive('before-cloudflare-migration', {
+            local: legacySources.map(({ key, raw }) => ({ key, raw })) })
+        } else if (stored && legacySources.length) {
+          await this.archive('legacy-local-source', {
+            local: legacySources.map(({ key, raw }) => ({ key, raw })) })
+        }
+        await this.writeDocument(this.index, { pending: !equal(projectWardrobeCloudIndex(this.index),
+          this.document.cloudflareBaseIndex || createWardrobeIndex()) })
+        this.ensureWriter()
+        if (this.persistence) this.persistence.removeLegacyKeysIfUnchanged(this.local,
+          legacySources.map(({ key, raw }) => ({ key, raw })))
+        this.unrecognizedLocalDocumentKey = this.local.getItem(this.key) ? this.key : null
+        this.localRecoveryKeysOnDisk = new Set(this.localRecoveryKeys()
+          .filter(key => this.local.getItem(key) !== null))
+        this.rawLegacySourceKeys = new Set(this.legacySourceKeys()
+          .filter(key => this.local.getItem(key) !== null))
+        this.measure()
+        committed = true
+        this.emit({ localSaved: true, state: this.document.conflicts?.length ? 'conflict' : 'pending',
+          conflicts: this.document.conflicts || [], error: '' })
+        return true
+      }
       const raw = extensionSettings?.VPWardrobe
       let online = null
       try { online = cloudSnapshot(raw) } catch (error) { this.remoteError = error }
@@ -622,6 +664,7 @@ export class WardrobeRepository {
   }
 
   async observeHostChanges() {
+    if (this.cloudflareMode) return
     if (this.pendingRemote) {
       const observedHostRaw = this.lastObservedHostRaw
       const hostSignatures = this.hostSettingSignatures
@@ -668,6 +711,12 @@ export class WardrobeRepository {
   }
 
   measure(extensionSettings = this.getPlayer()?.ExtensionSettings) {
+    if (this.cloudflareMode) {
+      this.quota = { limitBytes: 0, wardrobeBytes: 0, otherExtensionsBytes: 0,
+        totalBytes: 0, remainingBytes: 0, usageRatio: 0, isWarning: false,
+        isOverLimit: false, proposalAvailable: false, packetBytes: 0 }
+      return this.quota
+    }
     const observed = measureObservedExtensionQuota(this.lastFreshSettings ?? extensionSettings)
     const observedSource = this.lastFreshSettings === null ? 'player-cache' : 'login-response'
     this.quota = { ...observed, packetBytes: 0, isWarning: false, isOverLimit: false,
@@ -714,6 +763,7 @@ export class WardrobeRepository {
 
   invalidateFreshness() {
     this.cancelPending()
+    if (this.cloudflareMode) return
     this.freshCloudObserved = false
     this.verifiedPayloadInSession = null
     this.submittedRaw = null
@@ -722,6 +772,7 @@ export class WardrobeRepository {
   }
 
   queue(delay = 800, { retry = false } = {}) {
+    if (this.cloudflareMode) return
     if (this.timer !== null) this.cancel(this.timer)
     if (!retry) this.attempt = 0
     this.timer = this.schedule(() => { this.timer = null; return this.flush() }, delay)
@@ -738,6 +789,7 @@ export class WardrobeRepository {
   flush(options) { return this.serialize(() => this.flushNow(options)) }
 
   async flushNow({ force = false } = {}) {
+    if (this.cloudflareMode) return false
     this.cancelPending({ resetAttempts: force })
     let transportFailed = false
     try {
@@ -835,6 +887,7 @@ export class WardrobeRepository {
   receiveCloud(event) { return this.serialize(() => this.receiveCloudNow(event)) }
 
   async receiveCloudNow({ extensionSettings, fresh = false, memberNumber = this.getPlayer()?.MemberNumber, schedule = true } = {}) {
+    if (this.cloudflareMode) return true
     let committed = false
     let beforeRemote = null
     try {
@@ -947,6 +1000,119 @@ export class WardrobeRepository {
     }
   }
 
+  observeCloudflareSnapshot(snapshot) {
+    return this.serialize(() => this.observeCloudflareSnapshotNow(snapshot))
+  }
+
+  async observeCloudflareSnapshotNow({ revision, index }) {
+    await this.ensureAccount()
+    if (!this.cloudflareMode) throw new Error('Cloudflare sync is not enabled')
+    if (!Number.isSafeInteger(revision) || revision < 0) throw new Error('Invalid Cloudflare revision')
+    const remote = projectWardrobeCloudIndex(index || createWardrobeIndex())
+    await this.mergeStored()
+    const knownRevision = this.document.cloudflareRevision || 0
+    if (revision < knownRevision) throw new Error('Cloudflare returned an older revision')
+    if (revision === knownRevision && this.document.cloudflareBaseIndex
+      && !equal(remote, this.document.cloudflareBaseIndex)) {
+      throw new Error('Cloudflare returned different data for the same revision')
+    }
+    const prior = this.document.conflictContext
+    const base = prior?.base || this.document.cloudflareBaseIndex || createWardrobeIndex()
+    const local = prior?.local || this.index
+    const rawResult = mergeWardrobeIndexesThreeWay(base, local, remote, { replicaId: this.replicaId })
+    const resolvedChoices = equal(remote, prior?.remote)
+      ? (prior?.resolvedChoices || []).filter(choice => rawResult.conflicts.some(conflict =>
+        conflict.kind === choice.kind && conflict.id === choice.id && conflict.field === choice.field))
+      : []
+    const result = resolvedChoices.length
+      ? resolveWardrobeConflicts(rawResult, resolvedChoices, { replicaId: this.replicaId }) : rawResult
+    const conflicts = result.conflicts
+    const merged = clone(result.merged)
+    const pending = conflicts.length > 0 || !equal(projectWardrobeCloudIndex(merged), remote)
+    await this.writeDocument(merged, { pending, conflicts,
+      conflictContext: conflicts.length ? { base, local, remote, guardedRemote: remote,
+        result, missing: [], resolvedChoices } : null,
+      cloudflareBaseIndex: conflicts.length ? base : remote, cloudflareRevision: revision,
+      lastVerifiedAt: pending ? this.document.lastVerifiedAt : Date.now() })
+    this.measure()
+    this.emit({ state: conflicts.length ? 'conflict' : pending ? 'pending' : 'verified',
+      conflicts, localSaved: true, error: '',
+      lastVerifiedAt: this.document.lastVerifiedAt || null })
+    return { revision, index: projectWardrobeCloudIndex(merged), conflicts, pending }
+  }
+
+  cloudflarePlan() {
+    return this.serialize(async () => {
+      await this.ensureAccount()
+      if (!this.cloudflareMode) throw new Error('Cloudflare sync is not enabled')
+      await this.mergeStored()
+      return { revision: this.document.cloudflareRevision || 0,
+        index: projectWardrobeCloudIndex(this.index),
+        conflicts: this.document.conflicts || [] }
+    })
+  }
+
+  resetCloudflareReference() {
+    return this.serialize(async () => {
+      await this.ensureAccount()
+      if (this.cloudflareMode) throw new Error('Turn off Cloudflare sync before changing recovery keys')
+      await this.mergeStored()
+      await this.writeDocument(this.index, {
+        cloudflareRevision: 0, cloudflareBaseIndex: createWardrobeIndex(),
+        conflicts: [], conflictContext: null, pending: true, lastVerifiedAt: null,
+      })
+    })
+  }
+
+  saveCloudflareBcBaseline(baseline) {
+    return this.serialize(async () => {
+      await this.ensureAccount()
+      if (this.cloudflareMode) throw new Error('Cloudflare sync is already enabled')
+      if (baseline !== null && typeof baseline !== 'string') {
+        throw new Error('Invalid BC wardrobe baseline')
+      }
+      await this.mergeStored()
+      await this.writeDocument(this.index, { cloudflareBcBaseline: baseline })
+    })
+  }
+
+  confirmCloudflareWrite({ revision, index }) {
+    return this.serialize(async () => {
+      await this.ensureAccount()
+      if (!this.cloudflareMode) throw new Error('Cloudflare sync is not enabled')
+      if (!Number.isSafeInteger(revision) || revision <= (this.document.cloudflareRevision || 0)) {
+        throw new Error('Cloudflare did not confirm a newer revision')
+      }
+      const uploaded = projectWardrobeCloudIndex(index)
+      await this.mergeStored()
+      const pending = !equal(projectWardrobeCloudIndex(this.index), uploaded)
+      await this.writeDocument(this.index, { cloudflareBaseIndex: uploaded,
+        cloudflareRevision: revision, pending, conflicts: [], conflictContext: null,
+        lastVerifiedAt: Date.now() })
+      this.measure()
+      this.emit({ state: pending ? 'pending' : 'verified', localSaved: true,
+        conflicts: [], error: '', lastVerifiedAt: this.document.lastVerifiedAt })
+      return !pending
+    })
+  }
+
+  leaveCloudflareMode() {
+    return this.serialize(async () => {
+      await this.ensureAccount()
+      if (!this.cloudflareMode) return
+      const changes = { pending: true, conflicts: [], conflictContext: null,
+        cloudflareBcBaseline: null,
+        baseCloudIndex: createWardrobeIndex(), baseCloudSequence: 0, baseAppliedSeq: {},
+        submittedVersions: [], submission: null, protocolVersion: undefined,
+        lastVerifiedPayload: null, markerSequence: 0, discardedSeqByDevice: {} }
+      if (this.document.conflicts?.length) {
+        await this.writeDocumentWithArchive(this.index, changes, 'cloudflare-conflict-before-bc',
+          { conflicts: this.document.conflicts, context: this.document.conflictContext })
+      } else await this.writeDocument(this.index, changes)
+      this.emit({ state: 'pending', conflicts: [], error: '', localSaved: true })
+    })
+  }
+
   resolveSyncConflict(resolutions) { return this.serialize(() => this.resolveSyncConflictNow(resolutions)) }
 
   async resolveSyncConflictNow(resolutions) {
@@ -960,6 +1126,9 @@ export class WardrobeRepository {
     }
     const missingChoices = resolutions.filter(choice => choice.kind === 'device')
     const mergeChoices = resolutions.filter(choice => choice.kind !== 'device')
+    if (this.cloudflareMode && missingChoices.length) {
+      throw new Error('Cloudflare conflicts do not use BC device markers')
+    }
     for (const choice of missingChoices) {
       if (choice.field !== 'sequence' || choice.choice !== 'discard'
         || !this.document.conflicts.some(conflict => conflict.type === 'missing-device'
@@ -994,8 +1163,10 @@ export class WardrobeRepository {
     await this.writeDocumentWithArchive(next, { pending: true, conflicts,
       conflictContext: conflicts.length ? { ...context, result: updated,
         guardedRemote: context.remote, missing: activeMissing, resolvedChoices: allChoices } : null,
-      baseCloudIndex: conflicts.length ? context.base : context.remote,
-      baseAppliedSeq, discardedSeqByDevice: discarded, submission: null },
+      ...(this.cloudflareMode
+        ? { cloudflareBaseIndex: conflicts.length ? context.base : context.remote }
+        : { baseCloudIndex: conflicts.length ? context.base : context.remote,
+          baseAppliedSeq, discardedSeqByDevice: discarded, submission: null }) },
     'sync-conflict-decision', recovery)
     this.submittedRaw = null
     this.measure()

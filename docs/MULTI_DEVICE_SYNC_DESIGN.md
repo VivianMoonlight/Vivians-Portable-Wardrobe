@@ -1,8 +1,24 @@
-# 多端衣橱同步：BC 单份正文与设备标记
+# 多端衣橱同步：可选 Cloudflare 与 BC 模式
 
-本方案只使用 BC 的 `Player.ExtensionSettings`。云端的 `VPWardrobe` 是**唯一一份压缩衣橱正文**；每个安装环境另有一个长度有固定上界的标记键，只记录版本和序号，不存衣服内容、衣物 ID 或操作历史。冲突候选、已核对基线和待上传修改留在各设备本机。用户确认这一空间优先的取舍：发现正文遗漏修改时，等待原设备恢复，或由用户明确选择放弃缺失修改。
+衣橱以本机 IndexedDB 为编辑与恢复基础，同一时间只选择一种主要云同步方式。默认的 BC 模式使用 `Player.ExtensionSettings`；可选的 Cloudflare 模式使用 Pages Functions + D1。开启 Cloudflare 后不再向 BC 上传衣橱内容；关闭后从当前本机衣橱恢复 BC 同步。Cloudflare 故障时不会自动回退到 BC，以免旧 BC 副本覆盖新修改。两种云端副本不会自动保持一致。
 
-这份文档区分**旧版 schema 3 行为**与**v4 目标协议**；协议是否已经在发布包中生效须以实际构建和验收为准。相关代码见 [`WardrobeRepository.js`](../src/services/WardrobeRepository.js)、[`wardrobe-sync-marker.js`](../src/services/wardrobe-sync-marker.js)、[`wardrobe-index.js`](../src/services/wardrobe-index.js) 和 [`extension-quota.js`](../src/services/extension-quota.js)。
+本文的 Cloudflare 部分描述当前工作树中的实现；能否在用户脚本中开启，还取决于构建时是否配置了已部署的服务地址。下文 BC 的 v4 正文与设备标记是独立的目标协议，须区分旧版 schema 3 行为；协议是否已在发布包生效，以构建和真机验收为准。实现入口见 [`WardrobeRepository.js`](../src/services/WardrobeRepository.js)、[`cloudflare-wardrobe-client.js`](../src/services/cloudflare-wardrobe-client.js)、[`cloudflare-wardrobe-sync.js`](../src/services/cloudflare-wardrobe-sync.js)、[`wardrobe-sync-marker.js`](../src/services/wardrobe-sync-marker.js) 和 [`extension-quota.js`](../src/services/extension-quota.js)。部署步骤与 API 契约见 [Cloudflare 服务说明](../cloudflare/README.md)。
+
+## Cloudflare 模式：修订号与条件写入
+
+Pages 托管只读的数据查看与 JSON 导出页；持久化写入由 Pages Function 通过 D1 完成，不能把静态 Pages 当作数据库。服务按恢复密钥的 SHA-256 摘要区分衣柜，每把密钥在 D1 只有一条当前记录，不保留服务端历史。`GET /api/wardrobe` 返回当前索引与修订号；`PUT` 带 `expectedRevision`。创建使用原子插入，更新使用 `WHERE revision = ?` 的条件写入：两个设备从同一版本提交，只有一个能成功，另一个收到 HTTP 409 和最新版本。客户端将本机已核对基线、待上传修改与新版本比较，可证明独立的修改自动合并；同一内容的不可避免冲突交给用户选择，不在服务器保存多份冲突正文。请求超时不能证明写入失败；后续重试先重新读取修订号，再判断是否需要提交。Cloudflare 返回成功的 HTTP 响应与修订号；BC 模式则没有逐次写入回执。
+
+在 **设置 → 同步方式** 中开启 Cloudflare 前，脚本必须在打包时配置 `VITE_CLOUDFLARE_SYNC_URL`。界面没有任意服务地址输入框；未配置地址的构建不能新开启 Cloudflare。开关状态与恢复密钥先按 BC 账号保存在本机 IndexedDB。首次开启生成 32 字节随机恢复密钥；也可在关闭 Cloudflare 时导入已有密钥，再开启并合并该密钥对应的云衣橱。导入另一把密钥是**切换到另一份云衣橱**，不是撤销旧密钥：旧密钥仍可访问原 D1 记录，该记录不会自动删除。另一把格式正确的密钥可能指向空衣橱，不能把空结果当作原密钥的数据已被删除。更换密钥或切换模式前应导出当前 JSON 备份。关闭 Cloudflare 不会删除 D1 中的旧衣橱或旧密钥，也不保证当前衣橱能装入 BC 的 180 kB 预算；超限时本机数据仍保留，BC 上传暂停。
+
+恢复密钥可在设置中显示、复制或下载；应在插件外妥善备份。插件还会尝试把明文密钥写入 `ExtensionSettings.VPWCloudKey`，供其他 BC 设备取得；BC 对这一提交不逐次回执，界面的“已提交”不是服务器确认。若未取得密钥，另一设备必须手动导入。持有密钥的人可读取和修改对应衣橱；密钥丢失且本机与 BC 中均无副本时，服务无法找回。数据查看页只在当前页面内存中使用密钥，不把它放进链接或网页存储。D1 保存密钥摘要，但衣橱正文**未端到端加密**，Cloudflare 服务运营者仍能读取衣物内容；能读取 BC 扩展设置中明文密钥的一方也可能访问这份云衣橱。传输使用 HTTPS，BC 站点发起的请求由 Function 的 CORS 白名单处理；CORS 不是身份认证。
+
+同一 BC 账号的其他设备若继续向 BC 同步，BC 旧副本与 Cloudflare 衣橱会分叉。清理旧 `VPWardrobe` 正文和设备标记前，必须取得新鲜 BC 登录快照，并与开启 Cloudflare 时的已知基线比较；若旧副本已变化、来源无法确认或没有新鲜快照，应暂停清理并让用户审阅，不能把这些修改当作可丢弃的旧数据。确认 Cloudflare 已保存且 BC 旧副本未变后，才可提交清理，同时保留 `VPWCloudKey`。这次 BC 清理仍没有逐次回执，只有后续完整登录回读才可核对；检查后的迟到 BC 写入也不能靠客户端快照比较阻止，因此其他设备仍须切换或停用 BC 同步。在核对完成前，旧副本可能继续占用 BC 共享预算。
+
+Cloudflare 模式的每份云衣橱 JSON 主动限制为 **1,800,000 字节**，与 BC 模式的 **180000 字节**预算是两种独立限制。当前免费服务另设 100 把密钥、每个 IP 每 UTC 日创建 2 把、每把密钥每 UTC 日写入 500 次的保护上限；达到限制时保留本机修改并提示重试或处理容量。D1 和 Pages Functions 还有 Cloudflare 平台限制，参见 [D1 容量与行大小](https://developers.cloudflare.com/d1/platform/limits/)、[D1 用量](https://developers.cloudflare.com/d1/platform/pricing/)及 [Pages Functions 用量](https://developers.cloudflare.com/pages/functions/pricing/)。
+
+## BC 模式：单份正文与设备标记
+
+BC 模式只使用 `Player.ExtensionSettings` 同步衣橱。云端的 `VPWardrobe` 是**唯一一份压缩衣橱正文**；每个安装环境另有一个长度有固定上界的标记键，只记录版本和序号，不存衣服内容、衣物 ID 或操作历史。冲突候选、已核对基线和待上传修改留在各设备本机。此模式按空间优先取舍：发现正文遗漏修改时，等待原设备恢复，或由用户明确选择放弃缺失修改。以下协议、容量和验证章节只讨论 BC 模式。
 
 ## BC 接口边界
 

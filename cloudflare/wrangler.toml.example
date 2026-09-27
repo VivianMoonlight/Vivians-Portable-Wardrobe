@@ -1,0 +1,8 @@
+name = "vpw-cloud-sync"
+compatibility_date = "2026-09-27"
+pages_build_output_dir = "./public"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "vpw-cloud-sync"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"

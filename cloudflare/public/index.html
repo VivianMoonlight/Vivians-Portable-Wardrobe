@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <title>VPW 云端数据</title>
+    <link rel="stylesheet" href="/style.css">
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <main class="vpw-page">
+      <header class="vpw-hero">
+        <span class="vpw-eyebrow">Vivian's Portable Wardrobe</span>
+        <h1>云端衣柜</h1>
+        <p>查看和导出 Cloudflare 上的衣柜。这里使用衣柜设置中的恢复密钥，不需要 BC 账号或电子邮箱。</p>
+      </header>
+
+      <section class="vpw-card vpw-connect" aria-labelledby="vpw-connect-heading">
+        <div class="vpw-card-title">
+          <div>
+            <h2 id="vpw-connect-heading">连接衣柜</h2>
+            <p>从插件的 Cloudflare 同步设置中复制恢复密钥。密钥只保留在当前页面内存中；关闭或刷新页面后需要重新输入。</p>
+          </div>
+          <span id="vpw-connection" class="vpw-badge">未连接</span>
+        </div>
+        <form id="vpw-key-form" autocomplete="off">
+          <label for="vpw-key">恢复密钥</label>
+          <div class="vpw-key-row">
+            <input id="vpw-key" type="password" inputmode="text" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" placeholder="vpw1_…" required>
+            <button type="submit">连接</button>
+          </div>
+        </form>
+        <div id="vpw-connected-controls" class="vpw-connected-controls" hidden>
+          <button id="vpw-refresh" type="button" class="vpw-button-secondary">刷新数据</button>
+          <button id="vpw-disconnect" type="button" class="vpw-button-secondary">断开连接</button>
+        </div>
+        <p id="vpw-message" role="status" aria-live="polite"></p>
+      </section>
+
+      <section id="vpw-data" class="vpw-card" aria-labelledby="vpw-data-heading" hidden>
+        <div class="vpw-card-title">
+          <div>
+            <h2 id="vpw-data-heading">当前数据</h2>
+            <p>这里只显示这把密钥对应的衣柜。删除和改名仍请在插件中操作。</p>
+          </div>
+          <button id="vpw-export" type="button">导出 JSON 备份</button>
+        </div>
+        <dl class="vpw-stats">
+          <div><dt>云端修订</dt><dd id="vpw-revision">—</dd></div>
+          <div><dt>衣物</dt><dd id="vpw-outfits">—</dd></div>
+          <div><dt>标签</dt><dd id="vpw-tags">—</dd></div>
+          <div><dt>数据大小</dt><dd id="vpw-size">—</dd></div>
+        </dl>
+        <p id="vpw-updated" class="vpw-updated"></p>
+        <label for="vpw-search">查找衣物</label>
+        <input id="vpw-search" type="search" placeholder="按名称或标签查找">
+        <p id="vpw-list-note" class="vpw-list-note"></p>
+        <ul id="vpw-outfit-list" class="vpw-outfit-list"></ul>
+      </section>
+
+      <footer>请妥善保存恢复密钥。任何持有这把密钥的人都能读取并修改对应的云端衣柜。</footer>
+    </main>
+  </body>
+</html>

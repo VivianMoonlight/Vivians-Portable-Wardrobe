@@ -11,6 +11,8 @@ import { hostWindow } from '@/utils/host-window.js'
 import { FileItem } from './FileItem'
 import { SyncConflictReview } from './SyncConflictReview'
 import libraryStyles from './wardrobe-library.css?inline'
+import { cloudflareSyncErrorKey } from '@/ui/cloudflare-sync-error'
+import { CLOUDFLARE_WARDROBE_LIMIT_BYTES, estimateCloudflareWardrobeBytes } from '@/ui/cloudflare-size.js'
 
 function formatKB(bytes: number): string {
   return `${(Math.max(0, bytes) / 1000).toFixed(1)} kB`
@@ -34,15 +36,23 @@ interface FileManagerProps {
 }
 
 export function FileManager({ onSelectOutfit }: FileManagerProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const dialog = useDialog()
   const isMobile = useIsMobile()
   const actions = useWardrobeActions()
+  const wardrobeIndex = useFsSelector((fs) => fs.wardrobeIndex)
   const outfits = useFsSelector((fs) => fs.outfits)
   const tags = useFsSelector((fs) => fs.tags)
   const selectedTagId = useFsSelector((fs) => fs.selectedTagId)
   const quota = useFsSelector((fs) => fs.cloudQuota)
   const sync = useFsSelector((fs) => fs.syncStatus)
+  const cloudflare = useFsSelector((fs) => fs.cloudflareSyncStatus)
+  const cloudflareErrorKey = cloudflareSyncErrorKey(cloudflare.errorCode)
+  const cloudflareBytes = useMemo(() => cloudflare.enabled
+    ? estimateCloudflareWardrobeBytes(wardrobeIndex) : 0, [cloudflare.enabled, wardrobeIndex])
+  const cloudflareUsage = cloudflareBytes / CLOUDFLARE_WARDROBE_LIMIT_BYTES
+  const cloudflareSizeLabel = cloudflareBytes >= 1_000_000
+    ? `${(cloudflareBytes / 1_000_000).toFixed(2)} MB` : formatLocalStorageBytes(cloudflareBytes)
   const fileViewMode = useWbSelector((wb) => wb.wardrobeUi.fileViewMode)
   const [searchQuery, setSearchQuery] = useState('')
   const [editingOutfit, setEditingOutfit] = useState<WardrobeOutfit | null>(null)
@@ -148,6 +158,10 @@ export function FileManager({ onSelectOutfit }: FileManagerProps) {
 
   const retrySync = async () => {
     try { await getFs().syncNow() } catch (error) { await reportError(error) }
+  }
+
+  const retryCloudflareSync = async () => {
+    try { await getFs().syncCloudflareNow() } catch (error) { await reportError(error) }
   }
 
   const localStorageQuotaError = sync.errorCode === 'local-storage-quota'
@@ -335,7 +349,60 @@ export function FileManager({ onSelectOutfit }: FileManagerProps) {
         </Stack>
       </Paper>}
 
-      <Paper withBorder radius="md" p={8} className="vpw-library-quota" data-expanded={showQuotaDetails || undefined}>
+      {cloudflare.enabled ? <Paper withBorder radius="md" p={8} className="vpw-library-quota">
+        <Stack gap={4}>
+          <Group justify="space-between" gap={4}>
+            <Text size="xs" fw={600}>{t('cloudflareSync.enable')}</Text>
+            {!localSaveError && <Badge size="sm" variant="light" color={!cloudflare.ready ? 'orange' : cloudflare.error ? 'red' : cloudflare.pending ? 'blue' : cloudflare.lastSyncedAt && !cloudflare.syncing ? 'teal' : 'gray'}>
+              {!cloudflare.ready ? t('cloudflareSync.serviceNotReady') : cloudflare.syncing ? t('cloudflareSync.syncingShort') : cloudflare.error
+                ? t('cloudflareSync.needsAttentionShort') : cloudflare.pending ? t('cloudflareSync.pendingShort') : cloudflare.lastSyncedAt
+                  ? t('cloudflareSync.syncedShort')
+                  : t('cloudflareSync.waiting')}
+            </Badge>}
+          </Group>
+          <Group justify="space-between" gap={4}>
+            <Text size="xs" c="dimmed">{t('cloudflareSync.estimatedSize')}</Text>
+            <Text size="xs" fw={600} c={cloudflareUsage > 1 ? 'red' : cloudflareUsage >= 0.9 ? 'orange' : undefined}>
+              {cloudflareSizeLabel} / 1.8 MB
+            </Text>
+          </Group>
+          <Progress size={4} value={Math.min(100, cloudflareUsage * 100)}
+            color={cloudflareUsage > 1 ? 'red' : cloudflareUsage >= 0.9 ? 'orange' : 'teal'}
+            aria-label={t('cloudflareSync.sizeAria', { used: cloudflareSizeLabel })} />
+          <Text size="xs" c="dimmed">{t('cloudflareSync.sizeHint')}</Text>
+          {cloudflareUsage > 1 && <Text size="xs" c="red">{t('cloudflareSync.sizeOver')}</Text>}
+          {cloudflare.lastSyncedAt && !cloudflare.error && !cloudflare.pending && <Text size="xs" c="dimmed">
+            {t('cloudflareSync.lastSynced', {
+              time: new Date(cloudflare.lastSyncedAt).toLocaleString(i18n.language === 'zh' ? 'zh-CN' : 'en-US'),
+            })}
+          </Text>}
+          {!localSaveError && <Group justify="space-between" gap={4}>
+            <Text size="xs" c={sync.localSaved ? 'dimmed' : 'red'}>{t(sync.localSaved ? 'library.localSaved' : 'library.localUnsaved')}</Text>
+            {conflicts.length > 0
+              ? <Button variant="light" color="orange" size="compact-xs" onClick={() => setConflictReviewOpened(true)}>
+                {t('library.conflict.review', { count: conflicts.length })}
+              </Button>
+              : <Button variant="subtle" size="compact-xs" disabled={!cloudflare.ready || cloudflare.syncing}
+                onClick={() => { void retryCloudflareSync() }}>{t('cloudflareSync.syncNow')}</Button>}
+          </Group>}
+          {!cloudflare.ready && <Text size="xs" c="orange">{t('cloudflareSync.serviceUnavailable')}</Text>}
+          {cloudflare.bcLegacyChanged ? <Group justify="space-between" gap={4}>
+            <Text size="xs" c="orange">{t('cloudflareSync.bcLegacyChangedShort')}</Text>
+            <Button variant="subtle" size="compact-xs" onClick={() => getWb().setActiveTab('settings')}>
+              {t('fileManagerPanel.tabSettings')}
+            </Button>
+          </Group> : <>
+            {cloudflare.bcLegacyRetained === true && <Text size="xs" c="orange">{t('cloudflareSync.bcCleanupPendingShort')}</Text>}
+            {cloudflare.bcLegacyRetained == null && <Text size="xs" c="dimmed">{t('cloudflareSync.bcCleanupUnknownShort')}</Text>}
+          </>}
+          {sync.recoveryAvailable && <Button variant="subtle" size="compact-xs" style={{ alignSelf: 'flex-start' }}
+            onClick={actions.saveRecoveryBackup}>{t('library.exportRecovery')}</Button>}
+          {conflicts.length > 0 && <Text size="xs" c="orange">{t('library.conflict.paused')}</Text>}
+          {cloudflare.error && <Text size="xs" c="red" style={{ overflowWrap: 'anywhere' }}>
+            {cloudflareErrorKey ? t(cloudflareErrorKey) : cloudflare.error}
+          </Text>}
+        </Stack>
+      </Paper> : <Paper withBorder radius="md" p={8} className="vpw-library-quota" data-expanded={showQuotaDetails || undefined}>
         <Stack gap={4}>
           <Group justify="space-between" gap={4}>
             <Group gap={4} wrap="nowrap">
@@ -397,7 +464,7 @@ export function FileManager({ onSelectOutfit }: FileManagerProps) {
           {sync.error && !localSaveError && sync.errorCode !== 'device-limit' && sync.state !== 'quota' && sync.state !== 'conflict'
             && <Text size="xs" c="red" style={{ overflowWrap: 'anywhere' }}>{sync.error}</Text>}
         </Stack>
-      </Paper>
+      </Paper>}
 
       <Drawer opened={filtersOpened} onClose={() => setFiltersOpened(false)} position="left" size="min(340px, 88vw)" lockScroll={false}
         closeOnEscape={!filterTagPickerOpened}

@@ -72,6 +72,20 @@ export interface WardrobeSyncStatus {
   conflicts?: WardrobeSyncConflict[]
 }
 
+export interface CloudflareSyncStatus {
+  enabled: boolean
+  ready: boolean
+  syncing: boolean
+  pending: boolean
+  error: string
+  errorCode: string | null
+  lastSyncedAt: number | null
+  keyAvailable: boolean
+  keySavedToBC: boolean
+  bcLegacyRetained: boolean | null
+  bcLegacyChanged: boolean
+}
+
 export interface WardrobeSyncConflict {
   kind: string
   id: string
@@ -92,6 +106,7 @@ export interface WardrobeConflictResolution {
 /** Subset of the fileSystem store surface consumed by the React UI. */
 export interface FsCtx {
   // state
+  wardrobeIndex: unknown
   outfits: WardrobeOutfit[]
   tags: WardrobeTag[]
   selectedTagId: string | null
@@ -108,6 +123,7 @@ export interface FsCtx {
   activeFilters: string[]
   cloudQuota: CloudQuota
   syncStatus: WardrobeSyncStatus
+  cloudflareSyncStatus: CloudflareSyncStatus
   // actions
   initialize: (character?: any, options?: Record<string, unknown> & { preserveSlotControls?: boolean }) => Promise<void>
   selectTag: (id: string | null) => void
@@ -123,6 +139,11 @@ export interface FsCtx {
   exportRecovery: () => Promise<Array<{ key: string; reason: string; data: unknown }>>
   importWardrobe: (parsed: unknown, options?: { tagName?: string }) => Promise<{ count: number }>
   syncNow: () => Promise<boolean>
+  enableCloudflareSync: () => Promise<boolean>
+  disableCloudflareSync: () => Promise<boolean>
+  syncCloudflareNow: () => Promise<boolean>
+  exportCloudflareKey: () => Promise<string>
+  importCloudflareKey: (key: string) => Promise<boolean>
   resolveSyncConflict: (resolutions: WardrobeConflictResolution[]) => Promise<unknown>
   setActiveItem: (item: FileNode | -1, options?: { ignoreLock?: boolean }) => void
   selectOutfit: (item: FileNode) => boolean

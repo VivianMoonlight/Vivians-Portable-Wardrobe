@@ -51,14 +51,18 @@ For your own character, **Settings → Outfit controls → Allow force apply to 
   旧文件夹迁移为完整路径标签，删除标签会保留衣物。
 - Local-save status and cloud progress are shown separately. Each outfit can be **Cloud enabled** or kept on **This device only**.
   本机保存与云端进度分别显示，每件衣物可选择 **参与云同步** 或 **仅保存在本机**。
-- All extensions share a **180000-byte (180 kB)** settings budget. The storage panel shows VPW's share and other extensions' usage. Uploads pause when over the limit; saved local outfits remain available.
-  所有扩展共享 **180000 字节（180 kB）** 设置容量。面板显示 VPW 与其他扩展的占用，超限会暂停上传，已保存的本机衣物仍可使用。
+- **BC sync** uses `Player.ExtensionSettings`. VPW conservatively budgets **180000 bytes (180 kB)** for the entire settings object and shows its share alongside other extensions. BC uploads pause when the budget is exceeded; saved local outfits remain available.
+  **BC 同步**使用 `Player.ExtensionSettings`。VPW 为整个扩展设置对象保守预留 **180000 字节（180 kB）** 预算，并分别显示衣橱和其他扩展的占用。超过预算时会暂停 BC 上传，本机已保存的衣物仍可使用。
+- **Cloudflare sync** is optional and requires a build configured with a deployed [Pages Functions + D1 service](cloudflare/README.md). Enable it in **Settings → Sync method**. Cloudflare then becomes the primary sync source; VPW stops uploading wardrobe content to BC. The service accepts up to **1.8 MB of wardrobe JSON per recovery key**, subject to its other limits. Keep an external copy of the recovery key: anyone with it can read or change that cloud wardrobe. VPW also attempts to save the key in BC extension settings, which still uses part of the BC budget. Cloudflare stores outfit data without end-to-end encryption.
+  **Cloudflare 同步**是可选项，需要脚本构建时已配置并部署 [Pages Functions + D1 服务](cloudflare/README.md)。在 **设置 → 同步方式** 中开启后，Cloudflare 成为主要同步源，VPW 不再向 BC 上传衣橱内容。服务对每把恢复密钥最多接受 **1.8 MB 衣橱 JSON**，另有服务容量限制。请在插件外另存恢复密钥；持有密钥的人可以读取或修改对应云衣橱。VPW 也会尝试将密钥保存到 BC 扩展设置，因此它仍占用一小部分 BC 预算。Cloudflare 上的衣物数据没有端到端加密。
+- Turning Cloudflare sync off resumes BC sync from the current local wardrobe; it does not delete the Cloudflare copy. Importing a different recovery key switches to a different cloud wardrobe: the old key stays valid and its D1 record remains. Use the **same** key on every device. Devices that keep using BC sync can diverge; cleanup of the old BC copy must wait for a fresh BC comparison and pause for review if it changed. A Cloudflare outage does not silently switch back to BC. Export a JSON backup before changing modes or keys.
+  关闭 Cloudflare 同步后，当前本机衣橱会重新走 BC 同步；Cloudflare 副本不会自动删除。导入另一把恢复密钥会切换到另一份云衣橱，旧密钥仍有效，旧 D1 记录也不会删除。所有设备应使用**同一把**密钥；继续使用 BC 同步的设备可能与 Cloudflare 分叉。清理旧 BC 副本前必须核对新鲜 BC 快照，若发现变化则暂停并交由用户审阅。Cloudflare 不可用时不会悄悄切回 BC。切换模式或密钥前请导出 JSON 备份。
 - The wardrobe index and recovery copies now use IndexedDB. On first launch, VPW copies readable older `localStorage` records there and removes each unchanged old key only after the database transaction completes. Browser storage policies can still reject an IndexedDB write; a failed save is reported before an outfit is treated as saved or uploaded. The separate `localStorage` usage breakdown describes legacy data, not available space. Export the wardrobe and recovery backups before changing site data. Do not clear all site data.
   衣柜索引与恢复副本现在保存在 IndexedDB。首次打开时，VPW 会迁移可读取的旧 `localStorage` 记录；数据库事务完成后，才移除内容仍相同的旧键。浏览器存储策略仍可能拒绝 IndexedDB 写入；保存失败的衣物不会被标为已保存或上传。`localStorage` 用量明细只用于查看旧数据，不代表可用空间。更改站点数据前，请分别导出衣柜和恢复备份；不要清除整个站点数据。
-- BC does not acknowledge each `AccountUpdate`. After a successful send call, VPW shows the upload as assumed saved; the next full login reads cloud data to detect discrepancies or conflicts. Export a JSON backup before switching devices.
-  BC 不会逐次回执 `AccountUpdate`。提交调用成功后，VPW 默认显示同步成功；下次完整登录回读云端数据，用于发现差异或冲突。换设备前请导出 JSON 备份。
+- In BC mode, BC does not acknowledge each `AccountUpdate`. After a successful send call, VPW treats the upload as assumed saved; the next full login reads cloud data to detect discrepancies or conflicts. Cloudflare mode uses an HTTP response and revision check instead.
+  在 BC 模式下，BC 不会逐次回执 `AccountUpdate`。提交调用成功后，VPW 默认视为同步成功；下次完整登录回读数据，用于发现差异或冲突。Cloudflare 模式则根据 HTTP 响应与修订号核对结果。
 
-See the [user guide](USER_GUIDE.md), [中文快速开始](docs/user-docs/01-quick-start.md), [core workflows / 核心工作流](docs/user-docs/02-core-workflows.md) and [sync & storage / 云同步与容量](docs/user-docs/06-sync-and-storage.md).
+See the [user guide](USER_GUIDE.md), [中文快速开始](docs/user-docs/01-quick-start.md), [core workflows / 核心工作流](docs/user-docs/02-core-workflows.md), [sync & storage / 云同步与容量](docs/user-docs/06-sync-and-storage.md) and [multi-device sync design / 多端同步设计](docs/MULTI_DEVICE_SYNC_DESIGN.md).
 
 ## Development / 开发
 

@@ -195,6 +195,10 @@ function injectApp(): void {
           if (received) showStatus('')
         }).catch((error: unknown) => console.error('[VPW] cloud observation failed', error))
       } else {
+        if (wardrobe.cloudflareSyncStatus?.enabled) {
+          void wardrobe.syncCloudflareNow()
+          return
+        }
         repository()?.invalidateFreshness()
         showStatus(message(
           '这次登录开始于衣柜接管前。请重新登录 BC 后再同步。',
@@ -205,10 +209,19 @@ function injectApp(): void {
     onStorage: () => {},
     onOnline: () => {
       if (!ownsWriter() || desiredMember !== loadedMember) return
+      if (wardrobe.cloudflareSyncStatus?.enabled) {
+        void wardrobe.syncCloudflareNow()
+        return
+      }
       repository()?.invalidateFreshness()
     },
     onOffline: () => {
       if (!ownsWriter()) return
+      if (wardrobe.cloudflareSyncStatus?.enabled) {
+        wardrobe.cloudflareSyncStatus = { ...wardrobe.cloudflareSyncStatus,
+          error: message('当前离线，修改已保存在本机。', 'Offline; changes are saved on this device.') }
+        return
+      }
       const repo = repository()
       repo?.invalidateFreshness()
       repo?.emit({ state: 'offline' })
