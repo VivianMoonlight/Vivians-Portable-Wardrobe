@@ -56,21 +56,6 @@ test('one account has one writer and a waiting tab takes over after release', as
   ])
 })
 
-test('a pre-login tab can yield the origin lock and reacquire after the active tab closes', async () => {
-  const locks = new FakeLocks()
-  const loginTab = createWardrobeTabLock({ locks })
-  const wardrobeTab = createWardrobeTabLock({ locks })
-  assert.equal(await loginTab.acquire('origin'), true)
-  const waitingWardrobe = wardrobeTab.acquire('origin')
-  loginTab.release() // Visibility changed to hidden before login.
-  assert.equal(await waitingWardrobe, true)
-  const visibleAgain = loginTab.acquire('origin')
-  wardrobeTab.release()
-  assert.equal(await visibleAgain, true)
-  loginTab.dispose()
-  wardrobeTab.dispose()
-})
-
 test('different BC accounts use independent locks', async () => {
   const locks = new FakeLocks()
   const first = createWardrobeTabLock({ locks })
@@ -80,6 +65,16 @@ test('different BC accounts use independent locks', async () => {
   assert.equal(first.isHeldFor(43), false)
   first.dispose()
   second.dispose()
+})
+
+test('only a numeric account can claim a lock', async () => {
+  const locks = new FakeLocks()
+  const tab = createWardrobeTabLock({ locks })
+  for (const member of ['origin', 'undefined', '-1', '01', '9007199254740992']) {
+    assert.equal(await tab.acquire(member), false)
+  }
+  assert.equal(locks.held.size, 0)
+  tab.dispose()
 })
 
 test('account switch cancels a queued request without a stale takeover', async () => {

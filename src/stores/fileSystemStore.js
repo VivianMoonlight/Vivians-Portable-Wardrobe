@@ -63,10 +63,23 @@ function isActiveHistorySession(store, session) {
   return store._historySession === session
 }
 
+function ownsHistoryWriter(member) {
+  return hostWindow.__VPW_WARDROBE_LOCK_OWNER === true
+    && hostWindow.__VPW_WARDROBE_LOCK_MEMBER === String(member)
+    && String(hostWindow.Player?.MemberNumber) === String(member)
+}
+
+function requireHistoryWriter(member) {
+  if (!ownsHistoryWriter(member)) {
+    throw Object.assign(new Error('History writer lock was lost'), { code: 'writer-lost' })
+  }
+}
+
 function reportHistoryStorageFailure(store, session, error) {
   session.status = 'error'
+  session.writerLost = error?.code === 'writer-lost'
   if (isActiveHistorySession(store, session)) store.historyStorageStatus = 'error'
-  if (!session.warned) {
+  if (!session.warned && !session.writerLost) {
     session.warned = true
     console.warn('[VPW] History storage unavailable; recent changes remain in this tab', error)
   }
@@ -98,9 +111,11 @@ function flushHistorySession(store, session) {
   session.writePromise = (async () => {
     while (session.savedRevision < session.dirtyRevision) {
       const revision = session.dirtyRevision
+      requireHistoryWriter(session.member)
       await store._historyPersistence.write(session.member, session.history.toJSON())
       session.savedRevision = revision
     }
+    session.writerLost = false
     session.status = historyStorageState(session)
     if (isActiveHistorySession(store, session)) store.historyStorageStatus = session.status
   })().catch(error => reportHistoryStorageFailure(store, session, error)).finally(() => {
@@ -121,20 +136,24 @@ async function settleLegacyHistory(store, session) {
         session.legacyNeedsArchive = true
       }
       if (session.legacyNeedsArchive) {
+        requireHistoryWriter(session.member)
         await store._historyPersistence.archiveLegacy(session.member, raw)
         session.archivedLegacy = true
       }
+      requireHistoryWriter(session.member)
       if (localStorage.getItem(session.key) === raw) localStorage.removeItem(session.key)
       session.legacyConflict = localStorage.getItem(session.key) !== null
     }
   } catch (error) {
     session.legacyConflict = true
-    if (!session.warnedArchive) {
+    session.writerLost = error?.code === 'writer-lost'
+    if (!session.warnedArchive && !session.writerLost) {
       session.warnedArchive = true
       console.warn('[VPW] Older history copy remains in localStorage', error)
     }
   }
   session.legacySettled = true
+  if (!session.legacyConflict) session.writerLost = false
   session.status = historyStorageState(session)
   if (isActiveHistorySession(store, session)) store.historyStorageStatus = session.status
   if (session.dirtyRevision > session.savedRevision) flushHistorySession(store, session)
@@ -149,6 +168,7 @@ async function loadHistorySession(store, session) {
     const hasStoredHistory = data !== null
     if (data === null && session.legacyRaw !== null) {
       if (!isHistoryTree(session.legacyData)) throw new Error('Legacy history is invalid')
+      requireHistoryWriter(session.member)
       await store._historyPersistence.write(session.member, session.legacyData)
       data = session.legacyData
     }
@@ -256,7 +276,7 @@ const fileSystemStoreDefinition = {
     historyVersion: 0,
     historyStorageStatus: 'loading',
     _historySession: null,
-    _historyPersistence: new HistoryPersistence(() => hostWindow.indexedDB),
+    _historyPersistence: new HistoryPersistence(() => hostWindow.indexedDB, ownsHistoryWriter),
     _historyLocalStorage: hostWindow.localStorage,
     renderer: new RenderService({ drawCallbacks: RenderApi }),
     thumbnailRefreshVersion: 0,
@@ -1197,7 +1217,14 @@ const fileSystemStoreDefinition = {
      */
     loadHistory() {
       const member = getPlayerMemberSuffix()
-      if (this._historySession?.member === member) return this._historySession.readyPromise
+      if (this._historySession?.member === member) {
+        if (this.history !== this._historySession.history) {
+          this.history = this._historySession.history
+          this.historyVersion = (this.historyVersion || 0) + 1
+        }
+        if (this._historySession.writerLost && ownsHistoryWriter(member)) this.retryHistoryStorage()
+        return this._historySession.readyPromise
+      }
       if (this._historySession) {
         const previousFilter = this.history.filter
         this.history = new HistoryRecord('History', 100)
@@ -1224,6 +1251,7 @@ const fileSystemStoreDefinition = {
         initialData: this.history.toJSON(),
         pendingOperations: [], dirtyRevision: 0, savedRevision: 0,
         loaded: false, writing: false, status: 'loading', warned: false, warnedArchive: false,
+        writerLost: false,
         legacyConflict: false, legacyNeedsArchive: false, legacySettled: false, archivedLegacy: false,
         readyPromise: null, writePromise: null,
       }

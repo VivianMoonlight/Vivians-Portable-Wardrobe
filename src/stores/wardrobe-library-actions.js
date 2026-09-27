@@ -57,6 +57,7 @@ export const wardrobeLibraryActions = {
   _getRepository() {
     if (!this._repository) {
       const canWrite = member => hostWindow.__VPW_WARDROBE_LOCK_OWNER === true
+        && hostWindow.__VPW_WARDROBE_LOCK_MEMBER === String(member)
         && String(hostWindow.Player?.MemberNumber) === String(member)
       this._repository = new WardrobeRepository({
         getPlayer: () => hostWindow.Player,

@@ -250,6 +250,7 @@ test('switching accounts through loadAll clears the old outfit lock, selection a
   fs.history.addRecord([part('First account history')])
   fs.saveHistory()
   hostWindow.Player = { MemberNumber: 43, ExtensionSettings: {} }
+  hostWindow.__VPW_WARDROBE_LOCK_MEMBER = '43'
   assert.equal(await fs.loadAll(), true)
   assert.equal(fs.lockedItem, null)
   assert.equal(fs.selectedTagId, null)
@@ -273,17 +274,31 @@ test('an account change detected during an action rejects that action and clears
   assert.equal(fs.previewItem.data.some(item => item.Name === 'Old account dress'), false)
 })
 
-test('an old account lock cannot upload after Player switches accounts without a login callback', async () => {
+test('a new account lock does not upload without a fresh login callback', async () => {
   const { fs, hostWindow } = await setup()
   const sent = []
   hostWindow.ServerSend = (event, fields) => sent.push([event, fields])
   hostWindow.Player = { MemberNumber: 43, ExtensionSettings: {} }
   await assert.rejects(() => fs.createTag('Account change'), /Account changed/)
+  hostWindow.__VPW_WARDROBE_LOCK_MEMBER = '43'
   assert.equal(await fs.receiveCloud({ extensionSettings: {}, memberNumber: 43 }), true)
   await fs.addOutfit(outfit('New account draft'))
   assert.equal(await fs.syncNow(), false)
   assert.equal(sent.length, 0)
   assert.equal(fs.outfits.length, 1)
+})
+
+test('an old account lock cannot write the new account IndexedDB record', async () => {
+  const { fs, hostWindow } = await setup()
+  const persistence = fs._repository.persistence
+  const oldDocument = await persistence.read('42')
+  hostWindow.Player = { MemberNumber: 43, ExtensionSettings: {} }
+  assert.equal(hostWindow.__VPW_WARDROBE_LOCK_MEMBER, '42')
+
+  await assert.rejects(() => persistence.write('43', { index: createWardrobeIndex() }),
+    /writer lock was lost/)
+  assert.equal(await persistence.read('43'), null)
+  assert.deepEqual(await persistence.read('42'), oldDocument)
 })
 
 test('a selected tag follows the canonical alias when a same-name remote tag sorts before it', async () => {

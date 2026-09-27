@@ -15,8 +15,11 @@ import { Root } from '@/ui/Root'
 import '@/i18n'
 
 const HOST_ID = 'vpw-shadow-host'
-const LOCK_SCOPE = 'origin'
 const w = hostWindow as any
+const currentMember = (): string | null => {
+  const member = String(w.Player?.MemberNumber ?? '')
+  return /^(0|[1-9]\d*)$/.test(member) && Number.isSafeInteger(Number(member)) ? member : null
+}
 
 // The repository's transport also checks the member bound below.
 if (!doc.getElementById(HOST_ID)) {
@@ -57,21 +60,22 @@ function injectApp(): void {
   let generation = 0
   let lockRun = 0
   let lockPending = false
+  let pendingMember: string | null = null
   let waitTimer: ReturnType<typeof setTimeout> | null = null
   let disposeRender = () => {}
   const loginCapture = createWardrobeLoginCapture()
   const repository = () => wardrobe._repository
   const lock = createWardrobeTabLock({
     locks: w.navigator?.locks,
-    onChange: (owned: boolean) => {
+    onChange: (owned: boolean, member: string | null) => {
       w.__VPW_WARDROBE_LOCK_OWNER = owned
-      w.__VPW_WARDROBE_LOCK_MEMBER = owned ? loadedMember : null
+      w.__VPW_WARDROBE_LOCK_MEMBER = owned ? member : null
       if (!owned) repository()?.cancelPending()
     },
   })
-  const ownsWriter = () => lock.isHeldFor(LOCK_SCOPE)
-    && loadedMember !== null && w.__VPW_WARDROBE_LOCK_MEMBER === loadedMember
-    && String(w.Player?.MemberNumber) === loadedMember
+  const ownsWriter = () => loadedMember !== null && lock.isHeldFor(loadedMember)
+    && w.__VPW_WARDROBE_LOCK_MEMBER === loadedMember
+    && currentMember() === loadedMember
 
   const stopWaitTimer = () => {
     if (waitTimer !== null) w.clearTimeout(waitTimer)
@@ -99,29 +103,26 @@ function injectApp(): void {
   let openingMember: string | null = null
   let activationTask: Promise<void> = Promise.resolve()
   const activate = (member: string) => {
-    if (disposed || pageHidden || !gameReady || !ownsOriginLock() || !/^\d+$/.test(member)) return
+    if (disposed || pageHidden || !gameReady || !lock.isHeldFor(member) || currentMember() !== member) return
     if (desiredMember === member && (loadedMember === member || openingMember === member)) return
     const ticket = ++generation
     desiredMember = member
     openingMember = member
-    w.__VPW_WARDROBE_LOCK_MEMBER = null
+    w.__VPW_WARDROBE_LOCK_MEMBER = member
     repository()?.invalidateFreshness()
     unmountApp()
     activationTask = activationTask.catch(() => {}).then(async () => {
-      if (ticket !== generation || String(w.Player?.MemberNumber) !== member) return
+      if (ticket !== generation || currentMember() !== member || !lock.isHeldFor(member)) return
       try {
         await wardrobe.loadAll()
-        if (ticket !== generation || String(w.Player?.MemberNumber) !== member || !ownsOriginLock()) return
+        if (ticket !== generation || currentMember() !== member || !lock.isHeldFor(member)) return
         loadedMember = member
         w.__VPW_WARDROBE_LOCK_MEMBER = member
         const fresh = loginCapture.take({ member, player: w.Player, lockToken: lock.token() })
         if (fresh) await wardrobe.receiveCloud(fresh)
-        if (ticket !== generation || String(w.Player?.MemberNumber) !== member || !ownsOriginLock()) return
+        if (ticket !== generation || currentMember() !== member || !lock.isHeldFor(member)) return
         mountApp()
-        showStatus(fresh ? '' : message(
-          '衣柜已打开。重新登录 BC 后会核对云端并继续同步。',
-          'Wardrobe is open. Sign in to BC again to check the cloud before syncing.',
-        ))
+        showStatus('')
       } catch (error) {
         if (ticket !== generation) return
         console.error('[VPW] wardrobe initialization failed', error)
@@ -134,25 +135,35 @@ function injectApp(): void {
     })
     return activationTask
   }
-  const ownsOriginLock = () => lock.isHeldFor(LOCK_SCOPE)
-
-  const acquireOriginLock = async () => {
-    if (disposed || pageHidden || lockPending || ownsOriginLock()
+  const acquireMemberLock = async () => {
+    const member = currentMember()
+    if (disposed || pageHidden || member === null
       || (doc.visibilityState === 'hidden' && !gameReady)) return
+    if (lock.isHeldFor(member)) {
+      if (gameReady) activate(member)
+      return
+    }
+    if (lockPending && pendingMember === member) return
     const ticket = ++lockRun
     lockPending = true
+    pendingMember = member
+    generation++
+    desiredMember = null
+    unmountApp()
     w.__VPW_WARDROBE_LOCK_OWNER = false
     w.__VPW_WARDROBE_LOCK_MEMBER = null
     showStatus(message('正在打开衣柜…', 'Opening wardrobe…'))
+    stopWaitTimer()
     waitTimer = w.setTimeout(() => {
-      if (ticket === lockRun && !ownsOriginLock()) showStatus(message(
-        '衣柜正在另一个标签页使用。关闭那个标签页后，这里会自动接管。',
-        'Wardrobe is open in another tab. Close that tab to take over here automatically.',
+      if (ticket === lockRun && !lock.isHeldFor(member)) showStatus(message(
+        '此角色的衣柜正在另一个标签页使用。关闭那个标签页后，这里会自动接管。',
+        'This character’s wardrobe is open in another tab. Close that tab to take over here automatically.',
       ))
     }, 200)
-    const held = await lock.acquire(LOCK_SCOPE)
+    const held = await lock.acquire(member)
     if (disposed || pageHidden || ticket !== lockRun) return
     lockPending = false
+    pendingMember = null
     stopWaitTimer()
     if (!held) {
       showStatus(message(
@@ -161,14 +172,17 @@ function injectApp(): void {
       ))
       return
     }
-    if (gameReady) activate(String(w.Player?.MemberNumber))
+    if (gameReady) activate(member)
     else showStatus(message('等待 BC 登录…', 'Waiting for BC sign-in…'))
   }
 
   // Only a request sent under this lock can certify a later LoginResponse.
   // Never inspect or retain the AccountLogin credentials.
   const unhookLoginRequest = modApi.hookFunction('ServerSend', 0, (args: any[], next: (args: any[]) => unknown) => {
-    if (args[0] === 'AccountLogin') loginCapture.markRequest(ownsOriginLock() ? lock.token() : null)
+    if (args[0] === 'AccountLogin') {
+      const member = currentMember()
+      loginCapture.markRequest(member !== null && lock.isHeldFor(member) ? lock.token() : null)
+    }
     return next(args)
   })
   const unhookLoginResponse = modApi.hookFunction('LoginResponse', -1, (args: any[], next: (args: any[]) => unknown) => {
@@ -182,9 +196,13 @@ function injectApp(): void {
     onLogin: (event: any) => {
       if (disposed || pageHidden) return
       const member = String(event.memberNumber)
-      if (member !== String(w.Player?.MemberNumber)) return
-      loginCapture.record(event, w.Player, ownsOriginLock() ? lock.token() : null)
-      if (!gameReady || !ownsOriginLock()) return
+      if (member !== currentMember()) return
+      loginCapture.record(event, w.Player, lock.isHeldFor(member) ? lock.token() : null)
+      if (!gameReady) return
+      if (!lock.isHeldFor(member)) {
+        void acquireMemberLock()
+        return
+      }
       if (desiredMember !== member || loadedMember !== member) {
         activate(member)
         return
@@ -233,6 +251,7 @@ function injectApp(): void {
     generation++
     lockRun++
     lockPending = false
+    pendingMember = null
     stopWaitTimer()
     loginCapture.clear()
     w.__VPW_WARDROBE_LOCK_MEMBER = null
@@ -243,19 +262,20 @@ function injectApp(): void {
   const onPageShow = (event: PageTransitionEvent) => {
     if (!event.persisted || disposed) return
     pageHidden = false
-    void acquireOriginLock()
+    void acquireMemberLock()
   }
   const onVisibilityChange = () => {
     if (disposed || pageHidden) return
     if (doc.visibilityState === 'hidden' && !gameReady && loadedMember === null) {
       lockRun++
       lockPending = false
+      pendingMember = null
       stopWaitTimer()
       loginCapture.clear()
       w.__VPW_WARDROBE_LOCK_MEMBER = null
       lock.release()
     } else if (doc.visibilityState === 'visible' && loadedMember === null) {
-      void acquireOriginLock()
+      void acquireMemberLock()
     }
   }
   w.addEventListener('pagehide', onPageHide)
@@ -290,10 +310,9 @@ function injectApp(): void {
     host.remove()
   })
 
-  void acquireOriginLock()
   const waitForPlayerReady = () => {
     if (disposed) return
-    if (!w.Player || typeof w.Player.MemberNumber === 'undefined'
+    if (currentMember() === null
       || typeof w.CharacterRefresh !== 'function') {
       setTimeoutHost(waitForPlayerReady, 100)
       return
@@ -305,7 +324,7 @@ function injectApp(): void {
         .catch(error => console.warn('[VPW] item color layer names unavailable', error))
         .finally(() => LayerTranslator.cleanUpItemColorLayerNamesLoad())
       gameReady = true
-      if (ownsOriginLock()) activate(String(w.Player.MemberNumber))
+      void acquireMemberLock()
     } catch (error) {
       console.error('[VPW] game hooks failed', error)
       showStatus(message('衣柜启动失败。请刷新页面重试。', 'Wardrobe could not start. Reload the page to retry.'))

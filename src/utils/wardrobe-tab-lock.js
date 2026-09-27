@@ -31,7 +31,8 @@ export function createWardrobeTabLock({ locks = null, onChange = () => {} } = {}
 
   const acquire = memberNumber => {
     const member = String(memberNumber)
-    if (disposed || !supported || !/^(?:\d+|origin)$/.test(member)) return Promise.resolve(false)
+    if (disposed || !supported || !/^(0|[1-9]\d*)$/.test(member)
+      || !Number.isSafeInteger(Number(member))) return Promise.resolve(false)
     if (owner === member) return Promise.resolve(true)
     if (pending?.member === member) return pending.promise
 

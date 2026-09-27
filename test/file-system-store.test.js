@@ -416,7 +416,7 @@ test('IndexedDB failure preserves legacy history and does not repeat localStorag
   assert.equal(fs.getHistoryRecords().length, 3)
 })
 
-test('history changes during migration replay before saving and stay with their account', async () => {
+test('history waits for the matching member lock after switching accounts', async () => {
   const { fs, hostWindow } = setup()
   const records = memoryHistoryStorage(fs)
   let releaseRead
@@ -436,7 +436,14 @@ test('history changes during migration replay before saving and stay with their 
   await fs._historySession.readyPromise
   await fs._historySession.writePromise
 
-  assert.deepEqual(records.get('42').children[0].data[0].Name, 'member-42')
+  assert.equal(records.has('42'), false)
+  assert.equal(records.has('43'), false)
+  const pendingHistory = fs.history
+  fs.history = null
+  hostWindow.__VPW_WARDROBE_LOCK_MEMBER = '43'
+  fs.loadHistory()
+  await fs._historySession.writePromise
+  assert.equal(fs.history, pendingHistory)
   assert.deepEqual(records.get('43').children[0].data[0].Name, 'member-43')
   assert.equal(fs.getHistoryRecords()[0].data[0].Name, 'member-43')
 })

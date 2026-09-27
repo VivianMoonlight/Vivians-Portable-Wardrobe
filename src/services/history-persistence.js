@@ -3,8 +3,9 @@ const STORE_NAME = 'history'
 const legacyCopiesKey = member => `legacyCopies:${member}`
 
 export class HistoryPersistence {
-  constructor(getIndexedDB) {
+  constructor(getIndexedDB, canWrite = () => true) {
     this.getIndexedDB = getIndexedDB
+    this.canWrite = canWrite
     this.database = null
     this.connection = null
   }
@@ -71,6 +72,9 @@ export class HistoryPersistence {
 
   async write(member, data) {
     const database = await this.open()
+    if (this.canWrite(String(member)) !== true) {
+      throw Object.assign(new Error('History writer lock was lost'), { code: 'writer-lost' })
+    }
     return new Promise((resolve, reject) => {
       let transaction
       try {
@@ -89,6 +93,9 @@ export class HistoryPersistence {
 
   async archiveLegacy(member, raw) {
     const database = await this.open()
+    if (this.canWrite(String(member)) !== true) {
+      throw Object.assign(new Error('History writer lock was lost'), { code: 'writer-lost' })
+    }
     return new Promise((resolve, reject) => {
       let transaction
       try {
@@ -102,6 +109,11 @@ export class HistoryPersistence {
       const key = legacyCopiesKey(member)
       const request = store.get(key)
       request.onsuccess = () => {
+        if (this.canWrite(String(member)) !== true) {
+          transaction.abort()
+          reject(Object.assign(new Error('History writer lock was lost'), { code: 'writer-lost' }))
+          return
+        }
         const copies = Array.isArray(request.result) ? request.result : []
         if (copies.some(copy => copy.raw === raw)) return
         store.put([...copies, { raw, archivedAt: new Date().toISOString() }], key)
