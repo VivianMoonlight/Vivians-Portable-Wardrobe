@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useState } from 'react'
 import { ActionIcon, Badge, Box, Button, Collapse, Drawer, Group, Menu, Modal, MultiSelect, Paper, Progress, Select, Stack, Text, TextInput, Tooltip, UnstyledButton } from '@mantine/core'
 import { useTranslation } from 'react-i18next'
 import { getFs, getWb, useFsSelector, useWbSelector, type WardrobeOutfit } from '@/stores/hooks'
@@ -6,12 +6,18 @@ import { useDialog } from '@/ui/dialog/DialogProvider'
 import { useIsMobile } from '@/ui/hooks/useIsMobile'
 import { useWardrobeActions } from '@/ui/wardrobe-actions'
 import { OVERLAY_Z_INDEX } from '@/ui/z-index'
+import { estimateLocalStorageUsage } from '@/services/local-storage-usage.js'
+import { hostWindow } from '@/utils/host-window.js'
 import { FileItem } from './FileItem'
 import { SyncConflictReview } from './SyncConflictReview'
 import libraryStyles from './wardrobe-library.css?inline'
 
 function formatKB(bytes: number): string {
   return `${(Math.max(0, bytes) / 1000).toFixed(1)} kB`
+}
+
+function formatLocalStorageBytes(bytes: number): string {
+  return bytes < 1000 ? `${bytes} B` : formatKB(bytes)
 }
 
 interface FileManagerProps {
@@ -38,6 +44,8 @@ export function FileManager({ onSelectOutfit }: FileManagerProps) {
   const [tagQuery, setTagQuery] = useState('')
   const [cloudFilter, setCloudFilter] = useState<'all' | 'cloud' | 'local'>('all')
   const [quotaDetailsOpened, setQuotaDetailsOpened] = useState(false)
+  const [localStorageDetailsOpened, setLocalStorageDetailsOpened] = useState(false)
+  const localStorageDetailsId = useId()
   const [conflictReviewOpened, setConflictReviewOpened] = useState(false)
   const conflicts = sync.conflicts ?? []
   const cloudQuarantined = conflicts.some((conflict) => conflict.type === 'missing-device')
@@ -134,6 +142,13 @@ export function FileManager({ onSelectOutfit }: FileManagerProps) {
   }
 
   const localStorageQuotaError = sync.errorCode === 'local-storage-quota'
+  useEffect(() => {
+    if (!localStorageQuotaError) setLocalStorageDetailsOpened(false)
+  }, [localStorageQuotaError])
+  const localStorageUsage = useMemo(() => {
+    if (!localStorageQuotaError) return null
+    try { return estimateLocalStorageUsage(hostWindow.localStorage) } catch { return null }
+  }, [localStorageQuotaError, sync])
   const observedQuota = localStorageQuotaError && quota.observedSource !== 'login-response'
     ? undefined : quota.observed
   const observedColor = observedQuota?.isOverLimit ? 'red' : observedQuota?.isWarning ? 'orange' : 'teal'
@@ -189,7 +204,7 @@ export function FileManager({ onSelectOutfit }: FileManagerProps) {
   </Box>
 
   return (
-    <Box className="vpw-library-root">
+    <Box className="vpw-library-root" data-local-storage-error={localStorageQuotaError || undefined}>
       <style>{libraryStyles}</style>
       <Group gap={8} wrap="nowrap" className="vpw-library-search">
         <TextInput style={{ flex: 1, minWidth: 0 }} value={searchQuery} onChange={(event) => setSearchQuery(event.currentTarget.value)}
@@ -270,11 +285,30 @@ export function FileManager({ onSelectOutfit }: FileManagerProps) {
         </Box>
       </Box>
 
-      {localStorageQuotaError && <Paper withBorder radius="md" p="sm" role="alert" style={{ flexShrink: 0 }}>
-        <Stack gap="xs">
-          <Text size="sm" fw={700} c="red">{t('library.localStorageQuotaTitle')}</Text>
-          <Text size="xs">{t('library.localStorageQuotaHelp')}</Text>
-          <Group gap="xs">
+      {localStorageQuotaError && <Paper withBorder radius="md" p={isMobile ? 8 : 'sm'} role="alert"
+        className="vpw-library-local-alert" data-compact={isMobile || undefined}>
+        <Stack gap={isMobile ? 4 : 'xs'} className="vpw-library-local-alert-stack">
+          <Group justify="space-between" gap={4} wrap="nowrap" className="vpw-library-local-alert-heading">
+            <Text size="sm" fw={700} c="red">{t('library.localStorageQuotaTitle')}</Text>
+            {isMobile && <Button size="compact-xs" variant="subtle" onClick={() => setLocalStorageDetailsOpened((opened) => !opened)}
+              aria-expanded={localStorageDetailsOpened} aria-controls={localStorageDetailsId}>
+              {t(localStorageDetailsOpened ? 'library.hideLocalStorageDetails' : 'library.showLocalStorageDetails')}
+            </Button>}
+          </Group>
+          <Box id={localStorageDetailsId} hidden={isMobile && !localStorageDetailsOpened}
+            className="vpw-library-local-alert-details">
+            <Stack gap={4}>
+              <Text size="xs">{t('library.localStorageQuotaHelp')}</Text>
+              <Text size="xs" c="dimmed">{localStorageUsage
+                ? t('library.localStorageUsage', {
+                  wardrobe: formatLocalStorageBytes(localStorageUsage.wardrobeBytes),
+                  other: formatLocalStorageBytes(localStorageUsage.otherBytes),
+                  total: formatLocalStorageBytes(localStorageUsage.totalBytes),
+                })
+                : t('library.localStorageUsageUnavailable')}</Text>
+            </Stack>
+          </Box>
+          <Group gap="xs" className="vpw-library-local-alert-actions">
             <Button size="compact-sm" color="red" onClick={actions.saveBackup}>{t('library.exportLocalBackup')}</Button>
             <Button size="compact-sm" color="red" variant="light" onClick={() => void retrySync()}>{t('library.retryLocalSave')}</Button>
           </Group>

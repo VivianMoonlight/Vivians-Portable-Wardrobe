@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import LZString from 'lz-string'
 import { loadFileSystemStore } from './helpers/load-file-system-store.js'
 
 const keys = ['Cloth', 'Shoes', 'Gloves', 'Hair']
@@ -329,6 +330,67 @@ test('history preview clones data, keeps slot choices and locking, and does not 
   fs.loadHistoryRecord(null)
   fs.loadHistoryRecord({ name: 'Missing data' })
   assert.equal(renders.length, 1)
+})
+
+test('history saves in the local UTF-16 format and restores the same records', () => {
+  const { fs, hostWindow } = setup()
+  const record = [part('Cloth', 'saved-shirt'), part('Shoes', 'saved-shoes')]
+  fs.history.addRecord(record)
+  const expected = JSON.parse(JSON.stringify(fs.history.toJSON()))
+
+  fs.saveHistory()
+  const key = 'VPWardrobe_VPWardrobe_history_42'
+  const saved = hostWindow.localStorage.getItem(key)
+  assert.ok(saved.startsWith('~VPWH1:'))
+  assert.deepEqual(JSON.parse(LZString.decompressFromUTF16(saved.slice('~VPWH1:'.length))), expected)
+
+  fs.history.clear()
+  fs.loadHistory()
+  assert.deepEqual(JSON.parse(JSON.stringify(fs.getHistoryRecords()[0].data)), record)
+})
+
+test('loading Base64 history migrates it to UTF-16 without losing records', () => {
+  const { fs, hostWindow } = setup()
+  fs.history.addRecord([part('Cloth', 'legacy-shirt')])
+  const expected = JSON.parse(JSON.stringify(fs.history.toJSON()))
+  const key = 'VPWardrobe_VPWardrobe_history_42'
+  const legacy = LZString.compressToBase64(JSON.stringify(expected))
+  hostWindow.localStorage.setItem(key, legacy)
+  fs.history.clear()
+
+  fs.loadHistory()
+
+  assert.deepEqual(JSON.parse(JSON.stringify(fs.getHistoryRecords()[0].data)), expected.children[0].data)
+  const migrated = hostWindow.localStorage.getItem(key)
+  assert.ok(migrated.startsWith('~VPWH1:'))
+  assert.deepEqual(JSON.parse(LZString.decompressFromUTF16(migrated.slice('~VPWH1:'.length))), expected)
+})
+
+test('history falls back to Base64 when a UTF-8 byte quota rejects UTF-16', () => {
+  const { fs, hostWindow } = setup()
+  const record = Array.from({ length: 20 }, (_, index) => part(`Cloth${index}`, `shirt-${index}`))
+  fs.history.addRecord(record)
+  const json = JSON.stringify(fs.history.toJSON())
+  const utf16 = '~VPWH1:' + LZString.compressToUTF16(json)
+  const base64 = LZString.compressToBase64(json)
+  const bytes = value => new TextEncoder().encode(value).length
+  assert.ok(bytes(utf16) > bytes(base64))
+  const originalSetItem = hostWindow.localStorage.setItem
+  hostWindow.localStorage.setItem = (key, value) => {
+    if (bytes(value) > bytes(base64)) {
+      throw Object.assign(new Error('Local storage quota reached'), { name: 'QuotaExceededError' })
+    }
+    originalSetItem(key, value)
+  }
+
+  fs.saveHistory()
+
+  const key = 'VPWardrobe_VPWardrobe_history_42'
+  assert.equal(hostWindow.localStorage.getItem(key), base64)
+  fs.history.clear()
+  fs.loadHistory()
+  assert.deepEqual(JSON.parse(JSON.stringify(fs.getHistoryRecords()[0].data)), record)
+  assert.equal(hostWindow.localStorage.getItem(key), base64)
 })
 
 test('initialization previews the character before metadata resolves and preserves a selection made while waiting', async () => {

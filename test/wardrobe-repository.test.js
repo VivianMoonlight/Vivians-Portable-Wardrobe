@@ -85,6 +85,136 @@ function seed(server = { settings: {} }) {
   return device
 }
 
+test('local UTF-16 payloads round-trip while cloud Base64 and older local formats remain readable', () => {
+  const device = client()
+  assert.equal(device.repo.open(), true)
+  const stored = device.saved.get(device.repo.key)
+  assert.ok(stored.startsWith('VPW-LZ16:'))
+  assert.deepEqual(decodeWardrobePayload(stored).index, device.repo.index)
+  const legacy = { index: createWardrobeIndex() }
+  assert.deepEqual(decodeWardrobePayload(JSON.stringify(legacy)), legacy)
+  assert.deepEqual(decodeWardrobePayload(encode(legacy)), legacy)
+  device.login()
+  device.repo.apply([put('local-format')])
+  device.repo.flush()
+  assert.ok(device.server.settings.VPWardrobe)
+  assert.equal(device.server.settings.VPWardrobe.startsWith('VPW-LZ16:'), false)
+  assert.equal(cloudIndex(device.server).outfits['local-format'].name, 'local-format')
+})
+
+test('local writes fall back to Base64 when UTF-16 exceeds a byte-counted quota', () => {
+  const value = { index: applyWardrobeOperations(createWardrobeIndex(), Array.from({ length: 15 }, (_, i) =>
+    put(`outfit-${i}`, `Outfit ${i}`, { data: Array.from({ length: 20 }, (_, j) =>
+      ({ Group: `Group${j}`, Name: `Item-${i}-${j}`, Color: [`#${i}${j}abcdef`] })) })),
+  { replicaId: 'device-a' }) }
+  const base64 = encode(value)
+  const compact = 'VPW-LZ16:' + LZString.compressToUTF16(JSON.stringify(value))
+  assert.ok(Buffer.byteLength(compact) > Buffer.byteLength(base64))
+  const saved = new Map()
+  const storage = {
+    getItem: key => saved.get(key) ?? null,
+    setItem(key, payload) {
+      if (Buffer.byteLength(payload) > Buffer.byteLength(base64)) {
+        throw Object.assign(new Error('Storage quota exceeded'), { name: 'QuotaExceededError' })
+      }
+      saved.set(key, payload)
+    },
+  }
+  const repo = new WardrobeRepository({ localStorage: storage })
+  repo.persistLocalPayload('index', value)
+  assert.equal(saved.get('index'), base64)
+  assert.deepEqual(decodeWardrobePayload(saved.get('index')), value)
+})
+
+test('opening an older local document rewrites it in the compact local format', () => {
+  for (const oldFormat of ['json', 'base64']) {
+    const index = createWardrobeIndex()
+    const oldDocument = { index, pending: false, recoveryKeys: [], baseCloudIndex: index,
+      baseCloudSequence: 0, baseAppliedSeq: {}, submittedVersions: [], conflicts: [], protocolVersion: 4 }
+    const saved = new Map([['VPWardrobe_index_42', oldFormat === 'json'
+      ? JSON.stringify(oldDocument) : encode(oldDocument)]])
+    const server = { settings: { VPWardrobe: encode({ protocol: 'VPW4', index, a: {} }) } }
+    const device = client(server, { saved })
+    assert.equal(device.repo.open(), true)
+    assert.ok(saved.get(device.repo.key).startsWith('VPW-LZ16:'))
+    assert.deepEqual(decodeWardrobePayload(saved.get(device.repo.key)).index, index)
+    assert.equal(server.settings.VPWardrobe.startsWith('VPW-LZ16:'), false)
+  }
+})
+
+test('a full store compacts legacy index and recovery data before creating its device marker', () => {
+  const index = applyWardrobeOperations(createWardrobeIndex(), Array.from({ length: 30 }, (_, i) =>
+    put(`outfit-${i}`, `Outfit ${i}`, { data: Array.from({ length: 15 }, (_, j) =>
+      ({ Group: `Group${j}`, Name: `Clothing-${i}-${j}`, Color: [`#${i}${j}abcdef`] })) })),
+  { replicaId: 'old-device' })
+  const key = 'VPWardrobe_index_42'
+  const archiveKey = `${key}_recovery_existing`
+  const backup = { reason: 'before-v4-migration', data: { local: index }, createdAt: 1 }
+  const oldDocument = { index, pending: false, recoveryKeys: [archiveKey], baseCloudIndex: index,
+    baseCloudSequence: 0, baseAppliedSeq: {}, submittedVersions: [], conflicts: [], protocolVersion: 4 }
+  const saved = new Map([[key, encode(oldDocument)], [archiveKey, encode(backup)]])
+  const usage = () => [...saved].reduce((total, [name, value]) => total + name.length + value.length, 0)
+  const limit = usage() + 20
+  const writes = []
+  const storage = {
+    getItem: name => saved.get(name) ?? null,
+    setItem(name, value) {
+      const previous = saved.get(name)
+      const proposed = usage() - (previous === undefined ? 0 : name.length + previous.length)
+        + name.length + value.length
+      if (proposed > limit) throw Object.assign(new Error('Storage quota exceeded'), { name: 'QuotaExceededError' })
+      saved.set(name, value)
+      writes.push(name)
+    },
+  }
+  assert.throws(() => storage.setItem('VPW4_device_42', '0'.repeat(32)), /Storage quota exceeded/)
+  const server = { settings: { VPWardrobe: encode({ protocol: 'VPW4', index, a: {} }) } }
+  const repo = new WardrobeRepository({ getPlayer: () => ({ MemberNumber: 42, ExtensionSettings: server.settings }),
+    localStorage: storage, send: () => true, replicaId: 'new-device' })
+  assert.equal(repo.open(), true)
+  assert.equal(repo.status.localSaved, true)
+  assert.ok(saved.get(key).startsWith('VPW-LZ16:'))
+  assert.ok(saved.get(archiveKey).startsWith('VPW-LZ16:'))
+  assert.deepEqual(decodeWardrobePayload(saved.get(key)).index, index)
+  assert.deepEqual(decodeWardrobePayload(saved.get(archiveKey)), backup)
+  assert.match(saved.get('VPW4_device_42'), /^[0-9a-f]{32}$/)
+  assert.deepEqual(writes.slice(0, 3), [key, archiveKey, 'VPW4_device_42'])
+})
+
+test('refused compaction does not hide an unchanged readable legacy index', () => {
+  const index = createWardrobeIndex()
+  const oldDocument = { index, pending: false, recoveryKeys: [], baseCloudIndex: index,
+    baseCloudSequence: 0, baseAppliedSeq: {}, submittedVersions: [], conflicts: [], protocolVersion: 4 }
+  const raw = encode(oldDocument)
+  const saved = new Map([['VPWardrobe_index_42', raw]])
+  const server = { settings: { VPWardrobe: encode({ protocol: 'VPW4', index, a: {} }) } }
+  const device = client(server, { saved })
+  device.repo.local.setItem = () => { throw Object.assign(new Error('Storage quota exceeded'), { name: 'QuotaExceededError' }) }
+  assert.equal(device.repo.open(), true)
+  assert.equal(device.repo.status.localSaved, true)
+  assert.equal(saved.get(device.repo.key), raw)
+  assert.deepEqual(device.repo.index, index)
+})
+
+test('unreadable legacy recovery data is left untouched while opening the index', () => {
+  const key = 'VPWardrobe_index_42'
+  const archiveKey = `${key}_recovery_damaged`
+  const index = createWardrobeIndex()
+  const saved = new Map([[key, encode({ index, recoveryKeys: [archiveKey] })], [archiveKey, 'damaged backup']])
+  const device = client({ settings: {} }, { saved })
+  assert.equal(device.repo.open(), true)
+  assert.equal(saved.get(archiveKey), 'damaged backup')
+})
+
+test('a damaged prefixed local payload fails closed', () => {
+  assert.throws(() => decodeWardrobePayload('VPW-LZ16:invalid'), /Wardrobe data could not be decoded|JSON/)
+  const saved = new Map([['VPWardrobe_index_42', 'VPW-LZ16:invalid']])
+  const device = client({ settings: {} }, { saved })
+  assert.equal(device.repo.open(), false)
+  assert.equal(device.repo.status.state, 'error')
+  assert.equal(saved.get(device.repo.key), 'VPW-LZ16:invalid')
+})
+
 test('deletion survives a stale second device login and subsequent save', () => {
   const a = seed()
   const b = client(a.server, { replicaId: 'device-b' })
@@ -373,6 +503,7 @@ test('migration prefers the React local key, backs up old sources, and never rei
   assert.deepEqual(names(device.repo.index), ['Current React local'])
   const backups = device.repo.exportRecovery()
   assert.ok(backups.length > 0)
+  assert.ok(saved.get(backups[0].key).startsWith('VPW-LZ16:'))
   assert.match(JSON.stringify(backups), /Current React local/)
   assert.match(JSON.stringify(backups), /Old buggy local/)
   assert.equal(decodeWardrobePayload(backups[0].data.onlineRaw).children[0].name, 'Stale cloud tree')

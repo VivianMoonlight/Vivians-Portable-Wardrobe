@@ -29,6 +29,11 @@ import {
 const SLOT_MODE_EMPTY = 'empty'
 const SLOT_MODE_ORIGINAL = 'original'
 const SLOT_MODE_INCOMING = 'incoming'
+const HISTORY_STORAGE_FORMAT = '~VPWH1:'
+
+function isStorageQuotaError(error) {
+  return error?.name === 'QuotaExceededError' || error?.code === 22 || error?.code === 1014
+}
 
 function buildPartNameMapBySlot(parts = [], character = null) {
   const grouped = groupPartsBySlot(parts)
@@ -114,11 +119,22 @@ const fileSystemStoreDefinition = {
     storage: new StorageAdapter({
       local: {
         get: (k) => hostWindow.localStorage.getItem(k),
-        set: (k, val) => hostWindow.localStorage.setItem(k, val)
+        set: (k, val) => {
+          try {
+            hostWindow.localStorage.setItem(k, val)
+          } catch (error) {
+            if (!isStorageQuotaError(error) || !val.startsWith(HISTORY_STORAGE_FORMAT)) throw error
+            const serialized = LZString.decompressFromUTF16(val.slice(HISTORY_STORAGE_FORMAT.length))
+            if (serialized === null) throw error
+            hostWindow.localStorage.setItem(k, LZString.compressToBase64(serialized))
+          }
+        }
       },
       compressor: {
-        compress: (str) => LZString.compressToBase64(str),
-        decompress: (str) => LZString.decompressFromBase64(str)
+        compress: (str) => HISTORY_STORAGE_FORMAT + LZString.compressToUTF16(str),
+        decompress: (str) => str.startsWith(HISTORY_STORAGE_FORMAT)
+          ? LZString.decompressFromUTF16(str.slice(HISTORY_STORAGE_FORMAT.length))
+          : LZString.decompressFromBase64(str)
       }
     }),
     // preview 相关
@@ -1035,10 +1051,14 @@ const fileSystemStoreDefinition = {
     loadHistory() {
       try {
         const key = buildPlayerScopedStorageKey('VPWardrobe_history')
+        const previous = hostWindow.localStorage.getItem(this.storage.prefix + key)
         const historyData = this.storage.loadLocal(key)
         if (historyData) {
           this.history.fromJSON(historyData)
           this.historyVersion = (this.historyVersion || 0) + 1
+          if (previous && !previous.startsWith(HISTORY_STORAGE_FORMAT)) {
+            this.storage.saveLocal(key, historyData)
+          }
         }
       } catch (e) {
         console.warn('loadHistory failed', e)

@@ -14,6 +14,8 @@ import { mergeWardrobeIndexesThreeWay, resolveWardrobeConflicts } from './wardro
 
 const clone = value => JSON.parse(JSON.stringify(value))
 const encode = value => LZString.compressToBase64(JSON.stringify(value))
+const LOCAL_PAYLOAD_PREFIX = 'VPW-LZ16:'
+const encodeLocal = value => LOCAL_PAYLOAD_PREFIX + LZString.compressToUTF16(JSON.stringify(value))
 const canonical = value => Array.isArray(value) ? value.map(canonical)
   : value && typeof value === 'object'
     ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value
@@ -23,7 +25,7 @@ const V4_PROTOCOL = 'VPW4'
 
 function storageError(error) {
   if (error?.name !== 'QuotaExceededError' && error?.code !== 22 && error?.code !== 1014) return error
-  return Object.assign(new Error('Browser local storage is full; export a backup before clearing site data'),
+  return Object.assign(new Error('Browser rejected the local wardrobe write'),
     { code: 'local-storage-quota', cause: error })
 }
 
@@ -85,6 +87,11 @@ export function decodeWardrobePayload(raw) {
   if (raw === null || raw === undefined || raw === '') return null
   if (typeof raw === 'object') return requireObject(clone(raw))
   if (typeof raw !== 'string') throw new Error('Invalid wardrobe storage value')
+  if (raw.startsWith(LOCAL_PAYLOAD_PREFIX)) {
+    const json = LZString.decompressFromUTF16(raw.slice(LOCAL_PAYLOAD_PREFIX.length))
+    if (!json) throw new Error('Wardrobe data could not be decoded')
+    return requireObject(JSON.parse(json))
+  }
   let parsed
   try { parsed = JSON.parse(raw) } catch { /* Older clients store compressed JSON. */ }
   if (parsed !== undefined) return requireObject(parsed)
@@ -161,20 +168,32 @@ export class WardrobeRepository {
     this.onChange({ index: this.index, status: this.status, quota: this.quota })
   }
 
-  writeDocument(index, changes = {}) {
-    const document = { ...this.document, ...changes, index }
-    const encoded = encode(document)
-    if (this.local.getItem(this.key) !== encoded) {
+  persistLocalPayload(key, value) {
+    const compact = encodeLocal(value)
+    const previous = this.local.getItem(key)
+    if (previous === compact) return
+    const write = encoded => {
       let result
-      try { result = this.local.setItem(this.key, encoded) } catch (error) { throw storageError(error) }
+      try { result = this.local.setItem(key, encoded) } catch (error) { throw storageError(error) }
       if (result === false) throw new Error('Local wardrobe could not be saved')
     }
+    try { write(compact) }
+    catch (error) {
+      if (error.code !== 'local-storage-quota') throw error
+      // Quota accounting varies; Base64 can be smaller in byte-counted stores.
+      const base64 = encode(value)
+      if (previous !== base64) write(base64)
+    }
+  }
+
+  writeDocument(index, changes = {}) {
+    const document = { ...this.document, ...changes, index }
+    this.persistLocalPayload(this.key, document)
     this.document = document
     this.index = index
   }
 
-  readDocument() {
-    const raw = this.local.getItem(this.key)
+  readDocument(raw = this.local.getItem(this.key)) {
     if (!raw) return null
     const document = decodeWardrobePayload(raw)
     validateWardrobeIndex(document?.index)
@@ -188,6 +207,29 @@ export class WardrobeRepository {
     return document
   }
 
+  compactLocalPayload(key, raw, value) {
+    if (typeof raw !== 'string' || raw.startsWith(LOCAL_PAYLOAD_PREFIX)) return
+    const compact = encodeLocal(value)
+    if (compact.length >= raw.length || this.local.getItem(key) !== raw) return
+    let result
+    try { result = this.local.setItem(key, compact) } catch (error) { throw storageError(error) }
+    if (result === false) throw new Error('Local wardrobe could not be saved')
+  }
+
+  compactRecoveryArchives(keys) {
+    if (!Array.isArray(keys)) return
+    for (const key of keys) {
+      if (typeof key !== 'string' || !key.startsWith(`${this.key}_recovery_`)) continue
+      try {
+        const raw = this.local.getItem(key)
+        if (!raw || raw.startsWith(LOCAL_PAYLOAD_PREFIX)) continue
+        const backup = decodeWardrobePayload(raw)
+        if (typeof backup.reason !== 'string' || !own(backup, 'data')) continue
+        this.compactLocalPayload(key, raw, backup)
+      } catch { /* Keep an unreadable or unwritable recovery archive untouched. */ }
+    }
+  }
+
   archive(reason, data) {
     const baseKey = `${this.key}_recovery_${fingerprint(data)}`
     let key = baseKey
@@ -199,12 +241,7 @@ export class WardrobeRepository {
       key = `${baseKey}_${++suffix}`
     }
     if (!this.local.getItem(key)) {
-      let result
-      try { result = this.local.setItem(key, encode({ reason, data, createdAt: Date.now() })) }
-      catch (error) { throw storageError(error) }
-      if (result === false) {
-        throw new Error('Migration backup could not be saved')
-      }
+      this.persistLocalPayload(key, { reason, data, createdAt: Date.now() })
     }
     this.document.recoveryKeys = [...new Set([...(this.document.recoveryKeys || []), key])]
   }
@@ -256,10 +293,15 @@ export class WardrobeRepository {
             packetBytes: 0, proposalAvailable: false }
         } catch { /* A malformed cloud setting must not hide the saved local index. */ }
       }
-      const stored = this.readDocument()
+      const storedRaw = this.local.getItem(this.key)
+      const stored = this.readDocument(storedRaw)
       if (stored) {
         this.document = stored
         this.index = stored.index
+        // Release space in existing keys before allocating a device marker.
+        try { this.compactLocalPayload(this.key, storedRaw, stored) }
+        catch { /* An unchanged legacy document remains readable if compaction is refused. */ }
+        this.compactRecoveryArchives(stored.recoveryKeys)
       }
       this.deviceId = getOrCreateWardrobeDeviceId(this.local, Number(this.member))
       this.markerKey = markerKeyForDevice(this.deviceId)
@@ -285,8 +327,13 @@ export class WardrobeRepository {
       this.remoteRaw = raw
       if (!fresh && online) this.provisionalCloudPayload = raw
       this.observeSettings(extensionSettings, fresh)
-      this.writeDocument(this.index, { pending: this.document.pending || online?.kind !== 'v4',
-        protocolVersion: this.document.protocolVersion || (online?.kind === 'v4' ? 4 : undefined) })
+      const changes = { pending: this.document.pending || online?.kind !== 'v4',
+        protocolVersion: this.document.protocolVersion || (online?.kind === 'v4' ? 4 : undefined) }
+      const nextDocument = { ...this.document, ...changes, index: this.index }
+      if (stored && this.local.getItem(this.key) === storedRaw
+        && equal(decodeWardrobePayload(storedRaw), nextDocument)) {
+        this.document = nextDocument
+      } else this.writeDocument(this.index, changes)
       committed = true
       this.measure()
       this.emit({ localSaved: true, lastSubmittedAt: this.document.lastSubmittedAt || null,
