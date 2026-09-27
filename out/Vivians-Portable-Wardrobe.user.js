@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vivians Portable Wardrobe
 // @namespace    http://tampermonkey.net/
-// @version      0.10.1-react.11
+// @version      0.10.1-react.12
 // @author       VIVianMoonlight
 // @description  Portable Wardrobe for Bondage Club (React + Mantine, Shadow DOM isolated)
 // @downloadURL  https://cdn.jsdelivr.net/gh/VivianMoonlight/Vivians-Portable-Wardrobe@wardrobe-react/out/Vivians-Portable-Wardrobe.user.js
@@ -32,7 +32,7 @@
     return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
   };
   var require_main_001 = __commonJS({
-    "main-Dncqmida.js"(exports) {
+    "main-BM8DNDEQ.js"(exports) {
       function _mergeNamespaces(n, m) {
         for (var i = 0; i < m.length; i++) {
           const e = m[i];
@@ -9285,7 +9285,7 @@
       instance.hasLoadedNamespace;
       instance.loadNamespaces;
       instance.loadLanguages;
-      const version = "0.10.1-react.11";
+      const version = "0.10.1-react.12";
       var _unsafeWindow = /* @__PURE__ */ (() => typeof unsafeWindow != "undefined" ? unsafeWindow : void 0)();
       const hostWindow = typeof _unsafeWindow !== "undefined" ? _unsafeWindow : window;
       const doc = hostWindow.document;
@@ -11383,13 +11383,13 @@ One of mods you are using is using an old version of SDK. It will work for now b
         if (!isObject$4(value)) return value;
         return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, clone$3(child)]));
       }
-      function canonical$3(value) {
-        if (Array.isArray(value)) return value.map(canonical$3);
+      function canonical$4(value) {
+        if (Array.isArray(value)) return value.map(canonical$4);
         if (!isObject$4(value)) return value;
-        return Object.fromEntries(Object.keys(value).sort(compareText$1).map((key) => [key, canonical$3(value[key])]));
+        return Object.fromEntries(Object.keys(value).sort(compareText$1).map((key) => [key, canonical$4(value[key])]));
       }
       function sameValue(left, right) {
-        return JSON.stringify(canonical$3(left)) === JSON.stringify(canonical$3(right));
+        return JSON.stringify(canonical$4(left)) === JSON.stringify(canonical$4(right));
       }
       function sameOutfitContent(left, right) {
         const leftContent = { ...left };
@@ -11416,7 +11416,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
         if (!right) return left;
         const order = compareRevision$1(left.rev, right.rev);
         if (order !== 0) return order > 0 ? left : right;
-        return compareText$1(JSON.stringify(canonical$3(left)), JSON.stringify(canonical$3(right))) >= 0 ? left : right;
+        return compareText$1(JSON.stringify(canonical$4(left)), JSON.stringify(canonical$4(right))) >= 0 ? left : right;
       }
       function maximumClock$1(index2) {
         let clock = index2.clock;
@@ -12102,14 +12102,14 @@ One of mods you are using is using an old version of SDK. It will work for now b
         if (value === null || typeof value !== "object") return value;
         return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, clone$2(child)]));
       }
-      function canonical$2(value) {
-        if (Array.isArray(value)) return value.map(canonical$2);
+      function canonical$3(value) {
+        if (Array.isArray(value)) return value.map(canonical$3);
         if (value === null || typeof value !== "object") return value;
-        return Object.fromEntries(Object.keys(value).sort(compareText).map((key) => [key, canonical$2(value[key])]));
+        return Object.fromEntries(Object.keys(value).sort(compareText).map((key) => [key, canonical$3(value[key])]));
       }
-      function same$1(left, right) {
+      function same$2(left, right) {
         if (left === absent || right === absent) return left === right;
-        return JSON.stringify(canonical$2(left)) === JSON.stringify(canonical$2(right));
+        return JSON.stringify(canonical$3(left)) === JSON.stringify(canonical$3(right));
       }
       function set(table, id, value) {
         Object.defineProperty(table, id, { value, enumerable: true, configurable: true, writable: true });
@@ -12167,9 +12167,9 @@ One of mods you are using is using an old version of SDK. It will work for now b
         });
       }
       function chooseField(base, local, remote, details, conflicts) {
-        if (same$1(local, remote)) return local;
-        if (same$1(local, base)) return remote;
-        if (same$1(remote, base)) return local;
+        if (same$2(local, remote)) return local;
+        if (same$2(local, base)) return remote;
+        if (same$2(remote, base)) return local;
         addConflict(conflicts, { ...details, type: "concurrent-edit", base, local, remote });
         return local;
       }
@@ -12180,7 +12180,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
         return [.../* @__PURE__ */ new Set([...original, ...left, ...right])].filter((id) => original.has(id) ? left.has(id) && right.has(id) : left.has(id) || right.has(id)).sort(compareText);
       }
       function mergedRevision(index2, merged, candidates, replicaId) {
-        const matching = candidates.filter((candidate) => candidate && same$1(content(candidate), content(merged)));
+        const matching = candidates.filter((candidate) => candidate && same$2(content(candidate), content(merged)));
         if (matching.length) return clone$2(newestRevision(...matching.map((candidate) => candidate.rev)));
         return nextRevision(index2, replicaId);
       }
@@ -12209,7 +12209,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
         return merged;
       }
       function changedSince(baseRecord, candidate) {
-        return !!candidate && !same$1(content(baseRecord), content(candidate));
+        return !!candidate && !same$2(content(baseRecord), content(candidate));
       }
       function mergeCloudState(index2, id, baseState, localState, remoteState, conflicts, replicaId) {
         const local = localState || baseState;
@@ -12451,8 +12451,8 @@ One of mods you are using is using an old version of SDK. It will work for now b
       const encode = (value) => LZString.compressToBase64(JSON.stringify(value));
       const LOCAL_PAYLOAD_PREFIX = "VPW-LZ16:";
       const encodeLocal = (value) => LOCAL_PAYLOAD_PREFIX + LZString.compressToUTF16(JSON.stringify(value));
-      const canonical$1 = (value) => Array.isArray(value) ? value.map(canonical$1) : value && typeof value === "object" ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical$1(value[key])])) : value;
-      const equal = (left, right) => JSON.stringify(canonical$1(left)) === JSON.stringify(canonical$1(right));
+      const canonical$2 = (value) => Array.isArray(value) ? value.map(canonical$2) : value && typeof value === "object" ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical$2(value[key])])) : value;
+      const equal = (left, right) => JSON.stringify(canonical$2(left)) === JSON.stringify(canonical$2(right));
       const own = (object, key) => Object.prototype.hasOwnProperty.call(object || {}, key);
       const V4_PROTOCOL = "VPW4";
       function storageError(error, indexed = false) {
@@ -12600,9 +12600,23 @@ One of mods you are using is using an old version of SDK. It will work for now b
             lastVerifiedAt: null
           };
           this.operationTail = Promise.resolve();
+          this.cloudflareMode = false;
         }
         get key() {
           return `VPWardrobe_index_${this.member}`;
+        }
+        setCloudflareMode(enabled) {
+          this.cloudflareMode = Boolean(enabled);
+          this.cancelPending();
+          if (!this.cloudflareMode || this.member === null || !this.status.localSaved) return;
+          this.remoteError = null;
+          this.pendingRemote = null;
+          this.measure();
+          this.emit({
+            state: this.document.conflicts?.length ? "conflict" : "pending",
+            error: "",
+            conflicts: this.document.conflicts || []
+          });
         }
         serialize(operation) {
           const result = this.operationTail.then(operation, operation);
@@ -12630,7 +12644,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
         }
         hasSubmittedCurrentIndex() {
           const submission = this.document?.submission;
-          return submission?.submittedAt != null && submission.payload === this.document.lastSubmittedPayload && submission.projectionJson === JSON.stringify(canonical$1(projectWardrobeCloudIndex(this.index)));
+          return submission?.submittedAt != null && submission.payload === this.document.lastSubmittedPayload && submission.projectionJson === JSON.stringify(canonical$2(projectWardrobeCloudIndex(this.index)));
         }
         emit(patch = {}) {
           if (patch.state && patch.state !== "error") patch.errorCode = null;
@@ -12694,6 +12708,10 @@ One of mods you are using is using an old version of SDK. It will work for now b
           if (!document2) return null;
           validateWardrobeIndex(document2?.index);
           if (document2.baseCloudIndex) validateWardrobeIndex(document2.baseCloudIndex);
+          if (document2.cloudflareBaseIndex) validateWardrobeIndex(document2.cloudflareBaseIndex);
+          if (document2.cloudflareRevision !== void 0 && (!Number.isSafeInteger(document2.cloudflareRevision) || document2.cloudflareRevision < 0)) {
+            throw new Error("Invalid Cloudflare wardrobe revision");
+          }
           if (document2.recoveryKeys !== void 0 && (!Array.isArray(document2.recoveryKeys) || document2.recoveryKeys.some((key) => typeof key !== "string"))) {
             throw new Error("Invalid local wardrobe recovery keys");
           }
@@ -12948,6 +12966,39 @@ One of mods you are using is using an old version of SDK. It will work for now b
               this.ensureWriter();
             } else this.deviceId = getOrCreateWardrobeDeviceId(this.local, Number(this.member));
             this.markerKey = markerKeyForDevice(this.deviceId);
+            if (this.cloudflareMode) {
+              if (!stored && legacySources.length) {
+                this.index = migrateLegacyWardrobe(legacySources[0].value);
+                await this.archive("before-cloudflare-migration", {
+                  local: legacySources.map(({ key, raw: raw2 }) => ({ key, raw: raw2 }))
+                });
+              } else if (stored && legacySources.length) {
+                await this.archive("legacy-local-source", {
+                  local: legacySources.map(({ key, raw: raw2 }) => ({ key, raw: raw2 }))
+                });
+              }
+              await this.writeDocument(this.index, { pending: !equal(
+                projectWardrobeCloudIndex(this.index),
+                this.document.cloudflareBaseIndex || createWardrobeIndex()
+              ) });
+              this.ensureWriter();
+              if (this.persistence) this.persistence.removeLegacyKeysIfUnchanged(
+                this.local,
+                legacySources.map(({ key, raw: raw2 }) => ({ key, raw: raw2 }))
+              );
+              this.unrecognizedLocalDocumentKey = this.local.getItem(this.key) ? this.key : null;
+              this.localRecoveryKeysOnDisk = new Set(this.localRecoveryKeys().filter((key) => this.local.getItem(key) !== null));
+              this.rawLegacySourceKeys = new Set(this.legacySourceKeys().filter((key) => this.local.getItem(key) !== null));
+              this.measure();
+              committed = true;
+              this.emit({
+                localSaved: true,
+                state: this.document.conflicts?.length ? "conflict" : "pending",
+                conflicts: this.document.conflicts || [],
+                error: ""
+              });
+              return true;
+            }
             const raw = extensionSettings?.VPWardrobe;
             let online = null;
             try {
@@ -13111,6 +13162,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
           this.hostSettingSignatures = settingSignatures(this.getPlayer()?.ExtensionSettings);
         }
         async observeHostChanges() {
+          if (this.cloudflareMode) return;
           if (this.pendingRemote) {
             const observedHostRaw = this.lastObservedHostRaw;
             const hostSignatures = this.hostSettingSignatures;
@@ -13126,9 +13178,9 @@ One of mods you are using is using an old version of SDK. It will work for now b
         }
         proposal(settings = this.freshSettings || this.getPlayer()?.ExtensionSettings || {}) {
           const projection = projectWardrobeCloudIndex(this.index);
-          const projectionJson = JSON.stringify(canonical$1(projection));
-          const baseJson = JSON.stringify(canonical$1(this.document.baseCloudIndex || createWardrobeIndex()));
-          const appliedJson = JSON.stringify(canonical$1(this.document.baseAppliedSeq || {}));
+          const projectionJson = JSON.stringify(canonical$2(projection));
+          const baseJson = JSON.stringify(canonical$2(this.document.baseCloudIndex || createWardrobeIndex()));
+          const appliedJson = JSON.stringify(canonical$2(this.document.baseAppliedSeq || {}));
           const markers = readWardrobeSyncMarkers(settings);
           const registered = /* @__PURE__ */ new Set([...markers.keys(), ...Object.keys(this.document.baseAppliedSeq || {})]);
           if (registered.size > MAX_WARDROBE_DEVICE_MARKERS || !registered.has(this.deviceId) && registered.size >= MAX_WARDROBE_DEVICE_MARKERS) {
@@ -13154,6 +13206,21 @@ One of mods you are using is using an old version of SDK. It will work for now b
           return { payload, markerValue, marker, projectionJson, baseJson, appliedJson };
         }
         measure(extensionSettings = this.getPlayer()?.ExtensionSettings) {
+          if (this.cloudflareMode) {
+            this.quota = {
+              limitBytes: 0,
+              wardrobeBytes: 0,
+              otherExtensionsBytes: 0,
+              totalBytes: 0,
+              remainingBytes: 0,
+              usageRatio: 0,
+              isWarning: false,
+              isOverLimit: false,
+              proposalAvailable: false,
+              packetBytes: 0
+            };
+            return this.quota;
+          }
           const observed = measureObservedExtensionQuota(this.lastFreshSettings ?? extensionSettings);
           const observedSource = this.lastFreshSettings === null ? "player-cache" : "login-response";
           this.quota = {
@@ -13204,6 +13271,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
         }
         invalidateFreshness() {
           this.cancelPending();
+          if (this.cloudflareMode) return;
           this.freshCloudObserved = false;
           this.verifiedPayloadInSession = null;
           this.submittedRaw = null;
@@ -13211,6 +13279,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
           this.emit({ state });
         }
         queue(delay = 800, { retry = false } = {}) {
+          if (this.cloudflareMode) return;
           if (this.timer !== null) this.cancel(this.timer);
           if (!retry) this.attempt = 0;
           this.timer = this.schedule(() => {
@@ -13229,6 +13298,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
           return this.serialize(() => this.flushNow(options2));
         }
         async flushNow({ force = false } = {}) {
+          if (this.cloudflareMode) return false;
           this.cancelPending({ resetAttempts: force });
           let transportFailed = false;
           try {
@@ -13341,6 +13411,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
           return this.serialize(() => this.receiveCloudNow(event));
         }
         async receiveCloudNow({ extensionSettings, fresh = false, memberNumber = this.getPlayer()?.MemberNumber, schedule = true } = {}) {
+          if (this.cloudflareMode) return true;
           let committed = false;
           let beforeRemote = null;
           try {
@@ -13460,6 +13531,152 @@ One of mods you are using is using an old version of SDK. It will work for now b
             return committed;
           }
         }
+        observeCloudflareSnapshot(snapshot) {
+          return this.serialize(() => this.observeCloudflareSnapshotNow(snapshot));
+        }
+        async observeCloudflareSnapshotNow({ revision, index: index2 }) {
+          await this.ensureAccount();
+          if (!this.cloudflareMode) throw new Error("Cloudflare sync is not enabled");
+          if (!Number.isSafeInteger(revision) || revision < 0) throw new Error("Invalid Cloudflare revision");
+          const remote = projectWardrobeCloudIndex(index2 || createWardrobeIndex());
+          await this.mergeStored();
+          const knownRevision = this.document.cloudflareRevision || 0;
+          if (revision < knownRevision) throw new Error("Cloudflare returned an older revision");
+          if (revision === knownRevision && this.document.cloudflareBaseIndex && !equal(remote, this.document.cloudflareBaseIndex)) {
+            throw new Error("Cloudflare returned different data for the same revision");
+          }
+          const prior = this.document.conflictContext;
+          const base = prior?.base || this.document.cloudflareBaseIndex || createWardrobeIndex();
+          const local = prior?.local || this.index;
+          const rawResult = mergeWardrobeIndexesThreeWay(base, local, remote, { replicaId: this.replicaId });
+          const resolvedChoices = equal(remote, prior?.remote) ? (prior?.resolvedChoices || []).filter((choice) => rawResult.conflicts.some((conflict) => conflict.kind === choice.kind && conflict.id === choice.id && conflict.field === choice.field)) : [];
+          const result = resolvedChoices.length ? resolveWardrobeConflicts(rawResult, resolvedChoices, { replicaId: this.replicaId }) : rawResult;
+          const conflicts = result.conflicts;
+          const merged = clone$1(result.merged);
+          const pending = conflicts.length > 0 || !equal(projectWardrobeCloudIndex(merged), remote);
+          await this.writeDocument(merged, {
+            pending,
+            conflicts,
+            conflictContext: conflicts.length ? {
+              base,
+              local,
+              remote,
+              guardedRemote: remote,
+              result,
+              missing: [],
+              resolvedChoices
+            } : null,
+            cloudflareBaseIndex: conflicts.length ? base : remote,
+            cloudflareRevision: revision,
+            lastVerifiedAt: pending ? this.document.lastVerifiedAt : Date.now()
+          });
+          this.measure();
+          this.emit({
+            state: conflicts.length ? "conflict" : pending ? "pending" : "verified",
+            conflicts,
+            localSaved: true,
+            error: "",
+            lastVerifiedAt: this.document.lastVerifiedAt || null
+          });
+          return { revision, index: projectWardrobeCloudIndex(merged), conflicts, pending };
+        }
+        cloudflarePlan() {
+          return this.serialize(async () => {
+            await this.ensureAccount();
+            if (!this.cloudflareMode) throw new Error("Cloudflare sync is not enabled");
+            await this.mergeStored();
+            return {
+              revision: this.document.cloudflareRevision || 0,
+              index: projectWardrobeCloudIndex(this.index),
+              conflicts: this.document.conflicts || []
+            };
+          });
+        }
+        resetCloudflareReference() {
+          return this.serialize(async () => {
+            await this.ensureAccount();
+            if (this.cloudflareMode) throw new Error("Turn off Cloudflare sync before changing recovery keys");
+            await this.mergeStored();
+            await this.writeDocument(this.index, {
+              cloudflareRevision: 0,
+              cloudflareBaseIndex: createWardrobeIndex(),
+              conflicts: [],
+              conflictContext: null,
+              pending: true,
+              lastVerifiedAt: null
+            });
+          });
+        }
+        saveCloudflareBcBaseline(baseline) {
+          return this.serialize(async () => {
+            await this.ensureAccount();
+            if (this.cloudflareMode) throw new Error("Cloudflare sync is already enabled");
+            if (baseline !== null && typeof baseline !== "string") {
+              throw new Error("Invalid BC wardrobe baseline");
+            }
+            await this.mergeStored();
+            await this.writeDocument(this.index, { cloudflareBcBaseline: baseline });
+          });
+        }
+        confirmCloudflareWrite({ revision, index: index2 }) {
+          return this.serialize(async () => {
+            await this.ensureAccount();
+            if (!this.cloudflareMode) throw new Error("Cloudflare sync is not enabled");
+            if (!Number.isSafeInteger(revision) || revision <= (this.document.cloudflareRevision || 0)) {
+              throw new Error("Cloudflare did not confirm a newer revision");
+            }
+            const uploaded = projectWardrobeCloudIndex(index2);
+            await this.mergeStored();
+            const pending = !equal(projectWardrobeCloudIndex(this.index), uploaded);
+            await this.writeDocument(this.index, {
+              cloudflareBaseIndex: uploaded,
+              cloudflareRevision: revision,
+              pending,
+              conflicts: [],
+              conflictContext: null,
+              lastVerifiedAt: Date.now()
+            });
+            this.measure();
+            this.emit({
+              state: pending ? "pending" : "verified",
+              localSaved: true,
+              conflicts: [],
+              error: "",
+              lastVerifiedAt: this.document.lastVerifiedAt
+            });
+            return !pending;
+          });
+        }
+        leaveCloudflareMode() {
+          return this.serialize(async () => {
+            await this.ensureAccount();
+            if (!this.cloudflareMode) return;
+            const changes = {
+              pending: true,
+              conflicts: [],
+              conflictContext: null,
+              cloudflareBcBaseline: null,
+              baseCloudIndex: createWardrobeIndex(),
+              baseCloudSequence: 0,
+              baseAppliedSeq: {},
+              submittedVersions: [],
+              submission: null,
+              protocolVersion: void 0,
+              lastVerifiedPayload: null,
+              markerSequence: 0,
+              discardedSeqByDevice: {}
+            };
+            if (this.document.conflicts?.length) {
+              await this.writeDocumentWithArchive(
+                this.index,
+                changes,
+                "cloudflare-conflict-before-bc",
+                { conflicts: this.document.conflicts, context: this.document.conflictContext }
+              );
+            } else await this.writeDocument(this.index, changes);
+            this.emit({ state: "pending", conflicts: [], error: "", localSaved: true });
+          });
+        }
         resolveSyncConflict(resolutions) {
           return this.serialize(() => this.resolveSyncConflictNow(resolutions));
         }
@@ -13474,6 +13691,9 @@ One of mods you are using is using an old version of SDK. It will work for now b
           }
           const missingChoices = resolutions.filter((choice) => choice.kind === "device");
           const mergeChoices = resolutions.filter((choice) => choice.kind !== "device");
+          if (this.cloudflareMode && missingChoices.length) {
+            throw new Error("Cloudflare conflicts do not use BC device markers");
+          }
           for (const choice of missingChoices) {
             if (choice.field !== "sequence" || choice.choice !== "discard" || !this.document.conflicts.some((conflict) => conflict.type === "missing-device" && conflict.id === choice.id)) {
               throw new Error("Unknown device changes can only be explicitly discarded");
@@ -13517,10 +13737,12 @@ One of mods you are using is using an old version of SDK. It will work for now b
                 missing: activeMissing,
                 resolvedChoices: allChoices
               } : null,
-              baseCloudIndex: conflicts.length ? context.base : context.remote,
-              baseAppliedSeq,
-              discardedSeqByDevice: discarded,
-              submission: null
+              ...this.cloudflareMode ? { cloudflareBaseIndex: conflicts.length ? context.base : context.remote } : {
+                baseCloudIndex: conflicts.length ? context.base : context.remote,
+                baseAppliedSeq,
+                discardedSeqByDevice: discarded,
+                submission: null
+              }
             },
             "sync-conflict-decision",
             recovery
@@ -13605,7 +13827,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
         if (typeof key !== "string" || !key) throw new Error("Wardrobe storage key is required");
         return key;
       }
-      function same(left, right) {
+      function same$1(left, right) {
         const canonical2 = (value) => Array.isArray(value) ? value.map(canonical2) : value && typeof value === "object" ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical2(value[key])])) : value;
         return JSON.stringify(canonical2(left)) === JSON.stringify(canonical2(right));
       }
@@ -13792,7 +14014,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
             if (existing === void 0) {
               store.put(record, prefix + key);
               done(key);
-            } else if (same(existing?.data, record?.data)) {
+            } else if (same$1(existing?.data, record?.data)) {
               done(key);
             } else {
               this.saveArchive(store, request, prefix, desiredKey, record, done, suffix + 1);
@@ -13870,7 +14092,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
               const migrated = [];
               const remappedKeys = /* @__PURE__ */ new Map();
               const pending = archives.map((entry) => ({ ...entry }));
-              const legacyDocumentArchived = Boolean(existing && document2 && !same(existing, document2));
+              const legacyDocumentArchived = Boolean(existing && document2 && !same$1(existing, document2));
               if (legacyDocumentArchived) {
                 pending.push({
                   key: `VPWardrobe_index_${account}_recovery_legacy_document`,
@@ -13897,7 +14119,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
                   ...migrated
                 ])];
                 const saved = { ...primary, recoveryKeys };
-                if (!existing || !same(saved, existing)) store.put(saved, primaryKey);
+                if (!existing || !same$1(saved, existing)) store.put(saved, primaryKey);
                 result({ document: saved, archiveKeys: migrated, legacyDocumentArchived });
               };
               next();
@@ -13905,10 +14127,152 @@ One of mods you are using is using an old version of SDK. It will work for now b
           }, member);
         }
       }
+      const CLOUDFLARE_KEY_SETTING = "VPWCloudKey";
+      const KEY_PATTERN = /^vpw1_[A-Za-z0-9_-]{43}$/;
+      function isCloudflareRecoveryKey(value) {
+        return typeof value === "string" && KEY_PATTERN.test(value);
+      }
+      function generateCloudflareRecoveryKey(crypto = globalThis.crypto) {
+        if (typeof crypto?.getRandomValues !== "function") {
+          throw new Error("Secure random key generation is unavailable");
+        }
+        const bytes = crypto.getRandomValues(new Uint8Array(32));
+        const base64 = btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+        return `vpw1_${base64}`;
+      }
+      function configuredCloudflareUrl() {
+        return "https://vpw-cloud-sync.pages.dev";
+      }
+      class CloudflareWardrobeClient {
+        constructor({
+          baseUrl = configuredCloudflareUrl(),
+          fetchImpl = (...args) => globalThis.fetch(...args),
+          timeoutMs = 15e3
+        } = {}) {
+          this.baseUrl = String(baseUrl || "").replace(/\/+$/, "");
+          this.fetchImpl = fetchImpl;
+          this.timeoutMs = timeoutMs;
+          if (this.baseUrl) {
+            const url = new URL(this.baseUrl);
+            if (url.protocol !== "https:" && !(url.protocol === "http:" && ["localhost", "127.0.0.1"].includes(url.hostname))) {
+              throw new Error("Cloudflare sync requires HTTPS");
+            }
+          }
+        }
+        get available() {
+          return Boolean(this.baseUrl && this.fetchImpl);
+        }
+        async request(method, key, body) {
+          if (!this.available) throw Object.assign(
+            new Error("Cloudflare sync has not been configured"),
+            { code: "cloudflare-unconfigured" }
+          );
+          if (!isCloudflareRecoveryKey(key)) throw new Error("Invalid Cloudflare recovery key");
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+          let response;
+          try {
+            response = await this.fetchImpl(`${this.baseUrl}/api/wardrobe`, {
+              method,
+              cache: "no-store",
+              credentials: "omit",
+              signal: controller.signal,
+              headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+              ...body === void 0 ? {} : { body: JSON.stringify(body) }
+            });
+            const data = await response.json().catch(() => null);
+            if (response.status === 409 && data && Number.isSafeInteger(data.revision)) {
+              if (data.index !== null) validateWardrobeIndex(data.index);
+              throw Object.assign(
+                new Error("Cloudflare wardrobe changed on another device"),
+                { code: "cloudflare-conflict", remote: data }
+              );
+            }
+            if (!response.ok || !data) {
+              throw Object.assign(
+                new Error(`Cloudflare sync failed (HTTP ${response.status})`),
+                {
+                  code: "cloudflare-http",
+                  status: response.status,
+                  serverCode: typeof data?.error === "string" ? data.error : null,
+                  maxIndexBytes: Number.isSafeInteger(data?.maxIndexBytes) ? data.maxIndexBytes : null
+                }
+              );
+            }
+            return data;
+          } catch (error) {
+            if (error?.name === "AbortError") {
+              throw Object.assign(new Error("Cloudflare sync timed out"), { code: "cloudflare-timeout", cause: error });
+            }
+            throw error;
+          } finally {
+            clearTimeout(timer);
+          }
+        }
+        async read(key) {
+          const data = await this.request("GET", key);
+          if (!Number.isSafeInteger(data.revision) || data.revision < 0 || data.index !== null && data.index !== void 0 && !validateWardrobeIndex(data.index)) {
+            throw new Error("Cloudflare returned an invalid wardrobe");
+          }
+          return { revision: data.revision, index: data.index || null };
+        }
+        async write(key, expectedRevision, index2) {
+          if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
+            throw new Error("Invalid Cloudflare wardrobe revision");
+          }
+          validateWardrobeIndex(index2);
+          const data = await this.request("PUT", key, { expectedRevision, index: index2 });
+          if (!Number.isSafeInteger(data.revision) || data.revision <= expectedRevision) {
+            throw new Error("Cloudflare did not confirm the wardrobe write");
+          }
+          return data.revision;
+        }
+      }
+      const canonical$1 = (value) => Array.isArray(value) ? value.map(canonical$1) : value && typeof value === "object" ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical$1(value[key])])) : value;
+      const same = (left, right) => JSON.stringify(canonical$1(left)) === JSON.stringify(canonical$1(right));
+      async function syncCloudflareRepository(repository, client2, key, { maxAttempts = 5, isActive = () => true } = {}) {
+        const ensureActive = () => {
+          if (!isActive()) throw Object.assign(
+            new Error("Cloudflare sync was interrupted"),
+            { code: "cloudflare-cancelled" }
+          );
+        };
+        let observed = null;
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+          ensureActive();
+          const remote = observed || await client2.read(key);
+          ensureActive();
+          observed = null;
+          const remoteIndex = remote.index || createWardrobeIndex();
+          const merged = await repository.observeCloudflareSnapshot(remote);
+          ensureActive();
+          if (merged.conflicts.length) return { state: "conflict", revision: remote.revision };
+          const plan = await repository.cloudflarePlan();
+          ensureActive();
+          if (plan.conflicts.length) return { state: "conflict", revision: remote.revision };
+          if (same(plan.index, projectWardrobeCloudIndex(remoteIndex))) {
+            return { state: "verified", revision: remote.revision };
+          }
+          try {
+            ensureActive();
+            const revision = await client2.write(key, plan.revision, plan.index);
+            ensureActive();
+            const current = await repository.confirmCloudflareWrite({ revision, index: plan.index });
+            ensureActive();
+            if (current) return { state: "verified", revision };
+          } catch (error) {
+            if (error?.code !== "cloudflare-conflict") throw error;
+            observed = error.remote;
+          }
+        }
+        return { state: "pending", revision: repository.document?.cloudflareRevision || 0 };
+      }
       const clone = (value) => JSON.parse(JSON.stringify(value));
       const newId = () => globalThis.crypto.randomUUID();
       const canonical = (value) => Array.isArray(value) ? value.map(canonical) : value && typeof value === "object" ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical(value[key])])) : value;
       const sameRecord = (left, right) => JSON.stringify(canonical(left)) === JSON.stringify(canonical(right));
+      const hasLegacyBcSnapshot = (settings) => Boolean(settings?.VPWardrobe) || Object.entries(settings || {}).some(([key, value]) => key.startsWith("VPW4_M_") && value != null);
+      const bcWardrobeSignature = (settings) => JSON.stringify(Object.entries(settings || {}).filter(([key]) => key === "VPWardrobe" || key.startsWith("VPW4_M_")).sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0));
       function unavailableCloudQuota() {
         return {
           limitBytes: EXTENSION_QUOTA_BYTES,
@@ -13922,6 +14286,21 @@ One of mods you are using is using an old version of SDK. It will work for now b
           proposalAvailable: false
         };
       }
+      function idleCloudflareStatus(ready = false) {
+        return {
+          enabled: false,
+          ready,
+          syncing: false,
+          pending: false,
+          error: "",
+          errorCode: null,
+          lastSyncedAt: null,
+          keyAvailable: false,
+          keySavedToBC: false,
+          bcLegacyRetained: null,
+          bcLegacyChanged: false
+        };
+      }
       function createLibraryState() {
         return {
           wardrobeIndex: createWardrobeIndex(),
@@ -13931,7 +14310,16 @@ One of mods you are using is using an old version of SDK. It will work for now b
           _repository: null,
           _activeLibraryMember: null,
           syncStatus: { state: "idle", localSaved: false, error: "", recoveryAvailable: false, conflicts: [] },
-          cloudQuota: unavailableCloudQuota()
+          cloudQuota: unavailableCloudQuota(),
+          cloudflareSyncStatus: idleCloudflareStatus(),
+          _cloudflareKey: null,
+          _cloudflareMember: null,
+          _cloudflareTask: null,
+          _cloudflareTimer: null,
+          _cloudflareClient: null,
+          _cloudflareFreshSettings: null,
+          _cloudflareCleanupSubmitted: false,
+          _cloudflareEpoch: 0
         };
       }
       const wardrobeLibraryActions = {
@@ -13984,6 +14372,11 @@ One of mods you are using is using an old version of SDK. It will work for now b
             this.loadHistory();
             this.historyVersion++;
             this.updatePreviewItem();
+            this._cloudflareKey = null;
+            this._cloudflareMember = null;
+            this._cloudflareFreshSettings = null;
+            this._cloudflareCleanupSubmitted = false;
+            this.cloudflareSyncStatus = idleCloudflareStatus(this._cloudflareClient?.available || false);
           }
           if (this.wardrobeIndex !== index2) {
             const previous = new Map(this.outfits.map((item) => [item.id, item]));
@@ -14012,14 +14405,68 @@ One of mods you are using is using an old version of SDK. It will work for now b
         },
         async loadAll() {
           const member = String(hostWindow.Player?.MemberNumber);
+          this._cloudflareEpoch++;
+          if (this._cloudflareTimer !== null) hostWindow.clearTimeout(this._cloudflareTimer);
+          this._cloudflareTimer = null;
+          this._cloudflareTask = null;
           this._persistedAttemptedMember = member;
-          const loaded = await this._getRepository().open();
+          const repository = this._getRepository();
+          const client2 = this._cloudflareClient || (this._cloudflareClient = new CloudflareWardrobeClient());
+          const saved = repository.persistence ? await repository.persistence.readMeta(member, "cloudflareSync") : null;
+          if (String(hostWindow.Player?.MemberNumber) !== member) {
+            throw new Error("Wardrobe account changed while opening");
+          }
+          repository.setCloudflareMode(saved?.enabled === true);
+          const loaded = await repository.open();
+          if (String(hostWindow.Player?.MemberNumber) !== member || repository.member !== member) {
+            throw new Error("Wardrobe account changed while opening");
+          }
           this._persistedLoaded = loaded ? member : false;
+          const bcKey = hostWindow.Player?.ExtensionSettings?.[CLOUDFLARE_KEY_SETTING];
+          const key = isCloudflareRecoveryKey(saved?.key) ? saved.key : isCloudflareRecoveryKey(bcKey) ? bcKey : null;
+          this._cloudflareKey = key;
+          this._cloudflareMember = member;
+          this._cloudflareFreshSettings = null;
+          this._cloudflareCleanupSubmitted = false;
+          this.cloudflareSyncStatus = {
+            ...idleCloudflareStatus(client2.available),
+            enabled: saved?.enabled === true,
+            keyAvailable: Boolean(key),
+            pending: saved?.enabled === true,
+            keySavedToBC: Boolean(key && (bcKey === key || saved?.keySubmittedToBC)),
+            error: saved?.enabled && !key ? "Cloudflare recovery key is missing" : ""
+          };
           this.loadHistory();
+          if (loaded && saved?.enabled && key && client2.available) this._queueCloudflareSync(0);
           return loaded;
         },
         async receiveCloud(event) {
           const repository = this._getRepository();
+          if (this.cloudflareSyncStatus.enabled) {
+            const member = repository.member;
+            if (String(event?.memberNumber) !== member || String(hostWindow.Player?.MemberNumber) !== member || this._cloudflareMember !== member) return false;
+            const settings = event?.extensionSettings;
+            const key = settings?.[CLOUDFLARE_KEY_SETTING];
+            this._cloudflareFreshSettings = settings ? { ...settings } : null;
+            this._cloudflareCleanupSubmitted = false;
+            if (settings && typeof settings === "object") {
+              const retained = hasLegacyBcSnapshot(settings);
+              const baseline = repository.document?.cloudflareBcBaseline;
+              this.cloudflareSyncStatus = {
+                ...this.cloudflareSyncStatus,
+                bcLegacyRetained: retained,
+                bcLegacyChanged: retained && (typeof baseline !== "string" || bcWardrobeSignature(settings) !== baseline)
+              };
+            }
+            this.cloudflareSyncStatus = {
+              ...this.cloudflareSyncStatus,
+              keySavedToBC: key === this._cloudflareKey
+            };
+            this._clearLegacyBcSnapshot();
+            this.cloudflareSyncStatus = { ...this.cloudflareSyncStatus, pending: true };
+            this._queueCloudflareSync(0);
+            return true;
+          }
           const received = await repository.receiveCloud({ ...event, fresh: true });
           if (repository.member !== null) {
             this._persistedLoaded = repository.status.localSaved ? repository.member : false;
@@ -14027,32 +14474,309 @@ One of mods you are using is using an old version of SDK. It will work for now b
           return received;
         },
         async syncNow() {
+          if (this.cloudflareSyncStatus.enabled) return this.syncCloudflareNow();
           if (!this.syncStatus.localSaved) return this.loadAll();
           if (this.syncStatus.errorCode === "local-storage-quota") return this._getRepository().flush();
           return this._getRepository().flush({ force: true });
         },
-        resolveSyncConflict(resolutions) {
-          return this._getRepository().resolveSyncConflict(resolutions);
+        _queueCloudflareSync(delay = 800) {
+          if (!this.cloudflareSyncStatus.enabled || !this._cloudflareKey) return;
+          if (this._cloudflareTimer !== null) hostWindow.clearTimeout(this._cloudflareTimer);
+          this._cloudflareTimer = hostWindow.setTimeout(() => {
+            this._cloudflareTimer = null;
+            void this.syncCloudflareNow();
+          }, delay);
+        },
+        async syncCloudflareNow() {
+          if (!this.cloudflareSyncStatus.enabled) return false;
+          if (this._cloudflareTask) return this._cloudflareTask;
+          const client2 = this._cloudflareClient || (this._cloudflareClient = new CloudflareWardrobeClient());
+          const key = this._cloudflareKey;
+          const member = this._cloudflareMember;
+          const repository = this._getRepository();
+          const epoch = this._cloudflareEpoch;
+          const isActive = () => this._cloudflareEpoch === epoch && this._cloudflareMember === member && this._cloudflareKey === key && this.cloudflareSyncStatus.enabled && repository.member === member && String(hostWindow.Player?.MemberNumber) === member && hostWindow.__VPW_WARDROBE_LOCK_OWNER === true && hostWindow.__VPW_WARDROBE_LOCK_MEMBER === member;
+          if (!client2.available || !key || !this.syncStatus.localSaved) {
+            this.cloudflareSyncStatus = {
+              ...this.cloudflareSyncStatus,
+              error: !client2.available ? "Cloudflare sync has not been configured" : !key ? "Cloudflare recovery key is missing" : "Local wardrobe is not ready"
+            };
+            return false;
+          }
+          const task = (async () => {
+            this.cloudflareSyncStatus = {
+              ...this.cloudflareSyncStatus,
+              syncing: true,
+              error: "",
+              errorCode: null
+            };
+            try {
+              const result = await syncCloudflareRepository(repository, client2, key, { isActive });
+              if (!isActive()) return false;
+              this.cloudflareSyncStatus = {
+                ...this.cloudflareSyncStatus,
+                syncing: false,
+                error: result.state === "pending" ? "New local changes still need to sync" : "",
+                errorCode: null,
+                pending: result.state !== "verified",
+                lastSyncedAt: result.state === "verified" ? Date.now() : this.cloudflareSyncStatus.lastSyncedAt
+              };
+              if (result.state === "verified") {
+                if (!this._clearLegacyBcSnapshot()) await this._submitCloudflareKeyToBC(key);
+              }
+              if (result.state === "pending") this._queueCloudflareSync(1200);
+              return result.state === "verified";
+            } catch (error) {
+              if (isActive()) {
+                this.cloudflareSyncStatus = {
+                  ...this.cloudflareSyncStatus,
+                  syncing: false,
+                  error: error?.message || "Cloudflare sync failed",
+                  errorCode: error?.serverCode || error?.code || null,
+                  pending: true
+                };
+              }
+              return false;
+            }
+          })();
+          this._cloudflareTask = task;
+          try {
+            return await task;
+          } finally {
+            if (this._cloudflareTask === task) this._cloudflareTask = null;
+          }
+        },
+        async _submitCloudflareKeyToBC(key) {
+          const member = this._cloudflareMember;
+          const player = hostWindow.Player;
+          const repository = this._getRepository();
+          if (!isCloudflareRecoveryKey(key) || String(player?.MemberNumber) !== member || this._cloudflareKey !== key || !this.cloudflareSyncStatus.enabled || this.cloudflareSyncStatus.pending || !this.cloudflareSyncStatus.lastSyncedAt || repository.member !== member || !repository.cloudflareMode || !Number.isSafeInteger(repository.document?.cloudflareRevision) || repository.document.cloudflareRevision < 1 || repository.document?.pending || repository.document?.conflicts?.length || hostWindow.__VPW_WARDROBE_LOCK_OWNER !== true || hostWindow.__VPW_WARDROBE_LOCK_MEMBER !== member || typeof hostWindow.ServerSend !== "function" || hostWindow.ServerSocket?.connected === false) return false;
+          const settings = player.ExtensionSettings || (player.ExtensionSettings = {});
+          if (settings[CLOUDFLARE_KEY_SETTING] !== key || this._cloudflareFreshSettings && this._cloudflareFreshSettings[CLOUDFLARE_KEY_SETTING] !== key) {
+            const proposed = { ...settings, [CLOUDFLARE_KEY_SETTING]: key };
+            try {
+              if (measureObservedExtensionQuota(proposed).isOverLimit) return false;
+            } catch {
+              return false;
+            }
+            const prior = settings[CLOUDFLARE_KEY_SETTING];
+            settings[CLOUDFLARE_KEY_SETTING] = key;
+            try {
+              if (hostWindow.ServerSend("AccountUpdate", {
+                [`ExtensionSettings.${CLOUDFLARE_KEY_SETTING}`]: key
+              }) === false) throw new Error("BC did not accept the recovery key");
+            } catch {
+              if (prior === void 0) delete settings[CLOUDFLARE_KEY_SETTING];
+              else settings[CLOUDFLARE_KEY_SETTING] = prior;
+              return false;
+            }
+          }
+          if (this._cloudflareMember !== member) return false;
+          try {
+            await this._getRepository().persistence.writeMeta(member, "cloudflareSync", {
+              enabled: this.cloudflareSyncStatus.enabled,
+              key,
+              keySubmittedToBC: true
+            });
+          } catch {
+            return false;
+          }
+          this.cloudflareSyncStatus = { ...this.cloudflareSyncStatus, keySavedToBC: true };
+          return true;
+        },
+        _clearLegacyBcSnapshot() {
+          const repository = this._getRepository();
+          if (!this.cloudflareSyncStatus.enabled || !this._cloudflareKey || this._cloudflareCleanupSubmitted || this.cloudflareSyncStatus.bcLegacyRetained === false || this.cloudflareSyncStatus.bcLegacyChanged || !this._cloudflareFreshSettings || typeof repository.document?.cloudflareBcBaseline !== "string" || bcWardrobeSignature(this._cloudflareFreshSettings) !== repository.document.cloudflareBcBaseline || !Number.isSafeInteger(repository.document?.cloudflareRevision) || repository.document.cloudflareRevision < 1 || repository.document?.pending || repository.document?.conflicts?.length) return false;
+          const member = this._cloudflareMember;
+          const player = hostWindow.Player;
+          if (String(player?.MemberNumber) !== member || hostWindow.__VPW_WARDROBE_LOCK_OWNER !== true || hostWindow.__VPW_WARDROBE_LOCK_MEMBER !== member || typeof hostWindow.ServerSend !== "function" || hostWindow.ServerSocket?.connected === false) return false;
+          const settings = player.ExtensionSettings || (player.ExtensionSettings = {});
+          const observed = this._cloudflareFreshSettings || settings;
+          if (bcWardrobeSignature(settings) !== repository.document.cloudflareBcBaseline) {
+            this.cloudflareSyncStatus = { ...this.cloudflareSyncStatus, bcLegacyChanged: true };
+            return false;
+          }
+          const keys2 = ["VPWardrobe", ...Object.keys(observed).filter((key) => key.startsWith("VPW4_M_"))].filter((key) => observed[key] != null);
+          if (!keys2.length) return false;
+          const previous = new Map([...keys2, CLOUDFLARE_KEY_SETTING].map((key) => [key, settings[key]]));
+          const fields = {
+            ...Object.fromEntries(keys2.map((key) => [`ExtensionSettings.${key}`, null])),
+            [`ExtensionSettings.${CLOUDFLARE_KEY_SETTING}`]: this._cloudflareKey
+          };
+          const proposed = {
+            ...observed,
+            ...Object.fromEntries(keys2.map((key) => [key, null])),
+            [CLOUDFLARE_KEY_SETTING]: this._cloudflareKey
+          };
+          try {
+            if (measureObservedExtensionQuota(proposed).isOverLimit) return false;
+          } catch {
+            return false;
+          }
+          for (const key of keys2) settings[key] = null;
+          settings[CLOUDFLARE_KEY_SETTING] = this._cloudflareKey;
+          try {
+            if (hostWindow.ServerSend("AccountUpdate", fields) === false) {
+              throw new Error("BC did not accept the cleanup");
+            }
+          } catch {
+            for (const [key, value] of previous) {
+              if (value === void 0) delete settings[key];
+              else settings[key] = value;
+            }
+            return false;
+          }
+          this._cloudflareCleanupSubmitted = true;
+          this.cloudflareSyncStatus = {
+            ...this.cloudflareSyncStatus,
+            keySavedToBC: true,
+            bcLegacyRetained: null
+          };
+          return true;
+        },
+        async enableCloudflareSync() {
+          const client2 = this._cloudflareClient || (this._cloudflareClient = new CloudflareWardrobeClient());
+          if (!client2.available) {
+            this.cloudflareSyncStatus = {
+              ...this.cloudflareSyncStatus,
+              error: "Cloudflare sync has not been configured"
+            };
+            return false;
+          }
+          const repository = this._getRepository();
+          if (!this.syncStatus.localSaved) await this.loadAll();
+          if (!repository.status.localSaved) throw new Error("Local wardrobe is not ready");
+          if (repository.status.conflicts?.length) throw new Error("Resolve current sync conflicts before switching storage");
+          const member = repository.member;
+          const bcKey = hostWindow.Player?.ExtensionSettings?.[CLOUDFLARE_KEY_SETTING];
+          const key = this._cloudflareKey || (isCloudflareRecoveryKey(bcKey) ? bcKey : generateCloudflareRecoveryKey());
+          await repository.saveCloudflareBcBaseline(repository.freshCloudObserved ? bcWardrobeSignature(repository.lastFreshSettings) : null);
+          await repository.persistence.writeMeta(member, "cloudflareSync", {
+            enabled: true,
+            key,
+            keySubmittedToBC: bcKey === key
+          });
+          if (String(hostWindow.Player?.MemberNumber) !== member || repository.member !== member) {
+            throw new Error("Wardrobe account changed while switching sync");
+          }
+          this._cloudflareKey = key;
+          this._cloudflareMember = member;
+          repository.setCloudflareMode(true);
+          this.cloudflareSyncStatus = {
+            ...this.cloudflareSyncStatus,
+            enabled: true,
+            ready: true,
+            keyAvailable: true,
+            keySavedToBC: bcKey === key,
+            pending: true,
+            error: ""
+          };
+          this._queueCloudflareSync(0);
+          return true;
+        },
+        async disableCloudflareSync() {
+          if (!this.cloudflareSyncStatus.enabled) return true;
+          const member = this._cloudflareMember;
+          if (this._cloudflareTimer !== null) hostWindow.clearTimeout(this._cloudflareTimer);
+          this._cloudflareTimer = null;
+          if (this._cloudflareTask) await this._cloudflareTask;
+          if (this._cloudflareMember !== member || String(hostWindow.Player?.MemberNumber) !== member) {
+            throw new Error("Wardrobe account changed while switching sync");
+          }
+          const repository = this._getRepository();
+          await repository.leaveCloudflareMode();
+          if (repository.member !== member) throw new Error("Wardrobe account changed while switching sync");
+          await repository.persistence.writeMeta(member, "cloudflareSync", {
+            enabled: false,
+            key: this._cloudflareKey,
+            keySubmittedToBC: this.cloudflareSyncStatus.keySavedToBC
+          });
+          repository.setCloudflareMode(false);
+          repository.invalidateFreshness();
+          this.cloudflareSyncStatus = {
+            ...this.cloudflareSyncStatus,
+            enabled: false,
+            syncing: false,
+            pending: false,
+            error: "",
+            lastSyncedAt: null,
+            bcLegacyRetained: null,
+            bcLegacyChanged: false
+          };
+          return true;
+        },
+        async importCloudflareKey(key) {
+          const normalized = String(key || "").trim();
+          if (!isCloudflareRecoveryKey(normalized)) throw new Error("Invalid Cloudflare recovery key");
+          if (this.cloudflareSyncStatus.enabled && this._cloudflareKey !== normalized) {
+            throw new Error("Turn off Cloudflare sync before switching recovery keys");
+          }
+          const member = this._getRepository().member;
+          if (this._cloudflareKey !== normalized) {
+            await this._getRepository().resetCloudflareReference();
+          }
+          await this._getRepository().persistence.writeMeta(member, "cloudflareSync", {
+            enabled: this.cloudflareSyncStatus.enabled,
+            key: normalized,
+            keySubmittedToBC: false
+          });
+          if (String(hostWindow.Player?.MemberNumber) !== member) {
+            throw new Error("Wardrobe account changed while saving the recovery key");
+          }
+          this._cloudflareKey = normalized;
+          this._cloudflareMember = member;
+          this.cloudflareSyncStatus = {
+            ...this.cloudflareSyncStatus,
+            keyAvailable: true,
+            keySavedToBC: false,
+            pending: this.cloudflareSyncStatus.enabled,
+            error: ""
+          };
+          if (this.cloudflareSyncStatus.enabled) this._queueCloudflareSync(0);
+          return true;
+        },
+        async exportCloudflareKey() {
+          if (!this._cloudflareKey) throw new Error("Cloudflare recovery key is not available");
+          return this._cloudflareKey;
+        },
+        async resolveSyncConflict(resolutions) {
+          const result = await this._getRepository().resolveSyncConflict(resolutions);
+          if (this.cloudflareSyncStatus.enabled) {
+            this.cloudflareSyncStatus = { ...this.cloudflareSyncStatus, pending: true };
+            this._queueCloudflareSync();
+          }
+          return result;
         },
         refreshCloudQuotaStats() {
           this.cloudQuota = this._getRepository().measure();
           return this.cloudQuota;
+        },
+        async _applyLibraryOperations(operations) {
+          const result = await this._getRepository().apply(operations);
+          if (this.cloudflareSyncStatus.enabled) {
+            this.cloudflareSyncStatus = {
+              ...this.cloudflareSyncStatus,
+              pending: Boolean(this._getRepository().document?.pending)
+            };
+            this._queueCloudflareSync();
+          }
+          return result;
         },
         selectTag(id) {
           this.selectedTagId = id;
         },
         async createTag(name) {
           const id = newId();
-          await this._getRepository().apply([{ type: "put-tag", id, name }]);
+          await this._applyLibraryOperations([{ type: "put-tag", id, name }]);
           return id;
         },
         async renameTag(id, name) {
-          await this._getRepository().apply([{ type: "rename-tag", id, name }]);
+          await this._applyLibraryOperations([{ type: "rename-tag", id, name }]);
           return true;
         },
         async deleteTag(id) {
           const ids2 = this.tags.find((tag) => tag.aliasIds.includes(id))?.aliasIds || [id];
-          await this._getRepository().apply(ids2.map((id2) => ({ type: "delete-tag", id: id2 })));
+          await this._applyLibraryOperations(ids2.map((id2) => ({ type: "delete-tag", id: id2 })));
           return true;
         },
         async addOutfit(file) {
@@ -14061,22 +14785,22 @@ One of mods you are using is using an old version of SDK. It will work for now b
           changes.tagIds ||= this.selectedTagId && this.selectedTagId !== "untagged" ? [this.selectedTagId] : [];
           const operations = [{ type: "put-outfit", id, changes }];
           if (!cloudSync) operations.push({ type: "set-cloud", id, enabled: false });
-          await this._getRepository().apply(operations);
+          await this._applyLibraryOperations(operations);
           return id;
         },
         async updateOutfit(id, changes) {
-          await this._getRepository().apply([{ type: "put-outfit", id, changes }]);
+          await this._applyLibraryOperations([{ type: "put-outfit", id, changes }]);
           return true;
         },
         async removeOutfit(id) {
-          await this._getRepository().apply([{ type: "delete-outfit", id }]);
+          await this._applyLibraryOperations([{ type: "delete-outfit", id }]);
           return true;
         },
         setOutfitTags(id, tagIds) {
           return this.updateOutfit(id, { tagIds });
         },
         async setOutfitCloudSync(id, enabled) {
-          await this._getRepository().apply([{ type: "set-cloud", id, enabled }]);
+          await this._applyLibraryOperations([{ type: "set-cloud", id, enabled }]);
           return true;
         },
         exportWardrobe() {
@@ -14119,7 +14843,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
             operations.push({ type: "put-outfit", id, changes });
             if (incoming.cloudState[oldId]?.enabled === false) operations.push({ type: "set-cloud", id, enabled: false });
           }
-          if (operations.length) await this._getRepository().apply(operations);
+          if (operations.length) await this._applyLibraryOperations(operations);
           return { count: outfits.length };
         }
       };
@@ -21661,7 +22385,7 @@ ${lightForced}`;
         }
         return getCollapseProps;
       }
-      const defaultProps$L = {
+      const defaultProps$M = {
         transitionDuration: 200,
         transitionTimingFunction: "ease",
         animateOpacity: true
@@ -21677,7 +22401,7 @@ ${lightForced}`;
           animateOpacity,
           keepMounted,
           ...others
-        } = useProps("Collapse", defaultProps$L, props);
+        } = useProps("Collapse", defaultProps$M, props);
         const theme = useMantineTheme();
         const shouldReduceMotion = useReducedMotion();
         const reduceMotion = theme.respectReducedMotion ? shouldReduceMotion : false;
@@ -25127,7 +25851,7 @@ ${lightForced}`;
           item
         } : {}, [enabled, reference, floating, item]);
       }
-      var classes$y = { "root": "m_d57069b5", "content": "m_b1336c6", "viewport": "m_c0783ff9", "viewportInner": "m_f8f631dd", "scrollbar": "m_c44ba933", "thumb": "m_d8b5e363", "corner": "m_21657268" };
+      var classes$z = { "root": "m_d57069b5", "content": "m_b1336c6", "viewport": "m_c0783ff9", "viewportInner": "m_f8f631dd", "scrollbar": "m_c44ba933", "thumb": "m_d8b5e363", "corner": "m_21657268" };
       const [ScrollAreaProvider, useScrollAreaContext] = createSafeContext(
         "ScrollArea.Root component was not found in tree"
       );
@@ -25173,14 +25897,14 @@ ${lightForced}`;
         const hasCorner = ctx.type !== "scroll" && hasBothScrollbarsVisible;
         return hasCorner ? /* @__PURE__ */ jsxRuntimeExports.jsx(Corner, { ...props, ref }) : null;
       });
-      const defaultProps$K = {
+      const defaultProps$L = {
         scrollHideDelay: 1e3,
         type: "hover"
       };
       const ScrollAreaRoot = reactExports.forwardRef((_props, ref) => {
         const { type, scrollHideDelay, scrollbars, getStyles: getStyles2, ...others } = useProps(
           "ScrollAreaRoot",
-          defaultProps$K,
+          defaultProps$L,
           _props
         );
         const [scrollArea, setScrollArea] = reactExports.useState(null);
@@ -25822,12 +26546,12 @@ ${lightForced}`;
         }
       );
       ScrollAreaViewport.displayName = "@mantine/core/ScrollAreaViewport";
-      const defaultProps$J = {
+      const defaultProps$K = {
         scrollHideDelay: 1e3,
         type: "hover",
         scrollbars: "xy"
       };
-      const varsResolver$C = createVarsResolver(
+      const varsResolver$D = createVarsResolver(
         (_, { scrollbarSize, overscrollBehavior, scrollbars }) => {
           let overrideOverscrollBehavior = overscrollBehavior;
           if (overscrollBehavior && scrollbars) {
@@ -25846,7 +26570,7 @@ ${lightForced}`;
         }
       );
       const ScrollArea = factory((_props, ref) => {
-        const props = useProps("ScrollArea", defaultProps$J, _props);
+        const props = useProps("ScrollArea", defaultProps$K, _props);
         const {
           classNames,
           className,
@@ -25875,7 +26599,7 @@ ${lightForced}`;
         const getStyles2 = useStyles({
           name: "ScrollArea",
           props,
-          classes: classes$y,
+          classes: classes$z,
           className,
           style,
           classNames,
@@ -25883,7 +26607,7 @@ ${lightForced}`;
           unstyled,
           attributes,
           vars,
-          varsResolver: varsResolver$C
+          varsResolver: varsResolver$D
         });
         const localViewportRef = reactExports.useRef(null);
         const combinedViewportRef = useMergeRefs([viewportRef, localViewportRef]);
@@ -25998,7 +26722,7 @@ ${lightForced}`;
           onTopReached,
           onOverflowChange,
           ...others
-        } = useProps("ScrollAreaAutosize", defaultProps$J, props);
+        } = useProps("ScrollAreaAutosize", defaultProps$K, props);
         const viewportObserverRef = reactExports.useRef(null);
         const combinedViewportRef = useMergeRefs([viewportRef, viewportObserverRef]);
         const [overflowing, setOverflowing] = reactExports.useState(false);
@@ -26070,17 +26794,17 @@ ${lightForced}`;
           }
         ) });
       });
-      ScrollArea.classes = classes$y;
+      ScrollArea.classes = classes$z;
       ScrollAreaAutosize.displayName = "@mantine/core/ScrollAreaAutosize";
-      ScrollAreaAutosize.classes = classes$y;
+      ScrollAreaAutosize.classes = classes$z;
       ScrollArea.Autosize = ScrollAreaAutosize;
-      var classes$x = { "root": "m_87cf2631" };
-      const defaultProps$I = {
+      var classes$y = { "root": "m_87cf2631" };
+      const defaultProps$J = {
         __staticSelector: "UnstyledButton"
       };
       const UnstyledButton = polymorphicFactory(
         (_props, ref) => {
-          const props = useProps("UnstyledButton", defaultProps$I, _props);
+          const props = useProps("UnstyledButton", defaultProps$J, _props);
           const {
             className,
             component = "button",
@@ -26095,7 +26819,7 @@ ${lightForced}`;
           const getStyles2 = useStyles({
             name: __staticSelector,
             props,
-            classes: classes$x,
+            classes: classes$y,
             className,
             style,
             classNames,
@@ -26115,15 +26839,15 @@ ${lightForced}`;
           );
         }
       );
-      UnstyledButton.classes = classes$x;
+      UnstyledButton.classes = classes$y;
       UnstyledButton.displayName = "@mantine/core/UnstyledButton";
-      var classes$w = { "root": "m_515a97f8" };
+      var classes$x = { "root": "m_515a97f8" };
       const VisuallyHidden = factory((_props, ref) => {
         const props = useProps("VisuallyHidden", null, _props);
         const { classNames, className, style, styles: styles2, unstyled, vars, attributes, ...others } = props;
         const getStyles2 = useStyles({
           name: "VisuallyHidden",
-          classes: classes$w,
+          classes: classes$x,
           props,
           className,
           style,
@@ -26134,10 +26858,10 @@ ${lightForced}`;
         });
         return /* @__PURE__ */ jsxRuntimeExports.jsx(Box, { component: "span", ref, ...getStyles2("root"), ...others });
       });
-      VisuallyHidden.classes = classes$w;
+      VisuallyHidden.classes = classes$x;
       VisuallyHidden.displayName = "@mantine/core/VisuallyHidden";
-      var classes$v = { "root": "m_1b7284a3" };
-      const varsResolver$B = createVarsResolver((_, { radius, shadow }) => ({
+      var classes$w = { "root": "m_1b7284a3" };
+      const varsResolver$C = createVarsResolver((_, { radius, shadow }) => ({
         root: {
           "--paper-radius": radius === void 0 ? void 0 : getRadius(radius),
           "--paper-shadow": getShadow(shadow)
@@ -26163,7 +26887,7 @@ ${lightForced}`;
         const getStyles2 = useStyles({
           name: "Paper",
           props,
-          classes: classes$v,
+          classes: classes$w,
           className,
           style,
           classNames,
@@ -26171,7 +26895,7 @@ ${lightForced}`;
           unstyled,
           attributes,
           vars,
-          varsResolver: varsResolver$B
+          varsResolver: varsResolver$C
         });
         return /* @__PURE__ */ jsxRuntimeExports.jsx(
           Box,
@@ -26184,7 +26908,7 @@ ${lightForced}`;
           }
         );
       });
-      Paper.classes = classes$v;
+      Paper.classes = classes$w;
       Paper.displayName = "@mantine/core/Paper";
       function horizontalSide(placement, arrowY, arrowOffset, arrowPosition) {
         if (placement === "center" || arrowPosition === "center") {
@@ -26325,11 +27049,11 @@ ${lightForced}`;
         }
         return position;
       }
-      var classes$u = { "root": "m_9814e45f" };
-      const defaultProps$H = {
+      var classes$v = { "root": "m_9814e45f" };
+      const defaultProps$I = {
         zIndex: getDefaultZIndex("modal")
       };
-      const varsResolver$A = createVarsResolver(
+      const varsResolver$B = createVarsResolver(
         (_, { gradient, color, backgroundOpacity, blur, radius, zIndex }) => ({
           root: {
             "--overlay-bg": gradient || (color !== void 0 || backgroundOpacity !== void 0) && rgba(color || "#000", backgroundOpacity ?? 0.6) || void 0,
@@ -26340,7 +27064,7 @@ ${lightForced}`;
         })
       );
       const Overlay = polymorphicFactory((_props, ref) => {
-        const props = useProps("Overlay", defaultProps$H, _props);
+        const props = useProps("Overlay", defaultProps$I, _props);
         const {
           classNames,
           className,
@@ -26364,7 +27088,7 @@ ${lightForced}`;
         const getStyles2 = useStyles({
           name: "Overlay",
           props,
-          classes: classes$u,
+          classes: classes$v,
           className,
           style,
           classNames,
@@ -26372,11 +27096,11 @@ ${lightForced}`;
           unstyled,
           attributes,
           vars,
-          varsResolver: varsResolver$A
+          varsResolver: varsResolver$B
         });
         return /* @__PURE__ */ jsxRuntimeExports.jsx(Box, { ref, ...getStyles2("root"), mod: [{ center, fixed }, mod], ...others, children });
       });
-      Overlay.classes = classes$u;
+      Overlay.classes = classes$v;
       Overlay.displayName = "@mantine/core/Overlay";
       function createPortalNode(props) {
         const node = document.createElement("div");
@@ -26405,11 +27129,11 @@ ${lightForced}`;
         }
         return createPortalNode(others);
       }
-      const defaultProps$G = {
+      const defaultProps$H = {
         reuseTargetNode: true
       };
       const Portal = factory((props, ref) => {
-        const { children, target, reuseTargetNode, ...others } = useProps("Portal", defaultProps$G, props);
+        const { children, target, reuseTargetNode, ...others } = useProps("Portal", defaultProps$H, props);
         const [mounted, setMounted] = reactExports.useState(false);
         const nodeRef = reactExports.useRef(null);
         useIsomorphicEffect(() => {
@@ -26720,7 +27444,7 @@ ${lightForced}`;
       const [PopoverContextProvider, usePopoverContext] = createSafeContext(
         "Popover component was not found in the tree"
       );
-      var classes$t = { "dropdown": "m_38a85659", "arrow": "m_a31dc6c1", "overlay": "m_3d7bc908" };
+      var classes$u = { "dropdown": "m_38a85659", "arrow": "m_a31dc6c1", "overlay": "m_3d7bc908" };
       function FocusTrap({
         children,
         active = true,
@@ -26843,16 +27567,16 @@ ${lightForced}`;
           }
         ) });
       });
-      PopoverDropdown.classes = classes$t;
+      PopoverDropdown.classes = classes$u;
       PopoverDropdown.displayName = "@mantine/core/PopoverDropdown";
-      const defaultProps$F = {
+      const defaultProps$G = {
         refProp: "ref",
         popupType: "dialog"
       };
       const PopoverTarget = factory((props, ref) => {
         const { children, refProp, popupType, ...others } = useProps(
           "PopoverTarget",
-          defaultProps$F,
+          defaultProps$G,
           props
         );
         const child = getSingleElementChild(children);
@@ -27019,7 +27743,7 @@ ${lightForced}`;
           onToggle
         };
       }
-      const defaultProps$E = {
+      const defaultProps$F = {
         position: "bottom",
         offset: 8,
         positionDependencies: [],
@@ -27042,14 +27766,14 @@ ${lightForced}`;
         __staticSelector: "Popover",
         width: "max-content"
       };
-      const varsResolver$z = createVarsResolver((_, { radius, shadow }) => ({
+      const varsResolver$A = createVarsResolver((_, { radius, shadow }) => ({
         dropdown: {
           "--popover-radius": radius === void 0 ? void 0 : getRadius(radius),
           "--popover-shadow": getShadow(shadow)
         }
       }));
       function Popover(_props) {
-        const props = useProps("Popover", defaultProps$E, _props);
+        const props = useProps("Popover", defaultProps$F, _props);
         const {
           children,
           position,
@@ -27105,14 +27829,14 @@ ${lightForced}`;
         const getStyles2 = useStyles({
           name: __staticSelector,
           props,
-          classes: classes$t,
+          classes: classes$u,
           classNames,
           styles: styles2,
           unstyled,
           attributes,
           rootSelector: "dropdown",
           vars,
-          varsResolver: varsResolver$z
+          varsResolver: varsResolver$A
         });
         const { resolvedStyles } = useResolvedStylesApi({ classNames, styles: styles2, props });
         const [dropdownVisible, setDropdownVisible] = reactExports.useState(opened ?? defaultOpened ?? false);
@@ -27259,38 +27983,38 @@ ${lightForced}`;
       Popover.Dropdown = PopoverDropdown;
       Popover.displayName = "@mantine/core/Popover";
       Popover.extend = (input) => input;
-      var classes$s = { "root": "m_5ae2e3c", "barsLoader": "m_7a2bd4cd", "bar": "m_870bb79", "bars-loader-animation": "m_5d2b3b9d", "dotsLoader": "m_4e3f22d7", "dot": "m_870c4af", "loader-dots-animation": "m_aac34a1", "ovalLoader": "m_b34414df", "oval-loader-animation": "m_f8e89c4b" };
-      const Bars = reactExports.forwardRef(({ className, ...others }, ref) => /* @__PURE__ */ jsxRuntimeExports.jsxs(Box, { component: "span", className: clsx(classes$s.barsLoader, className), ...others, ref, children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: classes$s.bar }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: classes$s.bar }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: classes$s.bar })
+      var classes$t = { "root": "m_5ae2e3c", "barsLoader": "m_7a2bd4cd", "bar": "m_870bb79", "bars-loader-animation": "m_5d2b3b9d", "dotsLoader": "m_4e3f22d7", "dot": "m_870c4af", "loader-dots-animation": "m_aac34a1", "ovalLoader": "m_b34414df", "oval-loader-animation": "m_f8e89c4b" };
+      const Bars = reactExports.forwardRef(({ className, ...others }, ref) => /* @__PURE__ */ jsxRuntimeExports.jsxs(Box, { component: "span", className: clsx(classes$t.barsLoader, className), ...others, ref, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: classes$t.bar }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: classes$t.bar }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: classes$t.bar })
       ] }));
       Bars.displayName = "@mantine/core/Bars";
-      const Dots = reactExports.forwardRef(({ className, ...others }, ref) => /* @__PURE__ */ jsxRuntimeExports.jsxs(Box, { component: "span", className: clsx(classes$s.dotsLoader, className), ...others, ref, children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: classes$s.dot }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: classes$s.dot }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: classes$s.dot })
+      const Dots = reactExports.forwardRef(({ className, ...others }, ref) => /* @__PURE__ */ jsxRuntimeExports.jsxs(Box, { component: "span", className: clsx(classes$t.dotsLoader, className), ...others, ref, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: classes$t.dot }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: classes$t.dot }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: classes$t.dot })
       ] }));
       Dots.displayName = "@mantine/core/Dots";
-      const Oval = reactExports.forwardRef(({ className, ...others }, ref) => /* @__PURE__ */ jsxRuntimeExports.jsx(Box, { component: "span", className: clsx(classes$s.ovalLoader, className), ...others, ref }));
+      const Oval = reactExports.forwardRef(({ className, ...others }, ref) => /* @__PURE__ */ jsxRuntimeExports.jsx(Box, { component: "span", className: clsx(classes$t.ovalLoader, className), ...others, ref }));
       Oval.displayName = "@mantine/core/Oval";
       const defaultLoaders = {
         bars: Bars,
         oval: Oval,
         dots: Dots
       };
-      const defaultProps$D = {
+      const defaultProps$E = {
         loaders: defaultLoaders,
         type: "oval"
       };
-      const varsResolver$y = createVarsResolver((theme, { size: size2, color }) => ({
+      const varsResolver$z = createVarsResolver((theme, { size: size2, color }) => ({
         root: {
           "--loader-size": getSize(size2, "loader-size"),
           "--loader-color": color ? getThemeColor(color, theme) : void 0
         }
       }));
       const Loader = factory((_props, ref) => {
-        const props = useProps("Loader", defaultProps$D, _props);
+        const props = useProps("Loader", defaultProps$E, _props);
         const {
           size: size2,
           color,
@@ -27310,7 +28034,7 @@ ${lightForced}`;
         const getStyles2 = useStyles({
           name: "Loader",
           props,
-          classes: classes$s,
+          classes: classes$t,
           className,
           style,
           classNames,
@@ -27318,7 +28042,7 @@ ${lightForced}`;
           unstyled,
           attributes,
           vars,
-          varsResolver: varsResolver$y
+          varsResolver: varsResolver$z
         });
         if (children) {
           return /* @__PURE__ */ jsxRuntimeExports.jsx(Box, { ...getStyles2("root"), ref, ...others, children });
@@ -27336,17 +28060,17 @@ ${lightForced}`;
         );
       });
       Loader.defaultLoaders = defaultLoaders;
-      Loader.classes = classes$s;
+      Loader.classes = classes$t;
       Loader.displayName = "@mantine/core/Loader";
-      var classes$r = { "root": "m_8d3f4000", "icon": "m_8d3afb97", "loader": "m_302b9fb1", "group": "m_1a0f1b21", "groupSection": "m_437b6484" };
-      const defaultProps$C = {
+      var classes$s = { "root": "m_8d3f4000", "icon": "m_8d3afb97", "loader": "m_302b9fb1", "group": "m_1a0f1b21", "groupSection": "m_437b6484" };
+      const defaultProps$D = {
         orientation: "horizontal"
       };
-      const varsResolver$x = createVarsResolver((_, { borderWidth }) => ({
+      const varsResolver$y = createVarsResolver((_, { borderWidth }) => ({
         group: { "--ai-border-width": rem(borderWidth) }
       }));
       const ActionIconGroup = factory((_props, ref) => {
-        const props = useProps("ActionIconGroup", defaultProps$C, _props);
+        const props = useProps("ActionIconGroup", defaultProps$D, _props);
         const {
           className,
           style,
@@ -27360,11 +28084,11 @@ ${lightForced}`;
           mod,
           attributes,
           ...others
-        } = useProps("ActionIconGroup", defaultProps$C, _props);
+        } = useProps("ActionIconGroup", defaultProps$D, _props);
         const getStyles2 = useStyles({
           name: "ActionIconGroup",
           props,
-          classes: classes$r,
+          classes: classes$s,
           className,
           style,
           classNames,
@@ -27372,7 +28096,7 @@ ${lightForced}`;
           unstyled,
           attributes,
           vars,
-          varsResolver: varsResolver$x,
+          varsResolver: varsResolver$y,
           rootSelector: "group"
         });
         return /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -27387,9 +28111,9 @@ ${lightForced}`;
           }
         );
       });
-      ActionIconGroup.classes = classes$r;
+      ActionIconGroup.classes = classes$s;
       ActionIconGroup.displayName = "@mantine/core/ActionIconGroup";
-      const varsResolver$w = createVarsResolver(
+      const varsResolver$x = createVarsResolver(
         (theme, { radius, color, gradient, variant, autoContrast, size: size2 }) => {
           const colors = theme.variantColorResolver({
             color: color || theme.primaryColor,
@@ -27430,7 +28154,7 @@ ${lightForced}`;
         const getStyles2 = useStyles({
           name: "ActionIconGroupSection",
           props,
-          classes: classes$r,
+          classes: classes$s,
           className,
           style,
           classNames,
@@ -27438,14 +28162,14 @@ ${lightForced}`;
           unstyled,
           attributes,
           vars,
-          varsResolver: varsResolver$w,
+          varsResolver: varsResolver$x,
           rootSelector: "groupSection"
         });
         return /* @__PURE__ */ jsxRuntimeExports.jsx(Box, { ...getStyles2("groupSection"), ref, variant, ...others });
       });
-      ActionIconGroupSection.classes = classes$r;
+      ActionIconGroupSection.classes = classes$s;
       ActionIconGroupSection.displayName = "@mantine/core/ActionIconGroupSection";
-      const varsResolver$v = createVarsResolver(
+      const varsResolver$w = createVarsResolver(
         (theme, { size: size2, radius, variant, gradient, color, autoContrast }) => {
           const colors = theme.variantColorResolver({
             color: color || theme.primaryColor,
@@ -27497,13 +28221,13 @@ ${lightForced}`;
           props,
           className,
           style,
-          classes: classes$r,
+          classes: classes$s,
           classNames,
           styles: styles2,
           unstyled,
           attributes,
           vars,
-          varsResolver: varsResolver$v
+          varsResolver: varsResolver$w
         });
         return /* @__PURE__ */ jsxRuntimeExports.jsxs(
           UnstyledButton,
@@ -27523,7 +28247,7 @@ ${lightForced}`;
           }
         );
       });
-      ActionIcon.classes = classes$r;
+      ActionIcon.classes = classes$s;
       ActionIcon.displayName = "@mantine/core/ActionIcon";
       ActionIcon.Group = ActionIconGroup;
       ActionIcon.GroupSection = ActionIconGroupSection;
@@ -27550,11 +28274,11 @@ ${lightForced}`;
         )
       );
       CloseIcon.displayName = "@mantine/core/CloseIcon";
-      var classes$q = { "root": "m_86a44da5", "root--subtle": "m_220c80f2" };
-      const defaultProps$B = {
+      var classes$r = { "root": "m_86a44da5", "root--subtle": "m_220c80f2" };
+      const defaultProps$C = {
         variant: "subtle"
       };
-      const varsResolver$u = createVarsResolver((_, { size: size2, radius, iconSize }) => ({
+      const varsResolver$v = createVarsResolver((_, { size: size2, radius, iconSize }) => ({
         root: {
           "--cb-size": getSize(size2, "cb-size"),
           "--cb-radius": radius === void 0 ? void 0 : getRadius(radius),
@@ -27562,7 +28286,7 @@ ${lightForced}`;
         }
       }));
       const CloseButton = polymorphicFactory((_props, ref) => {
-        const props = useProps("CloseButton", defaultProps$B, _props);
+        const props = useProps("CloseButton", defaultProps$C, _props);
         const {
           iconSize,
           children,
@@ -27587,13 +28311,13 @@ ${lightForced}`;
           props,
           className,
           style,
-          classes: classes$q,
+          classes: classes$r,
           classNames,
           styles: styles2,
           unstyled,
           attributes,
           vars,
-          varsResolver: varsResolver$u
+          varsResolver: varsResolver$v
         });
         return /* @__PURE__ */ jsxRuntimeExports.jsxs(
           UnstyledButton,
@@ -27612,20 +28336,20 @@ ${lightForced}`;
           }
         );
       });
-      CloseButton.classes = classes$q;
+      CloseButton.classes = classes$r;
       CloseButton.displayName = "@mantine/core/CloseButton";
       function filterFalsyChildren(children) {
         return reactExports.Children.toArray(children).filter(Boolean);
       }
-      var classes$p = { "root": "m_4081bf90" };
-      const defaultProps$A = {
+      var classes$q = { "root": "m_4081bf90" };
+      const defaultProps$B = {
         preventGrowOverflow: true,
         gap: "md",
         align: "center",
         justify: "flex-start",
         wrap: "wrap"
       };
-      const varsResolver$t = createVarsResolver(
+      const varsResolver$u = createVarsResolver(
         (_, { grow, preventGrowOverflow, gap, align, justify, wrap }, { childWidth }) => ({
           root: {
             "--group-child-width": grow && preventGrowOverflow ? childWidth : void 0,
@@ -27637,7 +28361,7 @@ ${lightForced}`;
         })
       );
       const Group = factory((_props, ref) => {
-        const props = useProps("Group", defaultProps$A, _props);
+        const props = useProps("Group", defaultProps$B, _props);
         const {
           classNames,
           className,
@@ -27669,13 +28393,13 @@ ${lightForced}`;
           stylesCtx,
           className,
           style,
-          classes: classes$p,
+          classes: classes$q,
           classNames,
           styles: styles2,
           unstyled,
           attributes,
           vars,
-          varsResolver: varsResolver$t
+          varsResolver: varsResolver$u
         });
         return /* @__PURE__ */ jsxRuntimeExports.jsx(
           Box,
@@ -27690,7 +28414,7 @@ ${lightForced}`;
           }
         );
       });
-      Group.classes = classes$p;
+      Group.classes = classes$q;
       Group.displayName = "@mantine/core/Group";
       const [ModalBaseProvider, useModalBaseContext] = createSafeContext(
         "ModalBase component was not found in tree"
@@ -27822,7 +28546,7 @@ ${lightForced}`;
         }
       );
       ModalBase.displayName = "@mantine/core/ModalBase";
-      var classes$o = { "title": "m_615af6c9", "header": "m_b5489c3c", "inner": "m_60c222c7", "content": "m_fd1ab0aa", "close": "m_606cb269", "body": "m_5df29311" };
+      var classes$p = { "title": "m_615af6c9", "header": "m_b5489c3c", "inner": "m_60c222c7", "content": "m_fd1ab0aa", "close": "m_606cb269", "body": "m_5df29311" };
       function useModalBodyId() {
         const ctx = useModalBaseContext();
         reactExports.useEffect(() => {
@@ -27841,7 +28565,7 @@ ${lightForced}`;
               ref,
               ...others,
               id: bodyId,
-              className: clsx({ [classes$o.body]: !ctx.unstyled }, className)
+              className: clsx({ [classes$p.body]: !ctx.unstyled }, className)
             }
           );
         }
@@ -27859,7 +28583,7 @@ ${lightForced}`;
                 ctx.onClose();
                 onClick?.(event);
               },
-              className: clsx({ [classes$o.close]: !ctx.unstyled }, className),
+              className: clsx({ [classes$p.close]: !ctx.unstyled }, className),
               unstyled: ctx.unstyled
             }
           );
@@ -27888,7 +28612,7 @@ ${lightForced}`;
                 "div",
                 {
                   ...innerProps,
-                  className: clsx({ [classes$o.inner]: !ctx.unstyled }, innerProps.className),
+                  className: clsx({ [classes$p.inner]: !ctx.unstyled }, innerProps.className),
                   children: /* @__PURE__ */ jsxRuntimeExports.jsx(FocusTrap, { active: ctx.opened && ctx.trapFocus, innerRef: ref, children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                     Paper,
                     {
@@ -27900,7 +28624,7 @@ ${lightForced}`;
                       "aria-describedby": ctx.bodyMounted ? ctx.getBodyId() : void 0,
                       "aria-labelledby": ctx.titleMounted ? ctx.getTitleId() : void 0,
                       style: [style, transitionStyles],
-                      className: clsx({ [classes$o.content]: !ctx.unstyled }, className),
+                      className: clsx({ [classes$p.content]: !ctx.unstyled }, className),
                       unstyled: ctx.unstyled,
                       children: others.children
                     }
@@ -27920,7 +28644,7 @@ ${lightForced}`;
             {
               component: "header",
               ref,
-              className: clsx({ [classes$o.header]: !ctx.unstyled }, className),
+              className: clsx({ [classes$p.header]: !ctx.unstyled }, className),
               ...others
             }
           );
@@ -27983,7 +28707,7 @@ ${lightForced}`;
             {
               component: "h2",
               ref,
-              className: clsx({ [classes$o.title]: !ctx.unstyled }, className),
+              className: clsx({ [classes$p.title]: !ctx.unstyled }, className),
               ...others,
               id
             }
@@ -27997,7 +28721,7 @@ ${lightForced}`;
       const [InputContext, useInputContext] = createOptionalContext({
         size: "sm"
       });
-      var classes$n = { "wrapper": "m_6c018570", "input": "m_8fb7ebe7", "section": "m_82577fc2", "placeholder": "m_88bacfd0", "root": "m_46b77525", "label": "m_8fdc1311", "required": "m_78a94662", "error": "m_8f816625", "description": "m_fe47ce59" };
+      var classes$o = { "wrapper": "m_6c018570", "input": "m_8fb7ebe7", "section": "m_82577fc2", "placeholder": "m_88bacfd0", "root": "m_46b77525", "label": "m_8fdc1311", "required": "m_78a94662", "error": "m_8f816625", "description": "m_fe47ce59" };
       const InputClearButton = factory((_props, ref) => {
         const props = useProps("InputClearButton", null, _props);
         const { size: size2, variant, vars, classNames, styles: styles2, ...others } = props;
@@ -28065,7 +28789,7 @@ ${lightForced}`;
         inputId: void 0,
         labelId: void 0
       });
-      const varsResolver$s = createVarsResolver((_, { size: size2 }) => ({
+      const varsResolver$t = createVarsResolver((_, { size: size2 }) => ({
         description: {
           "--input-description-size": size2 === void 0 ? void 0 : `calc(${getFontSize(size2)} - ${rem(2)})`
         }
@@ -28090,7 +28814,7 @@ ${lightForced}`;
         const _getStyles = useStyles({
           name: ["InputWrapper", __staticSelector],
           props,
-          classes: classes$n,
+          classes: classes$o,
           className,
           style,
           classNames,
@@ -28099,7 +28823,7 @@ ${lightForced}`;
           attributes,
           rootSelector: "description",
           vars,
-          varsResolver: varsResolver$s
+          varsResolver: varsResolver$t
         });
         const getStyles2 = __inheritStyles && ctx?.getStyles || _getStyles;
         return /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -28114,9 +28838,9 @@ ${lightForced}`;
           }
         );
       });
-      InputDescription.classes = classes$n;
+      InputDescription.classes = classes$o;
       InputDescription.displayName = "@mantine/core/InputDescription";
-      const varsResolver$r = createVarsResolver((_, { size: size2 }) => ({
+      const varsResolver$s = createVarsResolver((_, { size: size2 }) => ({
         error: {
           "--input-error-size": size2 === void 0 ? void 0 : `calc(${getFontSize(size2)} - ${rem(2)})`
         }
@@ -28140,7 +28864,7 @@ ${lightForced}`;
         const _getStyles = useStyles({
           name: ["InputWrapper", __staticSelector],
           props,
-          classes: classes$n,
+          classes: classes$o,
           className,
           style,
           classNames,
@@ -28149,7 +28873,7 @@ ${lightForced}`;
           attributes,
           rootSelector: "error",
           vars,
-          varsResolver: varsResolver$r
+          varsResolver: varsResolver$s
         });
         const ctx = useInputWrapperContext();
         const getStyles2 = __inheritStyles && ctx?.getStyles || _getStyles;
@@ -28165,19 +28889,19 @@ ${lightForced}`;
           }
         );
       });
-      InputError.classes = classes$n;
+      InputError.classes = classes$o;
       InputError.displayName = "@mantine/core/InputError";
-      const defaultProps$z = {
+      const defaultProps$A = {
         labelElement: "label"
       };
-      const varsResolver$q = createVarsResolver((_, { size: size2 }) => ({
+      const varsResolver$r = createVarsResolver((_, { size: size2 }) => ({
         label: {
           "--input-label-size": getFontSize(size2),
           "--input-asterisk-color": void 0
         }
       }));
       const InputLabel = factory((_props, ref) => {
-        const props = useProps("InputLabel", defaultProps$z, _props);
+        const props = useProps("InputLabel", defaultProps$A, _props);
         const {
           classNames,
           className,
@@ -28196,11 +28920,11 @@ ${lightForced}`;
           mod,
           attributes,
           ...others
-        } = useProps("InputLabel", defaultProps$z, props);
+        } = useProps("InputLabel", defaultProps$A, props);
         const _getStyles = useStyles({
           name: ["InputWrapper", __staticSelector],
           props,
-          classes: classes$n,
+          classes: classes$o,
           className,
           style,
           classNames,
@@ -28209,7 +28933,7 @@ ${lightForced}`;
           attributes,
           rootSelector: "label",
           vars,
-          varsResolver: varsResolver$q
+          varsResolver: varsResolver$r
         });
         const ctx = useInputWrapperContext();
         const getStyles2 = ctx?.getStyles || _getStyles;
@@ -28237,7 +28961,7 @@ ${lightForced}`;
           }
         );
       });
-      InputLabel.classes = classes$n;
+      InputLabel.classes = classes$o;
       InputLabel.displayName = "@mantine/core/InputLabel";
       const InputPlaceholder = factory((_props, ref) => {
         const props = useProps("InputPlaceholder", null, _props);
@@ -28258,7 +28982,7 @@ ${lightForced}`;
         const getStyles2 = useStyles({
           name: ["InputPlaceholder", __staticSelector],
           props,
-          classes: classes$n,
+          classes: classes$o,
           className,
           style,
           classNames,
@@ -28279,7 +29003,7 @@ ${lightForced}`;
           }
         );
       });
-      InputPlaceholder.classes = classes$n;
+      InputPlaceholder.classes = classes$o;
       InputPlaceholder.displayName = "@mantine/core/InputPlaceholder";
       function getInputOffsets(inputWrapperOrder, { hasDescription, hasError }) {
         const inputIndex = inputWrapperOrder.findIndex((part) => part === "input");
@@ -28289,12 +29013,12 @@ ${lightForced}`;
         const offsetBottom = hasDescription && belowInput.includes("description") || hasError && belowInput.includes("error");
         return { offsetBottom, offsetTop };
       }
-      const defaultProps$y = {
+      const defaultProps$z = {
         labelElement: "label",
         inputContainer: (children) => children,
         inputWrapperOrder: ["label", "description", "input", "error"]
       };
-      const varsResolver$p = createVarsResolver((_, { size: size2 }) => ({
+      const varsResolver$q = createVarsResolver((_, { size: size2 }) => ({
         label: {
           "--input-label-size": getFontSize(size2),
           "--input-asterisk-color": void 0
@@ -28307,7 +29031,7 @@ ${lightForced}`;
         }
       }));
       const InputWrapper = factory((_props, ref) => {
-        const props = useProps("InputWrapper", defaultProps$y, _props);
+        const props = useProps("InputWrapper", defaultProps$z, _props);
         const {
           classNames,
           className,
@@ -28339,7 +29063,7 @@ ${lightForced}`;
         const getStyles2 = useStyles({
           name: ["InputWrapper", __staticSelector],
           props: __stylesApiProps || props,
-          classes: classes$n,
+          classes: classes$o,
           className,
           style,
           classNames,
@@ -28347,7 +29071,7 @@ ${lightForced}`;
           unstyled,
           attributes,
           vars,
-          varsResolver: varsResolver$p
+          varsResolver: varsResolver$q
         });
         const sharedProps = {
           size: size2,
@@ -28439,9 +29163,9 @@ ${lightForced}`;
           }
         );
       });
-      InputWrapper.classes = classes$n;
+      InputWrapper.classes = classes$o;
       InputWrapper.displayName = "@mantine/core/InputWrapper";
-      const defaultProps$x = {
+      const defaultProps$y = {
         variant: "default",
         leftSectionPointerEvents: "none",
         rightSectionPointerEvents: "none",
@@ -28449,7 +29173,7 @@ ${lightForced}`;
         withErrorStyles: true,
         size: "sm"
       };
-      const varsResolver$o = createVarsResolver((_, props, ctx) => ({
+      const varsResolver$p = createVarsResolver((_, props, ctx) => ({
         wrapper: {
           "--input-margin-top": ctx.offsetTop ? "calc(var(--mantine-spacing-xs) / 2)" : void 0,
           "--input-margin-bottom": ctx.offsetBottom ? "calc(var(--mantine-spacing-xs) / 2)" : void 0,
@@ -28464,7 +29188,7 @@ ${lightForced}`;
         }
       }));
       const Input = polymorphicFactory((_props, ref) => {
-        const props = useProps("Input", defaultProps$x, _props);
+        const props = useProps("Input", defaultProps$y, _props);
         const {
           classNames,
           className,
@@ -28508,7 +29232,7 @@ ${lightForced}`;
         const getStyles2 = useStyles({
           name: ["Input", __staticSelector],
           props: __stylesApiProps || props,
-          classes: classes$n,
+          classes: classes$o,
           className,
           style,
           classNames,
@@ -28518,7 +29242,7 @@ ${lightForced}`;
           stylesCtx,
           rootSelector: "wrapper",
           vars,
-          varsResolver: varsResolver$o
+          varsResolver: varsResolver$p
         });
         const ariaAttributes = withAria ? {
           required,
@@ -28596,7 +29320,7 @@ ${lightForced}`;
           }
         ) });
       });
-      Input.classes = classes$n;
+      Input.classes = classes$o;
       Input.Wrapper = InputWrapper;
       Input.Label = InputLabel;
       Input.Error = InputError;
@@ -28680,13 +29404,13 @@ ${lightForced}`;
           }
         };
       }
-      const defaultProps$w = {
+      const defaultProps$x = {
         __staticSelector: "InputBase",
         withAria: true,
         size: "sm"
       };
       const InputBase = polymorphicFactory((props, ref) => {
-        const { inputProps, wrapperProps, ...others } = useInputProps("InputBase", defaultProps$w, props);
+        const { inputProps, wrapperProps, ...others } = useInputProps("InputBase", defaultProps$x, props);
         return /* @__PURE__ */ jsxRuntimeExports.jsx(Input.Wrapper, { ...wrapperProps, children: /* @__PURE__ */ jsxRuntimeExports.jsx(Input, { ...inputProps, ...others, ref }) });
       });
       InputBase.classes = { ...Input.classes, ...Input.Wrapper.classes };
@@ -28700,7 +29424,7 @@ ${lightForced}`;
         wrap: { type: "identity", property: "flexWrap" },
         direction: { type: "identity", property: "flexDirection" }
       };
-      var classes$m = { "root": "m_8bffd616" };
+      var classes$n = { "root": "m_8bffd616" };
       const Flex = polymorphicFactory((_props, ref) => {
         const props = useProps("Flex", null, _props);
         const {
@@ -28722,7 +29446,7 @@ ${lightForced}`;
         } = props;
         const getStyles2 = useStyles({
           name: "Flex",
-          classes: classes$m,
+          classes: classes$n,
           props,
           className,
           style,
@@ -28761,9 +29485,9 @@ ${lightForced}`;
           )
         ] });
       });
-      Flex.classes = classes$m;
+      Flex.classes = classes$n;
       Flex.displayName = "@mantine/core/Flex";
-      var classes$l = { "root": "m_96b553a6" };
+      var classes$m = { "root": "m_96b553a6" };
       function isParent(parentElement, childElement) {
         if (!childElement || !parentElement) {
           return false;
@@ -28875,7 +29599,7 @@ ${lightForced}`;
         );
         return { initialized, hidden: hidden2 };
       }
-      const varsResolver$n = createVarsResolver(
+      const varsResolver$o = createVarsResolver(
         (_theme, { transitionDuration }) => ({
           root: {
             "--transition-duration": typeof transitionDuration === "number" ? `${transitionDuration}ms` : transitionDuration
@@ -28901,7 +29625,7 @@ ${lightForced}`;
         } = props;
         const getStyles2 = useStyles({
           name: "FloatingIndicator",
-          classes: classes$l,
+          classes: classes$m,
           props,
           className,
           style,
@@ -28910,7 +29634,7 @@ ${lightForced}`;
           unstyled,
           attributes,
           vars,
-          varsResolver: varsResolver$n
+          varsResolver: varsResolver$o
         });
         const innerRef = reactExports.useRef(null);
         const { initialized, hidden: hidden2 } = useFloatingIndicator({
@@ -28926,7 +29650,7 @@ ${lightForced}`;
         return /* @__PURE__ */ jsxRuntimeExports.jsx(Box, { ref: mergedRef, mod: [{ initialized, hidden: hidden2 }, mod], ...getStyles2("root"), ...others });
       });
       FloatingIndicator.displayName = "@mantine/core/FloatingIndicator";
-      FloatingIndicator.classes = classes$l;
+      FloatingIndicator.classes = classes$m;
       function useDelayedHover({ open, close, openDelay, closeDelay }) {
         const openTimeout = reactExports.useRef(-1);
         const closeTimeout = reactExports.useRef(-1);
@@ -28975,8 +29699,8 @@ ${lightForced}`;
         );
       }
       AccordionChevron.displayName = "@mantine/core/AccordionChevron";
-      var classes$k = { "root": "m_66836ed3", "wrapper": "m_a5d60502", "body": "m_667c2793", "title": "m_6a03f287", "label": "m_698f4f23", "icon": "m_667f2a6a", "message": "m_7fa78076", "closeButton": "m_87f54839" };
-      const varsResolver$m = createVarsResolver(
+      var classes$l = { "root": "m_66836ed3", "wrapper": "m_a5d60502", "body": "m_667c2793", "title": "m_6a03f287", "label": "m_698f4f23", "icon": "m_667f2a6a", "message": "m_7fa78076", "closeButton": "m_87f54839" };
+      const varsResolver$n = createVarsResolver(
         (theme, { radius, color, variant, autoContrast }) => {
           const colors = theme.variantColorResolver({
             color: color || theme.primaryColor,
@@ -29020,7 +29744,7 @@ ${lightForced}`;
         } = props;
         const getStyles2 = useStyles({
           name: "Alert",
-          classes: classes$k,
+          classes: classes$l,
           props,
           className,
           style,
@@ -29029,7 +29753,7 @@ ${lightForced}`;
           unstyled,
           attributes,
           vars,
-          varsResolver: varsResolver$m
+          varsResolver: varsResolver$n
         });
         const rootId = useId$1(id);
         const titleId = title && `${rootId}-title` || void 0;
@@ -29067,9 +29791,9 @@ ${lightForced}`;
           }
         );
       });
-      Alert.classes = classes$k;
+      Alert.classes = classes$l;
       Alert.displayName = "@mantine/core/Alert";
-      var classes$j = { "root": "m_b6d8b162" };
+      var classes$k = { "root": "m_b6d8b162" };
       function getTextTruncate(truncate) {
         if (truncate === "start") {
           return "start";
@@ -29079,10 +29803,10 @@ ${lightForced}`;
         }
         return void 0;
       }
-      const defaultProps$v = {
+      const defaultProps$w = {
         inherit: false
       };
-      const varsResolver$l = createVarsResolver(
+      const varsResolver$m = createVarsResolver(
         // Will be removed in 9.0
         // eslint-disable-next-line @typescript-eslint/no-deprecated
         (theme, { variant, lineClamp, gradient, size: size2, color }) => ({
@@ -29096,7 +29820,7 @@ ${lightForced}`;
         })
       );
       const Text = polymorphicFactory((_props, ref) => {
-        const props = useProps("Text", defaultProps$v, _props);
+        const props = useProps("Text", defaultProps$w, _props);
         const {
           lineClamp,
           truncate,
@@ -29120,7 +29844,7 @@ ${lightForced}`;
         const getStyles2 = useStyles({
           name: ["Text", __staticSelector],
           props,
-          classes: classes$j,
+          classes: classes$k,
           className,
           style,
           classNames,
@@ -29128,7 +29852,7 @@ ${lightForced}`;
           unstyled,
           attributes,
           vars,
-          varsResolver: varsResolver$l
+          varsResolver: varsResolver$m
         });
         return /* @__PURE__ */ jsxRuntimeExports.jsx(
           Box,
@@ -29151,7 +29875,7 @@ ${lightForced}`;
           }
         );
       });
-      Text.classes = classes$j;
+      Text.classes = classes$k;
       Text.displayName = "@mantine/core/Text";
       function parseItem(item) {
         if (typeof item === "string") {
@@ -29186,22 +29910,22 @@ ${lightForced}`;
           return acc;
         }, {});
       }
-      var classes$i = { "dropdown": "m_88b62a41", "search": "m_985517d8", "options": "m_b2821a6e", "option": "m_92253aa5", "empty": "m_2530cd1d", "header": "m_858f94bd", "footer": "m_82b967cb", "group": "m_254f3e4f", "groupLabel": "m_2bb2e9e5", "chevron": "m_2943220b", "optionsDropdownOption": "m_390b5f4", "optionsDropdownCheckIcon": "m_8ee53fc2", "optionsDropdownCheckPlaceholder": "m_a530ee0a" };
-      const defaultProps$u = {
+      var classes$j = { "dropdown": "m_88b62a41", "search": "m_985517d8", "options": "m_b2821a6e", "option": "m_92253aa5", "empty": "m_2530cd1d", "header": "m_858f94bd", "footer": "m_82b967cb", "group": "m_254f3e4f", "groupLabel": "m_2bb2e9e5", "chevron": "m_2943220b", "optionsDropdownOption": "m_390b5f4", "optionsDropdownCheckIcon": "m_8ee53fc2", "optionsDropdownCheckPlaceholder": "m_a530ee0a" };
+      const defaultProps$v = {
         error: null
       };
-      const varsResolver$k = createVarsResolver((theme, { size: size2, color }) => ({
+      const varsResolver$l = createVarsResolver((theme, { size: size2, color }) => ({
         chevron: {
           "--combobox-chevron-size": getSize(size2, "combobox-chevron-size"),
           "--combobox-chevron-color": color ? getThemeColor(color, theme) : void 0
         }
       }));
       const ComboboxChevron = factory((_props, ref) => {
-        const props = useProps("ComboboxChevron", defaultProps$u, _props);
+        const props = useProps("ComboboxChevron", defaultProps$v, _props);
         const { size: size2, error, style, className, classNames, styles: styles2, unstyled, vars, mod, ...others } = props;
         const getStyles2 = useStyles({
           name: "ComboboxChevron",
-          classes: classes$i,
+          classes: classes$j,
           props,
           style,
           className,
@@ -29209,7 +29933,7 @@ ${lightForced}`;
           styles: styles2,
           unstyled,
           vars,
-          varsResolver: varsResolver$k,
+          varsResolver: varsResolver$l,
           rootSelector: "chevron"
         });
         return /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -29236,7 +29960,7 @@ ${lightForced}`;
           }
         );
       });
-      ComboboxChevron.classes = classes$i;
+      ComboboxChevron.classes = classes$j;
       ComboboxChevron.displayName = "@mantine/core/ComboboxChevron";
       const [ComboboxProvider, useComboboxContext] = createSafeContext(
         "Combobox component was not found in tree"
@@ -29279,13 +30003,13 @@ ${lightForced}`;
           }
         );
       });
-      ComboboxDropdown.classes = classes$i;
+      ComboboxDropdown.classes = classes$j;
       ComboboxDropdown.displayName = "@mantine/core/ComboboxDropdown";
-      const defaultProps$t = {
+      const defaultProps$u = {
         refProp: "ref"
       };
       const ComboboxDropdownTarget = factory((props, ref) => {
-        const { children, refProp } = useProps("ComboboxDropdownTarget", defaultProps$t, props);
+        const { children, refProp } = useProps("ComboboxDropdownTarget", defaultProps$u, props);
         useComboboxContext();
         if (!isElement$1(children)) {
           throw new Error(
@@ -29311,7 +30035,7 @@ ${lightForced}`;
           }
         );
       });
-      ComboboxEmpty.classes = classes$i;
+      ComboboxEmpty.classes = classes$j;
       ComboboxEmpty.displayName = "@mantine/core/ComboboxEmpty";
       function useComboboxTargetProps({
         onKeyDown,
@@ -29390,7 +30114,7 @@ ${lightForced}`;
           onKeyDown: handleKeyDown
         };
       }
-      const defaultProps$s = {
+      const defaultProps$t = {
         refProp: "ref",
         targetType: "input",
         withKeyboardNavigation: true,
@@ -29408,7 +30132,7 @@ ${lightForced}`;
           targetType,
           autoComplete,
           ...others
-        } = useProps("ComboboxEventsTarget", defaultProps$s, props);
+        } = useProps("ComboboxEventsTarget", defaultProps$t, props);
         const child = getSingleElementChild(children);
         if (!child) {
           throw new Error(
@@ -29450,7 +30174,7 @@ ${lightForced}`;
           }
         );
       });
-      ComboboxFooter.classes = classes$i;
+      ComboboxFooter.classes = classes$j;
       ComboboxFooter.displayName = "@mantine/core/ComboboxFooter";
       const ComboboxGroup = factory((props, ref) => {
         const { classNames, className, style, styles: styles2, vars, children, label, id, ...others } = useProps(
@@ -29475,7 +30199,7 @@ ${lightForced}`;
           }
         );
       });
-      ComboboxGroup.classes = classes$i;
+      ComboboxGroup.classes = classes$j;
       ComboboxGroup.displayName = "@mantine/core/ComboboxGroup";
       const ComboboxHeader = factory((props, ref) => {
         const { classNames, className, style, styles: styles2, vars, ...others } = useProps(
@@ -29496,7 +30220,7 @@ ${lightForced}`;
           }
         );
       });
-      ComboboxHeader.classes = classes$i;
+      ComboboxHeader.classes = classes$j;
       ComboboxHeader.displayName = "@mantine/core/ComboboxHeader";
       function ComboboxHiddenInput({
         value,
@@ -29568,7 +30292,7 @@ ${lightForced}`;
           }
         );
       });
-      ComboboxOption.classes = classes$i;
+      ComboboxOption.classes = classes$j;
       ComboboxOption.displayName = "@mantine/core/ComboboxOption";
       const ComboboxOptions = factory((_props, ref) => {
         const props = useProps("ComboboxOptions", null, _props);
@@ -29594,14 +30318,14 @@ ${lightForced}`;
           }
         );
       });
-      ComboboxOptions.classes = classes$i;
+      ComboboxOptions.classes = classes$j;
       ComboboxOptions.displayName = "@mantine/core/ComboboxOptions";
-      const defaultProps$r = {
+      const defaultProps$s = {
         withAriaAttributes: true,
         withKeyboardNavigation: true
       };
       const ComboboxSearch = factory((_props, ref) => {
-        const props = useProps("ComboboxSearch", defaultProps$r, _props);
+        const props = useProps("ComboboxSearch", defaultProps$s, _props);
         const {
           classNames,
           styles: styles2,
@@ -29636,9 +30360,9 @@ ${lightForced}`;
           }
         );
       });
-      ComboboxSearch.classes = classes$i;
+      ComboboxSearch.classes = classes$j;
       ComboboxSearch.displayName = "@mantine/core/ComboboxSearch";
-      const defaultProps$q = {
+      const defaultProps$r = {
         refProp: "ref",
         targetType: "input",
         withKeyboardNavigation: true,
@@ -29656,7 +30380,7 @@ ${lightForced}`;
           targetType,
           autoComplete,
           ...others
-        } = useProps("ComboboxTarget", defaultProps$q, props);
+        } = useProps("ComboboxTarget", defaultProps$r, props);
         const child = getSingleElementChild(children);
         if (!child) {
           throw new Error(
@@ -29905,7 +30629,7 @@ ${lightForced}`;
           focusTarget
         };
       }
-      const defaultProps$p = {
+      const defaultProps$q = {
         keepMounted: true,
         withinPortal: true,
         resetSelectionOnOptionHover: false,
@@ -29913,7 +30637,7 @@ ${lightForced}`;
         transitionProps: { transition: "fade", duration: 0 },
         size: "sm"
       };
-      const varsResolver$j = createVarsResolver((_, { size: size2, dropdownPadding }) => ({
+      const varsResolver$k = createVarsResolver((_, { size: size2, dropdownPadding }) => ({
         options: {
           "--combobox-option-fz": getFontSize(size2),
           "--combobox-option-padding": getSize(size2, "combobox-option-padding")
@@ -29925,7 +30649,7 @@ ${lightForced}`;
         }
       }));
       function Combobox(_props) {
-        const props = useProps("Combobox", defaultProps$p, _props);
+        const props = useProps("Combobox", defaultProps$q, _props);
         const {
           classNames,
           styles: styles2,
@@ -29947,14 +30671,14 @@ ${lightForced}`;
         const store = controlledStore || uncontrolledStore;
         const getStyles2 = useStyles({
           name: __staticSelector || "Combobox",
-          classes: classes$i,
+          classes: classes$j,
           props,
           classNames,
           styles: styles2,
           unstyled,
           attributes,
           vars,
-          varsResolver: varsResolver$j
+          varsResolver: varsResolver$k
         });
         const onDropdownClose = () => {
           onClose?.();
@@ -29988,7 +30712,7 @@ ${lightForced}`;
       }
       const extendCombobox = (c) => c;
       Combobox.extend = extendCombobox;
-      Combobox.classes = classes$i;
+      Combobox.classes = classes$j;
       Combobox.displayName = "@mantine/core/Combobox";
       Combobox.Target = ComboboxTarget;
       Combobox.Dropdown = ComboboxDropdown;
@@ -30004,8 +30728,8 @@ ${lightForced}`;
       Combobox.Group = ComboboxGroup;
       Combobox.ClearButton = ComboboxClearButton;
       Combobox.HiddenInput = ComboboxHiddenInput;
-      var classes$h = { "root": "m_5f75b09e", "body": "m_5f6e695e", "labelWrapper": "m_d3ea56bb", "label": "m_8ee546b8", "description": "m_328f68c0", "error": "m_8e8a99cc" };
-      const InlineInputClasses = classes$h;
+      var classes$i = { "root": "m_5f75b09e", "body": "m_5f6e695e", "labelWrapper": "m_d3ea56bb", "label": "m_8ee546b8", "description": "m_328f68c0", "error": "m_8e8a99cc" };
+      const InlineInputClasses = classes$i;
       const InlineInput = reactExports.forwardRef(
         ({
           __staticSelector,
@@ -30036,7 +30760,7 @@ ${lightForced}`;
             props: __stylesApiProps,
             className,
             style,
-            classes: classes$h,
+            classes: classes$i,
             classNames,
             styles: styles2,
             unstyled,
@@ -30085,22 +30809,22 @@ ${lightForced}`;
         }
       );
       InlineInput.displayName = "@mantine/core/InlineInput";
-      var classes$g = { "root": "m_bf2d988c", "inner": "m_26062bec", "input": "m_26063560", "icon": "m_bf295423", "input--outline": "m_215c4542" };
+      var classes$h = { "root": "m_bf2d988c", "inner": "m_26062bec", "input": "m_26063560", "icon": "m_bf295423", "input--outline": "m_215c4542" };
       const CheckboxGroupContext = reactExports.createContext(null);
       const CheckboxGroupProvider = CheckboxGroupContext.Provider;
       const useCheckboxGroupContext = () => reactExports.useContext(CheckboxGroupContext);
       const [CheckboxCardProvider, useCheckboxCardContext] = createOptionalContext();
-      var classes$f = { "card": "m_26775b0a" };
-      const defaultProps$o = {
+      var classes$g = { "card": "m_26775b0a" };
+      const defaultProps$p = {
         withBorder: true
       };
-      const varsResolver$i = createVarsResolver((_, { radius }) => ({
+      const varsResolver$j = createVarsResolver((_, { radius }) => ({
         card: {
           "--card-radius": getRadius(radius)
         }
       }));
       const CheckboxCard = factory((_props, ref) => {
-        const props = useProps("CheckboxCard", defaultProps$o, _props);
+        const props = useProps("CheckboxCard", defaultProps$p, _props);
         const {
           classNames,
           className,
@@ -30120,7 +30844,7 @@ ${lightForced}`;
         } = props;
         const getStyles2 = useStyles({
           name: "CheckboxCard",
-          classes: classes$f,
+          classes: classes$g,
           props,
           className,
           style,
@@ -30129,7 +30853,7 @@ ${lightForced}`;
           unstyled,
           attributes,
           vars,
-          varsResolver: varsResolver$i,
+          varsResolver: varsResolver$j,
           rootSelector: "card"
         });
         const ctx = useCheckboxGroupContext();
@@ -30158,7 +30882,7 @@ ${lightForced}`;
         ) });
       });
       CheckboxCard.displayName = "@mantine/core/CheckboxCard";
-      CheckboxCard.classes = classes$f;
+      CheckboxCard.classes = classes$g;
       function InputsGroupFieldset({ children, role }) {
         const ctx = useInputWrapperContext();
         if (!ctx) {
@@ -30244,12 +30968,12 @@ ${lightForced}`;
         }
         return /* @__PURE__ */ jsxRuntimeExports.jsx(CheckIcon, { ...others });
       }
-      var classes$e = { "indicator": "m_5e5256ee", "icon": "m_1b1c543a", "indicator--outline": "m_76e20374" };
-      const defaultProps$n = {
+      var classes$f = { "indicator": "m_5e5256ee", "icon": "m_1b1c543a", "indicator--outline": "m_76e20374" };
+      const defaultProps$o = {
         icon: CheckboxIcon,
         variant: "filled"
       };
-      const varsResolver$h = createVarsResolver(
+      const varsResolver$i = createVarsResolver(
         (theme, { radius, color, size: size2, iconColor, variant, autoContrast }) => {
           const parsedColor = parseThemeColor({ color: color || theme.primaryColor, theme });
           const outlineColor = parsedColor.isThemeColor && parsedColor.shade === void 0 ? `var(--mantine-color-${parsedColor.color}-outline)` : parsedColor.color;
@@ -30264,7 +30988,7 @@ ${lightForced}`;
         }
       );
       const CheckboxIndicator = factory((_props, ref) => {
-        const props = useProps("CheckboxIndicator", defaultProps$n, _props);
+        const props = useProps("CheckboxIndicator", defaultProps$o, _props);
         const {
           classNames,
           className,
@@ -30287,7 +31011,7 @@ ${lightForced}`;
         } = props;
         const getStyles2 = useStyles({
           name: "CheckboxIndicator",
-          classes: classes$e,
+          classes: classes$f,
           props,
           className,
           style,
@@ -30296,7 +31020,7 @@ ${lightForced}`;
           unstyled,
           attributes,
           vars,
-          varsResolver: varsResolver$h,
+          varsResolver: varsResolver$i,
           rootSelector: "indicator"
         });
         const ctx = useCheckboxCardContext();
@@ -30314,13 +31038,13 @@ ${lightForced}`;
         );
       });
       CheckboxIndicator.displayName = "@mantine/core/CheckboxIndicator";
-      CheckboxIndicator.classes = classes$e;
-      const defaultProps$m = {
+      CheckboxIndicator.classes = classes$f;
+      const defaultProps$n = {
         labelPosition: "right",
         icon: CheckboxIcon,
         variant: "filled"
       };
-      const varsResolver$g = createVarsResolver(
+      const varsResolver$h = createVarsResolver(
         (theme, { radius, color, size: size2, iconColor, variant, autoContrast }) => {
           const parsedColor = parseThemeColor({ color: color || theme.primaryColor, theme });
           const outlineColor = parsedColor.isThemeColor && parsedColor.shade === void 0 ? `var(--mantine-color-${parsedColor.color}-outline)` : parsedColor.color;
@@ -30335,7 +31059,7 @@ ${lightForced}`;
         }
       );
       const Checkbox = factory((_props, forwardedRef) => {
-        const props = useProps("Checkbox", defaultProps$m, _props);
+        const props = useProps("Checkbox", defaultProps$n, _props);
         const {
           classNames,
           className,
@@ -30370,7 +31094,7 @@ ${lightForced}`;
         const getStyles2 = useStyles({
           name: "Checkbox",
           props,
-          classes: classes$g,
+          classes: classes$h,
           className,
           style,
           classNames,
@@ -30378,7 +31102,7 @@ ${lightForced}`;
           unstyled,
           attributes,
           vars,
-          varsResolver: varsResolver$g
+          varsResolver: varsResolver$h
         });
         const { styleProps, rest } = extractStyleProps(others);
         const uuid = useId$1(id);
@@ -30445,7 +31169,7 @@ ${lightForced}`;
           }
         );
       });
-      Checkbox.classes = { ...classes$g, ...InlineInputClasses };
+      Checkbox.classes = { ...classes$h, ...InlineInputClasses };
       Checkbox.displayName = "@mantine/core/Checkbox";
       Checkbox.Group = CheckboxGroup;
       Checkbox.Indicator = CheckboxIndicator;
@@ -30536,7 +31260,7 @@ ${lightForced}`;
       }) {
         if (!isOptionsGroup(data)) {
           const checked = isValueChecked(value, data.value);
-          const check = withCheckIcon && (checked ? /* @__PURE__ */ jsxRuntimeExports.jsx(CheckIcon, { className: classes$i.optionsDropdownCheckIcon }) : withAlignedLabels ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: classes$i.optionsDropdownCheckPlaceholder }) : null);
+          const check = withCheckIcon && (checked ? /* @__PURE__ */ jsxRuntimeExports.jsx(CheckIcon, { className: classes$j.optionsDropdownCheckIcon }) : withAlignedLabels ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: classes$j.optionsDropdownCheckPlaceholder }) : null);
           const defaultContent = /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
             checkIconPosition === "left" && check,
             /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: data.label }),
@@ -30547,7 +31271,7 @@ ${lightForced}`;
             {
               value: data.value,
               disabled: data.disabled,
-              className: clsx({ [classes$i.optionsDropdownOption]: !unstyled }),
+              className: clsx({ [classes$j.optionsDropdownOption]: !unstyled }),
               "data-reverse": checkIconPosition === "right" || void 0,
               "data-checked": checked || void 0,
               "aria-selected": checked,
@@ -30628,8 +31352,8 @@ ${lightForced}`;
           isEmpty && nothingFoundMessage && /* @__PURE__ */ jsxRuntimeExports.jsx(Combobox.Empty, { children: nothingFoundMessage })
         ] }) });
       }
-      var classes$d = { "root": "m_347db0ec", "root--dot": "m_fbd81e3d", "label": "m_5add502a", "section": "m_91fdda9b" };
-      const varsResolver$f = createVarsResolver(
+      var classes$e = { "root": "m_347db0ec", "root--dot": "m_fbd81e3d", "label": "m_5add502a", "section": "m_91fdda9b" };
+      const varsResolver$g = createVarsResolver(
         (theme, { radius, color, gradient, variant, size: size2, autoContrast, circle }) => {
           const colors = theme.variantColorResolver({
             color: color || theme.primaryColor,
@@ -30678,7 +31402,7 @@ ${lightForced}`;
         const getStyles2 = useStyles({
           name: "Badge",
           props,
-          classes: classes$d,
+          classes: classes$e,
           className,
           style,
           classNames,
@@ -30686,7 +31410,7 @@ ${lightForced}`;
           unstyled,
           attributes,
           vars,
-          varsResolver: varsResolver$f
+          varsResolver: varsResolver$g
         });
         return /* @__PURE__ */ jsxRuntimeExports.jsxs(
           Box,
@@ -30712,17 +31436,17 @@ ${lightForced}`;
           }
         );
       });
-      Badge.classes = classes$d;
+      Badge.classes = classes$e;
       Badge.displayName = "@mantine/core/Badge";
-      var classes$c = { "root": "m_77c9d27d", "inner": "m_80f1301b", "label": "m_811560b9", "section": "m_a74036a", "loader": "m_a25b86ee", "group": "m_80d6d844", "groupSection": "m_70be2a01" };
-      const defaultProps$l = {
+      var classes$d = { "root": "m_77c9d27d", "inner": "m_80f1301b", "label": "m_811560b9", "section": "m_a74036a", "loader": "m_a25b86ee", "group": "m_80d6d844", "groupSection": "m_70be2a01" };
+      const defaultProps$m = {
         orientation: "horizontal"
       };
-      const varsResolver$e = createVarsResolver((_, { borderWidth }) => ({
+      const varsResolver$f = createVarsResolver((_, { borderWidth }) => ({
         group: { "--button-border-width": rem(borderWidth) }
       }));
       const ButtonGroup = factory((_props, ref) => {
-        const props = useProps("ButtonGroup", defaultProps$l, _props);
+        const props = useProps("ButtonGroup", defaultProps$m, _props);
         const {
           className,
           style,
@@ -30736,11 +31460,11 @@ ${lightForced}`;
           mod,
           attributes,
           ...others
-        } = useProps("ButtonGroup", defaultProps$l, _props);
+        } = useProps("ButtonGroup", defaultProps$m, _props);
         const getStyles2 = useStyles({
           name: "ButtonGroup",
           props,
-          classes: classes$c,
+          classes: classes$d,
           className,
           style,
           classNames,
@@ -30748,7 +31472,7 @@ ${lightForced}`;
           unstyled,
           attributes,
           vars,
-          varsResolver: varsResolver$e,
+          varsResolver: varsResolver$f,
           rootSelector: "group"
         });
         return /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -30763,9 +31487,9 @@ ${lightForced}`;
           }
         );
       });
-      ButtonGroup.classes = classes$c;
+      ButtonGroup.classes = classes$d;
       ButtonGroup.displayName = "@mantine/core/ButtonGroup";
-      const varsResolver$d = createVarsResolver(
+      const varsResolver$e = createVarsResolver(
         (theme, { radius, color, gradient, variant, autoContrast, size: size2 }) => {
           const colors = theme.variantColorResolver({
             color: color || theme.primaryColor,
@@ -30806,7 +31530,7 @@ ${lightForced}`;
         const getStyles2 = useStyles({
           name: "ButtonGroupSection",
           props,
-          classes: classes$c,
+          classes: classes$d,
           className,
           style,
           classNames,
@@ -30814,12 +31538,12 @@ ${lightForced}`;
           unstyled,
           attributes,
           vars,
-          varsResolver: varsResolver$d,
+          varsResolver: varsResolver$e,
           rootSelector: "groupSection"
         });
         return /* @__PURE__ */ jsxRuntimeExports.jsx(Box, { ...getStyles2("groupSection"), ref, variant, ...others });
       });
-      ButtonGroupSection.classes = classes$c;
+      ButtonGroupSection.classes = classes$d;
       ButtonGroupSection.displayName = "@mantine/core/ButtonGroupSection";
       const loaderTransition = {
         in: { opacity: 1, transform: `translate(-50%, calc(-50% + ${rem(1)}))` },
@@ -30827,7 +31551,7 @@ ${lightForced}`;
         common: { transformOrigin: "center" },
         transitionProperty: "transform, opacity"
       };
-      const varsResolver$c = createVarsResolver(
+      const varsResolver$d = createVarsResolver(
         (theme, { radius, color, gradient, variant, size: size2, justify, autoContrast }) => {
           const colors = theme.variantColorResolver({
             color: color || theme.primaryColor,
@@ -30881,7 +31605,7 @@ ${lightForced}`;
         const getStyles2 = useStyles({
           name: "Button",
           props,
-          classes: classes$c,
+          classes: classes$d,
           className,
           style,
           classNames,
@@ -30889,7 +31613,7 @@ ${lightForced}`;
           unstyled,
           attributes,
           vars,
-          varsResolver: varsResolver$c
+          varsResolver: varsResolver$d
         });
         const hasLeftSection = !!leftSection;
         const hasRightSection = !!rightSection;
@@ -30930,15 +31654,15 @@ ${lightForced}`;
           }
         );
       });
-      Button.classes = classes$c;
+      Button.classes = classes$d;
       Button.displayName = "@mantine/core/Button";
       Button.Group = ButtonGroup;
       Button.GroupSection = ButtonGroupSection;
-      var classes$b = { "root": "m_3eebeb36", "label": "m_9e365f20" };
-      const defaultProps$k = {
+      var classes$c = { "root": "m_3eebeb36", "label": "m_9e365f20" };
+      const defaultProps$l = {
         orientation: "horizontal"
       };
-      const varsResolver$b = createVarsResolver((theme, { color, variant, size: size2 }) => ({
+      const varsResolver$c = createVarsResolver((theme, { color, variant, size: size2 }) => ({
         root: {
           "--divider-color": color ? getThemeColor(color, theme) : void 0,
           "--divider-border-style": variant,
@@ -30946,7 +31670,7 @@ ${lightForced}`;
         }
       }));
       const Divider = factory((_props, ref) => {
-        const props = useProps("Divider", defaultProps$k, _props);
+        const props = useProps("Divider", defaultProps$l, _props);
         const {
           classNames,
           className,
@@ -30964,7 +31688,7 @@ ${lightForced}`;
         } = props;
         const getStyles2 = useStyles({
           name: "Divider",
-          classes: classes$b,
+          classes: classes$c,
           props,
           className,
           style,
@@ -30973,7 +31697,7 @@ ${lightForced}`;
           unstyled,
           attributes,
           vars,
-          varsResolver: varsResolver$b
+          varsResolver: varsResolver$c
         });
         return /* @__PURE__ */ jsxRuntimeExports.jsx(
           Box,
@@ -30987,9 +31711,9 @@ ${lightForced}`;
           }
         );
       });
-      Divider.classes = classes$b;
+      Divider.classes = classes$c;
       Divider.displayName = "@mantine/core/Divider";
-      var classes$a = { "root": "m_f11b401e", "header": "m_5a7c2c9", "content": "m_b8a05bbd", "inner": "m_31cd769a" };
+      var classes$b = { "root": "m_f11b401e", "header": "m_5a7c2c9", "content": "m_b8a05bbd", "inner": "m_31cd769a" };
       const [DrawerProvider, useDrawerContext] = createSafeContext(
         "Drawer component was not found in tree"
       );
@@ -31006,7 +31730,7 @@ ${lightForced}`;
           }
         );
       });
-      DrawerBody.classes = classes$a;
+      DrawerBody.classes = classes$b;
       DrawerBody.displayName = "@mantine/core/DrawerBody";
       const DrawerCloseButton = factory((_props, ref) => {
         const props = useProps("DrawerCloseButton", null, _props);
@@ -31021,7 +31745,7 @@ ${lightForced}`;
           }
         );
       });
-      DrawerCloseButton.classes = classes$a;
+      DrawerCloseButton.classes = classes$b;
       DrawerCloseButton.displayName = "@mantine/core/DrawerCloseButton";
       const DrawerContent = factory((_props, ref) => {
         const props = useProps("DrawerContent", null, _props);
@@ -31041,7 +31765,7 @@ ${lightForced}`;
           }
         );
       });
-      DrawerContent.classes = classes$a;
+      DrawerContent.classes = classes$b;
       DrawerContent.displayName = "@mantine/core/DrawerContent";
       const DrawerHeader = factory((_props, ref) => {
         const props = useProps("DrawerHeader", null, _props);
@@ -31056,7 +31780,7 @@ ${lightForced}`;
           }
         );
       });
-      DrawerHeader.classes = classes$a;
+      DrawerHeader.classes = classes$b;
       DrawerHeader.displayName = "@mantine/core/DrawerHeader";
       const DrawerOverlay = factory((_props, ref) => {
         const props = useProps("DrawerOverlay", null, _props);
@@ -31071,7 +31795,7 @@ ${lightForced}`;
           }
         );
       });
-      DrawerOverlay.classes = classes$a;
+      DrawerOverlay.classes = classes$b;
       DrawerOverlay.displayName = "@mantine/core/DrawerOverlay";
       function getDrawerAlign(position) {
         switch (position) {
@@ -31101,7 +31825,7 @@ ${lightForced}`;
         right: "slide-right",
         left: "slide-left"
       };
-      const defaultProps$j = {
+      const defaultProps$k = {
         closeOnClickOutside: true,
         withinPortal: true,
         lockScroll: true,
@@ -31112,7 +31836,7 @@ ${lightForced}`;
         zIndex: getDefaultZIndex("modal"),
         position: "left"
       };
-      const varsResolver$a = createVarsResolver((_, { position, size: size2, offset: offset2 }) => ({
+      const varsResolver$b = createVarsResolver((_, { position, size: size2, offset: offset2 }) => ({
         root: {
           "--drawer-size": getSize(size2, "drawer-size"),
           "--drawer-flex": getDrawerFlex(position),
@@ -31123,7 +31847,7 @@ ${lightForced}`;
         }
       }));
       const DrawerRoot = factory((_props, ref) => {
-        const props = useProps("DrawerRoot", defaultProps$j, _props);
+        const props = useProps("DrawerRoot", defaultProps$k, _props);
         const {
           classNames,
           className,
@@ -31141,7 +31865,7 @@ ${lightForced}`;
         const { dir } = useDirection();
         const getStyles2 = useStyles({
           name: "Drawer",
-          classes: classes$a,
+          classes: classes$b,
           props,
           className,
           style,
@@ -31150,7 +31874,7 @@ ${lightForced}`;
           unstyled,
           attributes,
           vars,
-          varsResolver: varsResolver$a
+          varsResolver: varsResolver$b
         });
         const drawerTransition = (dir === "rtl" ? rtlTransitions : transitions)[position];
         return /* @__PURE__ */ jsxRuntimeExports.jsx(DrawerProvider, { value: { scrollAreaComponent, getStyles: getStyles2, radius }, children: /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -31165,7 +31889,7 @@ ${lightForced}`;
           }
         ) });
       });
-      DrawerRoot.classes = classes$a;
+      DrawerRoot.classes = classes$b;
       DrawerRoot.displayName = "@mantine/core/DrawerRoot";
       const [DrawerStackProvider, useDrawerStackContext] = createOptionalContext();
       function DrawerStack({ children }) {
@@ -31205,9 +31929,9 @@ ${lightForced}`;
           }
         );
       });
-      DrawerTitle.classes = classes$a;
+      DrawerTitle.classes = classes$b;
       DrawerTitle.displayName = "@mantine/core/DrawerTitle";
-      const defaultProps$i = {
+      const defaultProps$j = {
         closeOnClickOutside: true,
         withinPortal: true,
         lockScroll: true,
@@ -31231,7 +31955,7 @@ ${lightForced}`;
           stackId,
           zIndex,
           ...others
-        } = useProps("Drawer", defaultProps$i, _props);
+        } = useProps("Drawer", defaultProps$j, _props);
         const ctx = useDrawerStackContext();
         const hasHeader = !!title || withCloseButton;
         const stackProps = ctx && stackId ? {
@@ -31273,7 +31997,7 @@ ${lightForced}`;
           }
         );
       });
-      Drawer.classes = classes$a;
+      Drawer.classes = classes$b;
       Drawer.displayName = "@mantine/core/Drawer";
       Drawer.Root = DrawerRoot;
       Drawer.Overlay = DrawerOverlay;
@@ -31286,7 +32010,7 @@ ${lightForced}`;
       const [MenuContextProvider, useMenuContext] = createSafeContext(
         "Menu component was not found in the tree"
       );
-      var classes$9 = { "dropdown": "m_dc9b7c9f", "label": "m_9bfac126", "divider": "m_efdf90cb", "item": "m_99ac2aa1", "itemLabel": "m_5476e0d3", "itemSection": "m_8b75e504", "chevron": "m_b85b0bed" };
+      var classes$a = { "dropdown": "m_dc9b7c9f", "label": "m_9bfac126", "divider": "m_efdf90cb", "item": "m_99ac2aa1", "itemLabel": "m_5476e0d3", "itemSection": "m_8b75e504", "chevron": "m_b85b0bed" };
       const MenuDivider = factory((props, ref) => {
         const { classNames, className, style, styles: styles2, vars, ...others } = useProps(
           "MenuDivider",
@@ -31303,7 +32027,7 @@ ${lightForced}`;
           }
         );
       });
-      MenuDivider.classes = classes$9;
+      MenuDivider.classes = classes$a;
       MenuDivider.displayName = "@mantine/core/MenuDivider";
       const MenuDropdown = factory((props, ref) => {
         const {
@@ -31360,7 +32084,7 @@ ${lightForced}`;
           }
         );
       });
-      MenuDropdown.classes = classes$9;
+      MenuDropdown.classes = classes$a;
       MenuDropdown.displayName = "@mantine/core/MenuDropdown";
       const [SubMenuProvider, useSubMenuContext] = createOptionalContext();
       const MenuItem = polymorphicFactory((props, ref) => {
@@ -31439,7 +32163,7 @@ ${lightForced}`;
           }
         );
       });
-      MenuItem.classes = classes$9;
+      MenuItem.classes = classes$a;
       MenuItem.displayName = "@mantine/core/MenuItem";
       const MenuLabel = factory((props, ref) => {
         const { classNames, className, style, styles: styles2, vars, ...others } = useProps(
@@ -31457,7 +32181,7 @@ ${lightForced}`;
           }
         );
       });
-      MenuLabel.classes = classes$9;
+      MenuLabel.classes = classes$a;
       MenuLabel.displayName = "@mantine/core/MenuLabel";
       const MenuSubDropdown = factory((props, ref) => {
         const {
@@ -31499,7 +32223,7 @@ ${lightForced}`;
           }
         );
       });
-      MenuSubDropdown.classes = classes$9;
+      MenuSubDropdown.classes = classes$a;
       MenuSubDropdown.displayName = "@mantine/core/MenuSubDropdown";
       const MenuSubItem = polymorphicFactory((props, ref) => {
         const {
@@ -31581,7 +32305,7 @@ ${lightForced}`;
           }
         );
       });
-      MenuSubItem.classes = classes$9;
+      MenuSubItem.classes = classes$a;
       MenuSubItem.displayName = "@mantine/core/MenuSubItem";
       function MenuSubTarget({ children, refProp }) {
         if (!isElement$1(children)) {
@@ -31593,7 +32317,7 @@ ${lightForced}`;
         return /* @__PURE__ */ jsxRuntimeExports.jsx(Popover.Target, { refProp, popupType: "menu", children });
       }
       MenuSubTarget.displayName = "@mantine/core/MenuSubTarget";
-      const defaultProps$h = {
+      const defaultProps$i = {
         offset: 0,
         position: "right-start",
         transitionProps: { duration: 0 },
@@ -31606,7 +32330,7 @@ ${lightForced}`;
         }
       };
       function MenuSub(_props) {
-        const { children, closeDelay, openDelay, ...others } = useProps("MenuSub", defaultProps$h, _props);
+        const { children, closeDelay, openDelay, ...others } = useProps("MenuSub", defaultProps$i, _props);
         const id = useId$1();
         const [opened, { open, close }] = useDisclosure(false);
         const ctx = useSubMenuContext();
@@ -31642,11 +32366,11 @@ ${lightForced}`;
       MenuSub.Target = MenuSubTarget;
       MenuSub.Dropdown = MenuSubDropdown;
       MenuSub.Item = MenuSubItem;
-      const defaultProps$g = {
+      const defaultProps$h = {
         refProp: "ref"
       };
       const MenuTarget = reactExports.forwardRef((props, ref) => {
-        const { children, refProp, ...others } = useProps("MenuTarget", defaultProps$g, props);
+        const { children, refProp, ...others } = useProps("MenuTarget", defaultProps$h, props);
         const child = getSingleElementChild(children);
         if (!child) {
           throw new Error(
@@ -31684,7 +32408,7 @@ ${lightForced}`;
         }) });
       });
       MenuTarget.displayName = "@mantine/core/MenuTarget";
-      const defaultProps$f = {
+      const defaultProps$g = {
         trapFocus: true,
         closeOnItemClick: true,
         withInitialFocusPlaceholder: true,
@@ -31696,7 +32420,7 @@ ${lightForced}`;
         menuItemTabIndex: -1
       };
       function Menu(_props) {
-        const props = useProps("Menu", defaultProps$f, _props);
+        const props = useProps("Menu", defaultProps$g, _props);
         const {
           children,
           onOpen,
@@ -31724,7 +32448,7 @@ ${lightForced}`;
         } = props;
         const getStyles2 = useStyles({
           name: "Menu",
-          classes: classes$9,
+          classes: classes$a,
           props,
           classNames,
           styles: styles2,
@@ -31801,7 +32525,7 @@ ${lightForced}`;
       }
       Menu.extend = (input) => input;
       Menu.withProps = getWithProps(Menu);
-      Menu.classes = classes$9;
+      Menu.classes = classes$a;
       Menu.displayName = "@mantine/core/Menu";
       Menu.Item = MenuItem;
       Menu.Label = MenuLabel;
@@ -31809,7 +32533,7 @@ ${lightForced}`;
       Menu.Target = MenuTarget;
       Menu.Divider = MenuDivider;
       Menu.Sub = MenuSub;
-      var classes$8 = { "root": "m_9df02822", "content": "m_54c44539", "inner": "m_1f958f16", "header": "m_d0e2b9cd" };
+      var classes$9 = { "root": "m_9df02822", "content": "m_54c44539", "inner": "m_1f958f16", "header": "m_d0e2b9cd" };
       const [ModalProvider, useModalContext] = createSafeContext(
         "Modal component was not found in tree"
       );
@@ -31826,7 +32550,7 @@ ${lightForced}`;
           }
         );
       });
-      ModalBody.classes = classes$8;
+      ModalBody.classes = classes$9;
       ModalBody.displayName = "@mantine/core/ModalBody";
       const ModalCloseButton = factory((_props, ref) => {
         const props = useProps("ModalCloseButton", null, _props);
@@ -31841,7 +32565,7 @@ ${lightForced}`;
           }
         );
       });
-      ModalCloseButton.classes = classes$8;
+      ModalCloseButton.classes = classes$9;
       ModalCloseButton.displayName = "@mantine/core/ModalCloseButton";
       const ModalContent = factory((_props, ref) => {
         const props = useProps("ModalContent", null, _props);
@@ -31870,7 +32594,7 @@ ${lightForced}`;
           }
         );
       });
-      ModalContent.classes = classes$8;
+      ModalContent.classes = classes$9;
       ModalContent.displayName = "@mantine/core/ModalContent";
       const ModalHeader = factory((_props, ref) => {
         const props = useProps("ModalHeader", null, _props);
@@ -31885,7 +32609,7 @@ ${lightForced}`;
           }
         );
       });
-      ModalHeader.classes = classes$8;
+      ModalHeader.classes = classes$9;
       ModalHeader.displayName = "@mantine/core/ModalHeader";
       const ModalOverlay = factory((_props, ref) => {
         const props = useProps("ModalOverlay", null, _props);
@@ -31900,9 +32624,9 @@ ${lightForced}`;
           }
         );
       });
-      ModalOverlay.classes = classes$8;
+      ModalOverlay.classes = classes$9;
       ModalOverlay.displayName = "@mantine/core/ModalOverlay";
-      const defaultProps$e = {
+      const defaultProps$f = {
         __staticSelector: "Modal",
         closeOnClickOutside: true,
         withinPortal: true,
@@ -31915,7 +32639,7 @@ ${lightForced}`;
         transitionProps: { duration: 200, transition: "fade-down" },
         yOffset: "5dvh"
       };
-      const varsResolver$9 = createVarsResolver(
+      const varsResolver$a = createVarsResolver(
         (_, { radius, size: size2, yOffset, xOffset }) => ({
           root: {
             "--modal-radius": radius === void 0 ? void 0 : getRadius(radius),
@@ -31926,7 +32650,7 @@ ${lightForced}`;
         })
       );
       const ModalRoot = factory((_props, ref) => {
-        const props = useProps("ModalRoot", defaultProps$e, _props);
+        const props = useProps("ModalRoot", defaultProps$f, _props);
         const {
           classNames,
           className,
@@ -31946,7 +32670,7 @@ ${lightForced}`;
         } = props;
         const getStyles2 = useStyles({
           name: __staticSelector,
-          classes: classes$8,
+          classes: classes$9,
           props,
           className,
           style,
@@ -31955,7 +32679,7 @@ ${lightForced}`;
           unstyled,
           attributes,
           vars,
-          varsResolver: varsResolver$9
+          varsResolver: varsResolver$a
         });
         return /* @__PURE__ */ jsxRuntimeExports.jsx(ModalProvider, { value: { yOffset, scrollAreaComponent, getStyles: getStyles2, fullScreen }, children: /* @__PURE__ */ jsxRuntimeExports.jsx(
           ModalBase,
@@ -31970,7 +32694,7 @@ ${lightForced}`;
           }
         ) });
       });
-      ModalRoot.classes = classes$8;
+      ModalRoot.classes = classes$9;
       ModalRoot.displayName = "@mantine/core/ModalRoot";
       const [ModalStackProvider, useModalStackContext] = createOptionalContext();
       function ModalStack({ children }) {
@@ -32010,9 +32734,9 @@ ${lightForced}`;
           }
         );
       });
-      ModalTitle.classes = classes$8;
+      ModalTitle.classes = classes$9;
       ModalTitle.displayName = "@mantine/core/ModalTitle";
-      const defaultProps$d = {
+      const defaultProps$e = {
         closeOnClickOutside: true,
         withinPortal: true,
         lockScroll: true,
@@ -32038,7 +32762,7 @@ ${lightForced}`;
           stackId,
           zIndex,
           ...others
-        } = useProps("Modal", defaultProps$d, _props);
+        } = useProps("Modal", defaultProps$e, _props);
         const ctx = useModalStackContext();
         const hasHeader = !!title || withCloseButton;
         const stackProps = ctx && stackId ? {
@@ -32088,7 +32812,7 @@ ${lightForced}`;
           }
         );
       });
-      Modal.classes = classes$8;
+      Modal.classes = classes$9;
       Modal.displayName = "@mantine/core/Modal";
       Modal.Root = ModalRoot;
       Modal.Overlay = ModalOverlay;
@@ -32099,9 +32823,9 @@ ${lightForced}`;
       Modal.CloseButton = ModalCloseButton;
       Modal.Stack = ModalStack;
       const [PillsInputProvider, usePillsInputContext] = createOptionalContext();
-      var classes$7 = { "root": "m_7cda1cd6", "root--default": "m_44da308b", "root--contrast": "m_e3a01f8", "label": "m_1e0e6180", "remove": "m_ae386778", "group": "m_1dcfd90b" };
+      var classes$8 = { "root": "m_7cda1cd6", "root--default": "m_44da308b", "root--contrast": "m_e3a01f8", "label": "m_1e0e6180", "remove": "m_ae386778", "group": "m_1dcfd90b" };
       const [PillGroupProvider, usePillGroupContext] = createOptionalContext();
-      const varsResolver$8 = createVarsResolver((_, { gap }, { size: size2 }) => ({
+      const varsResolver$9 = createVarsResolver((_, { gap }, { size: size2 }) => ({
         group: {
           "--pg-gap": gap !== void 0 ? getSize(gap) : getSize(size2, "pg-gap")
         }
@@ -32124,7 +32848,7 @@ ${lightForced}`;
         const _size = pillsInputCtx?.size || size2 || void 0;
         const getStyles2 = useStyles({
           name: "PillGroup",
-          classes: classes$7,
+          classes: classes$8,
           props,
           className,
           style,
@@ -32133,18 +32857,18 @@ ${lightForced}`;
           unstyled,
           attributes,
           vars,
-          varsResolver: varsResolver$8,
+          varsResolver: varsResolver$9,
           stylesCtx: { size: _size },
           rootSelector: "group"
         });
         return /* @__PURE__ */ jsxRuntimeExports.jsx(PillGroupProvider, { value: { size: _size, disabled }, children: /* @__PURE__ */ jsxRuntimeExports.jsx(Box, { ref, size: _size, ...getStyles2("group"), ...others }) });
       });
-      PillGroup.classes = classes$7;
+      PillGroup.classes = classes$8;
       PillGroup.displayName = "@mantine/core/PillGroup";
-      const defaultProps$c = {
+      const defaultProps$d = {
         variant: "default"
       };
-      const varsResolver$7 = createVarsResolver((_, { radius }, { size: size2 }) => ({
+      const varsResolver$8 = createVarsResolver((_, { radius }, { size: size2 }) => ({
         root: {
           "--pill-fz": getSize(size2, "pill-fz"),
           "--pill-height": getSize(size2, "pill-height"),
@@ -32152,7 +32876,7 @@ ${lightForced}`;
         }
       }));
       const Pill = factory((_props, ref) => {
-        const props = useProps("Pill", defaultProps$c, _props);
+        const props = useProps("Pill", defaultProps$d, _props);
         const {
           classNames,
           className,
@@ -32178,7 +32902,7 @@ ${lightForced}`;
         const _variant = pillsInputCtx?.variant === "filled" ? "contrast" : variant || "default";
         const getStyles2 = useStyles({
           name: "Pill",
-          classes: classes$7,
+          classes: classes$8,
           props,
           className,
           style,
@@ -32187,7 +32911,7 @@ ${lightForced}`;
           unstyled,
           attributes,
           vars,
-          varsResolver: varsResolver$7,
+          varsResolver: varsResolver$8,
           stylesCtx: { size: _size }
         });
         return /* @__PURE__ */ jsxRuntimeExports.jsxs(
@@ -32234,15 +32958,15 @@ ${lightForced}`;
           }
         );
       });
-      Pill.classes = classes$7;
+      Pill.classes = classes$8;
       Pill.displayName = "@mantine/core/Pill";
       Pill.Group = PillGroup;
-      var classes$6 = { "field": "m_45c4369d" };
-      const defaultProps$b = {
+      var classes$7 = { "field": "m_45c4369d" };
+      const defaultProps$c = {
         type: "visible"
       };
       const PillsInputField = factory((_props, ref) => {
-        const props = useProps("PillsInputField", defaultProps$b, _props);
+        const props = useProps("PillsInputField", defaultProps$c, _props);
         const {
           classNames,
           className,
@@ -32262,7 +32986,7 @@ ${lightForced}`;
         const inputWrapperCtx = useInputWrapperContext();
         const getStyles2 = useStyles({
           name: "PillsInputField",
-          classes: classes$6,
+          classes: classes$7,
           props,
           className,
           style,
@@ -32291,13 +33015,13 @@ ${lightForced}`;
           }
         );
       });
-      PillsInputField.classes = classes$6;
+      PillsInputField.classes = classes$7;
       PillsInputField.displayName = "@mantine/core/PillsInputField";
-      const defaultProps$a = {
+      const defaultProps$b = {
         size: "sm"
       };
       const PillsInput = factory((_props, ref) => {
-        const props = useProps("PillsInput", defaultProps$a, _props);
+        const props = useProps("PillsInput", defaultProps$b, _props);
         const {
           children,
           onMouseDown,
@@ -32367,7 +33091,7 @@ ${lightForced}`;
         lg: 72,
         xl: 89
       };
-      const defaultProps$9 = {
+      const defaultProps$a = {
         maxValues: Infinity,
         withCheckIcon: true,
         checkIconPosition: "left",
@@ -32377,7 +33101,7 @@ ${lightForced}`;
         size: "sm"
       };
       const MultiSelect = factory((_props, ref) => {
-        const props = useProps("MultiSelect", defaultProps$9, _props);
+        const props = useProps("MultiSelect", defaultProps$a, _props);
         const {
           classNames,
           className,
@@ -32735,6 +33459,219 @@ ${lightForced}`;
       });
       MultiSelect.classes = { ...InputBase.classes, ...Combobox.classes };
       MultiSelect.displayName = "@mantine/core/MultiSelect";
+      var classes$6 = { "root": "m_f61ca620", "input": "m_ccf8da4c", "innerInput": "m_f2d85dd2", "visibilityToggle": "m_b1072d44" };
+      const PasswordToggleIcon = ({
+        reveal
+      }) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "svg",
+        {
+          viewBox: "0 0 15 15",
+          fill: "none",
+          xmlns: "http://www.w3.org/2000/svg",
+          style: { width: "var(--psi-icon-size)", height: "var(--psi-icon-size)" },
+          children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "path",
+            {
+              d: reveal ? "M13.3536 2.35355C13.5488 2.15829 13.5488 1.84171 13.3536 1.64645C13.1583 1.45118 12.8417 1.45118 12.6464 1.64645L10.6828 3.61012C9.70652 3.21671 8.63759 3 7.5 3C4.30786 3 1.65639 4.70638 0.0760002 7.23501C-0.0253338 7.39715 -0.0253334 7.60288 0.0760014 7.76501C0.902945 9.08812 2.02314 10.1861 3.36061 10.9323L1.64645 12.6464C1.45118 12.8417 1.45118 13.1583 1.64645 13.3536C1.84171 13.5488 2.15829 13.5488 2.35355 13.3536L4.31723 11.3899C5.29348 11.7833 6.36241 12 7.5 12C10.6921 12 13.3436 10.2936 14.924 7.76501C15.0253 7.60288 15.0253 7.39715 14.924 7.23501C14.0971 5.9119 12.9769 4.81391 11.6394 4.06771L13.3536 2.35355ZM9.90428 4.38861C9.15332 4.1361 8.34759 4 7.5 4C4.80285 4 2.52952 5.37816 1.09622 7.50001C1.87284 8.6497 2.89609 9.58106 4.09974 10.1931L9.90428 4.38861ZM5.09572 10.6114L10.9003 4.80685C12.1039 5.41894 13.1272 6.35031 13.9038 7.50001C12.4705 9.62183 10.1971 11 7.5 11C6.65241 11 5.84668 10.8639 5.09572 10.6114Z" : "M7.5 11C4.80285 11 2.52952 9.62184 1.09622 7.50001C2.52952 5.37816 4.80285 4 7.5 4C10.1971 4 12.4705 5.37816 13.9038 7.50001C12.4705 9.62183 10.1971 11 7.5 11ZM7.5 3C4.30786 3 1.65639 4.70638 0.0760002 7.23501C-0.0253338 7.39715 -0.0253334 7.60288 0.0760014 7.76501C1.65639 10.2936 4.30786 12 7.5 12C10.6921 12 13.3436 10.2936 14.924 7.76501C15.0253 7.60288 15.0253 7.39715 14.924 7.23501C13.3436 4.70638 10.6921 3 7.5 3ZM7.5 9.5C8.60457 9.5 9.5 8.60457 9.5 7.5C9.5 6.39543 8.60457 5.5 7.5 5.5C6.39543 5.5 5.5 6.39543 5.5 7.5C5.5 8.60457 6.39543 9.5 7.5 9.5Z",
+              fill: "currentColor",
+              fillRule: "evenodd",
+              clipRule: "evenodd"
+            }
+          )
+        }
+      );
+      const defaultProps$9 = {
+        visibilityToggleIcon: PasswordToggleIcon
+      };
+      const varsResolver$7 = createVarsResolver((_, { size: size2 }) => ({
+        root: {
+          "--psi-icon-size": getSize(size2, "psi-icon-size"),
+          "--psi-button-size": getSize(size2, "psi-button-size")
+        }
+      }));
+      const PasswordInput = factory((_props, ref) => {
+        const props = useProps("PasswordInput", defaultProps$9, _props);
+        const {
+          classNames,
+          className,
+          style,
+          styles: styles2,
+          unstyled,
+          vars,
+          required,
+          error,
+          leftSection,
+          disabled,
+          id,
+          variant,
+          inputContainer,
+          description,
+          label,
+          size: size2,
+          errorProps,
+          descriptionProps,
+          labelProps,
+          withAsterisk,
+          inputWrapperOrder,
+          wrapperProps,
+          radius,
+          rightSection,
+          rightSectionWidth,
+          rightSectionPointerEvents,
+          leftSectionWidth,
+          visible: visible2,
+          defaultVisible,
+          onVisibilityChange,
+          visibilityToggleIcon: VisibilityToggleIcon,
+          visibilityToggleButtonProps,
+          rightSectionProps,
+          leftSectionProps,
+          leftSectionPointerEvents,
+          withErrorStyles,
+          mod,
+          attributes,
+          ...others
+        } = props;
+        const uuid = useId$1(id);
+        const [_visible, setVisibility] = useUncontrolled({
+          value: visible2,
+          defaultValue: defaultVisible,
+          finalValue: false,
+          onChange: onVisibilityChange
+        });
+        const toggleVisibility = () => setVisibility(!_visible);
+        const getStyles2 = useStyles({
+          name: "PasswordInput",
+          classes: classes$6,
+          props,
+          className,
+          style,
+          classNames,
+          styles: styles2,
+          unstyled,
+          attributes,
+          vars,
+          varsResolver: varsResolver$7
+        });
+        const { resolvedClassNames, resolvedStyles } = useResolvedStylesApi({
+          classNames,
+          styles: styles2,
+          props
+        });
+        const { styleProps, rest } = extractStyleProps(others);
+        const errorId = errorProps?.id || `${uuid}-error`;
+        const descriptionId = descriptionProps?.id || `${uuid}-description`;
+        const hasError = !!error && typeof error !== "boolean";
+        const hasDescription = !!description;
+        const _describedBy = `${hasError ? errorId : ""} ${hasDescription ? descriptionId : ""}`;
+        const describedBy = _describedBy.trim().length > 0 ? _describedBy.trim() : void 0;
+        const visibilityToggleButton = /* @__PURE__ */ jsxRuntimeExports.jsx(
+          ActionIcon,
+          {
+            ...getStyles2("visibilityToggle"),
+            disabled,
+            radius,
+            "aria-hidden": !visibilityToggleButtonProps,
+            "aria-pressed": _visible,
+            tabIndex: -1,
+            ...visibilityToggleButtonProps,
+            variant: visibilityToggleButtonProps?.variant ?? "subtle",
+            color: "gray",
+            unstyled,
+            onTouchEnd: (event) => {
+              event.preventDefault();
+              visibilityToggleButtonProps?.onTouchEnd?.(event);
+              toggleVisibility();
+            },
+            onMouseDown: (event) => {
+              event.preventDefault();
+              visibilityToggleButtonProps?.onMouseDown?.(event);
+              toggleVisibility();
+            },
+            onKeyDown: (event) => {
+              visibilityToggleButtonProps?.onKeyDown?.(event);
+              if (event.key === " ") {
+                event.preventDefault();
+                toggleVisibility();
+              }
+            },
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx(VisibilityToggleIcon, { reveal: _visible })
+          }
+        );
+        return /* @__PURE__ */ jsxRuntimeExports.jsx(
+          Input.Wrapper,
+          {
+            required,
+            id: uuid,
+            label,
+            error,
+            description,
+            size: size2,
+            classNames: resolvedClassNames,
+            styles: resolvedStyles,
+            __staticSelector: "PasswordInput",
+            __stylesApiProps: props,
+            unstyled,
+            withAsterisk,
+            inputWrapperOrder,
+            inputContainer,
+            variant,
+            labelProps: { ...labelProps, htmlFor: uuid },
+            descriptionProps: { ...descriptionProps, id: descriptionId },
+            errorProps: { ...errorProps, id: errorId },
+            mod,
+            attributes,
+            ...getStyles2("root"),
+            ...styleProps,
+            ...wrapperProps,
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+              Input,
+              {
+                component: "div",
+                error,
+                leftSection,
+                size: size2,
+                classNames: { ...resolvedClassNames, input: clsx(classes$6.input, resolvedClassNames.input) },
+                styles: resolvedStyles,
+                radius,
+                disabled,
+                __staticSelector: "PasswordInput",
+                __stylesApiProps: props,
+                rightSectionWidth,
+                rightSection: rightSection ?? visibilityToggleButton,
+                variant,
+                unstyled,
+                leftSectionWidth,
+                rightSectionPointerEvents: rightSectionPointerEvents || "all",
+                rightSectionProps,
+                leftSectionProps,
+                leftSectionPointerEvents,
+                withAria: false,
+                withErrorStyles,
+                attributes,
+                children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "input",
+                  {
+                    required,
+                    "data-invalid": !!error || void 0,
+                    "data-with-left-section": !!leftSection || void 0,
+                    ...getStyles2("innerInput"),
+                    disabled,
+                    id: uuid,
+                    ref,
+                    ...rest,
+                    "aria-describedby": describedBy,
+                    autoComplete: rest.autoComplete || "off",
+                    type: _visible ? "text" : "password"
+                  }
+                )
+              }
+            )
+          }
+        );
+      });
+      PasswordInput.classes = { ...InputBase.classes, ...classes$6 };
+      PasswordInput.displayName = "@mantine/core/PasswordInput";
       var classes$5 = { "root": "m_db6d6462", "section": "m_2242eb65", "stripes-animation": "m_81a374bd", "stripes-animation-vertical": "m_e0fb7a86", "label": "m_91e40b74" };
       const [ProgressProvider, useProgressContext] = createSafeContext(
         "Progress.Root component was not found in tree"
@@ -34725,6 +35662,7 @@ ${lightForced}`;
       const studio$1 = { "ariaLabel": "Studio window", "title": "Studio", "saveStacksTitle": "Export current stacks to local JSON file", "loadStacksTitle": "Import stacks from local JSON", "savePaletteTitle": "Export current palette to local JSON file", "loadPaletteTitle": "Import palette from local JSON", "showPalette": "Show palette", "hidePalette": "Hide palette", "showLayerManager": "Show layer manager", "hideLayerManager": "Hide layer manager", "showHistory": "Show history", "hideHistory": "Hide history", "applyToTargetLabel": "Apply merged appearance to: {name}", "applyNoTargetTitle": "No target character set in File System store", "applyNoTargetAlert": "No target character set in File System store.", "applyMergedEmptyConfirm": "Merged appearance appears empty. Do you still want to apply it to the target character?", "applySuccessAlert": "Applied appearance to target character.", "applyFailedAlert": "Apply failed — see console for details.", "exportMergedTitle": "Export merged appearance to File Store", "exportNoFSAlert": "File System store not available.", "exportSuccessAlert": "Exported merged appearance to File Store.", "exportFailedAlert": "Export failed: {msg}", "closeTitle": "Close", "stacksImportSuccess": "Stacks imported successfully.", "stacksImportFailed": "Failed to import stacks from selected file.", "paletteImportSuccess": "Palette imported successfully.", "paletteImportFailed": "Failed to import palette from selected file.", "targetDefault": "target", "importCharacterTitle": "Import Character", "savesManager": "Manage saves", "layersSelected": "{count} layers selected", "replaceMode": "Replace mode", "visualMoveMode": "Visual Move mode" };
       const history$1 = { "title": "History", "clear": "Clear", "clearTitle": "Clear all history", "clearConfirmMessage": "Are you sure you want to clear all history? This cannot be undone.", "currentState": "Current State", "timelineSubtitle": "Browse and jump between edit states", "undoCount": "Undo", "redoCount": "Redo", "undoAction": "Undo", "redoAction": "Redo", "totalStates": "Total", "emptyState": "No history yet. Your changes will be tracked here.", "justNow": "Just now", "minutesAgo": "{count} min ago", "hoursAgo": "{count} hours ago", "undoItem": "Previous state", "redoItem": "Future state", "pastTag": "Past", "futureTag": "Future", "currentTag": "Now", "scrollHint": "Scroll horizontally to browse more states", "jumpLatest": "Jump to latest", "hasFutureState": "Future states available", "stateChange": "State Change", "initialState": "Initial State", "actionTypeLabels": { "part": { "updateMetadata": "Update part metadata", "updateProperty": "Update part properties", "applyLayerDeltas": "Apply part layer changes" }, "layer": { "batchApplyLayerDeltas": "Apply layer batch changes" }, "batch": { "updateOpacity": "Batch update opacity", "updateOffset": "Batch update offset", "updateColor": "Batch update color", "updatePriority": "Batch update priority" }, "palette": { "applyColor": "Apply color", "applyTag": "Apply palette tag", "applyTagOffset": "Apply tag offset", "resetTagOffset": "Reset tag offset", "updateTag": "Update palette tag", "createTagAndReplace": "Create tag and replace", "renameTagReferences": "Rename tag references", "deleteTag": "Delete palette tag", "clear": "Clear palette", "savedColor": { "add": "Add saved color", "update": "Update saved color", "delete": "Delete saved color", "clear": "Clear saved colors" } }, "stack": { "add": "Add stack", "remove": "Remove stack", "move": "Move stack", "clear": "Clear stacks", "rename": "Rename stack" }, "asset": { "apply": "Apply asset" } }, "actionScopeLabels": { "part": "Part", "layer": "Layer", "batch": "Batch", "palette": "Palette", "stack": "Stack", "asset": "Asset" }, "operationContentLabels": { "color": "Color", "opacity": "Opacity", "shift": "Shift", "order": "Order", "layer": "Layer", "property": "Property", "tag": "Tag", "general": "Edit" } };
       const groupNames$1 = { "Item": "Item", "Cosplay": "Cosplay", "Hair": "Hair", "Headwear": "Headwear", "Face": "Face", "Markings": "Markings / Tattoos", "ClothUpper": "Upper Clothing", "ClothLower": "Lower Clothing", "Hands": "Hands", "Feet": "Feet", "Accessories": "Accessories", "HiddenBody": "Hidden Body Parts", "Appearance": "Appearance" };
+      const cloudflareSync$1 = { "title": "Sync provider", "enable": "Use Cloudflare sync", "description": "Cloudflare becomes the main wardrobe sync source. BC stops uploading wardrobe data. Turning this off returns to BC sync; it does not delete the Cloudflare copy.", "allDevicesHint": "Turn on Cloudflare sync on every device. Older devices still using BC sync will form a separate copy.", "bcLegacyChanged": "We cannot confirm that the old BC wardrobe is unchanged, so automatic cleanup is paused. Export a backup and check the sync mode and wardrobe on every device. After reviewing them, switch each device to Cloudflare. Do not delete the old data yet.", "bcLegacyChangedShort": "Old BC data needs review; automatic cleanup is paused.", "notConfigured": "This version has no Cloudflare service URL. Deploy and configure the service, then update the script. BC sync remains active for now.", "serviceUnavailable": "This version has no Cloudflare service URL. Your wardrobe remains on this device; Cloudflare sync is paused and BC will not take over automatically. Update the script or turn off this switch to use BC.", "serviceNotReady": "Service not configured", "bcCleanupPending": "The old BC wardrobe copy still uses space. Cleanup is submitted after a successful Cloudflare save. BC gives no receipt, so a later login must confirm removal.", "bcCleanupPendingShort": "The old BC copy is awaiting cleanup and still uses BC space.", "bcCleanupUnknown": "The old BC wardrobe copy has not been checked. If cleanup was submitted, the next login will check the result.", "bcCleanupUnknownShort": "The old BC copy awaits a login check.", "bcCleanupVerified": "A BC login readback confirmed that the old wardrobe copy is absent.", "syncing": "Syncing to Cloudflare…", "syncingShort": "Syncing", "pending": "Local changes waiting to sync to Cloudflare", "pendingShort": "Pending sync", "needsAttention": "Cloudflare sync needs attention", "needsAttentionShort": "Needs attention", "syncedShort": "Last sync OK", "lastSynced": "Last synced: {time}", "waiting": "Waiting for first sync", "syncNow": "Sync now", "estimatedSize": "Estimated cloud data", "sizeAria": "Estimated Cloudflare upload {used}, limit 1.8 MB", "sizeHint": "UTF-8 JSON estimate for the next sync; device-only outfits are excluded.", "sizeOver": "The estimate exceeds the limit, so the upload may be rejected. Your local copy remains available; reduce synced content.", "changeFailed": "Could not switch sync providers. Check your connection or service configuration, then try again.", "syncFailed": "Could not finish Cloudflare sync. Check your connection and try again.", "errorTooLarge": "The cloud wardrobe exceeds the 1.8 MB limit. Reduce the content included in sync and retry. Your local copy remains available.", "errorCapacityReached": "This free service has reached its wardrobe or daily creation limit. Try later or check Cloudflare service capacity. Your local copy remains available.", "errorWriteLimit": "This key has reached the service's daily write limit (500 writes). Your local changes remain saved; retry on the next UTC day.", "errorProvisioningUnavailable": "The service cannot create a new cloud wardrobe. Configure the provisioning secret in the Cloudflare deployment and retry. Your local copy remains available.", "keyStorage": "The recovery key was submitted to BC extension settings (assumed successful; no receipt). Save another copy. Anyone with this key can access your cloud wardrobe.", "keyNotSaved": "The recovery key has not been submitted to BC. Copy it now and keep it safe.", "keyMissing": "This device cannot find the recovery key. Turn off Cloudflare sync, then import your original key.", "showKey": "Show recovery key", "recoveryKey": "Recovery key", "copyKey": "Copy key", "downloadKey": "Download recovery key", "keyDownloadFailed": "Could not download the recovery key. Show the key and copy it manually.", "hideKey": "Hide key", "keyCopied": "Key copied. Keep it somewhere safe.", "copyManually": "The browser blocked copying. Select the key above and copy it manually.", "keepKeySafe": "Keep this key somewhere safe. Do not share it.", "keyUnavailable": "Could not read the recovery key. Try again; do not clear this site's data.", "restoreKey": "Have a recovery key?", "changeKey": "Switch cloud wardrobe", "restoreHint": "Importing saves the key on this device and attempts to submit it to BC. When you turn sync on again, this device's wardrobe will merge with the cloud wardrobe for that key. The old key still opens its old cloud wardrobe and is not revoked.", "restore": "Import key", "restoreFailed": "Could not import the key. Check it and try again.", "openDashboard": "Open cloud data page", "dashboardHint": "The data page asks for your recovery key when opened. The key is not included in the link or saved by the page." };
       const fileManagerPanel$1 = { "ariaLabel": "Wardrobe panel", "title": "Portable wardrobe", "saveBackup": "Save backup", "importBackup": "Import backup", "saveCharacter": "Save current outfit", "importBCX": "Import from BCX", "importPlayerWardrobe": "Import player wardrobe", "settings": "Settings", "toggleFilters": "Adjust outfit", "lightMode": "Light mode", "darkMode": "Dark mode", "themedMode": "Themed mode", "toggleTheme": "Switch theme", "tabAriaLabel": "Workbench tabs", "tabWardrobe": "Wardrobe", "tabHistory": "History", "tabStudio": "Studio", "tabSettings": "Settings", "themeSettings": "Theme settings", "forceSelfApplyTitle": "Outfit controls", "forceSelfApplyLabel": "Allow force apply to myself", "forceSelfApplyDescription": "Shows an extra button for your character that tries to bypass BC clothing settings. The game may still reject changes. Saved on this browser only.", "forceSelfApplySaveFailed": "Could not save this setting. Check browser storage and try again.", "themedNotAvailable": "Themed BC not detected, using default light theme", "themedModeDesc": "Themed mode uses colors from Themed BC plugin. Themed BC must be installed and enabled." };
       const historyViewer$1 = { "title": "History", "toggleToHistory": "View History", "toggleToFileManager": "View wardrobe", "clearAll": "Clear All", "clearAllConfirm": "Clear the current history? Archived older copies remain available through Export history. This cannot be undone.", "deleteRecord": "Delete", "deleteConfirm": "Delete this history record?", "delete": "Delete", "searchPlaceholder": "Search history records...", "clearSearch": "Clear", "timeFilter": "Time filters", "filterAll": "All", "filterToday": "Today", "filterWeek": "Last 7 days", "loadRecord": "Load this record", "apply": "Apply", "cancel": "Cancel", "loadToPreview": "Load to preview", "recordedAt": "Recorded at", "emptyState": "No history records yet. Your outfit changes will be automatically recorded here.", "recordCount": "{count} records", "saveFailedTitle": "History changes were not saved", "saveFailedHelp": "Recent changes may be lost if you refresh. Check this site's storage permissions, then retry.", "retrySave": "Retry saving", "copiesDifferTitle": "Older history copy is still stored locally", "copiesDifferHelp": "The browser could not archive it. It may still use limited local storage. Retry, or export both copies now.", "retryArchive": "Retry archive", "copyArchivedTitle": "Older history copy preserved", "copyArchivedHelp": "Both copies are in the browser database. Export a history backup to keep them outside this browser.", "exportHistory": "Export history", "exportPartial": "History exported, but archived copies could not be read. Keep this site's data and retry later.", "exportFailed": "Could not export history. Try again.", "attentionRequired": "History storage needs attention", "archivedReminder": "Archived history copy available to export" };
       const sidePreview$1 = { "ariaLabel": "Character preview", "hint": "Check the preview, then apply it to the selected character.", "targetCharacter": "Target character", "noTargetCharacter": "No available character", "renderFailed": "The preview could not load. Try again.", "retry": "Reload preview", "loading": "Loading preview" };
@@ -34753,6 +35691,7 @@ ${lightForced}`;
         studio: studio$1,
         history: history$1,
         groupNames: groupNames$1,
+        cloudflareSync: cloudflareSync$1,
         fileManagerPanel: fileManagerPanel$1,
         historyViewer: historyViewer$1,
         sidePreview: sidePreview$1,
@@ -34781,6 +35720,7 @@ ${lightForced}`;
       const studio = { "ariaLabel": "Studio 窗口", "title": "Studio", "saveStacksTitle": "将当前 stacks 导出为本地 JSON 文件", "loadStacksTitle": "从本地 JSON 导入 stacks", "savePaletteTitle": "将当前调色板导出为本地 JSON 文件", "loadPaletteTitle": "从本地 JSON 导入调色板", "showPalette": "显示调色板", "hidePalette": "隐藏调色板", "showLayerManager": "显示图层管理器", "hideLayerManager": "隐藏图层管理器", "showHistory": "显示历史记录", "hideHistory": "隐藏历史记录", "applyToTargetLabel": "将合并外观应用到：{name}", "applyNoTargetTitle": "未在文件系统中设置目标角色", "applyNoTargetAlert": "未在文件系统中设置目标角色。", "applyMergedEmptyConfirm": "合并的外观似乎为空。仍要将其应用到目标角色吗？", "applySuccessAlert": "已将外观应用到目标角色。", "applyFailedAlert": "应用失败，详情见控制台。", "exportMergedTitle": "导出 mergedAppearance 到文件仓库", "exportNoFSAlert": "文件系统存储不可用。", "exportSuccessAlert": "已导出合并外观到文件仓库。", "exportFailedAlert": "导出失败：{msg}", "closeTitle": "关闭", "stacksImportSuccess": "Stacks 导入成功。", "stacksImportFailed": "从所选文件导入 Stacks 失败。", "paletteImportSuccess": "调色板导入成功。", "paletteImportFailed": "从所选文件导入调色板失败。", "targetDefault": "目标", "importCharacterTitle": "导入角色", "savesManager": "管理存档", "layersSelected": "已选择 {count} 个图层", "replaceMode": "替换模式", "visualMoveMode": "可视移动模式" };
       const history = { "title": "历史记录", "clear": "清空", "clearTitle": "清空所有历史记录", "clearConfirmMessage": "确定要清空所有历史记录吗？此操作无法撤销。", "currentState": "当前状态", "timelineSubtitle": "浏览并跳转到任意编辑状态", "undoCount": "可撤销", "redoCount": "可重做", "undoAction": "撤销", "redoAction": "重做", "totalStates": "总数", "emptyState": "暂无历史记录。您的更改将在此处跟踪。", "justNow": "刚刚", "minutesAgo": "{count} 分钟前", "hoursAgo": "{count} 小时前", "undoItem": "之前的状态", "redoItem": "未来的状态", "pastTag": "过去", "futureTag": "未来", "currentTag": "当前", "scrollHint": "横向滚动可查看更多状态", "jumpLatest": "跳至最新", "hasFutureState": "存在可重做状态", "stateChange": "状态变更", "initialState": "初始状态", "actionTypeLabels": { "part": { "updateMetadata": "更新部件元数据", "updateProperty": "更新部件属性", "applyLayerDeltas": "应用部件图层改动" }, "layer": { "batchApplyLayerDeltas": "批量应用图层改动" }, "batch": { "updateOpacity": "批量更新不透明度", "updateOffset": "批量更新偏移", "updateColor": "批量更新颜色", "updatePriority": "批量更新优先级" }, "palette": { "applyColor": "应用颜色", "applyTag": "应用调色标签", "applyTagOffset": "应用标签偏移", "resetTagOffset": "重置标签偏移", "updateTag": "更新调色标签", "createTagAndReplace": "创建标签并替换", "renameTagReferences": "重命名标签引用", "deleteTag": "删除调色标签", "clear": "清空调色板", "savedColor": { "add": "添加收藏颜色", "update": "更新收藏颜色", "delete": "删除收藏颜色", "clear": "清空收藏颜色" } }, "stack": { "add": "新增堆栈", "remove": "删除堆栈", "move": "移动堆栈", "clear": "清空堆栈", "rename": "重命名堆栈" }, "asset": { "apply": "应用资源" } }, "actionScopeLabels": { "part": "部件", "layer": "图层", "batch": "批量", "palette": "调色", "stack": "堆栈", "asset": "资源" }, "operationContentLabels": { "color": "颜色", "opacity": "透明度", "shift": "位移", "order": "顺序", "layer": "图层", "property": "属性", "tag": "标签", "general": "编辑" } };
       const groupNames = { "Item": "道具", "Cosplay": "Cosplay", "Hair": "头发", "Headwear": "头饰", "Face": "面部", "Markings": "痕迹/纹身", "ClothUpper": "上身服装", "ClothLower": "下身服装", "Hands": "手部", "Feet": "足部", "Accessories": "配饰", "HiddenBody": "隐藏身体部件", "Appearance": "外观" };
+      const cloudflareSync = { "title": "同步方式", "enable": "使用 Cloudflare 同步", "description": "开启后，Cloudflare 成为衣橱的主要同步源；BC 不再上传衣橱内容。关闭后改用 BC，云端副本不会自动删除。", "allDevicesHint": "请在每台设备开启 Cloudflare；仍使用 BC 同步的旧设备会形成分叉。", "bcLegacyChanged": "无法确认旧 BC 衣柜的数据没有变化，自动清理已暂停。请先导出备份，并检查所有设备的同步方式与衣柜内容；核对后再逐台开启 Cloudflare。不要直接删除旧数据。", "bcLegacyChangedShort": "旧 BC 数据尚未核对；自动清理已暂停。", "notConfigured": "此版本尚未配置 Cloudflare 服务地址。完成部署并更新脚本后才能开启；目前继续使用 BC 同步。", "serviceUnavailable": "当前版本未配置 Cloudflare 服务地址。衣橱仍保存在本机，Cloudflare 同步暂停；BC 不会自动接管。更新脚本后重试，或关闭此开关改用 BC。", "serviceNotReady": "服务未配置", "bcCleanupPending": "BC 旧衣柜副本仍占空间。Cloudflare 保存成功后会提交清理；BC 不回执，需在后续登录核对。", "bcCleanupPendingShort": "BC 旧副本待清理，暂时仍占 BC 空间。", "bcCleanupUnknown": "尚未核对 BC 旧衣柜副本。若已提交清理，将在下次登录核对结果。", "bcCleanupUnknownShort": "BC 旧副本状态待登录核对。", "bcCleanupVerified": "已在 BC 登录回读中核对：旧衣柜副本不存在。", "syncing": "正在同步到 Cloudflare…", "syncingShort": "同步中", "pending": "本机修改等待同步到 Cloudflare", "pendingShort": "待同步", "needsAttention": "Cloudflare 同步需要处理", "needsAttentionShort": "需处理", "syncedShort": "上次成功", "lastSynced": "最近同步：{time}", "waiting": "等待首次同步", "syncNow": "立即同步", "estimatedSize": "预计云端数据", "sizeAria": "Cloudflare 预计上传 {used}，上限 1.8 MB", "sizeHint": "按 UTF-8 JSON 估算下一次同步；仅本机衣物不计入。", "sizeOver": "预计已超上限，上传可能被拒绝。本机副本仍保留，请减少同步内容。", "changeFailed": "未能切换同步方式。请检查网络或服务配置后重试。", "syncFailed": "未能完成 Cloudflare 同步。请检查网络后重试。", "errorTooLarge": "云衣柜超过 1.8 MB 上限。请减少参与同步的内容后重试；本机副本仍保留。", "errorCapacityReached": "此免费服务已达到衣柜数量或今日创建额度。请稍后重试，或检查 Cloudflare 服务容量；本机副本仍保留。", "errorWriteLimit": "这把密钥今天已达到服务设置的写入上限（500 次）。本机修改仍保留，请在 UTC 次日重试。", "errorProvisioningUnavailable": "服务暂不能创建新云衣柜。请在 Cloudflare 部署中配置创建密钥后重试；本机副本仍保留。", "keyStorage": "恢复密钥已提交到 BC 扩展设置（默认成功，无回执）。建议另存一份；持有密钥的人可以访问云衣橱。", "keyNotSaved": "恢复密钥尚未提交到 BC。请立即复制并妥善保管。", "keyMissing": "此设备找不到恢复密钥。请先关闭 Cloudflare 同步，再导入原来的密钥。", "showKey": "显示恢复密钥", "recoveryKey": "恢复密钥", "copyKey": "复制密钥", "downloadKey": "下载恢复密钥", "keyDownloadFailed": "未能下载恢复密钥。请显示密钥并手动复制。", "hideKey": "隐藏密钥", "keyCopied": "已复制密钥。请保存在安全位置。", "copyManually": "浏览器未允许自动复制。请选中上方密钥手动复制。", "keepKeySafe": "请将密钥保存在安全位置。不要分享给他人。", "keyUnavailable": "无法读取恢复密钥。请重试；不要清除本站数据。", "restoreKey": "已有恢复密钥？", "changeKey": "切换云衣柜", "restoreHint": "导入会在本机保存密钥并尝试提交到 BC。重新开启同步后，本机衣橱会与这把密钥对应的云衣柜合并；旧密钥仍可访问旧云衣柜，不会被撤销。", "restore": "导入密钥", "restoreFailed": "未能导入密钥。请检查输入后重试。", "openDashboard": "打开云端数据页", "dashboardHint": "数据页只在打开时要求输入恢复密钥；密钥不会放进链接，也不会由网页保存。" };
       const fileManagerPanel = { "ariaLabel": "衣橱面板", "title": "随身衣橱", "saveBackup": "保存备份", "importBackup": "备份导入", "saveCharacter": "保存当前穿着", "importBCX": "从 BCX 导入", "importPlayerWardrobe": "导入玩家衣柜", "settings": "设置", "toggleFilters": "微调部位", "lightMode": "浅色模式", "darkMode": "深色模式", "themedMode": "Themed 模式", "toggleTheme": "切换主题", "tabAriaLabel": "工作台标签", "tabWardrobe": "衣橱", "tabHistory": "历史", "tabStudio": "Studio", "tabSettings": "设置", "themeSettings": "主题设置", "forceSelfApplyTitle": "换装选项", "forceSelfApplyLabel": "允许对自己强制换装", "forceSelfApplyDescription": "开启后，仅在目标是自己时显示红色按钮，尝试越过 BC 换装设置。游戏仍可能拒绝更改。此设置只保存在本机。", "forceSelfApplySaveFailed": "未能保存此设置。请检查浏览器存储后重试。", "themedNotAvailable": "未检测到 Themed BC，使用默认浅色主题", "themedModeDesc": "Themed 模式使用 Themed BC 的颜色配置，需要安装并启用 Themed BC 插件。" };
       const historyViewer = { "title": "历史记录", "toggleToHistory": "查看历史", "toggleToFileManager": "查看衣橱", "clearAll": "清空全部", "clearAllConfirm": "清空当前历史记录？旧版归档副本仍可通过“导出历史”保存。此操作无法撤销。", "deleteRecord": "删除", "deleteConfirm": "确定要删除此历史记录吗？", "delete": "删除", "searchPlaceholder": "搜索历史记录...", "clearSearch": "清除", "timeFilter": "时间筛选", "filterAll": "全部", "filterToday": "今天", "filterWeek": "近7天", "loadRecord": "载入此记录", "apply": "应用", "cancel": "取消", "loadToPreview": "加载到预览", "recordedAt": "记录于", "emptyState": "暂无历史记录。您的装扮更改将自动记录在此。", "recordCount": "{count} 条记录", "saveFailedTitle": "历史记录未能保存", "saveFailedHelp": "刷新后可能丢失本次更改。请检查本站的存储权限，然后重试。", "retrySave": "重试保存", "copiesDifferTitle": "旧版历史副本仍占本机空间", "copiesDifferHelp": "浏览器暂未能归档它。请重试，或先导出包含两份记录的历史备份。", "retryArchive": "重试归档", "copyArchivedTitle": "旧版历史副本已保留", "copyArchivedHelp": "两份记录已存入浏览器数据库。可导出历史备份，另存到浏览器外。", "exportHistory": "导出历史", "exportPartial": "历史已导出，但未能读取归档副本。请保留本站数据，稍后重试。", "exportFailed": "无法导出历史，请重试。", "attentionRequired": "历史记录存储需要处理", "archivedReminder": "有旧版历史副本可导出" };
       const sidePreview = { "ariaLabel": "角色预览", "hint": "确认目标角色和预览效果后，再应用。", "targetCharacter": "目标角色", "noTargetCharacter": "无可用角色", "renderFailed": "预览加载失败，请重试。", "retry": "重新加载预览", "loading": "正在加载预览" };
@@ -34809,6 +35749,7 @@ ${lightForced}`;
         studio,
         history,
         groupNames,
+        cloudflareSync,
         fileManagerPanel,
         historyViewer,
         sidePreview,
@@ -35771,6 +36712,19 @@ ${lightForced}`;
         );
       }
       const libraryStyles = ".vpw-library-root{container-type:inline-size;container-name:wardrobe-library;display:flex;flex-direction:column;gap:10px;height:100%;min-height:0;min-width:0}.vpw-library-search,.vpw-library-toolbar,.vpw-library-quota{flex:0 0 auto}.vpw-library-local-alert{flex:0 0 auto;min-width:0}.vpw-library-local-alert-heading>p{min-width:0}.vpw-library-local-alert-heading>button{flex:0 0 auto}.vpw-library-local-alert[data-compact] .vpw-library-local-alert-actions{order:1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}.vpw-library-local-alert[data-compact] .vpw-library-local-alert-actions>button{width:100%;min-width:0}.vpw-library-local-alert[data-compact] .vpw-library-local-alert-details{order:2;min-height:0;max-height:min(15dvh,86px);overflow-y:auto;overscroll-behavior:contain}.vpw-library-workspace{display:flex;flex:1;min-height:0;min-width:0;gap:14px}.vpw-library-sidebar{display:none;flex:0 0 154px;min-width:0;padding-right:12px;overflow-y:auto;border-right:1px solid var(--vpw-color-default-border)}.vpw-library-filter-option{display:flex;align-items:baseline;justify-content:space-between;gap:8px;width:100%;min-height:36px;padding:7px 9px;border-radius:8px}.vpw-library-filter-name{overflow-wrap:anywhere}.vpw-library-filter-option:hover{background:var(--vpw-color-default-hover)}.vpw-library-filter-option[aria-pressed=true]{color:var(--vpw-color-teal-light-color);background:var(--vpw-color-teal-light);font-weight:600}.vpw-library-filter-option:focus-visible,.vpw-outfit-select:focus-visible{outline:2px solid var(--vpw-color-teal-5);outline-offset:-2px}.vpw-library-scroll{flex:1;min-width:0;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:2px 3px 8px}.vpw-library-masonry{column-width:154px;column-gap:12px}.vpw-library-masonry[data-view=list]{columns:auto}.vpw-outfit-card{display:block;width:100%;vertical-align:top;break-inside:avoid;margin-bottom:12px;overflow:hidden;background:var(--vpw-color-body);transition:border-color .12s ease,box-shadow .12s ease}.vpw-outfit-card:hover{border-color:var(--vpw-color-teal-4)}.vpw-outfit-card[data-selected]{border-color:var(--vpw-color-teal-5);box-shadow:0 0 0 1px var(--vpw-color-teal-5)}.vpw-outfit-select{display:flex;flex-direction:column;width:100%;padding:5px;border-radius:10px;text-align:left}.vpw-outfit-thumbnail{position:relative;width:100%;aspect-ratio:9 / 16;flex:0 0 auto;overflow:hidden;border-radius:8px;background:linear-gradient(150deg,var(--vpw-color-default-hover),var(--vpw-color-body))}.vpw-outfit-selected-badge{position:absolute;inset-inline-start:6px;top:6px}.vpw-outfit-caption{min-width:0;padding:9px 6px 5px;width:100%}.vpw-outfit-name{min-width:0;flex:1;line-height:1.35;overflow-wrap:anywhere}.vpw-outfit-tag{padding:2px 6px;border-radius:5px;background:var(--vpw-color-default-hover);color:var(--vpw-color-dimmed);font-size:10px;line-height:1.4;max-width:100%;overflow-wrap:anywhere}.vpw-outfit-actions{padding:5px 10px 9px}.vpw-outfit-card[data-view=list]{display:flex;align-items:stretch;margin-bottom:8px}.vpw-outfit-card[data-view=list] .vpw-outfit-select{min-width:0;flex:1;justify-content:center;padding:12px}.vpw-outfit-card[data-view=list] .vpw-outfit-caption{padding:0}.vpw-outfit-card[data-view=list] .vpw-outfit-actions{flex:0 0 auto;align-content:center;padding:8px 8px 8px 0}@container wardrobe-library (max-width: 420px){.vpw-library-toolbar{align-items:flex-start}.vpw-outfit-card[data-view=list] .vpw-outfit-actions{flex-direction:column;justify-content:center;gap:2px}}@container wardrobe-library (min-width: 540px){.vpw-library-sidebar{display:block}.vpw-library-filter-trigger{display:none}}@media(pointer:coarse){.vpw-outfit-actions button,.vpw-library-filter-option{min-height:40px}.vpw-outfit-actions button:last-child{min-width:40px}}@media(prefers-reduced-motion:reduce){.vpw-outfit-card{transition:none}}@media(max-height:600px){.vpw-library-root[data-local-storage-error]{gap:6px}.vpw-library-quota:not([data-expanded]) .vpw-library-quota-secondary{display:none}}";
+      const errorKeys = {
+        "too-large": "cloudflareSync.errorTooLarge",
+        "capacity-reached": "cloudflareSync.errorCapacityReached",
+        "write-limit": "cloudflareSync.errorWriteLimit",
+        "provisioning-unavailable": "cloudflareSync.errorProvisioningUnavailable"
+      };
+      function cloudflareSyncErrorKey(code) {
+        return code ? errorKeys[code] || null : null;
+      }
+      const CLOUDFLARE_WARDROBE_LIMIT_BYTES = 18e5;
+      function estimateCloudflareWardrobeBytes(index2) {
+        return new TextEncoder().encode(JSON.stringify(projectWardrobeCloudIndex(index2))).byteLength;
+      }
       function formatKB(bytes) {
         return `${(Math.max(0, bytes) / 1e3).toFixed(1)} kB`;
       }
@@ -35786,15 +36740,21 @@ ${lightForced}`;
         ["otherAppsBytes", "library.localStorageOtherApps"]
       ];
       function FileManager({ onSelectOutfit }) {
-        const { t } = useTranslation();
+        const { t, i18n: i18n2 } = useTranslation();
         const dialog2 = useDialog();
         const isMobile = useIsMobile();
         const actions = useWardrobeActions();
+        const wardrobeIndex = useFsSelector((fs) => fs.wardrobeIndex);
         const outfits = useFsSelector((fs) => fs.outfits);
         const tags = useFsSelector((fs) => fs.tags);
         const selectedTagId = useFsSelector((fs) => fs.selectedTagId);
         const quota = useFsSelector((fs) => fs.cloudQuota);
         const sync = useFsSelector((fs) => fs.syncStatus);
+        const cloudflare = useFsSelector((fs) => fs.cloudflareSyncStatus);
+        const cloudflareErrorKey = cloudflareSyncErrorKey(cloudflare.errorCode);
+        const cloudflareBytes = reactExports.useMemo(() => cloudflare.enabled ? estimateCloudflareWardrobeBytes(wardrobeIndex) : 0, [cloudflare.enabled, wardrobeIndex]);
+        const cloudflareUsage = cloudflareBytes / CLOUDFLARE_WARDROBE_LIMIT_BYTES;
+        const cloudflareSizeLabel = cloudflareBytes >= 1e6 ? `${(cloudflareBytes / 1e6).toFixed(2)} MB` : formatLocalStorageBytes(cloudflareBytes);
         const fileViewMode = useWbSelector((wb) => wb.wardrobeUi.fileViewMode);
         const [searchQuery, setSearchQuery] = reactExports.useState("");
         const [editingOutfit, setEditingOutfit] = reactExports.useState(null);
@@ -35898,6 +36858,13 @@ ${lightForced}`;
         const retrySync = async () => {
           try {
             await getFs().syncNow();
+          } catch (error) {
+            await reportError2(error);
+          }
+        };
+        const retryCloudflareSync = async () => {
+          try {
+            await getFs().syncCloudflareNow();
           } catch (error) {
             await reportError2(error);
           }
@@ -36132,7 +37099,68 @@ ${lightForced}`;
               ] })
             }
           ),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(Paper, { withBorder: true, radius: "md", p: 8, className: "vpw-library-quota", "data-expanded": showQuotaDetails || void 0, children: /* @__PURE__ */ jsxRuntimeExports.jsxs(Stack, { gap: 4, children: [
+          cloudflare.enabled ? /* @__PURE__ */ jsxRuntimeExports.jsx(Paper, { withBorder: true, radius: "md", p: 8, className: "vpw-library-quota", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(Stack, { gap: 4, children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { justify: "space-between", gap: 4, children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", fw: 600, children: t("cloudflareSync.enable") }),
+              !localSaveError && /* @__PURE__ */ jsxRuntimeExports.jsx(Badge, { size: "sm", variant: "light", color: !cloudflare.ready ? "orange" : cloudflare.error ? "red" : cloudflare.pending ? "blue" : cloudflare.lastSyncedAt && !cloudflare.syncing ? "teal" : "gray", children: !cloudflare.ready ? t("cloudflareSync.serviceNotReady") : cloudflare.syncing ? t("cloudflareSync.syncingShort") : cloudflare.error ? t("cloudflareSync.needsAttentionShort") : cloudflare.pending ? t("cloudflareSync.pendingShort") : cloudflare.lastSyncedAt ? t("cloudflareSync.syncedShort") : t("cloudflareSync.waiting") })
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { justify: "space-between", gap: 4, children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "dimmed", children: t("cloudflareSync.estimatedSize") }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs(Text, { size: "xs", fw: 600, c: cloudflareUsage > 1 ? "red" : cloudflareUsage >= 0.9 ? "orange" : void 0, children: [
+                cloudflareSizeLabel,
+                " / 1.8 MB"
+              ] })
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              Progress,
+              {
+                size: 4,
+                value: Math.min(100, cloudflareUsage * 100),
+                color: cloudflareUsage > 1 ? "red" : cloudflareUsage >= 0.9 ? "orange" : "teal",
+                "aria-label": t("cloudflareSync.sizeAria", { used: cloudflareSizeLabel })
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "dimmed", children: t("cloudflareSync.sizeHint") }),
+            cloudflareUsage > 1 && /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "red", children: t("cloudflareSync.sizeOver") }),
+            cloudflare.lastSyncedAt && !cloudflare.error && !cloudflare.pending && /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "dimmed", children: t("cloudflareSync.lastSynced", {
+              time: new Date(cloudflare.lastSyncedAt).toLocaleString(i18n2.language === "zh" ? "zh-CN" : "en-US")
+            }) }),
+            !localSaveError && /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { justify: "space-between", gap: 4, children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: sync.localSaved ? "dimmed" : "red", children: t(sync.localSaved ? "library.localSaved" : "library.localUnsaved") }),
+              conflicts.length > 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "light", color: "orange", size: "compact-xs", onClick: () => setConflictReviewOpened(true), children: t("library.conflict.review", { count: conflicts.length }) }) : /* @__PURE__ */ jsxRuntimeExports.jsx(
+                Button,
+                {
+                  variant: "subtle",
+                  size: "compact-xs",
+                  disabled: !cloudflare.ready || cloudflare.syncing,
+                  onClick: () => {
+                    void retryCloudflareSync();
+                  },
+                  children: t("cloudflareSync.syncNow")
+                }
+              )
+            ] }),
+            !cloudflare.ready && /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "orange", children: t("cloudflareSync.serviceUnavailable") }),
+            cloudflare.bcLegacyChanged ? /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { justify: "space-between", gap: 4, children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "orange", children: t("cloudflareSync.bcLegacyChangedShort") }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "subtle", size: "compact-xs", onClick: () => getWb().setActiveTab("settings"), children: t("fileManagerPanel.tabSettings") })
+            ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+              cloudflare.bcLegacyRetained === true && /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "orange", children: t("cloudflareSync.bcCleanupPendingShort") }),
+              cloudflare.bcLegacyRetained == null && /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "dimmed", children: t("cloudflareSync.bcCleanupUnknownShort") })
+            ] }),
+            sync.recoveryAvailable && /* @__PURE__ */ jsxRuntimeExports.jsx(
+              Button,
+              {
+                variant: "subtle",
+                size: "compact-xs",
+                style: { alignSelf: "flex-start" },
+                onClick: actions.saveRecoveryBackup,
+                children: t("library.exportRecovery")
+              }
+            ),
+            conflicts.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "orange", children: t("library.conflict.paused") }),
+            cloudflare.error && /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "red", style: { overflowWrap: "anywhere" }, children: cloudflareErrorKey ? t(cloudflareErrorKey) : cloudflare.error })
+          ] }) }) : /* @__PURE__ */ jsxRuntimeExports.jsx(Paper, { withBorder: true, radius: "md", p: 8, className: "vpw-library-quota", "data-expanded": showQuotaDetails || void 0, children: /* @__PURE__ */ jsxRuntimeExports.jsxs(Stack, { gap: 4, children: [
             /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { justify: "space-between", gap: 4, children: [
               /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { gap: 4, wrap: "nowrap", children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", fw: 600, children: t("library.cloudStorage") }),
@@ -37386,15 +38414,120 @@ ${lightForced}`;
         width: "100%",
         overflow: "hidden"
       };
+      const dashboardUrl = (() => {
+        try {
+          return new URL(configuredCloudflareUrl()).origin;
+        } catch {
+          return "";
+        }
+      })();
       function WardrobeSettings() {
-        const { t } = useTranslation();
+        const { t, i18n: i18n2 } = useTranslation();
         const theme = useTheme();
         const dialog2 = useDialog();
-        useFsSelector((fs) => fs.character);
+        const member = useFsSelector((fs) => fs.character?.MemberNumber);
+        const cloudflare = useFsSelector((fs) => fs.cloudflareSyncStatus);
+        const cloudflareErrorKey = cloudflareSyncErrorKey(cloudflare.errorCode);
+        const activeTab = useWbSelector((wb) => wb.activeTab);
         useWbSelector((wb) => wb.forceSelfApplyRevision);
+        const [cloudflareBusy, setCloudflareBusy] = reactExports.useState(false);
+        const [recoveryKey, setRecoveryKey] = reactExports.useState("");
+        const [showRestore, setShowRestore] = reactExports.useState(false);
+        const [restoreKey, setRestoreKey] = reactExports.useState("");
+        const [copyResult, setCopyResult] = reactExports.useState(null);
+        reactExports.useEffect(() => {
+          setRecoveryKey("");
+          setRestoreKey("");
+          setShowRestore(false);
+          setCopyResult(null);
+        }, [member]);
+        reactExports.useEffect(() => {
+          if (activeTab !== "settings") setRecoveryKey("");
+        }, [activeTab]);
         const onForceSelfApplyChange = async (enabled) => {
           if (!getWb().setForceSelfApplyEnabled(enabled)) {
             await dialog2.alert(t("fileManagerPanel.forceSelfApplySaveFailed"));
+          }
+        };
+        const onCloudflareChange = async (enabled) => {
+          setCloudflareBusy(true);
+          setRecoveryKey("");
+          try {
+            const saved = enabled ? await getFs().enableCloudflareSync() : await getFs().disableCloudflareSync();
+            if (!saved && !getFs().cloudflareSyncStatus.error) await dialog2.alert(t("cloudflareSync.changeFailed"));
+          } catch {
+            await dialog2.alert(t("cloudflareSync.changeFailed"));
+          } finally {
+            setCloudflareBusy(false);
+          }
+        };
+        const onSyncCloudflare = async () => {
+          setCloudflareBusy(true);
+          try {
+            const synced = await getFs().syncCloudflareNow();
+            if (!synced && !getFs().cloudflareSyncStatus.error) await dialog2.alert(t("cloudflareSync.syncFailed"));
+          } catch {
+            await dialog2.alert(t("cloudflareSync.syncFailed"));
+          } finally {
+            setCloudflareBusy(false);
+          }
+        };
+        const onShowRecoveryKey = async () => {
+          try {
+            const key = await getFs().exportCloudflareKey();
+            if (!key) throw new Error("Recovery key unavailable");
+            setRecoveryKey(key);
+            setCopyResult(null);
+          } catch {
+            await dialog2.alert(t("cloudflareSync.keyUnavailable"));
+          }
+        };
+        const onCopyRecoveryKey = async () => {
+          try {
+            if (!hostWindow.navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
+            await hostWindow.navigator.clipboard.writeText(recoveryKey);
+            setCopyResult("copied");
+          } catch {
+            setCopyResult("manual");
+          }
+        };
+        const onDownloadRecoveryKey = async () => {
+          try {
+            const key = await getFs().exportCloudflareKey();
+            if (!key) throw new Error("Recovery key unavailable");
+            const url = URL.createObjectURL(new Blob([`${key}
+`], { type: "text/plain;charset=utf-8" }));
+            const anchor = hostWindow.document.createElement("a");
+            try {
+              anchor.href = url;
+              anchor.download = `vpw-cloud-recovery-key-${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}.txt`;
+              hostWindow.document.body.appendChild(anchor);
+              anchor.click();
+            } finally {
+              anchor.remove();
+              hostWindow.setTimeout(() => URL.revokeObjectURL(url), 6e4);
+            }
+          } catch {
+            await dialog2.alert(t("cloudflareSync.keyDownloadFailed"));
+          }
+        };
+        const onRestoreKey = async () => {
+          if (!restoreKey.trim()) return;
+          setCloudflareBusy(true);
+          try {
+            const restored = await getFs().importCloudflareKey(restoreKey.trim());
+            if (restored) {
+              setRecoveryKey("");
+              setCopyResult(null);
+              setRestoreKey("");
+              setShowRestore(false);
+            } else if (!getFs().cloudflareSyncStatus.error) {
+              await dialog2.alert(t("cloudflareSync.restoreFailed"));
+            }
+          } catch {
+            await dialog2.alert(t("cloudflareSync.restoreFailed"));
+          } finally {
+            setCloudflareBusy(false);
           }
         };
         return /* @__PURE__ */ jsxRuntimeExports.jsxs(Stack, { gap: "lg", children: [
@@ -37408,6 +38541,157 @@ ${lightForced}`;
               /* @__PURE__ */ jsxRuntimeExports.jsxs(Button, { variant: theme.isDark ? "filled" : "default", onClick: () => theme.setColorScheme("dark"), children: [
                 "☾ ",
                 t("fileManagerPanel.darkMode")
+              ] })
+            ] })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(Box, { children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { fw: 600, mb: "sm", children: t("cloudflareSync.title") }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs(Stack, { gap: "xs", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                Switch,
+                {
+                  checked: cloudflare.enabled,
+                  disabled: !cloudflare.ready && !cloudflare.enabled || cloudflareBusy || cloudflare.syncing,
+                  onChange: (event) => {
+                    void onCloudflareChange(event.currentTarget.checked);
+                  },
+                  label: t("cloudflareSync.enable"),
+                  description: t("cloudflareSync.description")
+                }
+              ),
+              cloudflare.enabled && /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "dimmed", children: t("cloudflareSync.allDevicesHint") }),
+              !cloudflare.ready && /* @__PURE__ */ jsxRuntimeExports.jsx(Alert, { color: "orange", children: t(cloudflare.enabled ? "cloudflareSync.serviceUnavailable" : "cloudflareSync.notConfigured") }),
+              cloudflare.enabled && /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { gap: "xs", align: "center", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "sm", c: cloudflare.error ? "red" : "dimmed", children: cloudflare.syncing ? t("cloudflareSync.syncing") : cloudflare.error ? t("cloudflareSync.needsAttention") : cloudflare.pending ? t("cloudflareSync.pending") : cloudflare.lastSyncedAt ? t("cloudflareSync.lastSynced", {
+                  time: new Date(cloudflare.lastSyncedAt).toLocaleString(i18n2.language === "zh" ? "zh-CN" : "en-US")
+                }) : t("cloudflareSync.waiting") }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  Button,
+                  {
+                    size: "compact-sm",
+                    variant: "light",
+                    disabled: !cloudflare.ready || cloudflareBusy || cloudflare.syncing,
+                    onClick: () => {
+                      void onSyncCloudflare();
+                    },
+                    children: t("cloudflareSync.syncNow")
+                  }
+                )
+              ] }),
+              cloudflare.error && /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "red", style: { overflowWrap: "anywhere" }, children: cloudflareErrorKey ? t(cloudflareErrorKey) : cloudflare.error }),
+              cloudflare.enabled && cloudflare.bcLegacyChanged && /* @__PURE__ */ jsxRuntimeExports.jsx(Alert, { color: "orange", children: t("cloudflareSync.bcLegacyChanged") }),
+              cloudflare.enabled && !cloudflare.bcLegacyChanged && cloudflare.bcLegacyRetained === true && /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "orange", children: t("cloudflareSync.bcCleanupPending") }),
+              cloudflare.enabled && !cloudflare.bcLegacyChanged && cloudflare.bcLegacyRetained == null && /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "dimmed", children: t("cloudflareSync.bcCleanupUnknown") }),
+              cloudflare.enabled && !cloudflare.bcLegacyChanged && cloudflare.bcLegacyRetained === false && /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "dimmed", children: t("cloudflareSync.bcCleanupVerified") }),
+              cloudflare.enabled && !cloudflare.keyAvailable && /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "orange", children: t("cloudflareSync.keyMissing") }),
+              cloudflare.keyAvailable && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: cloudflare.keySavedToBC ? "dimmed" : "orange", children: t(cloudflare.keySavedToBC ? "cloudflareSync.keyStorage" : "cloudflareSync.keyNotSaved") }),
+                !showRestore && (!recoveryKey ? /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { gap: "xs", children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    Button,
+                    {
+                      size: "compact-sm",
+                      variant: "subtle",
+                      onClick: () => {
+                        void onShowRecoveryKey();
+                      },
+                      children: t("cloudflareSync.showKey")
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    Button,
+                    {
+                      size: "compact-sm",
+                      variant: "subtle",
+                      onClick: () => {
+                        void onDownloadRecoveryKey();
+                      },
+                      children: t("cloudflareSync.downloadKey")
+                    }
+                  )
+                ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs(Stack, { gap: 4, children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    TextInput,
+                    {
+                      label: t("cloudflareSync.recoveryKey"),
+                      value: recoveryKey,
+                      readOnly: true,
+                      onFocus: (event) => event.currentTarget.select(),
+                      autoComplete: "off"
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { gap: "xs", children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { size: "compact-sm", onClick: () => {
+                      void onCopyRecoveryKey();
+                    }, children: t("cloudflareSync.copyKey") }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { size: "compact-sm", variant: "subtle", onClick: () => {
+                      void onDownloadRecoveryKey();
+                    }, children: t("cloudflareSync.downloadKey") }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { size: "compact-sm", variant: "subtle", onClick: () => {
+                      setRecoveryKey("");
+                      setCopyResult(null);
+                    }, children: t("cloudflareSync.hideKey") })
+                  ] }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: copyResult === "manual" ? "orange" : "dimmed", children: t(copyResult === "copied" ? "cloudflareSync.keyCopied" : copyResult === "manual" ? "cloudflareSync.copyManually" : "cloudflareSync.keepKeySafe") })
+                ] }))
+              ] }),
+              !cloudflare.enabled && cloudflare.ready && /* @__PURE__ */ jsxRuntimeExports.jsx(jsxRuntimeExports.Fragment, { children: !showRestore ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+                Button,
+                {
+                  size: "compact-sm",
+                  variant: "subtle",
+                  style: { alignSelf: "flex-start" },
+                  onClick: () => {
+                    setRecoveryKey("");
+                    setCopyResult(null);
+                    setShowRestore(true);
+                  },
+                  children: t(cloudflare.keyAvailable ? "cloudflareSync.changeKey" : "cloudflareSync.restoreKey")
+                }
+              ) : /* @__PURE__ */ jsxRuntimeExports.jsxs(Stack, { gap: "xs", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  PasswordInput,
+                  {
+                    label: t("cloudflareSync.recoveryKey"),
+                    value: restoreKey,
+                    onChange: (event) => setRestoreKey(event.currentTarget.value),
+                    autoComplete: "off"
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "dimmed", children: t("cloudflareSync.restoreHint") }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { gap: "xs", children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    Button,
+                    {
+                      size: "compact-sm",
+                      disabled: !restoreKey.trim() || cloudflareBusy,
+                      onClick: () => {
+                        void onRestoreKey();
+                      },
+                      children: t("cloudflareSync.restore")
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { size: "compact-sm", variant: "subtle", onClick: () => {
+                    setShowRestore(false);
+                    setRestoreKey("");
+                  }, children: t("dialog.cancel") })
+                ] })
+              ] }) }),
+              dashboardUrl && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  Button,
+                  {
+                    component: "a",
+                    href: dashboardUrl,
+                    target: "_blank",
+                    rel: "noopener noreferrer",
+                    size: "compact-sm",
+                    variant: "subtle",
+                    style: { alignSelf: "flex-start" },
+                    children: t("cloudflareSync.openDashboard")
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "dimmed", children: t("cloudflareSync.dashboardHint") })
               ] })
             ] })
           ] }),
@@ -38265,6 +39549,10 @@ ${lightForced}`;
                 if (received) showStatus("");
               }).catch((error) => console.error("[VPW] cloud observation failed", error));
             } else {
+              if (wardrobe.cloudflareSyncStatus?.enabled) {
+                void wardrobe.syncCloudflareNow();
+                return;
+              }
               repository()?.invalidateFreshness();
               showStatus(message(
                 "这次登录开始于衣柜接管前。请重新登录 BC 后再同步。",
@@ -38276,10 +39564,21 @@ ${lightForced}`;
           },
           onOnline: () => {
             if (!ownsWriter() || desiredMember !== loadedMember) return;
+            if (wardrobe.cloudflareSyncStatus?.enabled) {
+              void wardrobe.syncCloudflareNow();
+              return;
+            }
             repository()?.invalidateFreshness();
           },
           onOffline: () => {
             if (!ownsWriter()) return;
+            if (wardrobe.cloudflareSyncStatus?.enabled) {
+              wardrobe.cloudflareSyncStatus = {
+                ...wardrobe.cloudflareSyncStatus,
+                error: message("当前离线，修改已保存在本机。", "Offline; changes are saved on this device.")
+              };
+              return;
+            }
             const repo = repository();
             repo?.invalidateFreshness();
             repo?.emit({ state: "offline" });

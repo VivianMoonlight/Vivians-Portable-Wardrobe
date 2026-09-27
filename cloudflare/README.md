@@ -33,13 +33,13 @@ npx wrangler d1 create vpw-cloud-sync
 cp wrangler.toml.example wrangler.toml
 # 将 wrangler.toml 中的 REPLACE_WITH_D1_DATABASE_ID 换成创建结果
 npx wrangler d1 execute vpw-cloud-sync --remote --file=schema.sql
-npx wrangler pages project create vpw-cloud-sync
+npx wrangler pages project create vpw-cloud-sync --production-branch wardrobe-react
 npx wrangler pages secret put VPW_PROVISIONING_SECRET --project-name=vpw-cloud-sync
-npx wrangler pages deploy public --project-name=vpw-cloud-sync
+npx wrangler pages deploy public --project-name=vpw-cloud-sync --branch wardrobe-react
 ```
 
 输入 `VPW_PROVISIONING_SECRET` 时使用独立生成的至少 32 字符随机值，例如先运行 `node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))"`，再粘贴到 Wrangler 的密钥提示中。它只保存在 Cloudflare 服务端，用来以 HMAC 摘要记录每日创建者 IP；插件不用发送这个值。没有此密钥或 Cloudflare 提供的客户端 IP 时，新衣柜创建会关闭，但已有衣柜可继续读写。
 
-上面的命令需在 `cloudflare/` 目录运行；Pages 的 `functions/` 会与静态网页一起部署。确认项目域名后，在**打包插件的环境**中设置 `VITE_CLOUDFLARE_SYNC_URL=https://<项目域名>`，再运行项目根目录的 `npm run package:react`。这个地址会写进插件构建产物，插件设置里没有地址输入框。若项目名已被占用，请同时修改 Pages 项目名和本地 Wrangler 的 `name`。单把恢复密钥只在当前浏览器页面的内存中使用，不在 Pages 网页的 localStorage 中保存。
+上面的命令需在 `cloudflare/` 目录运行；Pages 的 `functions/` 会与静态网页一起部署。当前生产服务位于 [vpw-cloud-sync.pages.dev](https://vpw-cloud-sync.pages.dev/)，项目根目录的 `.env.production` 已设置 `VITE_CLOUDFLARE_SYNC_URL`，因此 `npm run package:react` 会连接这个地址。自建部署需修改该值或在打包环境中覆盖它。地址会写进插件构建产物，插件设置里没有地址输入框。若项目名已被占用，请同时修改 Pages 项目名和本地 Wrangler 的 `name`。单把恢复密钥只在当前浏览器页面的内存中使用，不在 Pages 网页的 localStorage 中保存。
 
 Cloudflare 免费方案目前对 D1 的单库容量为 500 MB、账户总存储为 5 GB，另有限制每日行读写次数。这个实现每把密钥只占一行，但单份衣柜仍受 1.8 MB 的主动限制；100 把密钥的理论 JSON 上限约为 180 MB。公开端点仍可能遭到读取请求洪泛或分布式创建滥用。CORS 不能阻止脚本和命令行请求，公开部署时还应关注 Cloudflare 指标并在可用时配置 [速率限制规则](https://developers.cloudflare.com/waf/rate-limiting-rules/)。完整限制以 [D1 官方文档](https://developers.cloudflare.com/d1/platform/limits/) 和 [定价页](https://developers.cloudflare.com/d1/platform/pricing/) 为准。
