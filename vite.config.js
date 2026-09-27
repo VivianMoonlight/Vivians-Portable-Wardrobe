@@ -7,7 +7,7 @@ import fs from 'fs'
 // Read version from package.json (single source of truth)
 const pkgJson = JSON.parse(fs.readFileSync(new URL('./package.json', import.meta.url)))
 const VERSION = pkgJson.version || '0.0.0'
-const REACT_LOADER_URL = 'https://cdn.jsdelivr.net/gh/VivianMoonlight/Vivians-Portable-Wardrobe@wardrobe-react/ViviansPortableWardrobeReactLoader.user.js'
+const REACT_BUNDLE_URL = 'https://cdn.jsdelivr.net/gh/VivianMoonlight/Vivians-Portable-Wardrobe@wardrobe-react/out/Vivians-Portable-Wardrobe.user.js'
 
 const hosts = [
   'https://bondageprojects.elementfx.com/*',
@@ -53,8 +53,8 @@ export default defineConfig(({ mode }) => {
               author: 'VIVianMoonlight',
               description: 'Portable Wardrobe for Bondage Club (React + Mantine, Shadow DOM isolated)',
               match: hosts,
-              updateURL: REACT_LOADER_URL,
-              downloadURL: REACT_LOADER_URL,
+              updateURL: REACT_BUNDLE_URL,
+              downloadURL: REACT_BUNDLE_URL,
               //icon: '/public/icon.png',
               grant: [
                 'GM_setValue', 'GM_getValue', 'GM_deleteValue', 'GM_listValues',

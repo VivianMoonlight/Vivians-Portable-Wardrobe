@@ -10,6 +10,10 @@ The React preview follows the **`wardrobe-react`** branch. Install the [React pr
 
 React 预览版跟随 **`wardrobe-react`** 分支。在脚本管理器中安装 [React 预览加载器](https://cdn.jsdelivr.net/gh/VivianMoonlight/Vivians-Portable-Wardrobe@wardrobe-react/ViviansPortableWardrobeReactLoader.user.js)，然后刷新游戏。加载器及更新地址均指向此分支，当前版本以 [package.json](package.json) 为准。
 
+Install the loader **once from the link above**. In the script manager it appears as **Vivians Portable Wardrobe (React Preview Loader)** and updates through its `@updateURL`. It loads the current branch bundle when the game opens. If you previously installed the full React bundle or the older VPW script, disable that copy to avoid running two wardrobes.
+
+请从上面的链接**安装一次加载器**；脚本管理器中应显示 **Vivians Portable Wardrobe (React Preview Loader)**。它通过 `@updateURL` 更新自身，并在打开游戏时加载该分支的主程序。如果之前安装过 React 主包或旧版 VPW，请停用旧脚本，避免同时运行两份衣橱。
+
 ## Find, preview, apply / 找衣物、预览、应用
 
 1. Open the wardrobe from the floating button. Search outfits or tags, then use the tag and cloud filters to narrow the results.
