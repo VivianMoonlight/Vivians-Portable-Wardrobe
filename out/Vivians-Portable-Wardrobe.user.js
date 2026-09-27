@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vivians Portable Wardrobe
 // @namespace    http://tampermonkey.net/
-// @version      0.10.1-react.12
+// @version      0.10.1-react.13
 // @author       VIVianMoonlight
 // @description  Portable Wardrobe for Bondage Club (React + Mantine, Shadow DOM isolated)
 // @downloadURL  https://cdn.jsdelivr.net/gh/VivianMoonlight/Vivians-Portable-Wardrobe@wardrobe-react/out/Vivians-Portable-Wardrobe.user.js
@@ -32,7 +32,7 @@
     return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
   };
   var require_main_001 = __commonJS({
-    "main-BM8DNDEQ.js"(exports) {
+    "main-BV0pfCT5.js"(exports) {
       function _mergeNamespaces(n, m) {
         for (var i = 0; i < m.length; i++) {
           const e = m[i];
@@ -9285,7 +9285,7 @@
       instance.hasLoadedNamespace;
       instance.loadNamespaces;
       instance.loadLanguages;
-      const version = "0.10.1-react.12";
+      const version = "0.10.1-react.13";
       var _unsafeWindow = /* @__PURE__ */ (() => typeof unsafeWindow != "undefined" ? unsafeWindow : void 0)();
       const hostWindow = typeof _unsafeWindow !== "undefined" ? _unsafeWindow : window;
       const doc = hostWindow.document;
@@ -14325,7 +14325,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
       const wardrobeLibraryActions = {
         _getRepository() {
           if (!this._repository) {
-            const canWrite = (member) => hostWindow.__VPW_WARDROBE_LOCK_OWNER === true && String(hostWindow.Player?.MemberNumber) === String(member);
+            const canWrite = (member) => hostWindow.__VPW_WARDROBE_LOCK_OWNER === true && hostWindow.__VPW_WARDROBE_LOCK_MEMBER === String(member) && String(hostWindow.Player?.MemberNumber) === String(member);
             this._repository = new WardrobeRepository({
               getPlayer: () => hostWindow.Player,
               localStorage: hostWindow.localStorage,
@@ -15330,8 +15330,9 @@ One of mods you are using is using an old version of SDK. It will work for now b
       const STORE_NAME = "history";
       const legacyCopiesKey = (member) => `legacyCopies:${member}`;
       class HistoryPersistence {
-        constructor(getIndexedDB) {
+        constructor(getIndexedDB, canWrite = () => true) {
           this.getIndexedDB = getIndexedDB;
+          this.canWrite = canWrite;
           this.database = null;
           this.connection = null;
         }
@@ -15394,6 +15395,9 @@ One of mods you are using is using an old version of SDK. It will work for now b
         }
         async write(member, data) {
           const database = await this.open();
+          if (this.canWrite(String(member)) !== true) {
+            throw Object.assign(new Error("History writer lock was lost"), { code: "writer-lost" });
+          }
           return new Promise((resolve, reject) => {
             let transaction;
             try {
@@ -15411,6 +15415,9 @@ One of mods you are using is using an old version of SDK. It will work for now b
         }
         async archiveLegacy(member, raw) {
           const database = await this.open();
+          if (this.canWrite(String(member)) !== true) {
+            throw Object.assign(new Error("History writer lock was lost"), { code: "writer-lost" });
+          }
           return new Promise((resolve, reject) => {
             let transaction;
             try {
@@ -15424,6 +15431,11 @@ One of mods you are using is using an old version of SDK. It will work for now b
             const key = legacyCopiesKey(member);
             const request = store.get(key);
             request.onsuccess = () => {
+              if (this.canWrite(String(member)) !== true) {
+                transaction.abort();
+                reject(Object.assign(new Error("History writer lock was lost"), { code: "writer-lost" }));
+                return;
+              }
               const copies = Array.isArray(request.result) ? request.result : [];
               if (copies.some((copy2) => copy2.raw === raw)) return;
               store.put([...copies, { raw, archivedAt: (/* @__PURE__ */ new Date()).toISOString() }], key);
@@ -16964,10 +16976,19 @@ One of mods you are using is using an old version of SDK. It will work for now b
       function isActiveHistorySession(store, session) {
         return store._historySession === session;
       }
+      function ownsHistoryWriter(member) {
+        return hostWindow.__VPW_WARDROBE_LOCK_OWNER === true && hostWindow.__VPW_WARDROBE_LOCK_MEMBER === String(member) && String(hostWindow.Player?.MemberNumber) === String(member);
+      }
+      function requireHistoryWriter(member) {
+        if (!ownsHistoryWriter(member)) {
+          throw Object.assign(new Error("History writer lock was lost"), { code: "writer-lost" });
+        }
+      }
       function reportHistoryStorageFailure(store, session, error) {
         session.status = "error";
+        session.writerLost = error?.code === "writer-lost";
         if (isActiveHistorySession(store, session)) store.historyStorageStatus = "error";
-        if (!session.warned) {
+        if (!session.warned && !session.writerLost) {
           session.warned = true;
           console.warn("[VPW] History storage unavailable; recent changes remain in this tab", error);
         }
@@ -16996,9 +17017,11 @@ One of mods you are using is using an old version of SDK. It will work for now b
         session.writePromise = (async () => {
           while (session.savedRevision < session.dirtyRevision) {
             const revision = session.dirtyRevision;
+            requireHistoryWriter(session.member);
             await store._historyPersistence.write(session.member, session.history.toJSON());
             session.savedRevision = revision;
           }
+          session.writerLost = false;
           session.status = historyStorageState(session);
           if (isActiveHistorySession(store, session)) store.historyStorageStatus = session.status;
         })().catch((error) => reportHistoryStorageFailure(store, session, error)).finally(() => {
@@ -17018,20 +17041,24 @@ One of mods you are using is using an old version of SDK. It will work for now b
               session.legacyNeedsArchive = true;
             }
             if (session.legacyNeedsArchive) {
+              requireHistoryWriter(session.member);
               await store._historyPersistence.archiveLegacy(session.member, raw);
               session.archivedLegacy = true;
             }
+            requireHistoryWriter(session.member);
             if (localStorage2.getItem(session.key) === raw) localStorage2.removeItem(session.key);
             session.legacyConflict = localStorage2.getItem(session.key) !== null;
           }
         } catch (error) {
           session.legacyConflict = true;
-          if (!session.warnedArchive) {
+          session.writerLost = error?.code === "writer-lost";
+          if (!session.warnedArchive && !session.writerLost) {
             session.warnedArchive = true;
             console.warn("[VPW] Older history copy remains in localStorage", error);
           }
         }
         session.legacySettled = true;
+        if (!session.legacyConflict) session.writerLost = false;
         session.status = historyStorageState(session);
         if (isActiveHistorySession(store, session)) store.historyStorageStatus = session.status;
         if (session.dirtyRevision > session.savedRevision) flushHistorySession(store, session);
@@ -17045,6 +17072,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
           const hasStoredHistory = data !== null;
           if (data === null && session.legacyRaw !== null) {
             if (!isHistoryTree(session.legacyData)) throw new Error("Legacy history is invalid");
+            requireHistoryWriter(session.member);
             await store._historyPersistence.write(session.member, session.legacyData);
             data = session.legacyData;
           }
@@ -17135,7 +17163,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
           historyVersion: 0,
           historyStorageStatus: "loading",
           _historySession: null,
-          _historyPersistence: new HistoryPersistence(() => hostWindow.indexedDB),
+          _historyPersistence: new HistoryPersistence(() => hostWindow.indexedDB, ownsHistoryWriter),
           _historyLocalStorage: hostWindow.localStorage,
           renderer: new RenderService({ drawCallbacks: RenderApi }),
           thumbnailRefreshVersion: 0,
@@ -17935,7 +17963,14 @@ One of mods you are using is using an old version of SDK. It will work for now b
            */
           loadHistory() {
             const member = getPlayerMemberSuffix();
-            if (this._historySession?.member === member) return this._historySession.readyPromise;
+            if (this._historySession?.member === member) {
+              if (this.history !== this._historySession.history) {
+                this.history = this._historySession.history;
+                this.historyVersion = (this.historyVersion || 0) + 1;
+              }
+              if (this._historySession.writerLost && ownsHistoryWriter(member)) this.retryHistoryStorage();
+              return this._historySession.readyPromise;
+            }
             if (this._historySession) {
               const previousFilter = this.history.filter;
               this.history = new HistoryRecord("History", 100);
@@ -17973,6 +18008,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
               status: "loading",
               warned: false,
               warnedArchive: false,
+              writerLost: false,
               legacyConflict: false,
               legacyNeedsArchive: false,
               legacySettled: false,
@@ -18232,7 +18268,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
         };
         const acquire = (memberNumber) => {
           const member = String(memberNumber);
-          if (disposed || !supported || !/^(?:\d+|origin)$/.test(member)) return Promise.resolve(false);
+          if (disposed || !supported || !/^(0|[1-9]\d*)$/.test(member) || !Number.isSafeInteger(Number(member))) return Promise.resolve(false);
           if (owner === member) return Promise.resolve(true);
           if (pending?.member === member) return pending.promise;
           release();
@@ -39383,8 +39419,11 @@ ${lightForced}`;
         );
       }
       const HOST_ID = "vpw-shadow-host";
-      const LOCK_SCOPE = "origin";
       const w = hostWindow;
+      const currentMember = () => {
+        const member = String(w.Player?.MemberNumber ?? "");
+        return /^(0|[1-9]\d*)$/.test(member) && Number.isSafeInteger(Number(member)) ? member : null;
+      };
       if (!doc.getElementById(HOST_ID)) {
         w.__VPW_WARDROBE_LOCK_OWNER = false;
         w.__VPW_WARDROBE_LOCK_MEMBER = null;
@@ -39418,6 +39457,7 @@ ${lightForced}`;
         let generation = 0;
         let lockRun = 0;
         let lockPending = false;
+        let pendingMember = null;
         let waitTimer = null;
         let disposeRender = () => {
         };
@@ -39425,13 +39465,13 @@ ${lightForced}`;
         const repository = () => wardrobe._repository;
         const lock = createWardrobeTabLock({
           locks: w.navigator?.locks,
-          onChange: (owned) => {
+          onChange: (owned, member) => {
             w.__VPW_WARDROBE_LOCK_OWNER = owned;
-            w.__VPW_WARDROBE_LOCK_MEMBER = owned ? loadedMember : null;
+            w.__VPW_WARDROBE_LOCK_MEMBER = owned ? member : null;
             if (!owned) repository()?.cancelPending();
           }
         });
-        const ownsWriter = () => lock.isHeldFor(LOCK_SCOPE) && loadedMember !== null && w.__VPW_WARDROBE_LOCK_MEMBER === loadedMember && String(w.Player?.MemberNumber) === loadedMember;
+        const ownsWriter = () => loadedMember !== null && lock.isHeldFor(loadedMember) && w.__VPW_WARDROBE_LOCK_MEMBER === loadedMember && currentMember() === loadedMember;
         const stopWaitTimer = () => {
           if (waitTimer !== null) w.clearTimeout(waitTimer);
           waitTimer = null;
@@ -39457,30 +39497,27 @@ ${lightForced}`;
         let openingMember = null;
         let activationTask = Promise.resolve();
         const activate = (member) => {
-          if (pageHidden || !gameReady || !ownsOriginLock() || !/^\d+$/.test(member)) return;
+          if (pageHidden || !gameReady || !lock.isHeldFor(member) || currentMember() !== member) return;
           if (desiredMember === member && (loadedMember === member || openingMember === member)) return;
           const ticket = ++generation;
           desiredMember = member;
           openingMember = member;
-          w.__VPW_WARDROBE_LOCK_MEMBER = null;
+          w.__VPW_WARDROBE_LOCK_MEMBER = member;
           repository()?.invalidateFreshness();
           unmountApp();
           activationTask = activationTask.catch(() => {
           }).then(async () => {
-            if (ticket !== generation || String(w.Player?.MemberNumber) !== member) return;
+            if (ticket !== generation || currentMember() !== member || !lock.isHeldFor(member)) return;
             try {
               await wardrobe.loadAll();
-              if (ticket !== generation || String(w.Player?.MemberNumber) !== member || !ownsOriginLock()) return;
+              if (ticket !== generation || currentMember() !== member || !lock.isHeldFor(member)) return;
               loadedMember = member;
               w.__VPW_WARDROBE_LOCK_MEMBER = member;
               const fresh = loginCapture.take({ member, player: w.Player, lockToken: lock.token() });
               if (fresh) await wardrobe.receiveCloud(fresh);
-              if (ticket !== generation || String(w.Player?.MemberNumber) !== member || !ownsOriginLock()) return;
+              if (ticket !== generation || currentMember() !== member || !lock.isHeldFor(member)) return;
               mountApp();
-              showStatus(fresh ? "" : message(
-                "衣柜已打开。重新登录 BC 后会核对云端并继续同步。",
-                "Wardrobe is open. Sign in to BC again to check the cloud before syncing."
-              ));
+              showStatus("");
             } catch (error) {
               if (ticket !== generation) return;
               console.error("[VPW] wardrobe initialization failed", error);
@@ -39493,23 +39530,34 @@ ${lightForced}`;
           });
           return activationTask;
         };
-        const ownsOriginLock = () => lock.isHeldFor(LOCK_SCOPE);
-        const acquireOriginLock = async () => {
-          if (pageHidden || lockPending || ownsOriginLock() || doc.visibilityState === "hidden" && !gameReady) return;
+        const acquireMemberLock = async () => {
+          const member = currentMember();
+          if (pageHidden || member === null || doc.visibilityState === "hidden" && !gameReady) return;
+          if (lock.isHeldFor(member)) {
+            if (gameReady) activate(member);
+            return;
+          }
+          if (lockPending && pendingMember === member) return;
           const ticket = ++lockRun;
           lockPending = true;
+          pendingMember = member;
+          generation++;
+          desiredMember = null;
+          unmountApp();
           w.__VPW_WARDROBE_LOCK_OWNER = false;
           w.__VPW_WARDROBE_LOCK_MEMBER = null;
           showStatus(message("正在打开衣柜…", "Opening wardrobe…"));
+          stopWaitTimer();
           waitTimer = w.setTimeout(() => {
-            if (ticket === lockRun && !ownsOriginLock()) showStatus(message(
-              "衣柜正在另一个标签页使用。关闭那个标签页后，这里会自动接管。",
-              "Wardrobe is open in another tab. Close that tab to take over here automatically."
+            if (ticket === lockRun && !lock.isHeldFor(member)) showStatus(message(
+              "此角色的衣柜正在另一个标签页使用。关闭那个标签页后，这里会自动接管。",
+              "This character’s wardrobe is open in another tab. Close that tab to take over here automatically."
             ));
           }, 200);
-          const held = await lock.acquire(LOCK_SCOPE);
+          const held = await lock.acquire(member);
           if (pageHidden || ticket !== lockRun) return;
           lockPending = false;
+          pendingMember = null;
           stopWaitTimer();
           if (!held) {
             showStatus(message(
@@ -39518,11 +39566,14 @@ ${lightForced}`;
             ));
             return;
           }
-          if (gameReady) activate(String(w.Player?.MemberNumber));
+          if (gameReady) activate(member);
           else showStatus(message("等待 BC 登录…", "Waiting for BC sign-in…"));
         };
         modApi.hookFunction("ServerSend", 0, (args, next) => {
-          if (args[0] === "AccountLogin") loginCapture.markRequest(ownsOriginLock() ? lock.token() : null);
+          if (args[0] === "AccountLogin") {
+            const member = currentMember();
+            loginCapture.markRequest(member !== null && lock.isHeldFor(member) ? lock.token() : null);
+          }
           return next(args);
         });
         modApi.hookFunction("LoginResponse", -1, (args, next) => {
@@ -39536,9 +39587,13 @@ ${lightForced}`;
           onLogin: (event) => {
             if (disposed || pageHidden) return;
             const member = String(event.memberNumber);
-            if (member !== String(w.Player?.MemberNumber)) return;
-            loginCapture.record(event, w.Player, ownsOriginLock() ? lock.token() : null);
-            if (!gameReady || !ownsOriginLock()) return;
+            if (member !== currentMember()) return;
+            loginCapture.record(event, w.Player, lock.isHeldFor(member) ? lock.token() : null);
+            if (!gameReady) return;
+            if (!lock.isHeldFor(member)) {
+              void acquireMemberLock();
+              return;
+            }
             if (desiredMember !== member || loadedMember !== member) {
               activate(member);
               return;
@@ -39589,6 +39644,7 @@ ${lightForced}`;
           generation++;
           lockRun++;
           lockPending = false;
+          pendingMember = null;
           stopWaitTimer();
           loginCapture.clear();
           w.__VPW_WARDROBE_LOCK_MEMBER = null;
@@ -39599,19 +39655,20 @@ ${lightForced}`;
         const onPageShow = (event) => {
           if (!event.persisted || disposed) return;
           pageHidden = false;
-          void acquireOriginLock();
+          void acquireMemberLock();
         };
         const onVisibilityChange = () => {
           if (pageHidden) return;
           if (doc.visibilityState === "hidden" && !gameReady && loadedMember === null) {
             lockRun++;
             lockPending = false;
+            pendingMember = null;
             stopWaitTimer();
             loginCapture.clear();
             w.__VPW_WARDROBE_LOCK_MEMBER = null;
             lock.release();
           } else if (doc.visibilityState === "visible" && loadedMember === null) {
-            void acquireOriginLock();
+            void acquireMemberLock();
           }
         };
         w.addEventListener("pagehide", onPageHide);
@@ -39624,9 +39681,8 @@ ${lightForced}`;
         };
         w.__APP_I18N__ = i18nCompat;
         w.APP_I18N = i18nCompat;
-        void acquireOriginLock();
         const waitForPlayerReady = () => {
-          if (!w.Player || typeof w.Player.MemberNumber === "undefined" || typeof w.CharacterRefresh !== "function") {
+          if (currentMember() === null || typeof w.CharacterRefresh !== "function") {
             setTimeoutHost(waitForPlayerReady, 100);
             return;
           }
@@ -39635,7 +39691,7 @@ ${lightForced}`;
             disposeRender = installRenderHooks(modApi);
             void Promise.resolve().then(() => ensureItemColorLayerNamesLoaded()).catch((error) => console.warn("[VPW] item color layer names unavailable", error)).finally(() => cleanUpItemColorLayerNamesLoad());
             gameReady = true;
-            if (ownsOriginLock()) activate(String(w.Player.MemberNumber));
+            void acquireMemberLock();
           } catch (error) {
             console.error("[VPW] game hooks failed", error);
             showStatus(message("衣柜启动失败。请刷新页面重试。", "Wardrobe could not start. Reload the page to retry."));
