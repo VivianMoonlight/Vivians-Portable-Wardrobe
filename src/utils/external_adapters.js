@@ -288,7 +288,8 @@ export const ExternalAdapter = {
      * @returns {object|null} Asset object or null
      */
     assetGet(family, group, name) {
-        if (!family || !group || !name) return null;
+        // BC uses an empty asset name for its non-customizable arm and hand groups.
+        if (!family || !group || typeof name !== 'string') return null;
         if (typeof hostWindow.AssetGet !== 'function') {
             console.warn("[ExternalAdapter] AssetGet not available");
             return null;
@@ -649,6 +650,7 @@ export const ExternalAdapter = {
         }
 
         const previousAppearance = C.Appearance;
+        const liveAppearance = Array.isArray(previousAppearance) ? [...previousAppearance] : [];
         const success = ExternalAdapter.serverAppearanceLoad(
             C,
             C.AssetFamily,
@@ -656,10 +658,23 @@ export const ExternalAdapter = {
             C.MemberNumber
         );
 
+        // BC rebuilds every bundled item. Keep the live protected appearance
+        // objects even when it reconstructs or sanitizes their bundle entries.
+        const loadedAppearance = C.Appearance;
+        const appearanceChanged = loadedAppearance !== previousAppearance ||
+            (Array.isArray(loadedAppearance) &&
+                (loadedAppearance.length !== liveAppearance.length ||
+                    loadedAppearance.some((item, index) => item !== liveAppearance[index])));
+        if (appearanceChanged) {
+            C.Appearance = preserveHiddenBodySlots(liveAppearance, Array.isArray(loadedAppearance) ? loadedAppearance : []);
+        }
+
         // BC can install a sanitized, partial appearance while returning false.
         // Refresh that actual result so the character canvas and self sync agree.
-        if (!success && C.Appearance !== previousAppearance) {
+        if (!success && appearanceChanged) {
             ExternalAdapter.refreshCharacter(C);
+            // BC may have broadcast its partial result before returning false.
+            if (ExternalAdapter.isSelfCharacter(C)) ExternalAdapter.chatRoomUpdate(C);
         }
 
         if (success) {

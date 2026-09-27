@@ -109,14 +109,22 @@ test('the final apply boundary keeps live hidden body parts even in force mode',
 test('a partially sanitized BC result refreshes the actual character without reporting success', () => {
   const context = setup()
   context.enable()
+  const liveBlush = { Asset: context.hostWindow.AssetGet('', 'Blush', 'LiveBlush') }
+  context.player.Appearance = [liveBlush]
   let refreshes = 0
+  let updates = 0
   context.hostWindow.CharacterRefresh = () => { refreshes++ }
+  context.hostWindow.ChatRoomCharacterUpdate = character => {
+    updates++
+    assert.equal(character.Appearance.find(item => item.Asset?.Group?.Name === 'Blush'), liveBlush)
+  }
   context.hostWindow.ServerAppearanceLoadFromBundle = (character) => {
     character.Appearance = []
     return false
   }
   assert.equal(context.fs.applyCurrentPreviewToSelfForced(), false)
   assert.equal(refreshes, 1)
+  assert.equal(updates, 1)
 })
 
 test('normal apply accepts a protected slot even if BC serializes its color differently', () => {
@@ -161,4 +169,62 @@ test('an unavailable live hidden asset blocks the apply instead of being dropped
     group === 'Blush' ? null : assetGet(family, group, name)
   assert.equal(context.fs.applyCurrentPreviewToSelfForced(), false)
   assert.equal(context.loads, 0)
+})
+
+test('full replacement never sends saved arm or hand assets and retains live parts', () => {
+  const context = setup()
+  context.player.CanChangeOwnClothes = () => true
+  context.hostWindow.ValidationIsItemBlockedOrLimited = () => false
+  context.hostWindow.InventoryIsPermissionBlocked = () => false
+  const protectedGroups = ['ArmsLeft', 'ArmsRight', 'HandsLeft', 'HandsRight']
+  const liveParts = protectedGroups.map(Group => ({
+    Asset: {
+      Name: '',
+      Group: { Name: Group, Category: 'Appearance', AllowNone: false },
+    },
+    Color: ['#abc123'],
+    Property: { live: Group },
+  }))
+  context.player.Appearance = [...liveParts]
+  context.hostWindow.ServerAppearanceBundle = appearance => appearance.map(item => ({
+    Group: item.Asset.Group.Name,
+    Name: item.Asset.Name,
+    Color: item.Color,
+    Property: item.Property,
+  }))
+  const assetGet = context.hostWindow.AssetGet
+  context.hostWindow.AssetGet = (family, group, name) =>
+    name === '' && protectedGroups.includes(group)
+      ? liveParts.find(item => item.Asset.Group.Name === group).Asset
+      : assetGet(family, group, name)
+
+  let sentBundle
+  context.hostWindow.ServerAppearanceLoadFromBundle = (target, family, bundle) => {
+    sentBundle = bundle
+    const resolved = bundle.map(part => context.hostWindow.AssetGet(family, part.Group, part.Name))
+    target.Appearance = bundle.flatMap((part, index) => resolved[index]
+      ? [{ Asset: resolved[index], Color: part.Color, Property: part.Property }]
+      : [])
+    return resolved.every(Boolean)
+  }
+  const incoming = [
+    ...protectedGroups.map(Group => ({ Group, Name: `Saved${Group}` })),
+    { Group: 'Cloth', Name: 'NewShirt' },
+  ]
+  context.fs.filterSnapshot = {
+    items: [...protectedGroups, 'Cloth'].map(key => ({ key })),
+    groups: [{ groupID: 'HiddenBody', itemList: protectedGroups.map(key => ({ key })) }],
+  }
+  assert.equal(context.fs.selectOutfit({ type: 'outfit', data: incoming }), true)
+  assert.equal(context.fs.setGroupSlotModes('HiddenBody', 'incoming'), false)
+  assert.equal(context.fs.progressGroupSource('HiddenBody', 'incoming'), false)
+  context.fs.replaceAllFromSource('incoming')
+  assert.equal(context.fs.applyCurrentPreviewToCharacter(), true)
+  assert.equal(sentBundle.length, 5)
+  assert.equal(sentBundle.find(part => part.Group === 'Cloth')?.Name, 'NewShirt')
+  for (const [index, Group] of protectedGroups.entries()) {
+    assert.equal(sentBundle.find(part => part.Group === Group)?.Name, '')
+    assert.equal(context.player.Appearance.find(item => item.Asset?.Group?.Name === Group), liveParts[index])
+  }
+  assert.equal(context.player.Appearance.find(item => item.Asset?.Group?.Name === 'Cloth')?.Asset.Name, 'NewShirt')
 })

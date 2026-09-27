@@ -8,19 +8,24 @@ export function isHiddenBodySlot(groupName) {
   return HIDDEN_BODY_SLOTS.has(groupName)
 }
 
+function groupName(part) {
+  return typeof part?.Group === 'string' ? part.Group : part?.Asset?.Group?.Name
+}
+
 /** Keep the live character's protected groups when applying any saved bundle. */
 export function preserveHiddenBodySlots(currentBundle = [], requestedBundle = []) {
   const original = new Map()
   for (const part of currentBundle) {
-    if (!isHiddenBodySlot(part?.Group)) continue
-    if (!original.has(part.Group)) original.set(part.Group, [])
-    original.get(part.Group).push(part)
+    const group = groupName(part)
+    if (!isHiddenBodySlot(group)) continue
+    if (!original.has(group)) original.set(group, [])
+    original.get(group).push(part)
   }
 
   const result = []
   const inserted = new Set()
   for (const part of requestedBundle) {
-    const group = part?.Group
+    const group = groupName(part)
     if (!isHiddenBodySlot(group)) {
       result.push(part)
       continue
