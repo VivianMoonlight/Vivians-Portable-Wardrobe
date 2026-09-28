@@ -16,7 +16,7 @@ test('Cloudflare estimate matches the UTF-8 JSON sent to the service and exclude
   }, { type: 'set-cloud', id: 'private', enabled: false }], { replicaId: 'device-a' })
   const projected = projectWardrobeCloudIndex(withPrivate)
 
-  assert.equal(CLOUDFLARE_WARDROBE_LIMIT_BYTES, 1_800_000)
+  assert.equal(CLOUDFLARE_WARDROBE_LIMIT_BYTES, 8_000_000)
   assert.equal(projected.outfits.private, undefined)
   assert.equal(estimateCloudflareWardrobeBytes(withPrivate),
     Buffer.byteLength(JSON.stringify(projected), 'utf8'))

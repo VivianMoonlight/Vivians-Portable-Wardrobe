@@ -63,7 +63,7 @@ test('Cloudflare mode replaces BC quota and never displays a recovery key by def
   await updateCloudflareState(page, {
     error: 'Cloudflare sync failed (HTTP 413)', errorCode: 'too-large', bcLegacyRetained: true,
   })
-  await expect(settingsPanel.getByText('The cloud wardrobe exceeds the 1.8 MB limit.')).toBeVisible()
+  await expect(settingsPanel.getByText('The cloud wardrobe exceeds the 8 MB limit.')).toBeVisible()
   await expect(settingsPanel.getByText('The old BC wardrobe copy still uses space.')).toBeVisible()
   await expect(page.getByText('Cloudflare sync failed (HTTP 413)')).toHaveCount(0)
   await updateCloudflareState(page, { bcLegacyRetained: false })

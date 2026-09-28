@@ -1,6 +1,8 @@
-const MAX_INDEX_BYTES = 1_800_000
+const MAX_INDEX_BYTES = 8_000_000
 const MAX_REQUEST_BYTES = MAX_INDEX_BYTES + 8_192
-const MAX_ACCOUNTS = 100
+const CHUNK_BYTES = 1_500_000
+const CHUNK_MARKER = 'vpw-chunks:'
+const MAX_ACCOUNTS = 50
 const MAX_CREATIONS_PER_IP_DAY = 2
 const MAX_WRITES_PER_ACCOUNT_DAY = 500
 const encoder = new TextEncoder()
@@ -122,16 +124,39 @@ async function boundedBody(request) {
   return new TextDecoder('utf-8', { fatal: true }).decode(bytes)
 }
 
-function rowDocument(row) {
-  return row
-    ? { revision: row.revision, index: JSON.parse(row.index_json), updatedAt: row.updated_at }
-    : { revision: 0, index: null, updatedAt: null }
+function splitIndex(bytes) {
+  const chunks = []
+  const decoder = new TextDecoder('utf-8', { fatal: true })
+  for (let start = 0; start < bytes.length;) {
+    let end = Math.min(start + CHUNK_BYTES, bytes.length)
+    while (end < bytes.length && (bytes[end] & 0xc0) === 0x80) end--
+    chunks.push(decoder.decode(bytes.subarray(start, end)))
+    start = end
+  }
+  return chunks
 }
 
 async function currentDocument(db, hash) {
-  const row = await db.prepare('SELECT revision, index_json, updated_at FROM wardrobes WHERE account_hash = ?')
-    .bind(hash).first()
-  return rowDocument(row)
+  // Both reads share one D1 snapshot, so a concurrent write cannot mix the
+  // parent's revision with another revision's chunks.
+  const [parent, fragments] = await db.batch([
+    db.prepare('SELECT revision, index_json, updated_at FROM wardrobes WHERE account_hash = ?').bind(hash),
+    db.prepare('SELECT chunk_no, chunk_json FROM wardrobe_chunks WHERE account_hash = ? ORDER BY chunk_no').bind(hash),
+  ])
+  const row = parent.results?.[0]
+  if (!row) return { revision: 0, index: null, updatedAt: null }
+  let indexJson = row.index_json
+  if (indexJson.startsWith(CHUNK_MARKER)) {
+    const marker = /^vpw-chunks:[0-9a-f-]{36}:([1-9]\d*)$/.exec(indexJson)
+    const count = marker && Number(marker[1])
+    const chunks = fragments.results || []
+    if (!Number.isSafeInteger(count) || chunks.length !== count
+      || chunks.some((chunk, chunkNo) => chunk.chunk_no !== chunkNo)) {
+      throw new Error('Incomplete wardrobe chunks')
+    }
+    indexJson = chunks.map(chunk => chunk.chunk_json).join('')
+  }
+  return { revision: row.revision, index: JSON.parse(indexJson), updatedAt: row.updated_at }
 }
 
 export async function onRequest({ request, env }) {
@@ -173,33 +198,51 @@ export async function onRequest({ request, env }) {
       return response(request, { error: 'invalid-wardrobe' }, 400)
     }
     const indexJson = JSON.stringify(payload.index)
-    if (encoder.encode(indexJson).byteLength > MAX_INDEX_BYTES) {
+    const indexBytes = encoder.encode(indexJson)
+    if (indexBytes.byteLength > MAX_INDEX_BYTES) {
       return response(request, { error: 'too-large', maxIndexBytes: MAX_INDEX_BYTES }, 413)
     }
+    const chunks = splitIndex(indexBytes)
+    const marker = `${CHUNK_MARKER}${crypto.randomUUID()}:${chunks.length}`
     const nextRevision = payload.expectedRevision + 1
     if (!Number.isSafeInteger(nextRevision)) return response(request, { error: 'revision-exhausted' }, 400)
     const updatedAt = Date.now()
     const day = Math.floor(updatedAt / 86_400_000)
-    let result
+    let parentWrite
     if (payload.expectedRevision === 0) {
       const ipHash = await dailyIpHash(request, env.VPW_PROVISIONING_SECRET, day)
       if (!ipHash) return response(request, { error: 'provisioning-unavailable' }, 503)
-      result = await env.DB.prepare(`
+      parentWrite = env.DB.prepare(`
         INSERT OR IGNORE INTO wardrobes
           (account_hash, revision, index_json, updated_at, created_ip_hash, created_day, write_day, writes_today)
         SELECT ?, 1, ?, ?, ?, ?, ?, 1
         WHERE (SELECT COUNT(*) FROM wardrobes) < ?
           AND (SELECT COUNT(*) FROM wardrobes WHERE created_ip_hash = ? AND created_day = ?) < ?
-      `).bind(hash, indexJson, updatedAt, ipHash, day, day,
-        MAX_ACCOUNTS, ipHash, day, MAX_CREATIONS_PER_IP_DAY).run()
+      `).bind(hash, marker, updatedAt, ipHash, day, day,
+        MAX_ACCOUNTS, ipHash, day, MAX_CREATIONS_PER_IP_DAY)
     } else {
-      result = await env.DB.prepare(`
+      parentWrite = env.DB.prepare(`
         UPDATE wardrobes SET revision = ?, index_json = ?, updated_at = ?, write_day = ?,
           writes_today = CASE WHEN write_day = ? THEN writes_today + 1 ELSE 1 END
         WHERE account_hash = ? AND revision = ? AND (write_day <> ? OR writes_today < ?)
-      `).bind(nextRevision, indexJson, updatedAt, day, day, hash, payload.expectedRevision,
-        day, MAX_WRITES_PER_ACCOUNT_DAY).run()
+      `).bind(nextRevision, marker, updatedAt, day, day, hash, payload.expectedRevision,
+        day, MAX_WRITES_PER_ACCOUNT_DAY)
     }
+    // The marker is unique to this attempt. If the compare-and-swap fails,
+    // every following statement is a no-op and cannot touch the winner's data.
+    const statements = [
+      parentWrite,
+      env.DB.prepare(`
+        DELETE FROM wardrobe_chunks WHERE account_hash = ?
+          AND EXISTS (SELECT 1 FROM wardrobes WHERE account_hash = ? AND index_json = ?)
+      `).bind(hash, hash, marker),
+      ...chunks.map((chunk, chunkNo) => env.DB.prepare(`
+        INSERT INTO wardrobe_chunks (account_hash, chunk_no, chunk_json)
+        SELECT ?, ?, ? WHERE EXISTS
+          (SELECT 1 FROM wardrobes WHERE account_hash = ? AND index_json = ?)
+      `).bind(hash, chunkNo, chunk, hash, marker)),
+    ]
+    const [result] = await env.DB.batch(statements)
     if (result.meta?.changes === 1) return response(request, { revision: nextRevision, updatedAt })
     const current = await currentDocument(env.DB, hash)
     if (current.revision !== payload.expectedRevision) {

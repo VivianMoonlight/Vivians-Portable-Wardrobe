@@ -10,3 +10,10 @@ CREATE TABLE IF NOT EXISTS wardrobes (
 );
 
 CREATE INDEX IF NOT EXISTS wardrobes_creation_limit ON wardrobes (created_ip_hash, created_day);
+
+CREATE TABLE IF NOT EXISTS wardrobe_chunks (
+  account_hash TEXT NOT NULL,
+  chunk_no INTEGER NOT NULL CHECK (chunk_no >= 0),
+  chunk_json TEXT NOT NULL,
+  PRIMARY KEY (account_hash, chunk_no)
+);

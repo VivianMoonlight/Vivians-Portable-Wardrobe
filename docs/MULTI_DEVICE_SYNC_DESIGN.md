@@ -6,7 +6,7 @@
 
 ## Cloudflare 模式：修订号与条件写入
 
-Pages 托管只读的数据查看与 JSON 导出页；持久化写入由 Pages Function 通过 D1 完成，不能把静态 Pages 当作数据库。服务按恢复密钥的 SHA-256 摘要区分衣柜，每把密钥在 D1 只有一条当前记录，不保留服务端历史。`GET /api/wardrobe` 返回当前索引与修订号；`PUT` 带 `expectedRevision`。创建使用原子插入，更新使用 `WHERE revision = ?` 的条件写入：两个设备从同一版本提交，只有一个能成功，另一个收到 HTTP 409 和最新版本。客户端将本机已核对基线、待上传修改与新版本比较，可证明独立的修改自动合并；同一内容的不可避免冲突交给用户选择，不在服务器保存多份冲突正文。请求超时不能证明写入失败；后续重试先重新读取修订号，再判断是否需要提交。Cloudflare 返回成功的 HTTP 响应与修订号；BC 模式则没有逐次写入回执。
+Pages 托管只读的数据查看与 JSON 导出页；持久化写入由 Pages Function 通过 D1 完成，不能把静态 Pages 当作数据库。服务按恢复密钥的 SHA-256 摘要区分衣柜，每把密钥只保留一个当前修订版；正文分块存于多行，不保留服务端历史。`GET /api/wardrobe` 返回当前索引与修订号；`PUT` 带 `expectedRevision`。写入时原子检查修订号：两个设备从同一版本提交，只有一个成功，另一个收到 HTTP 409 和最新版本。客户端将本机已核对基线、待上传修改与新版本比较，可证明独立的修改自动合并；同一内容的不可避免冲突交给用户选择，不在服务器保存多份冲突正文。请求超时不能证明写入失败；后续重试先重新读取修订号，再判断是否需要提交。Cloudflare 返回成功的 HTTP 响应与修订号；BC 模式则没有逐次写入回执。
 
 在 **设置 → 同步方式** 中开启 Cloudflare 前，脚本必须在打包时配置 `VITE_CLOUDFLARE_SYNC_URL`；当前生产构建已配置。界面没有任意服务地址输入框；未配置地址的自建构建不能新开启 Cloudflare。开关状态与恢复密钥先按 BC 账号保存在本机 IndexedDB。首次开启生成 32 字节随机恢复密钥；也可在关闭 Cloudflare 时导入已有密钥，再开启并合并该密钥对应的云衣橱。导入另一把密钥是**切换到另一份云衣橱**，不是撤销旧密钥：旧密钥仍可访问原 D1 记录，该记录不会自动删除。另一把格式正确的密钥可能指向空衣橱，不能把空结果当作原密钥的数据已被删除。更换密钥或切换模式前应导出当前 JSON 备份。关闭 Cloudflare 不会删除 D1 中的旧衣橱或旧密钥，也不保证当前衣橱能装入 BC 的 180 kB 预算；超限时本机数据仍保留，BC 上传暂停。
 
@@ -14,7 +14,7 @@ Pages 托管只读的数据查看与 JSON 导出页；持久化写入由 Pages F
 
 同一 BC 账号的其他设备若继续向 BC 同步，BC 旧副本与 Cloudflare 衣橱会分叉。清理旧 `VPWardrobe` 正文和设备标记前，必须取得新鲜 BC 登录快照，并与开启 Cloudflare 时的已知基线比较；若旧副本已变化、来源无法确认或没有新鲜快照，应暂停清理并让用户审阅，不能把这些修改当作可丢弃的旧数据。确认 Cloudflare 已保存且 BC 旧副本未变后，才可提交清理，同时保留 `VPWCloudKey`。这次 BC 清理仍没有逐次回执，只有后续完整登录回读才可核对；检查后的迟到 BC 写入也不能靠客户端快照比较阻止，因此其他设备仍须切换或停用 BC 同步。在核对完成前，旧副本可能继续占用 BC 共享预算。
 
-Cloudflare 模式的每份云衣橱 JSON 主动限制为 **1,800,000 字节**，与 BC 模式的 **180000 字节**预算是两种独立限制。当前免费服务另设 100 把密钥、每个 IP 每 UTC 日创建 2 把、每把密钥每 UTC 日写入 500 次的保护上限；达到限制时保留本机修改并提示重试或处理容量。D1 和 Pages Functions 还有 Cloudflare 平台限制，参见 [D1 容量与行大小](https://developers.cloudflare.com/d1/platform/limits/)、[D1 用量](https://developers.cloudflare.com/d1/platform/pricing/)及 [Pages Functions 用量](https://developers.cloudflare.com/pages/functions/pricing/)。
+Cloudflare 模式的每份云衣橱 JSON 主动限制为 **8,000,000 字节**，与 BC 模式的 **180000 字节**预算是两种独立限制。当前免费服务另设 50 把密钥、每个 IP 每 UTC 日创建 2 把、每把密钥每 UTC 日写入 500 次的保护上限；全部衣柜正文最多约 400 MB，为 Cloudflare 免费版 500 MB 单库限制留出开销余量。达到限制时保留本机修改并提示重试或处理容量。D1 和 Pages Functions 还有 Cloudflare 平台限制，参见 [D1 容量与行大小](https://developers.cloudflare.com/d1/platform/limits/)、[D1 用量](https://developers.cloudflare.com/d1/platform/pricing/)及 [Pages Functions 用量](https://developers.cloudflare.com/pages/functions/pricing/)。
 
 ## BC 模式：单份正文与设备标记
 

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { DatabaseSync } from 'node:sqlite'
 import { test } from 'node:test'
@@ -20,6 +21,17 @@ function index(name = 'Blue dress') {
   }
 }
 
+function indexWithBytes(size) {
+  const document = index()
+  document.outfits.outfit_1.data = ['']
+  const prefix = 'x'.repeat(499_999) + '😀'
+  const remaining = size - Buffer.byteLength(JSON.stringify(document), 'utf8')
+    - Buffer.byteLength(prefix, 'utf8')
+  document.outfits.outfit_1.data = [prefix + 'x'.repeat(remaining)]
+  assert.equal(Buffer.byteLength(JSON.stringify(document), 'utf8'), size)
+  return document
+}
+
 function database() {
   const sqlite = new DatabaseSync(':memory:')
   sqlite.exec(readFileSync(new URL('../schema.sql', import.meta.url), 'utf8'))
@@ -28,11 +40,28 @@ function database() {
     prepare(sql) {
       return {
         bind(...values) {
+          const prepared = sqlite.prepare(sql)
+          const query = prepared.columns().length > 0
           return {
-            first() { return sqlite.prepare(sql).get(...values) || null },
-            run() { return { meta: { changes: Number(sqlite.prepare(sql).run(...values).changes) } } },
+            first() { return prepared.get(...values) || null },
+            all() { return prepared.all(...values) },
+            run() {
+              if (query) return { results: prepared.all(...values), meta: { changes: 0 } }
+              return { results: [], meta: { changes: Number(prepared.run(...values).changes) } }
+            },
           }
         },
+      }
+    },
+    batch(statements) {
+      sqlite.exec('BEGIN')
+      try {
+        const results = statements.map(statement => statement.run())
+        sqlite.exec('COMMIT')
+        return results
+      } catch (error) {
+        sqlite.exec('ROLLBACK')
+        throw error
       }
     },
   }
@@ -63,6 +92,46 @@ test('new key starts empty; write and read use one active revision', async () =>
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS count FROM wardrobes').get().count, 1)
 })
 
+test('an exact 8 MB UTF-8 wardrobe round-trips across bounded D1 rows', async () => {
+  const db = database()
+  const large = indexWithBytes(8_000_000)
+  const saved = await request(db, 'PUT', { body: { expectedRevision: 0, index: large } })
+  assert.equal(saved.status, 200)
+  const loaded = await request(db)
+  assert.equal(loaded.status, 200)
+  assert.deepEqual((await loaded.json()).index, large)
+  const chunks = db.sqlite.prepare('SELECT chunk_json FROM wardrobe_chunks ORDER BY chunk_no').all()
+  assert.ok(chunks.length > 1)
+  assert.ok(chunks.every(({ chunk_json }) => Buffer.byteLength(chunk_json, 'utf8') <= 1_500_000))
+  const smaller = await request(db, 'PUT', { body: { expectedRevision: 1, index: index('Updated') } })
+  assert.equal(smaller.status, 200)
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS count FROM wardrobe_chunks').get().count, 1)
+  assert.equal((await (await request(db)).json()).index.outfits.outfit_1.name, 'Updated')
+})
+
+test('legacy inline wardrobe migrates on write and a failed chunk insert rolls back the revision', async () => {
+  const db = database()
+  const original = index('Legacy')
+  const accountHash = createHash('sha256').update(KEY_B).digest('hex')
+  db.sqlite.prepare(`INSERT INTO wardrobes
+    (account_hash, revision, index_json, updated_at, created_ip_hash, created_day, write_day, writes_today)
+    VALUES (?, 1, ?, 1, 'legacy', 1, 1, 1)`)
+    .run(accountHash, JSON.stringify(original))
+  assert.deepEqual((await (await request(db, 'GET', { key: KEY_B })).json()).index, original)
+  db.sqlite.exec(`CREATE TRIGGER reject_chunks BEFORE INSERT ON wardrobe_chunks
+    BEGIN SELECT RAISE(ABORT, 'simulated D1 failure'); END;`)
+  const failed = await request(db, 'PUT', { key: KEY_B, body: { expectedRevision: 1, index: index('New') } })
+  assert.equal(failed.status, 503)
+  assert.equal((await (await request(db, 'GET', { key: KEY_B })).json()).revision, 1)
+  assert.equal(db.sqlite.prepare('SELECT index_json FROM wardrobes WHERE account_hash = ?').get(accountHash).index_json,
+    JSON.stringify(original))
+  db.sqlite.exec('DROP TRIGGER reject_chunks')
+  assert.equal((await request(db, 'PUT', { key: KEY_B, body: { expectedRevision: 1, index: index('New') } })).status, 200)
+  assert.equal((await (await request(db, 'GET', { key: KEY_B })).json()).index.outfits.outfit_1.name, 'New')
+  assert.match(db.sqlite.prepare('SELECT index_json FROM wardrobes WHERE account_hash = ?').get(accountHash).index_json,
+    /^vpw-chunks:/)
+})
+
 test('concurrent writes at one revision produce one winner and a reviewable conflict', async () => {
   const db = database()
   await request(db, 'PUT', { body: { expectedRevision: 0, index: index() } })
@@ -77,6 +146,7 @@ test('concurrent writes at one revision produce one winner and a reviewable conf
   assert.equal(conflict.revision, 2)
   assert.deepEqual(conflict.index, current.index)
   assert.equal(current.revision, 2)
+  assert.equal(current.index.outfits.outfit_1.name, first.status === 200 ? 'Red dress' : 'Green dress')
 })
 
 test('keys isolate wardrobes and raw credentials never enter D1', async () => {
@@ -111,7 +181,7 @@ test('invalid and oversized documents do not change the stored revision', async 
   malformedTag.tags.tag_1 = { id: 'tag_1', name: '   ', rev: [1, 'test'] }
   assert.equal((await request(db, 'PUT', { body: { expectedRevision: 0, index: malformedTag } })).status, 400)
   const hugeIndex = index()
-  hugeIndex.outfits.outfit_1.data = ['x'.repeat(1_800_000)]
+  hugeIndex.outfits.outfit_1.data = ['x'.repeat(8_000_000)]
   assert.equal((await request(db, 'PUT', { body: { expectedRevision: 0, index: hugeIndex } })).status, 413)
   assert.equal((await (await request(db)).json()).revision, 0)
 })
@@ -149,15 +219,15 @@ test('daily write cap refuses more writes without changing the document', async 
 test('global account cap is checked inside the atomic creation statement', async () => {
   const db = database()
   const body = { expectedRevision: 0, index: index() }
-  for (let seed = 1; seed < 100; seed++) {
+  for (let seed = 1; seed < 50; seed++) {
     const key = `vpw1_${Buffer.alloc(32, seed).toString('base64url')}`
     assert.equal((await request(db, 'PUT', { key, ip: `203.0.113.${seed}`, body })).status, 200)
   }
-  const candidates = [100, 101].map(seed => request(db, 'PUT', {
+  const candidates = [50, 51].map(seed => request(db, 'PUT', {
     key: `vpw1_${Buffer.alloc(32, seed).toString('base64url')}`,
     ip: `203.0.113.${seed}`, body,
   }))
   const statuses = (await Promise.all(candidates)).map(result => result.status).sort()
   assert.deepEqual(statuses, [200, 429])
-  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS count FROM wardrobes').get().count, 100)
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS count FROM wardrobes').get().count, 50)
 })

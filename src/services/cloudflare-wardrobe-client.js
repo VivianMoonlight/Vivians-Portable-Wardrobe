@@ -24,7 +24,7 @@ export function configuredCloudflareUrl() {
 
 export class CloudflareWardrobeClient {
   constructor({ baseUrl = configuredCloudflareUrl(), fetchImpl = (...args) => globalThis.fetch(...args),
-    timeoutMs = 15000 } = {}) {
+    timeoutMs = 60_000 } = {}) {
     this.baseUrl = String(baseUrl || '').replace(/\/+$/, '')
     this.fetchImpl = fetchImpl
     this.timeoutMs = timeoutMs

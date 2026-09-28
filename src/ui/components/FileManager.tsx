@@ -363,12 +363,14 @@ export function FileManager({ onSelectOutfit }: FileManagerProps) {
           <Group justify="space-between" gap={4}>
             <Text size="xs" c="dimmed">{t('cloudflareSync.estimatedSize')}</Text>
             <Text size="xs" fw={600} c={cloudflareUsage > 1 ? 'red' : cloudflareUsage >= 0.9 ? 'orange' : undefined}>
-              {cloudflareSizeLabel} / 1.8 MB
+              {cloudflareSizeLabel} / {CLOUDFLARE_WARDROBE_LIMIT_BYTES / 1_000_000} MB
             </Text>
           </Group>
           <Progress size={4} value={Math.min(100, cloudflareUsage * 100)}
             color={cloudflareUsage > 1 ? 'red' : cloudflareUsage >= 0.9 ? 'orange' : 'teal'}
-            aria-label={t('cloudflareSync.sizeAria', { used: cloudflareSizeLabel })} />
+            aria-label={t('cloudflareSync.sizeAria', {
+              used: cloudflareSizeLabel, limit: `${CLOUDFLARE_WARDROBE_LIMIT_BYTES / 1_000_000} MB`,
+            })} />
           <Text size="xs" c="dimmed">{t('cloudflareSync.sizeHint')}</Text>
           {cloudflareUsage > 1 && <Text size="xs" c="red">{t('cloudflareSync.sizeOver')}</Text>}
           {cloudflare.lastSyncedAt && !cloudflare.error && !cloudflare.pending && <Text size="xs" c="dimmed">
