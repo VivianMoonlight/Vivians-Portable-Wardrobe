@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vivians Portable Wardrobe
 // @namespace    http://tampermonkey.net/
-// @version      0.10.1-react.15
+// @version      0.10.1-react.16
 // @author       VIVianMoonlight
 // @description  Portable Wardrobe for Bondage Club (React + Mantine, Shadow DOM isolated)
 // @downloadURL  https://cdn.jsdelivr.net/gh/VivianMoonlight/Vivians-Portable-Wardrobe@wardrobe-react/out/Vivians-Portable-Wardrobe.user.js
@@ -32,7 +32,7 @@
     return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
   };
   var require_main_001 = __commonJS({
-    "main-DDYw4Ucx.js"(exports) {
+    "main-C4uHCDY5.js"(exports) {
       function _mergeNamespaces(n, m) {
         for (var i = 0; i < m.length; i++) {
           const e = m[i];
@@ -9285,7 +9285,7 @@
       instance.hasLoadedNamespace;
       instance.loadNamespaces;
       instance.loadLanguages;
-      const version = "0.10.1-react.15";
+      const version = "0.10.1-react.16";
       var _unsafeWindow = /* @__PURE__ */ (() => typeof unsafeWindow != "undefined" ? unsafeWindow : void 0)();
       const hostWindow = typeof _unsafeWindow !== "undefined" ? _unsafeWindow : window;
       const doc = hostWindow.document;
@@ -11599,9 +11599,12 @@ One of mods you are using is using an old version of SDK. It will work for now b
           if (!validId(id)) throw new Error("Wardrobe operation ID is required");
           switch (operation.type) {
             case "put-outfit": {
-              if (hasOwn(next.tombstones.outfits, id)) throw new Error("Deleted outfits require a new ID to restore");
               if (!isObject$4(operation.changes)) throw new Error("Outfit changes must be an object");
               const previous = hasOwn(next.outfits, id) ? next.outfits[id] : null;
+              if (hasOwn(operation, "expectedRev") && (!isRevision(operation.expectedRev) || !previous || !sameValue(previous.rev, operation.expectedRev))) {
+                throw Object.assign(new Error("Outfit changed while editing"), { code: "outfit-changed" });
+              }
+              if (hasOwn(next.tombstones.outfits, id)) throw new Error("Deleted outfits require a new ID to restore");
               const changes = clone$3(operation.changes);
               delete changes.id;
               delete changes.rev;
@@ -13130,6 +13133,11 @@ One of mods you are using is using an old version of SDK. It will work for now b
             return visible2;
           } catch (error) {
             const reported = storageError(error, !!this.persistence);
+            if (reported?.code === "outfit-changed") {
+              this.index = this.document?.index || before;
+              this.emit();
+              throw reported;
+            }
             this.cancelPending();
             if (committed) {
               this.emit({
@@ -14790,6 +14798,10 @@ One of mods you are using is using an old version of SDK. It will work for now b
         },
         async updateOutfit(id, changes) {
           await this._applyLibraryOperations([{ type: "put-outfit", id, changes }]);
+          return true;
+        },
+        async updateOutfitIfUnchanged(id, expectedRev, changes) {
+          await this._applyLibraryOperations([{ type: "put-outfit", id, expectedRev, changes }]);
           return true;
         },
         async removeOutfit(id) {
@@ -35697,6 +35709,7 @@ ${lightForced}`;
           value
         }, children);
       }
+      const outfitEditor$1 = { "open": "Edit outfit", "title": "Edit saved outfit", "titleFor": "Edit {name}", "close": "Close outfit editor", "back": "Back", "preview": "Outfit preview", "previewLoading": "Loading preview…", "previewFailed": "Preview could not load", "retryPreview": "Retry preview", "previewHint": "Changes stay in this preview until you save. They will not dress the character.", "parts": "Saved parts", "noParts": "No editable parts in this outfit. Choose a group to add one.", "group": "Body slot or clothing group", "selectGroup": "Search groups", "noGroups": "No matching groups", "asset": "Asset", "selectAsset": "Search assets", "noAssets": "No assets available in this group", "addAsset": "Add part", "replaceAsset": "Replace part", "removeAsset": "Remove part", "color": "Color", "colorLayer": "Color layer {number}", "defaultColor": "Default color", "setColor": "Set color", "resetColor": "Use default color", "cancel": "Cancel", "overwrite": "Overwrite outfit", "saveCopy": "Save as new", "newNamePrompt": "Name the new outfit:", "copyName": "{name} copy", "nameRequired": "Enter a name for the new outfit.", "discardConfirm": "Discard your unsaved outfit changes?", "sourceMissing": "This outfit is no longer available. Close the editor and choose another outfit.", "sourceChanged": "This outfit changed or was deleted. Save your draft as a new outfit, or close and reopen the latest version.", "editFailed": "Could not edit this part: {error}", "saveFailed": "Could not save this outfit: {error}", "errors": { "protected-group": "This body part cannot be changed.", "invalid-group": "This group is no longer available.", "invalid-asset": "This asset is no longer available in this group.", "required-group": "This body group cannot be empty.", "missing-part": "Add a part before setting its color.", "invalid-color": "This color is not accepted for the selected part.", "outfit-changed": "This outfit changed or was deleted. Save your draft as a new outfit, or close and reopen the latest version." } };
       const library$1 = { "searchPlaceholder": "Search outfits or tags…", "allOutfits": "All outfits", "untagged": "Untagged", "filterByTag": "Filter by tag", "manageTags": "Manage tags", "newTag": "New tag", "newTagPrompt": "Enter a unique tag name:", "renameTag": "Rename selected tag", "renameTagPrompt": "New tag name:", "deleteTag": "Delete selected tag", "deleteTagConfirm": 'Delete tag "{name}"? Your outfits will stay in the wardrobe.', "tagNameInvalid": "Enter a tag name that is different from your existing tags.", "editTags": "Edit tags", "editOutfitTags": "Tags for {name}", "tags": "Tags", "selectTags": "Select one or more tags", "noTags": "No matching tags. Create tags from Manage tags.", "multipleTagsHint": "An outfit can have multiple tags. Removing a tag does not delete the outfit.", "saveTags": "Save tags", "outfitCount": "{count} / {total} outfits", "empty": "Your wardrobe is empty", "noMatches": "No matching outfits", "clearFilters": "Clear all filters", "saveCharacter": "Save current outfit", "saveNamePrompt": "Name this outfit:", "saved": 'Saved "{name}" to this device. Check cloud status for sync progress.', "imported": "Imported {count} outfits to this device. Check cloud status for sync progress.", "nothingImported": "No outfits to import. Check that the imported data contains outfits.", "operationFailed": "The operation could not be completed: {error}", "itemUnavailable": "This outfit or tag is no longer available. Refresh your selection and try again.", "deleteOutfitConfirm": 'Delete "{name}"? It will be removed from this device, and the deletion will sync.', "previewOutfit": "Preview {name}", "outfitActions": "Actions for {name}", "moreActions": "More actions", "cloudIncluded": "Cloud enabled", "localOnly": "This device only", "localFork": "Saved local copy", "localForkHint": "Another device re-enabled cloud sync, so this device's edited version was kept as a local copy. It will not upload automatically. You can turn on cloud sync for this copy.", "cloudToggleTitle": "Include or exclude this outfit from cloud sync. Local copies are retained.", "cloudStorage": "Shared cloud storage", "otherExtensions": "Other extensions", "remainingCapacity": "Available: {amount}", "quotaAria": "{source}: {used} of {limit}", "quotaObservedLogin": "Last read from BC at login", "quotaObservedCache": "BC local cache estimate · not yet checked", "quotaObservedUnavailable": "Cloud usage has not been read yet", "observedRemaining": "Available at last read: {amount}", "proposedUpload": "Estimated next upload · not uploaded yet", "proposedRemaining": "Estimated available after upload: {amount}", "sharedQuotaInfo": "About shared cloud capacity", "sharedQuotaHint": "The wardrobe limits all extension settings to 180 kB (180000 bytes). The main figures show last-read usage; expand for the estimated next upload. VPW includes outfits and device markers.", "quotaWarning": "The estimated next upload is near the limit. Keep some outfits on this device only to reduce cloud use.", "quotaBlocked": "Upload paused: the proposed update exceeds the shared 180 kB or single-packet limit. Local outfits remain available. Reduce cloud-synced outfits, then retry.", "localSaved": "Saved on this device", "localUnsaved": "Not saved on this device", "localStorageQuotaTitle": "Browser rejected this local save", "localStorageQuotaHelp": "This edit or sync record was not confirmed saved. The cause may be this site's separate localStorage quota or a browser storage policy; this does not show how much disk space remains. It is separate from BC's 180 kB cloud limit. Export the currently readable backup, check this site's data, then retry. Do not clear all site data.", "indexedDBSaveTitle": "Wardrobe database save failed", "indexedDBSaveHelp": "This wardrobe change was not confirmed saved. You can still export any readable data. Export a backup, then retry the local save. Do not clear all site data.", "localStorageUsage": "Estimated data stored in this site's localStorage: VPW {wardrobe}, other data {other}, total {total}.", "localStorageUsageNote": "Estimated from UTF-16 text length. Excludes the rejected write; not the actual quota or space left.", "localStorageUsageUnavailable": "Could not read this site's stored localStorage usage.", "localStorageCurrentIndex": "Wardrobe indexes (all accounts)", "localStorageRecovery": "Recovery archives", "localStorageOldHistory": "Older history", "localStorageLegacyWardrobe": "Older wardrobes", "localStorageOtherVpw": "Other VPW data", "localStorageOtherApps": "Other site data", "showLocalStorageDetails": "Show details", "hideLocalStorageDetails": "Hide details", "retryLocalSave": "Retry local save", "retrySync": "Retry upload", "exportLocalBackup": "Export local backup", "deviceLimit": "Cloud sync has 16 registered installations. This new installation can still save locally and export a backup; registered installations can continue syncing. Old registrations are not removed automatically.", "exportRecovery": "Export pre-migration backup", "conflict": { "review": "Review {count} conflicts", "title": "Review sync conflicts", "back": "Back to wardrobe", "intro": "Cloud uploads are paused until you choose what to keep. Your changes remain saved on this device.", "quarantineIntro": "A device change is missing from the cloud copy. Synced outfits are temporarily hidden and uploads are paused. Reopen the original device or explicitly discard the missing change.", "quarantined": "Synced outfits are temporarily hidden and cannot be previewed or applied. This-device-only outfits remain available. Saving, importing, and enabling cloud sync are paused until you resolve the missing change.", "hiddenEmpty": "Synced outfits are temporarily hidden. No this-device-only outfits are available.", "cloudEnablePaused": "Resolve the missing change before enabling cloud sync.", "paused": "Cloud upload paused. Review conflicting changes to continue.", "itemTitle": "{name} · {field}", "unnamed": "Item", "changed": "Changed", "deleted": "Deleted", "partCount": "{count} parts", "tagCount": "{count} tags", "thisDevice": "This device", "cloud": "Cloud copy", "chooseExplanation": "These versions changed separately. Choose which one to keep.", "deleteEditExplanation": "One device deleted this item while another edited it. Restoring the edit creates a new item.", "privacyExplanation": "One device kept this outfit locally while another enabled cloud sync. Choose which storage choice and outfit to keep.", "keepLocal": "Keep this device's version", "keepCloud": "Keep cloud version", "keepDeletion": "Keep deletion", "restoreAsNewOutfit": "Restore as new outfit", "restoreAsNewTag": "Restore as new tag", "missingTitle": "A reported change is missing", "missingExplanation": "A device reported a change, but its content is missing from the cloud copy. Reopen the wardrobe on the original device to recover it, or discard the missing change.", "waitForDevice": "Wait for original device", "discardMissing": "Discard missing change", "discardConfirm": "Stop waiting for this missing change? The cloud cannot restore its content. If the original device still has a local copy, you may recover it there.", "resolveFailed": "This conflict could not be resolved. Your local changes are still saved. Try again.", "fields": { "name": "Name", "data": "Outfit", "tagIds": "Tags", "cloudSync": "Cloud sync", "enabled": "Cloud sync", "$record": "Deletion and edit", "sequence": "Change record", "record": "Item", "deleted": "Deletion" } }, "sync": { "idle": "Cloud ready", "pending": "Saved locally", "submitted": "Sent (assumed saved)", "verified": "Verified against cloud data", "offline": "Offline · waiting to retry", "quota": "Upload paused · over limit", "error": "Sync needs attention", "conflict": "Conflict · upload paused" }, "selected": "Selected", "browseLibrary": "Browse wardrobe", "findTag": "Find a tag…", "storageFilter": "Cloud sync", "filters": "Filters", "storageDetails": "Storage details", "showResults": "Show {count} outfits" };
       const fileItem$1 = { "open": "Open", "rename": "Rename", "delete": "Delete", "apply": "Apply to Character", "sendToStudio": "Send to Studio", "cancel": "Cancel", "promptNewName": "New name", "confirmDelete": "Are you sure you want to delete this item?", "elementDefaultName": "Element", "sendError": "Send to Studio failed", "exportBCX": "Export as BCX", "cloudOn": "Cloud On", "cloudOff": "Cloud Off", "cloudToggleFileTitle": "Toggle cloud sync for this file", "cloudToggleFolderTitle": "Toggle cloud sync for this folder and its children" };
       const fileManager$1 = { "title": "Wardrobe", "newFolderTitle": "New folder", "restoreTitle": "Restore", "refreshThumbnails": "Refresh thumbnails", "closePanel": "Close panel", "promptNewFolderName": "New folder name", "goUp": "Go to parent folder", "parentFolder": "Parent folder", "dropToParentTitle": "Drop here to move to the parent folder", "searchPlaceholderCurrent": "Search in current folder...", "searchPlaceholderAll": "Search all folders...", "searchAria": "Search files", "clearSearch": "Clear search", "switchToGlobalSearch": "Switch to global search", "switchToCurrentSearch": "Switch to current-folder search", "emptyTip": "No matching files or folders", "scopeCurrent": "Current folder", "scopeAll": "Global", "sortBy": "Sort by", "sortToggle": "Sort", "sortToggleAria": "Cycle sort mode", "viewMode": "View mode", "viewCard": "Cards", "viewList": "List", "sortRecent": "Recent", "sortName": "Name", "sortType": "Type", "cloudUsageTitle": "Cloud Usage", "cloudUsageAria": "Cloud storage usage", "cloudUsageOk": "Within limit", "cloudUsageWarn": "Approaching limit", "cloudUsageOver": "Over 180KB limit", "filterAll": "All", "filterFolder": "Folders", "filterOutfit": "Outfits", "filterCharacter": "Character snapshots" };
@@ -35726,6 +35739,7 @@ ${lightForced}`;
       const wardrobeIO$1 = { "menuLabel": "Import / Export", "importEmpty": "Imported data is empty.", "importMerged": "Backup imported and merged into your wardrobe.", "importReplaced": "Replaced the wardrobe with the imported backup.", "importedAsFile": "Imported as a file into the current folder.", "importNamePrompt": "Enter a name for the imported outfit:", "importCancelled": "Import cancelled.", "importUnrecognized": "Unrecognized import format.", "playerWardrobeUnavailable": "Player wardrobe data is not available.", "playerWardrobeImported": 'Imported {count} outfits into "{name}".', "playerWardrobeFailed": "Failed to import player wardrobe. See console for details.", "bcxImportPrompt": "Paste BCX code (base64 + LZString):", "bcxImportFailed": "Failed to decode/parse BCX. Check the input.", "bcxCopied": "BCX code copied to clipboard.", "backupSaveFailed": "Failed to save backup. See console for details.", "backupParseFailed": "Failed to parse backup file (must be valid JSON).", "saveCharacterEmpty": "No outfit to save for this character. Select a character and try again.", "saveCharacterPrompt": "Outfit name:", "savedToFolder": 'Saved "{name}" to the current folder.', "saveFailed": "Save failed. See console for details." };
       const outfitFlow$1 = { "backToLibrary": "Back to wardrobe", "backToPreview": "Back to preview", "previewTitle": "Outfit preview", "closePreview": "Close preview", "openAdjustments": "Adjust outfit", "dialogTitle": "Outfit adjustments", "closeAdjustments": "Close adjustments", "doneAdjusting": "Done adjusting", "adjustmentPreviewHint": "Changes update the preview only.", "applyHint": "Check the target and preview before applying.", "applyTo": "Apply to {name}", "appliedTo": "Applied to {name}", "forceApplyTo": "Force apply to {name}", "forceApplyAttempted": "Force apply attempted for {name}. Check the current appearance.", "forceApplyFailed": "The game did not fully accept the outfit. Check your current appearance." };
       const en = {
+        outfitEditor: outfitEditor$1,
         library: library$1,
         fileItem: fileItem$1,
         fileManager: fileManager$1,
@@ -35755,6 +35769,7 @@ ${lightForced}`;
         wardrobeIO: wardrobeIO$1,
         outfitFlow: outfitFlow$1
       };
+      const outfitEditor = { "open": "编辑衣物", "title": "编辑已保存的衣物", "titleFor": "编辑「{name}」", "close": "关闭衣物编辑器", "back": "返回", "preview": "衣物预览", "previewLoading": "正在加载预览…", "previewFailed": "预览加载失败", "retryPreview": "重试预览", "previewHint": "修改会先留在预览中，保存后才写入衣柜，不会直接给角色换装。", "parts": "已保存的部位", "noParts": "这件衣物没有可编辑的部位。请选择分组添加。", "group": "身体部位或衣物分组", "selectGroup": "搜索分组", "noGroups": "没有匹配的分组", "asset": "物件", "selectAsset": "搜索物件", "noAssets": "这个分组没有可选物件", "addAsset": "添加部位", "replaceAsset": "替换部位", "removeAsset": "移除部位", "color": "颜色", "colorLayer": "第 {number} 层颜色", "defaultColor": "默认颜色", "setColor": "设置颜色", "resetColor": "恢复默认颜色", "cancel": "取消", "overwrite": "覆盖原衣物", "saveCopy": "另存为新衣物", "newNamePrompt": "为新衣物命名：", "copyName": "{name} 副本", "nameRequired": "请输入新衣物的名称。", "discardConfirm": "放弃尚未保存的衣物修改？", "sourceMissing": "这件衣物已不存在。请关闭编辑器后重新选择。", "sourceChanged": "这件衣物已被修改或删除。请将草稿另存为新衣物，或关闭后重新打开最新版本。", "editFailed": "无法编辑这个部位：{error}", "saveFailed": "无法保存这件衣物：{error}", "errors": { "protected-group": "这个身体部位不能修改。", "invalid-group": "这个分组已不可用。", "invalid-asset": "这个物件在当前分组中已不可用。", "required-group": "这个身体分组不能置空。", "missing-part": "请先添加物件，再设置颜色。", "invalid-color": "所选物件不支持这个颜色。", "outfit-changed": "这件衣物已被修改或删除。请将草稿另存为新衣物，或关闭后重新打开最新版本。" } };
       const library = { "searchPlaceholder": "搜索衣物或标签…", "allOutfits": "全部衣物", "untagged": "未加标签", "filterByTag": "按标签筛选", "manageTags": "管理标签", "newTag": "新建标签", "newTagPrompt": "输入唯一的标签名称：", "renameTag": "重命名当前标签", "renameTagPrompt": "新的标签名称：", "deleteTag": "删除当前标签", "deleteTagConfirm": "删除标签「{name}」？衣物会保留在衣橱中。", "tagNameInvalid": "请输入标签名称，并使用与现有标签不同的名称。", "editTags": "编辑标签", "editOutfitTags": "「{name}」的标签", "tags": "标签", "selectTags": "选择一个或多个标签", "noTags": "没有匹配标签，可在「管理标签」中新建。", "multipleTagsHint": "每件衣物可添加多个标签。移除标签不会删除衣物。", "saveTags": "保存标签", "outfitCount": "{count} / {total} 件衣物", "empty": "衣橱里还没有衣物", "noMatches": "没有符合条件的衣物", "clearFilters": "清除所有筛选", "saveCharacter": "保存当前穿着", "saveNamePrompt": "衣物名称：", "saved": "已将「{name}」保存到本机衣橱，云端进度请查看同步状态。", "imported": "已将 {count} 件衣物导入本机衣橱，云端进度请查看同步状态。", "nothingImported": "没有可导入的衣物。请检查导入内容是否为空。", "operationFailed": "操作未完成：{error}", "itemUnavailable": "这件衣物或标签已不可用，请重新选择后再试。", "deleteOutfitConfirm": "删除「{name}」？本机衣橱会删除它，并同步这次删除。", "previewOutfit": "预览「{name}」", "outfitActions": "「{name}」的操作", "moreActions": "更多操作", "cloudIncluded": "参与云同步", "localOnly": "仅保存在本机", "localFork": "保留的本机副本", "localForkHint": "另一台设备重新开启云同步时，这台设备修改过的版本被保留为本机副本。此副本不会自动上传，可手动开启云同步。", "cloudToggleTitle": "开启或关闭这件衣物的云同步，本机副本会保留。", "cloudStorage": "共享云端容量", "otherExtensions": "其他扩展", "remainingCapacity": "可用：{amount}", "quotaAria": "{source}：已用 {used}，上限 {limit}", "quotaObservedLogin": "最近一次登录从 BC 读取的占用", "quotaObservedCache": "BC 本机缓存估计，尚未核对", "quotaObservedUnavailable": "尚未读取到云端占用数据", "observedRemaining": "最近读取的可用空间：{amount}", "proposedUpload": "下次上传预计占用，尚未上传", "proposedRemaining": "预计上传后可用：{amount}", "sharedQuotaInfo": "共享云端容量说明", "sharedQuotaHint": "衣橱按 180 kB（180000 字节）控制全部扩展设置。上方显示最近读取的占用，展开可查看下次上传预计占用。VPW 包括衣物和设备标记。", "quotaWarning": "预计上传后接近容量上限。可将部分衣物设为仅保存在本机。", "quotaBlocked": "上传已暂停：预计更新超过 180 kB 的共享或单包限制。本机衣物仍可使用，请减少云同步衣物后重试。", "localSaved": "已保存到本机", "localUnsaved": "尚未保存到本机", "localStorageQuotaTitle": "浏览器拒绝了本次本机写入", "localStorageQuotaHelp": "这次修改或同步记录未确认保存。原因可能是此站点 localStorage 的独立配额或浏览器存储策略，不能据此判断磁盘空间；与 BC 云端 180 kB 限额无关。请先导出当前可读取的备份，再检查同站点数据并重试。不要直接清除整个站点数据。", "indexedDBSaveTitle": "衣柜数据库写入失败", "indexedDBSaveHelp": "这次衣柜修改未确认保存。仍可导出当前能读取的数据。请先导出备份，再重试本机保存。不要清除整个站点数据。", "localStorageUsage": "此站点 localStorage 已存数据估算：VPW {wardrobe}，其他数据 {other}，合计 {total}。", "localStorageUsageNote": "按 UTF-16 字符长度估算；不含被拒绝的写入，也不是实际配额或剩余空间。", "localStorageUsageUnavailable": "无法读取此站点的 localStorage 已存数据占用。", "localStorageCurrentIndex": "衣柜索引（所有账号）", "localStorageRecovery": "恢复档案", "localStorageOldHistory": "旧版历史", "localStorageLegacyWardrobe": "旧版衣柜", "localStorageOtherVpw": "其他 VPW 数据", "localStorageOtherApps": "其他站点数据", "showLocalStorageDetails": "查看详情", "hideLocalStorageDetails": "收起详情", "retryLocalSave": "重试本机保存", "retrySync": "重试上传", "exportLocalBackup": "导出本机备份", "deviceLimit": "云同步已登记 16 台安装环境。当前新设备仍可保存到本机并导出备份；已登记设备可继续同步。旧设备记录不会自动清除。", "exportRecovery": "导出迁移前备份", "conflict": { "review": "处理 {count} 处冲突", "title": "处理同步冲突", "back": "返回衣橱", "intro": "选择要保留的版本后，云端才能继续上传。你的修改仍保存在本机。", "quarantineIntro": "检测到云端缺少一次设备修改。同步衣物已暂时隐藏，上传暂停；请在原设备找回，或明确舍弃缺失修改。", "quarantined": "同步衣物暂时隐藏，不能预览或应用；仅本机衣物仍可使用。处理缺失修改前，保存、导入和开启云同步暂不可用。", "hiddenEmpty": "同步衣物已暂时隐藏，目前没有仅保存在本机的衣物。", "cloudEnablePaused": "请先处理缺失修改，再开启云同步。", "paused": "云端上传已暂停。处理冲突后可继续同步。", "itemTitle": "{name} · {field}", "unnamed": "项目", "changed": "已修改", "deleted": "已删除", "partCount": "{count} 个部件", "tagCount": "{count} 个标签", "thisDevice": "本机版本", "cloud": "云端版本", "chooseExplanation": "两边分别修改了这项内容，请选择要保留的版本。", "deleteEditExplanation": "一台设备删除了这项内容，另一台设备修改了它。选择修改版会以新项目恢复。", "privacyExplanation": "一台设备将这件衣物设为仅保存在本机，另一台开启了云同步。请选择要保留的存储设置和衣物版本。", "keepLocal": "保留本机版本", "keepCloud": "保留云端版本", "keepDeletion": "保留删除结果", "restoreAsNewOutfit": "作为新衣物恢复", "restoreAsNewTag": "作为新标签恢复", "missingTitle": "发现未合入的修改", "missingExplanation": "一台设备报告过修改，但云端衣橱里没有修改内容。可在原设备重新打开衣橱以找回，或明确舍弃这次修改。", "waitForDevice": "等待原设备", "discardMissing": "舍弃缺失修改", "discardConfirm": "确定不再等待这次缺失的修改？云端无法还原其内容；如果原设备仍保存它，可从那里找回。", "resolveFailed": "冲突未能处理。本机修改仍已保存，请重试。", "fields": { "name": "名称", "data": "衣物内容", "tagIds": "标签", "cloudSync": "云同步", "enabled": "云同步", "$record": "删除与修改", "sequence": "修改记录", "record": "项目", "deleted": "删除" } }, "sync": { "idle": "云同步就绪", "pending": "本机已保存", "submitted": "已提交（默认成功）", "verified": "已与云端核对", "offline": "离线，等待重试", "quota": "容量超限，上传暂停", "error": "同步需要处理", "conflict": "存在冲突，上传暂停" }, "selected": "已选择", "browseLibrary": "浏览衣橱", "findTag": "搜索标签…", "storageFilter": "云同步范围", "filters": "筛选", "storageDetails": "容量明细", "showResults": "查看 {count} 件衣物" };
       const fileItem = { "open": "打开", "rename": "重命名", "delete": "删除", "apply": "应用到角色", "sendToStudio": "发送到 Studio", "cancel": "取消", "promptNewName": "新名字", "confirmDelete": "确认删除该项目吗？", "elementDefaultName": "元素", "sendError": "发送到 Studio 失败", "exportBCX": "导出为 BCX", "cloudOn": "云同步开", "cloudOff": "云同步关", "cloudToggleFileTitle": "切换此文件是否云同步", "cloudToggleFolderTitle": "切换此文件夹及其子项是否云同步" };
       const fileManager = { "title": "衣橱", "newFolderTitle": "新建文件夹", "restoreTitle": "恢复", "refreshThumbnails": "刷新缩略图", "closePanel": "关闭面板", "promptNewFolderName": "新建文件夹名", "goUp": "返回上一级", "parentFolder": "上一级", "dropToParentTitle": "拖到这里移到上一级文件夹", "searchPlaceholderCurrent": "在当前文件夹搜索...", "searchPlaceholderAll": "搜索所有文件夹...", "searchAria": "搜索文件", "clearSearch": "清除搜索", "switchToGlobalSearch": "切换到全局搜索", "switchToCurrentSearch": "切换到当前文件夹", "emptyTip": "没有匹配的文件/文件夹", "scopeCurrent": "当前目录", "scopeAll": "全局", "sortBy": "排序方式", "sortToggle": "排序", "sortToggleAria": "切换排序方式", "viewMode": "视图模式", "viewCard": "卡牌", "viewList": "列表", "sortRecent": "最近修改", "sortName": "名称", "sortType": "类型", "cloudUsageTitle": "云端占用", "cloudUsageAria": "云端容量占用", "cloudUsageOk": "容量正常", "cloudUsageWarn": "容量接近上限", "cloudUsageOver": "超出 180KB 上限", "filterAll": "全部", "filterFolder": "文件夹", "filterOutfit": "套装", "filterCharacter": "角色快照" };
@@ -35784,6 +35799,7 @@ ${lightForced}`;
       const wardrobeIO = { "menuLabel": "导入 / 导出", "importEmpty": "导入的数据为空。", "importMerged": "备份已导入并合并到衣橱。", "importReplaced": "已用导入备份替换当前衣橱。", "importedAsFile": "已作为文件导入到当前文件夹。", "importNamePrompt": "导入的衣物名称：", "importCancelled": "已取消导入。", "importUnrecognized": "无法识别的导入格式。", "playerWardrobeUnavailable": "无法获取角色 Wardrobe 数据。", "playerWardrobeImported": '已导入 {count} 套服装到 "{name}"。', "playerWardrobeFailed": "导入角色 Wardrobe 失败，请查看控制台。", "bcxImportPrompt": "请粘贴 BCX 代码（base64 + LZString 压缩）：", "bcxImportFailed": "BCX 解码或解析失败，请检查输入。", "bcxCopied": "BCX 代码已复制到剪贴板。", "backupSaveFailed": "保存备份失败，请查看控制台。", "backupParseFailed": "解析备份文件失败（需为合法 JSON）。", "saveCharacterEmpty": "当前角色没有可保存的衣物。请选择角色后重试。", "saveCharacterPrompt": "衣物名称：", "savedToFolder": '已保存 "{name}" 到当前文件夹。', "saveFailed": "保存失败，请查看控制台。" };
       const outfitFlow = { "backToLibrary": "返回衣橱", "backToPreview": "返回预览", "previewTitle": "试穿预览", "closePreview": "收起预览", "openAdjustments": "微调部位", "dialogTitle": "微调部位", "closeAdjustments": "关闭微调", "doneAdjusting": "完成微调", "adjustmentPreviewHint": "调整只更新预览。", "applyHint": "确认目标角色和效果后，再应用。", "applyTo": "应用到「{name}」", "appliedTo": "已应用到「{name}」", "forceApplyTo": "强制应用到「{name}」", "forceApplyAttempted": "已尝试强制应用到「{name}」。请检查当前外观。", "forceApplyFailed": "游戏未完整接受换装，请检查当前外观。" };
       const zh = {
+        outfitEditor,
         library,
         fileItem,
         fileManager,
@@ -36406,7 +36422,7 @@ ${lightForced}`;
           }
         );
       }
-      const FileItem = reactExports.memo(function FileItem2({ item, tagNames, viewMode, cloudEnableBlocked = false, onEditTags, onSelectOutfit }) {
+      const FileItem = reactExports.memo(function FileItem2({ item, tagNames, viewMode, cloudEnableBlocked = false, onEditTags, onSelectOutfit, onEditOutfit }) {
         const { t } = useTranslation();
         const dialog2 = useDialog();
         const isPreviewLocked = useFsSelector((fs) => fs.lockedItem?.id === item.id);
@@ -36557,6 +36573,10 @@ ${lightForced}`;
               x: menu.x,
               y: menu.y,
               onClose: closeMenu,
+              onEdit: () => {
+                closeMenu();
+                onEditOutfit(item);
+              },
               onRename: () => void renameItem(),
               onDelete: () => void deleteItem(),
               onExport: () => void exportBcx(),
@@ -36571,6 +36591,7 @@ ${lightForced}`;
       function ContextMenu(props) {
         const { t } = useTranslation();
         const items = [
+          { key: "edit", label: t("outfitEditor.open"), action: props.onEdit },
           { key: "tags", label: t("library.editTags"), action: props.onEditTags },
           { key: "rename", label: t("fileItem.rename"), action: props.onRename },
           { key: "export", label: t("fileItem.exportBCX"), action: props.onExport },
@@ -36786,7 +36807,7 @@ ${lightForced}`;
         ["otherVpwBytes", "library.localStorageOtherVpw"],
         ["otherAppsBytes", "library.localStorageOtherApps"]
       ];
-      function FileManager({ onSelectOutfit }) {
+      function FileManager({ onSelectOutfit, onEditOutfit }) {
         const { t, i18n: i18n2 } = useTranslation();
         const dialog2 = useDialog();
         const isMobile = useIsMobile();
@@ -37082,6 +37103,7 @@ ${lightForced}`;
                   viewMode: fileViewMode,
                   cloudEnableBlocked: cloudQuarantined,
                   onSelectOutfit,
+                  onEditOutfit,
                   tagNames: [...new Set(item.tagIds.map((id) => tagNames.get(id)).filter((name) => !!name))],
                   onEditTags: () => editTags(item)
                 },
@@ -38107,6 +38129,481 @@ ${lightForced}`;
           }
         );
       }
+      function editorError(code, message) {
+        return Object.assign(new Error(message), { code });
+      }
+      function cloneBundle(bundle) {
+        if (!Array.isArray(bundle)) throw editorError("invalid-bundle", "Outfit data must be an array");
+        return structuredClone(bundle);
+      }
+      function getGroup(groupName2, resolveGroup) {
+        if (typeof groupName2 !== "string" || !groupName2.trim() || groupName2 !== groupName2.trim()) {
+          throw editorError("invalid-group", "Choose a valid appearance group");
+        }
+        if (isHiddenBodySlot(groupName2)) {
+          throw editorError("protected-group", "This body group cannot be edited");
+        }
+        const group = typeof resolveGroup === "function" ? resolveGroup(groupName2) : null;
+        if (!group || group.Name && group.Name !== groupName2) {
+          throw editorError("invalid-group", "Appearance group is unavailable");
+        }
+        return group;
+      }
+      function getAsset$1(groupName2, assetName, group, resolveAsset) {
+        if (typeof assetName !== "string" || !assetName.trim() || assetName !== assetName.trim()) {
+          throw editorError("invalid-asset", "Choose a valid asset");
+        }
+        const asset = typeof resolveAsset === "function" ? resolveAsset(groupName2, assetName) : group.Asset?.find((candidate) => candidate?.Name === assetName);
+        if (!asset || asset.Name !== assetName || asset.Group?.Name && asset.Group.Name !== groupName2) {
+          throw editorError("invalid-asset", "Asset is unavailable in this group");
+        }
+        return asset;
+      }
+      function isItemGroup(group) {
+        return group.Category === "Item" || typeof group.IsItem === "function" && group.IsItem();
+      }
+      function replaceGroup(bundle, groupName2, replacement) {
+        const result = [];
+        let found = false;
+        for (const part of bundle) {
+          if (part?.Group !== groupName2) {
+            result.push(part);
+          } else if (!found) {
+            if (replacement) result.push(replacement);
+            found = true;
+          }
+        }
+        if (!found && replacement) result.push(replacement);
+        return result;
+      }
+      function validColor(color, schema) {
+        return typeof color === "string" && (schema.includes(color) || /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(color));
+      }
+      function createOutfitDraft(bundle) {
+        return cloneBundle(bundle);
+      }
+      function listOutfitParts(bundle) {
+        const seen = /* @__PURE__ */ new Set();
+        return cloneBundle(bundle).filter((part) => {
+          if (typeof part?.Group !== "string" || isHiddenBodySlot(part.Group) || seen.has(part.Group)) return false;
+          seen.add(part.Group);
+          return true;
+        });
+      }
+      function setOutfitAsset(bundle, groupName2, assetName, { resolveGroup, resolveAsset } = {}) {
+        const group = getGroup(groupName2, resolveGroup);
+        getAsset$1(groupName2, assetName, group, resolveAsset);
+        const replacement = { Group: groupName2, Name: assetName, IsItem: isItemGroup(group) };
+        return replaceGroup(cloneBundle(bundle), groupName2, replacement);
+      }
+      function removeOutfitAsset(bundle, groupName2, { resolveGroup } = {}) {
+        const group = getGroup(groupName2, resolveGroup);
+        if (group.AllowNone === false) throw editorError("required-group", "This appearance group cannot be empty");
+        return replaceGroup(cloneBundle(bundle), groupName2, null);
+      }
+      function setOutfitColor(bundle, groupName2, color, { resolveGroup, resolveAsset } = {}) {
+        const group = getGroup(groupName2, resolveGroup);
+        const draft = cloneBundle(bundle);
+        const part = draft.find((item) => item?.Group === groupName2);
+        if (!part) throw editorError("missing-part", "Add an asset to this group before setting its color");
+        const asset = getAsset$1(groupName2, part.Name, group, resolveAsset);
+        const schema = Array.isArray(group.ColorSchema) ? group.ColorSchema : [group.DefaultColor || "Default"];
+        if (color !== null) {
+          const valid = Array.isArray(color) ? color.length > 0 && (!Number.isInteger(asset.ColorableLayerCount) || color.length <= asset.ColorableLayerCount) && color.every((value) => validColor(value, schema)) : validColor(color, schema);
+          if (!valid) throw editorError("invalid-color", "Color is not accepted for this asset");
+        }
+        const replacement = { ...part };
+        if (color === null) delete replacement.Color;
+        else replacement.Color = structuredClone(color);
+        return replaceGroup(draft, groupName2, replacement);
+      }
+      const styles$1 = ".vpw-outfit-editor-dialog{display:flex;flex-direction:column;height:min(800px,calc(100dvh - 40px));overflow:hidden}.vpw-outfit-editor-dialog .vpw-outfit-editor-body,.vpw-outfit-editor-page{display:flex;flex:1 1 auto;flex-direction:column;gap:12px;min-width:0;min-height:0;overflow:hidden}.vpw-outfit-editor-page{height:100%}.vpw-outfit-editor-layout{display:grid;grid-template-columns:minmax(180px,.75fr) minmax(0,1.5fr);flex:1 1 auto;gap:16px;min-height:0;min-width:0}.vpw-outfit-editor-preview-column,.vpw-outfit-editor-controls{display:flex;flex-direction:column;gap:8px;min-height:0;min-width:0}.vpw-outfit-editor-preview{position:relative;flex:1 1 auto;min-height:130px;overflow:hidden;border:1px solid var(--vpw-color-default-border);border-radius:var(--vpw-radius-md);background:var(--vpw-color-default-hover)}.vpw-outfit-editor-preview canvas{display:none}.vpw-outfit-editor-preview-message{position:absolute;top:50%;left:50%;width:calc(100% - 16px);transform:translate(-50%,-50%);text-align:center}.vpw-outfit-editor-parts{flex:0 1 190px;min-height:92px;border:1px solid var(--vpw-color-default-border);border-radius:var(--vpw-radius-md);padding:4px}.vpw-outfit-editor-part{display:flex;width:100%;min-width:0;margin:1px 0}.vpw-outfit-editor-part .mantine-Button-inner,.vpw-outfit-editor-part .mantine-Button-label{min-width:0;width:100%}.vpw-outfit-editor-part .mantine-Button-label{display:flex;justify-content:space-between;gap:8px}.vpw-outfit-editor-part-name{overflow:hidden;color:var(--vpw-color-dimmed);text-overflow:ellipsis;white-space:nowrap}.vpw-outfit-editor-fields{display:flex;flex:1 1 auto;flex-direction:column;gap:10px;overflow-y:auto;min-height:0;padding-right:3px}.vpw-outfit-editor-colors{border-top:1px solid var(--vpw-color-default-border);padding-top:10px}.vpw-outfit-editor-footer{flex:0 0 auto;border-top:1px solid var(--vpw-color-default-border);padding-top:10px}.vpw-outfit-editor-mobile-header{flex:0 0 auto;border-bottom:1px solid var(--vpw-color-default-border);padding-bottom:8px}@media(max-width:899px){.vpw-outfit-editor-page .vpw-outfit-editor-layout{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(120px,180px) minmax(0,1fr);gap:10px}.vpw-outfit-editor-page .vpw-outfit-editor-preview-column>p:last-child{display:none}.vpw-outfit-editor-page .vpw-outfit-editor-footer{padding-bottom:env(safe-area-inset-bottom,0px)}}@media(max-width:899px)and (max-height:600px){.vpw-outfit-editor-page .vpw-outfit-editor-layout{grid-template-rows:minmax(0,1fr)}.vpw-outfit-editor-page .vpw-outfit-editor-preview-column{display:none}}";
+      const EDITOR_Z_INDEX = OVERLAY_Z_INDEX - 2;
+      function readSource(id) {
+        const fs = getFs();
+        const outfit = fs.outfits.find((entry) => entry.id === id);
+        if (!outfit?.rev) return null;
+        return {
+          id,
+          name: outfit.name,
+          type: outfit.type,
+          tagIds: [...outfit.tagIds],
+          cloudSync: outfit.cloudSync,
+          rev: [outfit.rev[0], outfit.rev[1]],
+          data: createOutfitDraft(outfit.data)
+        };
+      }
+      function sourceChanged(snapshot) {
+        const current = getFs().outfits.find((entry) => entry.id === snapshot.id);
+        return !current?.rev || current.rev[0] !== snapshot.rev[0] || current.rev[1] !== snapshot.rev[1];
+      }
+      function assetList(group) {
+        const assets = group?.Asset;
+        return Array.isArray(assets) ? assets : [];
+      }
+      function getAsset(group, assetName) {
+        return assetList(group).find((asset) => asset?.Name === assetName);
+      }
+      function DraftPreview({ draft }) {
+        const { t } = useTranslation();
+        const renderer = reactExports.useMemo(() => new RenderService({ drawCallbacks: getFs().renderer.drawCallbacks }), []);
+        const item = reactExports.useMemo(() => ({ data: draft }), [draft]);
+        const frameRef = reactExports.useRef(null);
+        const canvasRef = reactExports.useRef(null);
+        const [status, setStatus] = reactExports.useState("loading");
+        const [attempt, setAttempt] = reactExports.useState(0);
+        reactExports.useEffect(() => {
+          const frame = frameRef.current;
+          const canvas = canvasRef.current;
+          if (!frame || !canvas) return;
+          let source = null;
+          let disposed = false;
+          let frameId = 0;
+          const draw = () => {
+            sizeCanvasToContainer(canvas, frame);
+            if (source) drawSourceCentered(canvas, source);
+            else canvas.style.display = "none";
+          };
+          draw();
+          setStatus("loading");
+          frame.setAttribute("aria-busy", "true");
+          const unsubscribe = renderer.observe(item, (nextSource, nextStatus) => {
+            if (disposed) return;
+            source = nextSource;
+            setStatus(nextStatus.state === "error" ? "error" : nextStatus.state === "ready" ? "ready" : "loading");
+            frame.setAttribute("aria-busy", String(nextStatus.state === "loading"));
+            draw();
+          }, { preview: true });
+          const resize = typeof hostWindow.ResizeObserver === "function" ? new hostWindow.ResizeObserver(() => {
+            if (frameId) hostWindow.cancelAnimationFrame(frameId);
+            frameId = hostWindow.requestAnimationFrame(() => {
+              frameId = 0;
+              draw();
+            });
+          }) : null;
+          resize?.observe(frame);
+          return () => {
+            disposed = true;
+            unsubscribe();
+            resize?.disconnect();
+            if (frameId) hostWindow.cancelAnimationFrame(frameId);
+            renderer.removeCanvas(item);
+          };
+        }, [renderer, item, attempt]);
+        return /* @__PURE__ */ jsxRuntimeExports.jsxs(Box, { className: "vpw-outfit-editor-preview", ref: frameRef, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("canvas", { ref: canvasRef, "aria-label": t("outfitEditor.preview") }),
+          status === "loading" && /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { className: "vpw-outfit-editor-preview-message", size: "xs", c: "dimmed", children: t("outfitEditor.previewLoading") }),
+          status === "error" && /* @__PURE__ */ jsxRuntimeExports.jsxs(Stack, { className: "vpw-outfit-editor-preview-message", gap: "xs", align: "center", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "dimmed", children: t("outfitEditor.previewFailed") }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { size: "compact-xs", variant: "light", onClick: () => {
+              retryFailedImagesForOutfit(draft);
+              setAttempt((value) => value + 1);
+            }, children: t("outfitEditor.retryPreview") })
+          ] })
+        ] });
+      }
+      function Editor({ outfitId, onClose, mobile }) {
+        const { t } = useTranslation();
+        const dialog2 = useDialog();
+        const backRef = reactExports.useRef(null);
+        const [source] = reactExports.useState(() => readSource(outfitId));
+        const [draft, setDraft] = reactExports.useState(() => source ? createOutfitDraft(source.data) : []);
+        const [groups, setGroups] = reactExports.useState([]);
+        const [selectedGroup, setSelectedGroup] = reactExports.useState(() => source ? listOutfitParts(source.data)[0]?.Group ?? null : null);
+        const [selectedAsset, setSelectedAsset] = reactExports.useState(null);
+        const [colors, setColors] = reactExports.useState([""]);
+        const [saving, setSaving] = reactExports.useState(false);
+        const [error, setError] = reactExports.useState("");
+        useFsSelector((fs) => fs.fileTreeVersion);
+        const stale = !!source && sourceChanged(source);
+        const dirty = reactExports.useMemo(() => !!source && JSON.stringify(draft) !== JSON.stringify(source.data), [draft, source]);
+        const parts = reactExports.useMemo(() => listOutfitParts(draft), [draft]);
+        const currentPart = parts.find((part) => part.Group === selectedGroup);
+        const group = groups.find((entry) => entry.Name === selectedGroup);
+        const gameWindow2 = hostWindow;
+        reactExports.useLayoutEffect(() => {
+          if (mobile) backRef.current?.focus({ preventScroll: true });
+        }, [mobile]);
+        reactExports.useEffect(() => {
+          let alive = true;
+          void fetchAssetData().then((entries) => {
+            if (!alive) return;
+            setGroups(entries.map((entry) => entry.data).filter((entry) => !!entry?.Name && !isHiddenBodySlot(entry.Name) && (!entry.Category || entry.Category === "Appearance" || entry.Category === "Item")));
+          });
+          return () => {
+            alive = false;
+          };
+        }, []);
+        reactExports.useEffect(() => {
+          setSelectedAsset(currentPart?.Name ?? null);
+          const color = currentPart?.Color;
+          setColors(Array.isArray(color) ? [...color] : [color ?? ""]);
+        }, [selectedGroup, currentPart?.Name, currentPart?.Color]);
+        const groupOptions = reactExports.useMemo(() => groups.map((entry) => ({
+          value: entry.Name,
+          label: entry.Description || entry.Name
+        })).sort((a, b) => a.label.localeCompare(b.label)), [groups]);
+        const assets = reactExports.useMemo(() => {
+          const family = gameWindow2.Player?.AssetFamily || "Female3DCG";
+          const list = assetList(group).filter((entry) => {
+            if (!entry?.Name) return false;
+            if (typeof gameWindow2.AssetGet !== "function") return true;
+            try {
+              return !!gameWindow2.AssetGet(family, group?.Name, entry.Name);
+            } catch {
+              return false;
+            }
+          });
+          if (currentPart && !list.some((entry) => entry.Name === currentPart.Name)) {
+            list.unshift({ Name: currentPart.Name });
+          }
+          return list.map((entry) => ({ value: entry.Name, label: entry.Description || entry.Name })).sort((a, b) => a.label.localeCompare(b.label));
+        }, [group, currentPart?.Name]);
+        const resolveGroup = (name) => groups.find((entry) => entry.Name === name) ?? null;
+        const resolveAsset = (groupName2, assetName) => {
+          const family = gameWindow2.Player?.AssetFamily || "Female3DCG";
+          if (typeof gameWindow2.AssetGet === "function") {
+            try {
+              return gameWindow2.AssetGet(family, groupName2, assetName) ?? null;
+            } catch {
+              return null;
+            }
+          }
+          return getAsset(resolveGroup(groupName2) ?? void 0, assetName) ?? null;
+        };
+        const canChooseAsset = !!group && !!selectedGroup && !!selectedAsset && selectedAsset !== currentPart?.Name && !!resolveAsset(selectedGroup, selectedAsset);
+        const describeError = (reason) => {
+          const code = reason?.code;
+          return code && t(`outfitEditor.errors.${code}`, { defaultValue: "" }) || t("outfitEditor.editFailed", { error: reason instanceof Error ? reason.message : String(reason) });
+        };
+        const edit = (operation) => {
+          try {
+            setError("");
+            setDraft(operation());
+          } catch (reason) {
+            setError(describeError(reason));
+          }
+        };
+        const addOrReplace = () => {
+          if (!selectedGroup || !selectedAsset || !canChooseAsset) return;
+          edit(() => setOutfitAsset(draft, selectedGroup, selectedAsset, { resolveGroup, resolveAsset }));
+        };
+        const remove = () => {
+          if (!selectedGroup) return;
+          edit(() => removeOutfitAsset(draft, selectedGroup, { resolveGroup }));
+        };
+        const updateColor = () => {
+          if (!selectedGroup) return;
+          const values2 = colors.map((value) => value.trim());
+          const color = values2.every((value) => !value) ? null : values2.length === 1 ? values2[0] : values2;
+          edit(() => setOutfitColor(draft, selectedGroup, color, { resolveGroup, resolveAsset }));
+        };
+        const closeWithDiscardCheck = async () => {
+          if (saving) return;
+          if (dirty && !await dialog2.confirm(t("outfitEditor.discardConfirm"))) return;
+          onClose();
+        };
+        const overwrite = async () => {
+          if (!source || !dirty || saving) return;
+          if (sourceChanged(source)) {
+            setError(t("outfitEditor.sourceChanged"));
+            return;
+          }
+          setSaving(true);
+          setError("");
+          try {
+            await getFs().updateOutfitIfUnchanged(source.id, source.rev, { data: draft });
+            onClose();
+          } catch (reason) {
+            const code = reason?.code;
+            setError(sourceChanged(source) || code === "outfit-changed" ? t("outfitEditor.sourceChanged") : t("outfitEditor.saveFailed", { error: reason instanceof Error ? reason.message : String(reason) }));
+          } finally {
+            setSaving(false);
+          }
+        };
+        const saveCopy = async () => {
+          if (!source || saving) return;
+          const name = (await dialog2.prompt(
+            t("outfitEditor.newNamePrompt"),
+            t("outfitEditor.copyName", { name: source.name })
+          ))?.trim();
+          if (name === void 0) return;
+          if (!name) {
+            setError(t("outfitEditor.nameRequired"));
+            return;
+          }
+          setSaving(true);
+          setError("");
+          try {
+            await getFs().addOutfit({
+              name,
+              type: source.type,
+              data: draft,
+              tagIds: source.tagIds,
+              cloudSync: source.cloudSync
+            });
+            onClose();
+          } catch (reason) {
+            setError(t("outfitEditor.saveFailed", { error: reason instanceof Error ? reason.message : String(reason) }));
+          } finally {
+            setSaving(false);
+          }
+        };
+        const onEscape = (event) => {
+          if (event.key !== "Escape" || event.nativeEvent.isComposing || event.defaultPrevented) return;
+          const target = event.nativeEvent.composedPath().find((node) => node instanceof HTMLElement);
+          if (target?.closest('[role="listbox"], [role="menu"], [aria-expanded="true"][aria-haspopup]')) return;
+          event.stopPropagation();
+          event.preventDefault();
+          void closeWithDiscardCheck();
+        };
+        const content2 = /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("style", { children: styles$1 }),
+          mobile && /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { className: "vpw-outfit-editor-mobile-header", gap: "xs", wrap: "nowrap", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { ref: backRef, variant: "subtle", size: "compact-sm", onClick: () => void closeWithDiscardCheck(), children: t("outfitEditor.back") }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { fw: 600, size: "sm", truncate: true, children: source?.name || t("outfitEditor.title") })
+          ] }),
+          !source ? /* @__PURE__ */ jsxRuntimeExports.jsx(Alert, { color: "orange", role: "alert", children: t("outfitEditor.sourceMissing") }) : /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+            stale && /* @__PURE__ */ jsxRuntimeExports.jsx(Alert, { color: "orange", role: "alert", children: t("outfitEditor.sourceChanged") }),
+            error && /* @__PURE__ */ jsxRuntimeExports.jsx(Alert, { color: "red", role: "alert", children: error }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs(Box, { className: "vpw-outfit-editor-layout", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs(Box, { className: "vpw-outfit-editor-preview-column", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", fw: 600, children: t("outfitEditor.preview") }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(DraftPreview, { draft }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "dimmed", children: t("outfitEditor.previewHint") })
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs(Box, { className: "vpw-outfit-editor-controls", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "sm", fw: 600, children: t("outfitEditor.parts") }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(ScrollArea, { className: "vpw-outfit-editor-parts", type: "auto", children: parts.length ? parts.map((part) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  Button,
+                  {
+                    variant: selectedGroup === part.Group ? "light" : "subtle",
+                    className: "vpw-outfit-editor-part",
+                    onClick: () => setSelectedGroup(part.Group),
+                    "aria-pressed": selectedGroup === part.Group,
+                    justify: "space-between",
+                    children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: groups.find((entry) => entry.Name === part.Group)?.Description || part.Group }),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "vpw-outfit-editor-part-name", children: part.Name })
+                    ]
+                  },
+                  part.Group
+                )) : /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "dimmed", children: t("outfitEditor.noParts") }) }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs(Box, { className: "vpw-outfit-editor-fields", children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    Select,
+                    {
+                      searchable: true,
+                      clearable: true,
+                      data: groupOptions,
+                      value: selectedGroup,
+                      onChange: setSelectedGroup,
+                      label: t("outfitEditor.group"),
+                      placeholder: t("outfitEditor.selectGroup"),
+                      nothingFoundMessage: t("outfitEditor.noGroups"),
+                      comboboxProps: { withinPortal: true, zIndex: EDITOR_Z_INDEX + 1 }
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    Select,
+                    {
+                      searchable: true,
+                      clearable: true,
+                      data: assets,
+                      value: selectedAsset,
+                      onChange: setSelectedAsset,
+                      label: t("outfitEditor.asset"),
+                      placeholder: t("outfitEditor.selectAsset"),
+                      disabled: !group,
+                      nothingFoundMessage: t("outfitEditor.noAssets"),
+                      comboboxProps: { withinPortal: true, zIndex: EDITOR_Z_INDEX + 1 }
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { gap: "xs", wrap: "nowrap", children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { size: "xs", onClick: addOrReplace, disabled: !canChooseAsset || saving, children: currentPart ? t("outfitEditor.replaceAsset") : t("outfitEditor.addAsset") }),
+                    currentPart && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      Button,
+                      {
+                        size: "xs",
+                        variant: "default",
+                        color: "red",
+                        onClick: remove,
+                        disabled: !group || group.AllowNone === false || saving,
+                        children: t("outfitEditor.removeAsset")
+                      }
+                    )
+                  ] }),
+                  currentPart && /* @__PURE__ */ jsxRuntimeExports.jsxs(Stack, { gap: "xs", className: "vpw-outfit-editor-colors", children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", fw: 600, children: t("outfitEditor.color") }),
+                    colors.map((color, index2) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      TextInput,
+                      {
+                        label: colors.length > 1 ? t("outfitEditor.colorLayer", { number: index2 + 1 }) : void 0,
+                        "aria-label": t("outfitEditor.colorLayer", { number: index2 + 1 }),
+                        value: color,
+                        onChange: (event) => setColors((before) => before.map((value, i) => i === index2 ? event.currentTarget.value : value)),
+                        placeholder: t("outfitEditor.defaultColor")
+                      },
+                      `${selectedGroup}:${index2}`
+                    )),
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { gap: "xs", children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { size: "xs", variant: "light", onClick: updateColor, disabled: !group || saving, children: t("outfitEditor.setColor") }),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { size: "xs", variant: "subtle", onClick: () => {
+                        setColors([""]);
+                        edit(() => setOutfitColor(draft, selectedGroup, null, { resolveGroup, resolveAsset }));
+                      }, disabled: !group || saving, children: t("outfitEditor.resetColor") })
+                    ] })
+                  ] })
+                ] })
+              ] })
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { className: "vpw-outfit-editor-footer", gap: "xs", justify: "flex-end", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "subtle", onClick: () => void closeWithDiscardCheck(), disabled: saving, children: t("outfitEditor.cancel") }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { variant: "default", onClick: () => void saveCopy(), disabled: saving, children: t("outfitEditor.saveCopy") }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { onClick: () => void overwrite(), disabled: !dirty || stale || saving, loading: saving, children: t("outfitEditor.overwrite") })
+            ] })
+          ] })
+        ] });
+        return mobile ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+          Box,
+          {
+            component: "section",
+            className: "vpw-outfit-editor-page",
+            "aria-label": t("outfitEditor.title"),
+            onKeyDownCapture: onEscape,
+            onKeyDown: (event) => {
+              if (event.key === "Escape") event.stopPropagation();
+            },
+            children: content2
+          }
+        ) : /* @__PURE__ */ jsxRuntimeExports.jsx(
+          Modal,
+          {
+            opened: true,
+            lockScroll: false,
+            onClose: () => void closeWithDiscardCheck(),
+            title: /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { fw: 600, children: t("outfitEditor.titleFor", { name: source?.name || "" }) }),
+            size: 1e3,
+            centered: true,
+            radius: "md",
+            padding: "sm",
+            zIndex: EDITOR_Z_INDEX,
+            classNames: { content: "vpw-outfit-editor-dialog", body: "vpw-outfit-editor-body" },
+            closeButtonProps: { "aria-label": t("outfitEditor.close") },
+            closeOnEscape: false,
+            onKeyDownCapture: onEscape,
+            returnFocus: false,
+            overlayProps: { backgroundOpacity: 0.4 },
+            children: content2
+          }
+        );
+      }
+      function OutfitEditorDialog({ outfitId, onClose }) {
+        return outfitId ? /* @__PURE__ */ jsxRuntimeExports.jsx(Editor, { outfitId, onClose, mobile: false }, outfitId) : null;
+      }
+      function OutfitEditorPage({ outfitId, onBack }) {
+        return /* @__PURE__ */ jsxRuntimeExports.jsx(Editor, { outfitId, onClose: onBack, mobile: true }, outfitId);
+      }
       const styles = ".vpw-workspace,.vpw-workspace-columns,.vpw-workspace-browse{height:100%;min-height:0;min-width:0}.vpw-workspace-columns{display:grid;grid-template-columns:minmax(0,1fr);gap:14px}.vpw-workspace-columns[data-preview-open]{grid-template-columns:minmax(0,1fr) clamp(270px,29%,350px)}.vpw-workspace-preview{min-width:0;min-height:0;border-left:1px solid var(--vpw-color-default-border);padding-left:14px}.vpw-preview-pane{height:100%;min-height:0;min-width:0;display:flex;flex-direction:column;gap:10px}.vpw-preview-heading,.vpw-preview-actions{flex:0 0 auto}.vpw-mobile-preview-page{display:flex;flex-direction:column;gap:10px;height:100%;min-height:0;min-width:0}.vpw-mobile-page-header{flex:0 0 auto;padding-bottom:8px;border-bottom:1px solid var(--vpw-color-default-border)}.vpw-mobile-preview-content{flex:1;min-height:0}.vpw-mobile-preview-page .vpw-preview-actions{padding-bottom:env(safe-area-inset-bottom,0px)}.vpw-preview-canvas{flex:1;min-height:110px;min-width:0;overflow:hidden;border:1px solid var(--vpw-color-default-border);border-radius:12px;background:var(--vpw-color-default-hover)}.vpw-preview-actions{display:flex;flex-direction:column;gap:8px;padding-top:8px;border-top:1px solid var(--vpw-color-default-border)}@media(max-height:600px){.vpw-preview-pane{gap:6px}.vpw-preview-actions{gap:5px;padding-top:5px}.vpw-preview-actions>p{display:none}}";
       function WardrobeWorkspace({ onMobileDetailChange }) {
         const { t } = useTranslation();
@@ -38114,14 +38611,16 @@ ${lightForced}`;
         const isMobile = useIsMobile();
         const [previewOpen, setPreviewOpen] = reactExports.useState(false);
         const [adjusting, setAdjusting] = reactExports.useState(false);
+        const [editingOutfitId, setEditingOutfitId] = reactExports.useState(null);
         const browsingRef = reactExports.useRef(null);
         const previewRef = reactExports.useRef(null);
         const previewBackRef = reactExports.useRef(null);
         const showPreview = previewOpen && !!selected;
+        const selectedId = selected?.id;
         reactExports.useLayoutEffect(() => {
-          onMobileDetailChange?.(isMobile && showPreview);
+          onMobileDetailChange?.(isMobile && (showPreview || editingOutfitId !== null));
           return () => onMobileDetailChange?.(false);
-        }, [isMobile, showPreview, onMobileDetailChange]);
+        }, [isMobile, showPreview, editingOutfitId, onMobileDetailChange]);
         reactExports.useEffect(() => {
           if (isMobile && showPreview) previewBackRef.current?.focus({ preventScroll: true });
         }, [isMobile, showPreview]);
@@ -38134,6 +38633,7 @@ ${lightForced}`;
         const closePreview = () => {
           setPreviewOpen(false);
           setAdjusting(false);
+          setEditingOutfitId(null);
           hostWindow.requestAnimationFrame(() => {
             browsingRef.current?.querySelector('[aria-pressed="true"][data-outfit-id]')?.focus({ preventScroll: true });
           });
@@ -38142,6 +38642,20 @@ ${lightForced}`;
           setAdjusting(false);
           if (isMobile) hostWindow.requestAnimationFrame(() => {
             previewRef.current?.querySelector(".vpw-preview-actions button")?.focus({ preventScroll: true });
+          });
+        };
+        const openEditor = (item) => {
+          const fs = getFs();
+          const current = fs.outfits.find((entry) => entry.id === item.id);
+          if (!current || !fs.selectOutfit(current)) return;
+          setAdjusting(false);
+          setPreviewOpen(true);
+          setEditingOutfitId(item.id);
+        };
+        const closeEditor = () => {
+          setEditingOutfitId(null);
+          hostWindow.requestAnimationFrame(() => {
+            previewRef.current?.querySelector('[data-action="edit-outfit"]')?.focus({ preventScroll: true });
           });
         };
         const onPreviewKeyDown = (event) => {
@@ -38162,6 +38676,17 @@ ${lightForced}`;
           ] }),
           /* @__PURE__ */ jsxRuntimeExports.jsx(Box, { className: "vpw-preview-canvas", children: /* @__PURE__ */ jsxRuntimeExports.jsx(SidePreview, {}) }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs(Box, { className: "vpw-preview-actions", children: [
+            selectedId && /* @__PURE__ */ jsxRuntimeExports.jsx(
+              Button,
+              {
+                fullWidth: true,
+                variant: "light",
+                "data-action": "edit-outfit",
+                "aria-haspopup": isMobile ? void 0 : "dialog",
+                onClick: () => setEditingOutfitId(selectedId),
+                children: t("outfitEditor.open")
+              }
+            ),
             /* @__PURE__ */ jsxRuntimeExports.jsx(Button, { fullWidth: true, variant: "default", "aria-haspopup": isMobile ? void 0 : "dialog", onClick: () => setAdjusting(true), children: t("outfitFlow.openAdjustments", { defaultValue: "微调部位" }) }),
             /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "dimmed", children: t("outfitFlow.applyHint") }),
             /* @__PURE__ */ jsxRuntimeExports.jsx(ApplyOutfitButton, {})
@@ -38174,14 +38699,18 @@ ${lightForced}`;
             {
               className: "vpw-workspace-columns",
               "data-preview-open": showPreview && !isMobile || void 0,
-              style: { display: isMobile && showPreview ? "none" : void 0 },
+              style: { display: isMobile && (showPreview || editingOutfitId !== null) ? "none" : void 0 },
               children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx(Box, { ref: browsingRef, className: "vpw-workspace-browse", children: /* @__PURE__ */ jsxRuntimeExports.jsx(FileManager, { onSelectOutfit: () => setPreviewOpen(true) }) }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(Box, { ref: browsingRef, className: "vpw-workspace-browse", children: /* @__PURE__ */ jsxRuntimeExports.jsx(FileManager, { onSelectOutfit: () => {
+                  setEditingOutfitId(null);
+                  setPreviewOpen(true);
+                }, onEditOutfit: openEditor }) }),
                 showPreview && !isMobile && /* @__PURE__ */ jsxRuntimeExports.jsx(Box, { component: "aside", "aria-label": t("outfitFlow.previewTitle", { defaultValue: "试穿预览" }), className: "vpw-workspace-preview", children: preview })
               ]
             }
           ),
-          showPreview && isMobile && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+          editingOutfitId && isMobile && /* @__PURE__ */ jsxRuntimeExports.jsx(OutfitEditorPage, { outfitId: editingOutfitId, onBack: closeEditor }),
+          showPreview && isMobile && !editingOutfitId && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
             /* @__PURE__ */ jsxRuntimeExports.jsxs(
               Box,
               {
@@ -38204,7 +38733,8 @@ ${lightForced}`;
             ),
             adjusting && /* @__PURE__ */ jsxRuntimeExports.jsx(OutfitAdjustmentsPage, { onBack: closeAdjustments })
           ] }),
-          !isMobile && /* @__PURE__ */ jsxRuntimeExports.jsx(OutfitAdjustmentsDialog, { opened: showPreview && adjusting, onClose: closeAdjustments })
+          !isMobile && /* @__PURE__ */ jsxRuntimeExports.jsx(OutfitAdjustmentsDialog, { opened: showPreview && adjusting, onClose: closeAdjustments }),
+          !isMobile && /* @__PURE__ */ jsxRuntimeExports.jsx(OutfitEditorDialog, { outfitId: editingOutfitId, onClose: closeEditor })
         ] });
       }
       function formatTimestamp(recordName) {
