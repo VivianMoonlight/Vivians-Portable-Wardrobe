@@ -10,6 +10,7 @@ import { installWardrobeSyncEvents } from '@/utils/wardrobe-sync-events.js'
 import { createWardrobeTabLock } from '@/utils/wardrobe-tab-lock.js'
 import { createWardrobeLoginCapture } from '@/utils/wardrobe-login-capture.js'
 import { installRenderHooks } from '@/utils/RenderApi.js'
+import { configureNativeItemEditor, cancelNativeItemEditor } from '@/services/native-item-editor.js'
 import { createShadowHost } from '@/ui/shadow'
 import { Root } from '@/ui/Root'
 import '@/i18n'
@@ -63,6 +64,7 @@ function injectApp(): void {
   let pendingMember: string | null = null
   let waitTimer: ReturnType<typeof setTimeout> | null = null
   let disposeRender = () => {}
+  let disposeNativeItemEditor = () => {}
   const loginCapture = createWardrobeLoginCapture()
   const repository = () => wardrobe._repository
   const lock = createWardrobeTabLock({
@@ -82,6 +84,7 @@ function injectApp(): void {
     waitTimer = null
   }
   const unmountApp = () => {
+    cancelNativeItemEditor()
     root?.unmount()
     root = null
     loadedMember = null
@@ -303,6 +306,7 @@ function injectApp(): void {
     unhookLoginRequest?.()
     unhookLoginResponse?.()
     disposeRender()
+    disposeNativeItemEditor()
     unmountApp()
     w.removeEventListener('pagehide', onPageHide)
     w.removeEventListener('pageshow', onPageShow)
@@ -320,6 +324,11 @@ function injectApp(): void {
     try {
       hookDrawCharacter(modApi)
       disposeRender = installRenderHooks(modApi)
+      try {
+        disposeNativeItemEditor = configureNativeItemEditor({ host: w, modApi, hostElement: host })
+      } catch (error) {
+        console.warn('[VPW] BC item editor is unavailable', error)
+      }
       void Promise.resolve().then(() => LayerTranslator.ensureItemColorLayerNamesLoaded())
         .catch(error => console.warn('[VPW] item color layer names unavailable', error))
         .finally(() => LayerTranslator.cleanUpItemColorLayerNamesLoad())

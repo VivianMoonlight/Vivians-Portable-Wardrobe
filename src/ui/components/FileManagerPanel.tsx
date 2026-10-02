@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { ActionIcon, Box, Button, CloseButton, Divider, Flex, Group, Modal, Paper, Portal, Tabs, Text, Tooltip } from '@mantine/core'
 import { useTranslation } from 'react-i18next'
 import { hostWindow } from '@/utils/host-window.js'
+import { isNativeItemEditorActive, subscribeNativeItemEditor } from '@/services/native-item-editor.js'
 import { getFs, getWb, useFsSelector, useWbSelector } from '@/stores/hooks'
 import { useTheme } from '@/ui/theme/ThemeProvider'
 import { useIsMobile } from '@/ui/hooks/useIsMobile'
@@ -41,6 +42,7 @@ export function FileManagerPanel({ opened, onClose }: FileManagerPanelProps) {
     || historyStorageStatus === 'conflict' || historyStorageStatus === 'archived'
   const theme = useTheme()
   const isMobile = useIsMobile()
+  const nativeItemEditorActive = useSyncExternalStore(subscribeNativeItemEditor, isNativeItemEditorActive)
   const [adjustmentsOpen, setAdjustmentsOpen] = useState(false)
   const [panelRect, setPanelRect] = useState(() => {
     const width = Math.min(1180, Math.max(PANEL_MIN_WIDTH, Math.round((hostWindow.innerWidth || 1280) * 0.82)))
@@ -212,6 +214,7 @@ export function FileManagerPanel({ opened, onClose }: FileManagerPanelProps) {
   if (isMobile) {
     return (
       <Modal opened={opened} onClose={onClose} fullScreen radius={0} withCloseButton={false} padding={0} lockScroll={false}
+        trapFocus={!nativeItemEditorActive}
         closeOnEscape={false} classNames={{ content: 'vpw-main-wardrobe-dialog' }}>
         <MobileWardrobeShell onClose={onClose} />
       </Modal>

@@ -38,6 +38,10 @@
   min-width: 0;
 }
 
+.vpw-outfit-editor-category {
+  flex: 0 0 auto;
+}
+
 .vpw-outfit-editor-preview {
   position: relative;
   flex: 1 1 auto;

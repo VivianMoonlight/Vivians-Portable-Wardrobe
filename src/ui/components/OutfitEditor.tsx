@@ -1,9 +1,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import { Alert, Box, Button, Group, Modal, ScrollArea, Select, Stack, Text, TextInput } from '@mantine/core'
+import { Alert, Box, Button, Group, Modal, ScrollArea, SegmentedControl, Select, Stack, Text, TextInput } from '@mantine/core'
 import { useTranslation } from 'react-i18next'
 import { getFs, useFsSelector } from '@/stores/hooks'
 import { RenderService } from '@/services/RenderService.js'
 import { isHiddenBodySlot } from '@/services/hidden-body-slots.js'
+import { openNativeItemEditor } from '@/services/native-item-editor.js'
 import {
   createOutfitDraft, listOutfitParts, removeOutfitAsset, setOutfitAsset, setOutfitColor,
 } from '@/services/outfit-editor-model.js'
@@ -22,7 +23,13 @@ interface EditorPart {
   Group: string
   Name: string
   Color?: string | string[]
+  IsItem?: boolean
+  Property?: Record<string, unknown>
+  Craft?: Record<string, unknown>
+  Difficulty?: number
 }
+
+type EditorCategory = 'clothing' | 'item'
 
 interface AssetGroupData {
   Name: string
@@ -131,14 +138,18 @@ function Editor({ outfitId, onClose, mobile }: { outfitId: string; onClose: () =
   const { t } = useTranslation()
   const dialog = useDialog()
   const backRef = useRef<HTMLButtonElement>(null)
+  const nativeController = useRef<AbortController | null>(null)
   const [source] = useState(() => readSource(outfitId))
   const [draft, setDraft] = useState<EditorPart[]>(() => source ? createOutfitDraft(source.data) as EditorPart[] : [])
   const [groups, setGroups] = useState<AssetGroupData[]>([])
+  const [selectedCategory, setSelectedCategory] = useState<EditorCategory>(() =>
+    source && (listOutfitParts(source.data) as EditorPart[])[0]?.IsItem ? 'item' : 'clothing')
   const [selectedGroup, setSelectedGroup] = useState<string | null>(() =>
     source ? (listOutfitParts(source.data) as EditorPart[])[0]?.Group ?? null : null)
   const [selectedAsset, setSelectedAsset] = useState<string | null>(null)
   const [colors, setColors] = useState<string[]>([''])
   const [saving, setSaving] = useState(false)
+  const [nativeBusy, setNativeBusy] = useState(false)
   const [error, setError] = useState('')
   const fileTreeVersion = useFsSelector((fs) => fs.fileTreeVersion)
   const stale = !!source && sourceChanged(source)
@@ -147,8 +158,14 @@ function Editor({ outfitId, onClose, mobile }: { outfitId: string; onClose: () =
   const currentPart = parts.find((part) => part.Group === selectedGroup)
   const group = groups.find((entry) => entry.Name === selectedGroup)
   const gameWindow = hostWindow as any
+  const categoryForPart = (part: EditorPart): EditorCategory => {
+    const metadata = groups.find((entry) => entry.Name === part.Group)
+    return metadata ? (metadata.Category === 'Item' ? 'item' : 'clothing') : (part.IsItem ? 'item' : 'clothing')
+  }
+  const visibleParts = parts.filter((part) => categoryForPart(part) === selectedCategory)
 
   useLayoutEffect(() => { if (mobile) backRef.current?.focus({ preventScroll: true }) }, [mobile])
+  useEffect(() => () => nativeController.current?.abort(), [])
 
   useEffect(() => {
     let alive = true
@@ -167,9 +184,19 @@ function Editor({ outfitId, onClose, mobile }: { outfitId: string; onClose: () =
     setColors(Array.isArray(color) ? [...color] : [color ?? ''])
   }, [selectedGroup, currentPart?.Name, currentPart?.Color])
 
-  const groupOptions = useMemo(() => groups.map((entry) => ({
+  useEffect(() => {
+    if (group) setSelectedCategory(group.Category === 'Item' ? 'item' : 'clothing')
+  }, [selectedGroup, group?.Category])
+
+  const groupOptions = useMemo(() => groups.filter((entry) =>
+    (entry.Category === 'Item' ? 'item' : 'clothing') === selectedCategory).map((entry) => ({
     value: entry.Name, label: entry.Description || entry.Name,
-  })).sort((a, b) => a.label.localeCompare(b.label)), [groups])
+  })).sort((a, b) => a.label.localeCompare(b.label)), [groups, selectedCategory])
+
+  const chooseCategory = (category: EditorCategory) => {
+    setSelectedCategory(category)
+    setSelectedGroup(parts.find((part) => categoryForPart(part) === category)?.Group ?? null)
+  }
   const assets = useMemo(() => {
     const family = gameWindow.Player?.AssetFamily || 'Female3DCG'
     const list = assetList(group).filter((entry) => {
@@ -197,6 +224,9 @@ function Editor({ outfitId, onClose, mobile }: { outfitId: string; onClose: () =
   const canChooseAsset = !!group && !!selectedGroup && !!selectedAsset
     && selectedAsset !== currentPart?.Name
     && !!resolveAsset(selectedGroup, selectedAsset)
+  const hasNativeItemSettings = selectedCategory === 'item' && !!currentPart && !!selectedGroup
+    && ['Load', 'Draw', 'Click'].every((suffix) =>
+      typeof gameWindow[`Inventory${selectedGroup}${currentPart.Name}${suffix}`] === 'function')
 
   const describeError = (reason: unknown) => {
     const code = (reason as { code?: string })?.code
@@ -229,14 +259,37 @@ function Editor({ outfitId, onClose, mobile }: { outfitId: string; onClose: () =
     edit(() => setOutfitColor(draft, selectedGroup, color, { resolveGroup, resolveAsset }) as EditorPart[])
   }
 
+  const editNativeItem = async () => {
+    if (!hasNativeItemSettings || !selectedGroup || nativeBusy || saving) return
+    const groupName = selectedGroup
+    const controller = new AbortController()
+    nativeController.current = controller
+    setNativeBusy(true)
+    setError('')
+    try {
+      const result = await openNativeItemEditor({ bundle: draft, groupName,
+        signal: controller.signal, title: t('outfitEditor.nativeItemTitle') })
+      if (!controller.signal.aborted && result.status === 'saved') {
+        setDraft((before) => before.map((part) => part.Group === groupName ? result.part as EditorPart : part))
+      }
+    } catch (reason) {
+      if (!controller.signal.aborted) setError(t('outfitEditor.nativeItemFailed', {
+        error: reason instanceof Error ? reason.message : String(reason),
+      }))
+    } finally {
+      if (nativeController.current === controller) nativeController.current = null
+      if (!controller.signal.aborted) setNativeBusy(false)
+    }
+  }
+
   const closeWithDiscardCheck = async () => {
-    if (saving) return
+    if (saving || nativeBusy) return
     if (dirty && !await dialog.confirm(t('outfitEditor.discardConfirm'))) return
     onClose()
   }
 
   const overwrite = async () => {
-    if (!source || !dirty || saving) return
+    if (!source || !dirty || saving || nativeBusy) return
     if (sourceChanged(source)) { setError(t('outfitEditor.sourceChanged')); return }
     setSaving(true)
     setError('')
@@ -252,7 +305,7 @@ function Editor({ outfitId, onClose, mobile }: { outfitId: string; onClose: () =
   }
 
   const saveCopy = async () => {
-    if (!source || saving) return
+    if (!source || saving || nativeBusy) return
     const name = (await dialog.prompt(t('outfitEditor.newNamePrompt'),
       t('outfitEditor.copyName', { name: source.name })))?.trim()
     if (name === undefined) return
@@ -294,18 +347,26 @@ function Editor({ outfitId, onClose, mobile }: { outfitId: string; onClose: () =
           <Text size="xs" c="dimmed">{t('outfitEditor.previewHint')}</Text>
         </Box>
         <Box className="vpw-outfit-editor-controls">
-          <Text size="sm" fw={600}>{t('outfitEditor.parts')}</Text>
+          <SegmentedControl className="vpw-outfit-editor-category" fullWidth
+            data-testid="vpw-editor-category" aria-label={t('outfitEditor.category')}
+            value={selectedCategory} onChange={(value) => chooseCategory(value as EditorCategory)}
+            data={[
+              { value: 'clothing', label: t('outfitEditor.clothing') },
+              { value: 'item', label: t('outfitEditor.items') },
+            ]} />
+          <Text size="sm" fw={600}>{t(selectedCategory === 'item' ? 'outfitEditor.savedItems' : 'outfitEditor.savedClothing')}</Text>
           <ScrollArea className="vpw-outfit-editor-parts" type="auto">
-            {parts.length ? parts.map((part) => <Button key={part.Group} variant={selectedGroup === part.Group ? 'light' : 'subtle'}
+            {visibleParts.length ? visibleParts.map((part) => <Button key={part.Group} variant={selectedGroup === part.Group ? 'light' : 'subtle'}
               className="vpw-outfit-editor-part" onClick={() => setSelectedGroup(part.Group)}
               aria-pressed={selectedGroup === part.Group} justify="space-between">
               <span>{groups.find((entry) => entry.Name === part.Group)?.Description || part.Group}</span>
               <span className="vpw-outfit-editor-part-name">{part.Name}</span>
-            </Button>) : <Text size="xs" c="dimmed">{t('outfitEditor.noParts')}</Text>}
+            </Button>) : <Text size="xs" c="dimmed">{t(selectedCategory === 'item' ? 'outfitEditor.noItems' : 'outfitEditor.noClothing')}</Text>}
           </ScrollArea>
           <Box className="vpw-outfit-editor-fields">
             <Select searchable clearable data={groupOptions} value={selectedGroup} onChange={setSelectedGroup}
-              label={t('outfitEditor.group')} placeholder={t('outfitEditor.selectGroup')}
+              label={t(selectedCategory === 'item' ? 'outfitEditor.itemGroup' : 'outfitEditor.clothingGroup')}
+              placeholder={t('outfitEditor.selectGroup')}
               nothingFoundMessage={t('outfitEditor.noGroups')}
               comboboxProps={{ withinPortal: true, zIndex: EDITOR_Z_INDEX + 1 }} />
             <Select searchable clearable data={assets} value={selectedAsset} onChange={setSelectedAsset}
@@ -313,14 +374,23 @@ function Editor({ outfitId, onClose, mobile }: { outfitId: string; onClose: () =
               disabled={!group} nothingFoundMessage={t('outfitEditor.noAssets')}
               comboboxProps={{ withinPortal: true, zIndex: EDITOR_Z_INDEX + 1 }} />
             <Group gap="xs" wrap="nowrap">
-              <Button size="xs" onClick={addOrReplace} disabled={!canChooseAsset || saving}>
+              <Button size="xs" onClick={addOrReplace} disabled={!canChooseAsset || saving || nativeBusy}>
                 {currentPart ? t('outfitEditor.replaceAsset') : t('outfitEditor.addAsset')}
               </Button>
               {currentPart && <Button size="xs" variant="default" color="red" onClick={remove}
-                disabled={!group || group.AllowNone === false || saving}>
+                disabled={!group || group.AllowNone === false || saving || nativeBusy}>
                 {t('outfitEditor.removeAsset')}
               </Button>}
             </Group>
+            {selectedCategory === 'item' && currentPart && <Stack gap={4}>
+              {hasNativeItemSettings ? <>
+                <Button size="xs" variant="light" onClick={() => void editNativeItem()}
+                  loading={nativeBusy} disabled={saving}>
+                  {t('outfitEditor.nativeItemOpen')}
+                </Button>
+                <Text size="xs" c="dimmed">{t('outfitEditor.nativeItemHint')}</Text>
+              </> : <Text size="xs" c="dimmed">{t('outfitEditor.nativeItemUnavailable')}</Text>}
+            </Stack>}
             {currentPart && <Stack gap="xs" className="vpw-outfit-editor-colors">
               <Text size="xs" fw={600}>{t('outfitEditor.color')}</Text>
               {colors.map((color, index) => <TextInput key={`${selectedGroup}:${index}`}
@@ -329,20 +399,20 @@ function Editor({ outfitId, onClose, mobile }: { outfitId: string; onClose: () =
                 value={color} onChange={(event) => setColors((before) => before.map((value, i) => i === index ? event.currentTarget.value : value))}
                 placeholder={t('outfitEditor.defaultColor')} />)}
               <Group gap="xs">
-                <Button size="xs" variant="light" onClick={updateColor} disabled={!group || saving}>{t('outfitEditor.setColor')}</Button>
+                <Button size="xs" variant="light" onClick={updateColor} disabled={!group || saving || nativeBusy}>{t('outfitEditor.setColor')}</Button>
                 <Button size="xs" variant="subtle" onClick={() => {
                   setColors([''])
                   edit(() => setOutfitColor(draft, selectedGroup!, null, { resolveGroup, resolveAsset }) as EditorPart[])
-                }} disabled={!group || saving}>{t('outfitEditor.resetColor')}</Button>
+                }} disabled={!group || saving || nativeBusy}>{t('outfitEditor.resetColor')}</Button>
               </Group>
             </Stack>}
           </Box>
         </Box>
       </Box>
       <Group className="vpw-outfit-editor-footer" gap="xs" justify="flex-end">
-        <Button variant="subtle" onClick={() => void closeWithDiscardCheck()} disabled={saving}>{t('outfitEditor.cancel')}</Button>
-        <Button variant="default" onClick={() => void saveCopy()} disabled={saving}>{t('outfitEditor.saveCopy')}</Button>
-        <Button onClick={() => void overwrite()} disabled={!dirty || stale || saving} loading={saving}>
+        <Button variant="subtle" onClick={() => void closeWithDiscardCheck()} disabled={saving || nativeBusy}>{t('outfitEditor.cancel')}</Button>
+        <Button variant="default" onClick={() => void saveCopy()} disabled={saving || nativeBusy}>{t('outfitEditor.saveCopy')}</Button>
+        <Button onClick={() => void overwrite()} disabled={!dirty || stale || saving || nativeBusy} loading={saving}>
           {t('outfitEditor.overwrite')}
         </Button>
       </Group>
@@ -358,6 +428,7 @@ function Editor({ outfitId, onClose, mobile }: { outfitId: string; onClose: () =
       classNames={{ content: 'vpw-outfit-editor-dialog', body: 'vpw-outfit-editor-body' }}
       closeButtonProps={{ 'aria-label': t('outfitEditor.close') }}
       closeOnEscape={false} onKeyDownCapture={onEscape} returnFocus={false}
+      trapFocus={!nativeBusy}
       overlayProps={{ backgroundOpacity: 0.4 }}>{content}</Modal>
 }
 
