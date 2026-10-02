@@ -1,6 +1,6 @@
 {
   "name": "vivians-portable-wardrobe",
-  "version": "0.10.1-react.16",
+  "version": "0.10.1-react.17",
   "type": "module",
   "scripts": {
     "dev": "vite --mode mock",
