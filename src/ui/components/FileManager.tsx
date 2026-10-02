@@ -33,9 +33,10 @@ const LOCAL_STORAGE_CATEGORIES = [
 
 interface FileManagerProps {
   onSelectOutfit?: (item: WardrobeOutfit) => void
+  onEditOutfit: (item: WardrobeOutfit) => void
 }
 
-export function FileManager({ onSelectOutfit }: FileManagerProps) {
+export function FileManager({ onSelectOutfit, onEditOutfit }: FileManagerProps) {
   const { t, i18n } = useTranslation()
   const dialog = useDialog()
   const isMobile = useIsMobile()
@@ -293,7 +294,7 @@ export function FileManager({ onSelectOutfit }: FileManagerProps) {
           </Group>}
           {displayList.length > 0 ? <Box className="vpw-library-masonry" data-view={fileViewMode}>
             {displayList.map((item) => (
-              <FileItem key={item.id} item={item} viewMode={fileViewMode} cloudEnableBlocked={cloudQuarantined} onSelectOutfit={onSelectOutfit}
+              <FileItem key={item.id} item={item} viewMode={fileViewMode} cloudEnableBlocked={cloudQuarantined} onSelectOutfit={onSelectOutfit} onEditOutfit={onEditOutfit}
                 tagNames={[...new Set(item.tagIds.map((id) => tagNames.get(id)).filter((name): name is string => !!name))]}
                 onEditTags={() => editTags(item)} />
             ))}

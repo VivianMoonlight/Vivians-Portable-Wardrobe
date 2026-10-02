@@ -1,11 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { Box, Button, CloseButton, Group, Text } from '@mantine/core'
 import { useTranslation } from 'react-i18next'
-import { useFsSelector } from '@/stores/hooks'
+import { getFs, useFsSelector, type WardrobeOutfit } from '@/stores/hooks'
 import { useIsMobile } from '@/ui/hooks/useIsMobile'
 import { hostWindow } from '@/utils/host-window.js'
 import { FileManager } from './FileManager'
 import { OutfitAdjustmentsDialog, OutfitAdjustmentsPage } from './OutfitAdjustmentsDialog'
+import { OutfitEditorDialog, OutfitEditorPage } from './OutfitEditor'
 import { ApplyOutfitButton, SidePreview } from './SidePreview'
 import styles from './wardrobe-workspace.css?inline'
 
@@ -15,15 +16,17 @@ export function WardrobeWorkspace({ onMobileDetailChange }: { onMobileDetailChan
   const isMobile = useIsMobile()
   const [previewOpen, setPreviewOpen] = useState(false)
   const [adjusting, setAdjusting] = useState(false)
+  const [editingOutfitId, setEditingOutfitId] = useState<string | null>(null)
   const browsingRef = useRef<HTMLDivElement>(null)
   const previewRef = useRef<HTMLDivElement>(null)
   const previewBackRef = useRef<HTMLButtonElement>(null)
   const showPreview = previewOpen && !!selected
+  const selectedId = selected?.id
 
   useLayoutEffect(() => {
-    onMobileDetailChange?.(isMobile && showPreview)
+    onMobileDetailChange?.(isMobile && (showPreview || editingOutfitId !== null))
     return () => onMobileDetailChange?.(false)
-  }, [isMobile, showPreview, onMobileDetailChange])
+  }, [isMobile, showPreview, editingOutfitId, onMobileDetailChange])
 
   useEffect(() => {
     if (isMobile && showPreview) previewBackRef.current?.focus({ preventScroll: true })
@@ -39,6 +42,7 @@ export function WardrobeWorkspace({ onMobileDetailChange }: { onMobileDetailChan
   const closePreview = () => {
     setPreviewOpen(false)
     setAdjusting(false)
+    setEditingOutfitId(null)
     hostWindow.requestAnimationFrame(() => {
       browsingRef.current?.querySelector<HTMLElement>('[aria-pressed="true"][data-outfit-id]')?.focus({ preventScroll: true })
     })
@@ -48,6 +52,22 @@ export function WardrobeWorkspace({ onMobileDetailChange }: { onMobileDetailChan
     setAdjusting(false)
     if (isMobile) hostWindow.requestAnimationFrame(() => {
       previewRef.current?.querySelector<HTMLButtonElement>('.vpw-preview-actions button')?.focus({ preventScroll: true })
+    })
+  }
+
+  const openEditor = (item: WardrobeOutfit) => {
+    const fs = getFs()
+    const current = fs.outfits.find((entry) => entry.id === item.id)
+    if (!current || !fs.selectOutfit(current)) return
+    setAdjusting(false)
+    setPreviewOpen(true)
+    setEditingOutfitId(item.id)
+  }
+
+  const closeEditor = () => {
+    setEditingOutfitId(null)
+    hostWindow.requestAnimationFrame(() => {
+      previewRef.current?.querySelector<HTMLButtonElement>('[data-action="edit-outfit"]')?.focus({ preventScroll: true })
     })
   }
 
@@ -71,6 +91,10 @@ export function WardrobeWorkspace({ onMobileDetailChange }: { onMobileDetailChan
       </Group>
       <Box className="vpw-preview-canvas"><SidePreview /></Box>
       <Box className="vpw-preview-actions">
+        {selectedId && <Button fullWidth variant="light" data-action="edit-outfit"
+          aria-haspopup={isMobile ? undefined : 'dialog'} onClick={() => setEditingOutfitId(selectedId)}>
+          {t('outfitEditor.open')}
+        </Button>}
         <Button fullWidth variant="default" aria-haspopup={isMobile ? undefined : 'dialog'} onClick={() => setAdjusting(true)}>
           {t('outfitFlow.openAdjustments', { defaultValue: '微调部位' })}
         </Button>
@@ -84,9 +108,9 @@ export function WardrobeWorkspace({ onMobileDetailChange }: { onMobileDetailChan
     <Box className="vpw-workspace">
       <style>{styles}</style>
       <Box className="vpw-workspace-columns" data-preview-open={showPreview && !isMobile || undefined}
-        style={{ display: isMobile && showPreview ? 'none' : undefined }}>
+        style={{ display: isMobile && (showPreview || editingOutfitId !== null) ? 'none' : undefined }}>
         <Box ref={browsingRef} className="vpw-workspace-browse">
-          <FileManager onSelectOutfit={() => setPreviewOpen(true)} />
+          <FileManager onSelectOutfit={() => { setEditingOutfitId(null); setPreviewOpen(true) }} onEditOutfit={openEditor} />
         </Box>
         {showPreview && !isMobile && (
           <Box component="aside" aria-label={t('outfitFlow.previewTitle', { defaultValue: '试穿预览' })} className="vpw-workspace-preview">
@@ -94,7 +118,8 @@ export function WardrobeWorkspace({ onMobileDetailChange }: { onMobileDetailChan
           </Box>
         )}
       </Box>
-      {showPreview && isMobile && <>
+      {editingOutfitId && isMobile && <OutfitEditorPage outfitId={editingOutfitId} onBack={closeEditor} />}
+      {showPreview && isMobile && !editingOutfitId && <>
         <Box component="section" aria-label={t('outfitFlow.previewTitle')} className="vpw-mobile-preview-page"
           onKeyDownCapture={onPreviewKeyDown}
           onKeyDown={(event) => { if (event.key === 'Escape') event.stopPropagation() }}
@@ -110,6 +135,7 @@ export function WardrobeWorkspace({ onMobileDetailChange }: { onMobileDetailChan
         {adjusting && <OutfitAdjustmentsPage onBack={closeAdjustments} />}
       </>}
       {!isMobile && <OutfitAdjustmentsDialog opened={showPreview && adjusting} onClose={closeAdjustments} />}
+      {!isMobile && <OutfitEditorDialog outfitId={editingOutfitId} onClose={closeEditor} />}
     </Box>
   )
 }

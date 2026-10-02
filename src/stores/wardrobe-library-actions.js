@@ -494,6 +494,10 @@ export const wardrobeLibraryActions = {
     await this._applyLibraryOperations([{ type: 'put-outfit', id, changes }])
     return true
   },
+  async updateOutfitIfUnchanged(id, expectedRev, changes) {
+    await this._applyLibraryOperations([{ type: 'put-outfit', id, expectedRev, changes }])
+    return true
+  },
   async removeOutfit(id) {
     await this._applyLibraryOperations([{ type: 'delete-outfit', id }])
     return true

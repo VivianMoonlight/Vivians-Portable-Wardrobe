@@ -25,6 +25,7 @@ export interface FileNode {
 
 export interface WardrobeOutfit extends FileNode {
   id: string
+  rev: [number, string]
   type: string
   data: unknown[]
   tagIds: string[]
@@ -132,6 +133,7 @@ export interface FsCtx {
   deleteTag: (id: string) => Promise<boolean>
   addOutfit: (outfit: { name: string; type: string; data: unknown[]; tagIds?: string[]; cloudSync?: boolean }) => Promise<string>
   updateOutfit: (id: string, changes: Partial<Pick<WardrobeOutfit, 'name' | 'type' | 'data' | 'tagIds' | 'cloudSync'>>) => Promise<boolean>
+  updateOutfitIfUnchanged: (id: string, expectedRev: [number, string], changes: Partial<Pick<WardrobeOutfit, 'name' | 'type' | 'data' | 'tagIds' | 'cloudSync'>>) => Promise<boolean>
   removeOutfit: (id: string) => Promise<boolean>
   setOutfitTags: (id: string, tagIds: string[]) => Promise<boolean>
   setOutfitCloudSync: (id: string, enabled: boolean) => Promise<boolean>

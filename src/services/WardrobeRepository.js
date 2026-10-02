@@ -637,6 +637,11 @@ export class WardrobeRepository {
       return visible
     } catch (error) {
       const reported = storageError(error, !!this.persistence)
+      if (reported?.code === 'outfit-changed') {
+        this.index = this.document?.index || before
+        this.emit()
+        throw reported
+      }
       this.cancelPending()
       if (committed) {
         this.emit({ state: 'error', error: reported.message, errorCode: reported.code || null,

@@ -266,9 +266,13 @@ export function applyWardrobeOperations(index, operations, { replicaId } = {}) {
     if (!validId(id)) throw new Error('Wardrobe operation ID is required')
     switch (operation.type) {
       case 'put-outfit': {
-        if (hasOwn(next.tombstones.outfits, id)) throw new Error('Deleted outfits require a new ID to restore')
         if (!isObject(operation.changes)) throw new Error('Outfit changes must be an object')
         const previous = hasOwn(next.outfits, id) ? next.outfits[id] : null
+        if (hasOwn(operation, 'expectedRev')
+          && (!isRevision(operation.expectedRev) || !previous || !sameValue(previous.rev, operation.expectedRev))) {
+          throw Object.assign(new Error('Outfit changed while editing'), { code: 'outfit-changed' })
+        }
+        if (hasOwn(next.tombstones.outfits, id)) throw new Error('Deleted outfits require a new ID to restore')
         const changes = clone(operation.changes)
         delete changes.id
         delete changes.rev

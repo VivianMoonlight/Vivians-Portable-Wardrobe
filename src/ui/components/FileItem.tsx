@@ -15,6 +15,7 @@ interface FileItemProps {
   cloudEnableBlocked?: boolean
   onEditTags: () => void
   onSelectOutfit?: (item: WardrobeOutfit) => void
+  onEditOutfit: (item: WardrobeOutfit) => void
 }
 
 interface MenuState {
@@ -22,7 +23,7 @@ interface MenuState {
   y: number
 }
 
-export const FileItem = memo(function FileItem({ item, tagNames, viewMode, cloudEnableBlocked = false, onEditTags, onSelectOutfit }: FileItemProps) {
+export const FileItem = memo(function FileItem({ item, tagNames, viewMode, cloudEnableBlocked = false, onEditTags, onSelectOutfit, onEditOutfit }: FileItemProps) {
   const { t } = useTranslation()
   const dialog = useDialog()
   const isPreviewLocked = useFsSelector((fs) => fs.lockedItem?.id === item.id)
@@ -141,6 +142,7 @@ export const FileItem = memo(function FileItem({ item, tagNames, viewMode, cloud
           </Group>
       </Paper>
       {menu && <Portal><ContextMenu x={menu.x} y={menu.y} onClose={closeMenu}
+        onEdit={() => { closeMenu(); onEditOutfit(item) }}
         onRename={() => void renameItem()} onDelete={() => void deleteItem()}
         onExport={() => void exportBcx()} onEditTags={() => { closeMenu(); onEditTags() }} /></Portal>}
     </>
@@ -151,6 +153,7 @@ interface ContextMenuProps {
   x: number
   y: number
   onClose: () => void
+  onEdit: () => void
   onRename: () => void
   onDelete: () => void
   onExport: () => void
@@ -160,6 +163,7 @@ interface ContextMenuProps {
 function ContextMenu(props: ContextMenuProps) {
   const { t } = useTranslation()
   const items = [
+    { key: 'edit', label: t('outfitEditor.open'), action: props.onEdit },
     { key: 'tags', label: t('library.editTags'), action: props.onEditTags },
     { key: 'rename', label: t('fileItem.rename'), action: props.onRename },
     { key: 'export', label: t('fileItem.exportBCX'), action: props.onExport },

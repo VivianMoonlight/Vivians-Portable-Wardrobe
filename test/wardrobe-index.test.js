@@ -374,6 +374,20 @@ test('deleted identities cannot be reused by ordinary put operations', () => {
   assert.deepEqual(listWardrobeTags(deleted), [])
 })
 
+test('conditional outfit edit rejects a stale revision without changing the newer outfit', () => {
+  const original = apply(createWardrobeIndex(), [outfit('one')])
+  const revision = original.outfits.one.rev
+  const current = apply(original, [{ type: 'put-outfit', id: 'one', changes: { name: 'Newer name' } }])
+  assert.equal(apply(current, [{ type: 'put-outfit', id: 'one', expectedRev: current.outfits.one.rev,
+    changes: { data: [{ Group: 'Cloth', Name: 'New shirt' }] } }]).outfits.one.data[0].Name, 'New shirt')
+  assert.throws(() => apply(current, [{ type: 'put-outfit', id: 'one', expectedRev: revision,
+    changes: { data: [] } }]), { code: 'outfit-changed' })
+  const deleted = apply(current, [{ type: 'delete-outfit', id: 'one' }])
+  assert.throws(() => apply(deleted, [{ type: 'put-outfit', id: 'one', expectedRev: current.outfits.one.rev,
+    changes: { data: [] } }]), { code: 'outfit-changed' })
+  assert.equal(current.outfits.one.name, 'Newer name')
+})
+
 test('prototype-like IDs remain ordinary own records across edits, merges, and deletion', () => {
   const ids = ['__proto__', 'constructor', 'toString']
   const original = apply(createWardrobeIndex(), ids.flatMap(id => [
