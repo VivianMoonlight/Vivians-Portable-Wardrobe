@@ -44,8 +44,8 @@ export function createNativeItemEditor({ host, modApi, hostElement }) {
     session.requestFinish()
   })
   hook('CommonSetScreen', (args, next) => {
-    // Native item callbacks sometimes try to return to a chat-room dialog.
-    if (ownsScreen() && session.dispatchDepth > 0) return Promise.resolve()
+    // BC item controls can request a screen change from DOM callbacks, outside Run/Click.
+    if (ownsScreen()) return Promise.resolve()
     return next(args)
   })
   for (const name of ['InventoryTogglePermission', 'InventorySetPermission']) {
@@ -274,7 +274,6 @@ export function createNativeItemEditor({ host, modApi, hostElement }) {
                 host.DrawText?.(title, 1150, 70, 'White', 'Black')
                 host.DrawButton?.(1885, 25, 90, 90, '', 'White', 'Icons/Exit.png', 'Back to wardrobe')
                 host.DrawRect?.(1775, 25, 90, 90, '#777777')
-                host.DrawText?.('X', 1820, 78, 'White', 'Black')
               })
             } catch (reason) { current.finish('cancelled', reason) }
           },
@@ -284,7 +283,10 @@ export function createNativeItemEditor({ host, modApi, hostElement }) {
               current.withScratch(() => {
                 if (host.DialogMenuMode === 'tighten' && host.DialogTightenLoosenItem) {
                   host.TightenLoosenItemClick?.(scratch, host.DialogTightenLoosenItem)
-                  if (!host.DialogTightenLoosenItem) current.back()
+                  if (!host.DialogTightenLoosenItem) {
+                    if (host.DialogFocusItem) host.DialogMenuMode = 'extended'
+                    else current.requestFinish()
+                  }
                 } else host[handlerBase + 'Click']()
                 host.ExtendedItemPermissionMode = false
               })

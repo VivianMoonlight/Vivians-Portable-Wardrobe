@@ -146,6 +146,14 @@ test('cancelling the native item editor discards the scratch changes and restore
   const context = setup(true)
   const originalAppearance = structuredClone(context.player.Appearance)
   const pending = context.editor.open({ bundle: [context.source], groupName: 'ItemNeck' })
+  context.host.DialogMenuMode = 'tighten'
+  context.host.DialogTightenLoosenItem = context.host.DialogFocusItem
+  context.host.TightenLoosenItemClick = () => { context.host.DialogTightenLoosenItem = null }
+  context.host.CurrentScreenFunctions.Click()
+  assert.equal(context.host.CurrentScreen, screen)
+  assert.equal(context.host.DialogMenuMode, 'extended')
+  await context.host.CommonSetScreen('Online', 'Other')
+  assert.deepEqual(context.screens, [])
   context.host.CharacterGetCurrentHandlers[screen]().Appearance[0].Property.Effect.push('Unsaved')
   context.editor.cancel()
 
