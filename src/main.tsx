@@ -11,6 +11,7 @@ import { createWardrobeTabLock } from '@/utils/wardrobe-tab-lock.js'
 import { createWardrobeLoginCapture } from '@/utils/wardrobe-login-capture.js'
 import { installRenderHooks } from '@/utils/RenderApi.js'
 import { configureNativeItemEditor, cancelNativeItemEditor } from '@/services/native-item-editor.js'
+import { configureNativeWardrobeEditor, cancelNativeWardrobeEditor } from '@/services/native-wardrobe-editor.js'
 import { createShadowHost } from '@/ui/shadow'
 import { Root } from '@/ui/Root'
 import '@/i18n'
@@ -65,6 +66,7 @@ function injectApp(): void {
   let waitTimer: ReturnType<typeof setTimeout> | null = null
   let disposeRender = () => {}
   let disposeNativeItemEditor = () => {}
+  let disposeNativeWardrobeEditor = () => {}
   const loginCapture = createWardrobeLoginCapture()
   const repository = () => wardrobe._repository
   const lock = createWardrobeTabLock({
@@ -84,6 +86,7 @@ function injectApp(): void {
     waitTimer = null
   }
   const unmountApp = () => {
+    cancelNativeWardrobeEditor()
     cancelNativeItemEditor()
     root?.unmount()
     root = null
@@ -307,6 +310,7 @@ function injectApp(): void {
     unhookLoginResponse?.()
     disposeRender()
     disposeNativeItemEditor()
+    disposeNativeWardrobeEditor()
     unmountApp()
     w.removeEventListener('pagehide', onPageHide)
     w.removeEventListener('pageshow', onPageShow)
@@ -328,6 +332,11 @@ function injectApp(): void {
         disposeNativeItemEditor = configureNativeItemEditor({ host: w, modApi, hostElement: host })
       } catch (error) {
         console.warn('[VPW] BC item editor is unavailable', error)
+      }
+      try {
+        disposeNativeWardrobeEditor = configureNativeWardrobeEditor({ host: w, modApi, hostElement: host })
+      } catch (error) {
+        console.warn('[VPW] BC wardrobe editor is unavailable', error)
       }
       void Promise.resolve().then(() => LayerTranslator.ensureItemColorLayerNamesLoaded())
         .catch(error => console.warn('[VPW] item color layer names unavailable', error))

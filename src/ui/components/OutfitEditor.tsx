@@ -1,10 +1,11 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import { Alert, Box, Button, Group, Modal, ScrollArea, SegmentedControl, Select, Stack, Text, TextInput } from '@mantine/core'
+import { Alert, Box, Button, Group, Modal, ScrollArea, Select, Stack, Text, TextInput } from '@mantine/core'
 import { useTranslation } from 'react-i18next'
 import { getFs, useFsSelector } from '@/stores/hooks'
 import { RenderService } from '@/services/RenderService.js'
 import { isHiddenBodySlot } from '@/services/hidden-body-slots.js'
 import { openNativeItemEditor } from '@/services/native-item-editor.js'
+import { openNativeWardrobeEditor } from '@/services/native-wardrobe-editor.js'
 import {
   createOutfitDraft, listOutfitParts, removeOutfitAsset, setOutfitAsset, setOutfitColor,
 } from '@/services/outfit-editor-model.js'
@@ -28,8 +29,6 @@ interface EditorPart {
   Craft?: Record<string, unknown>
   Difficulty?: number
 }
-
-type EditorCategory = 'clothing' | 'item'
 
 interface AssetGroupData {
   Name: string
@@ -72,6 +71,24 @@ function assetList(group: AssetGroupData | undefined) {
 
 function getAsset(group: AssetGroupData | undefined, assetName: string) {
   return assetList(group).find((asset) => asset?.Name === assetName)
+}
+
+function keepProtectedParts(previous: EditorPart[], edited: EditorPart[]): EditorPart[] {
+  const protectedParts = new Map(previous.filter((part) => isHiddenBodySlot(part.Group))
+    .map((part) => [part.Group, part]))
+  const included = new Set<string>()
+  const result: EditorPart[] = []
+  for (const part of edited) {
+    if (isHiddenBodySlot(part.Group)) {
+      const original = protectedParts.get(part.Group)
+      if (original && !included.has(part.Group)) result.push(original)
+    } else result.push(part)
+    included.add(part.Group)
+  }
+  for (const [group, part] of protectedParts) {
+    if (!included.has(group)) result.push(part)
+  }
+  return createOutfitDraft(result) as EditorPart[]
 }
 
 function DraftPreview({ draft }: { draft: EditorPart[] }) {
@@ -142,38 +159,35 @@ function Editor({ outfitId, onClose, mobile }: { outfitId: string; onClose: () =
   const [source] = useState(() => readSource(outfitId))
   const [draft, setDraft] = useState<EditorPart[]>(() => source ? createOutfitDraft(source.data) as EditorPart[] : [])
   const [groups, setGroups] = useState<AssetGroupData[]>([])
-  const [selectedCategory, setSelectedCategory] = useState<EditorCategory>(() =>
-    source && (listOutfitParts(source.data) as EditorPart[])[0]?.IsItem ? 'item' : 'clothing')
-  const [selectedGroup, setSelectedGroup] = useState<string | null>(() =>
-    source ? (listOutfitParts(source.data) as EditorPart[])[0]?.Group ?? null : null)
+  const [stage, setStage] = useState<'opening' | 'items' | 'failed'>('opening')
+  const [selectedGroup, setSelectedGroup] = useState<string | null>(null)
   const [selectedAsset, setSelectedAsset] = useState<string | null>(null)
+  const [assetSearch, setAssetSearch] = useState('')
   const [colors, setColors] = useState<string[]>([''])
   const [saving, setSaving] = useState(false)
   const [nativeBusy, setNativeBusy] = useState(false)
   const [error, setError] = useState('')
-  const fileTreeVersion = useFsSelector((fs) => fs.fileTreeVersion)
+  useFsSelector((fs) => fs.fileTreeVersion)
   const stale = !!source && sourceChanged(source)
   const dirty = useMemo(() => !!source && JSON.stringify(draft) !== JSON.stringify(source.data), [draft, source])
   const parts = useMemo(() => listOutfitParts(draft) as EditorPart[], [draft])
-  const currentPart = parts.find((part) => part.Group === selectedGroup)
-  const group = groups.find((entry) => entry.Name === selectedGroup)
+  const group = groups.find((entry) => entry.Name === selectedGroup && entry.Category === 'Item')
   const gameWindow = hostWindow as any
-  const categoryForPart = (part: EditorPart): EditorCategory => {
+  const isItemPart = (part: EditorPart) => {
     const metadata = groups.find((entry) => entry.Name === part.Group)
-    return metadata ? (metadata.Category === 'Item' ? 'item' : 'clothing') : (part.IsItem ? 'item' : 'clothing')
+    return metadata ? metadata.Category === 'Item' : !!part.IsItem
   }
-  const visibleParts = parts.filter((part) => categoryForPart(part) === selectedCategory)
+  const visibleParts = parts.filter(isItemPart)
+  const currentPart = visibleParts.find((part) => part.Group === selectedGroup)
 
-  useLayoutEffect(() => { if (mobile) backRef.current?.focus({ preventScroll: true }) }, [mobile])
-  useEffect(() => () => nativeController.current?.abort(), [])
+  useLayoutEffect(() => { if (mobile && stage !== 'opening') backRef.current?.focus({ preventScroll: true }) }, [mobile, stage])
 
   useEffect(() => {
     let alive = true
     void fetchAssetData().then((entries: Array<{ key: string; data: AssetGroupData }>) => {
       if (!alive) return
       setGroups(entries.map((entry) => entry.data).filter((entry) =>
-        !!entry?.Name && !isHiddenBodySlot(entry.Name) &&
-        (!entry.Category || entry.Category === 'Appearance' || entry.Category === 'Item')))
+        !!entry?.Name && !isHiddenBodySlot(entry.Name) && entry.Category === 'Item'))
     })
     return () => { alive = false }
   }, [])
@@ -185,18 +199,14 @@ function Editor({ outfitId, onClose, mobile }: { outfitId: string; onClose: () =
   }, [selectedGroup, currentPart?.Name, currentPart?.Color])
 
   useEffect(() => {
-    if (group) setSelectedCategory(group.Category === 'Item' ? 'item' : 'clothing')
-  }, [selectedGroup, group?.Category])
+    if (!selectedGroup || !groups.some((entry) => entry.Name === selectedGroup && entry.Category === 'Item')) {
+      setSelectedGroup(visibleParts[0]?.Group ?? null)
+    }
+  }, [groups, draft, selectedGroup])
 
-  const groupOptions = useMemo(() => groups.filter((entry) =>
-    (entry.Category === 'Item' ? 'item' : 'clothing') === selectedCategory).map((entry) => ({
+  const groupOptions = useMemo(() => groups.filter((entry) => entry.Category === 'Item').map((entry) => ({
     value: entry.Name, label: entry.Description || entry.Name,
-  })).sort((a, b) => a.label.localeCompare(b.label)), [groups, selectedCategory])
-
-  const chooseCategory = (category: EditorCategory) => {
-    setSelectedCategory(category)
-    setSelectedGroup(parts.find((part) => categoryForPart(part) === category)?.Group ?? null)
-  }
+  })).sort((a, b) => a.label.localeCompare(b.label)), [groups])
   const assets = useMemo(() => {
     const family = gameWindow.Player?.AssetFamily || 'Female3DCG'
     const list = assetList(group).filter((entry) => {
@@ -211,6 +221,8 @@ function Editor({ outfitId, onClose, mobile }: { outfitId: string; onClose: () =
     return list.map((entry) => ({ value: entry.Name, label: entry.Description || entry.Name }))
       .sort((a, b) => a.label.localeCompare(b.label))
   }, [group, currentPart?.Name])
+  const filteredAssets = assets.filter((asset) => (asset.label + ' ' + asset.value).toLocaleLowerCase()
+    .includes(assetSearch.trim().toLocaleLowerCase()))
 
   const resolveGroup = (name: string) => groups.find((entry) => entry.Name === name) ?? null
   const resolveAsset = (groupName: string, assetName: string) => {
@@ -224,7 +236,7 @@ function Editor({ outfitId, onClose, mobile }: { outfitId: string; onClose: () =
   const canChooseAsset = !!group && !!selectedGroup && !!selectedAsset
     && selectedAsset !== currentPart?.Name
     && !!resolveAsset(selectedGroup, selectedAsset)
-  const hasNativeItemSettings = selectedCategory === 'item' && !!currentPart && !!selectedGroup
+  const hasNativeItemSettings = !!currentPart && !!selectedGroup
     && ['Load', 'Draw', 'Click'].every((suffix) =>
       typeof gameWindow[`Inventory${selectedGroup}${currentPart.Name}${suffix}`] === 'function')
 
@@ -258,6 +270,46 @@ function Editor({ outfitId, onClose, mobile }: { outfitId: string; onClose: () =
       : values.length === 1 ? values[0] : values
     edit(() => setOutfitColor(draft, selectedGroup, color, { resolveGroup, resolveAsset }) as EditorPart[])
   }
+
+  const openWardrobe = async (initial: boolean) => {
+    if (!source || nativeController.current || saving) return
+    const controller = new AbortController()
+    nativeController.current = controller
+    setStage('opening')
+    setNativeBusy(true)
+    setError('')
+    try {
+      const result = await openNativeWardrobeEditor({ bundle: draft, signal: controller.signal })
+      if (controller.signal.aborted) return
+      if (result.status === 'cancelled') {
+        if (initial) onClose()
+        else setStage('items')
+      } else {
+        setDraft((before) => keepProtectedParts(before, result.bundle as EditorPart[]))
+        setStage('items')
+      }
+    } catch (reason) {
+      if (!controller.signal.aborted) {
+        setError(t('outfitEditor.nativeWardrobeFailed', {
+          error: reason instanceof Error ? reason.message : String(reason),
+        }))
+        setStage(initial ? 'failed' : 'items')
+      }
+    } finally {
+      if (nativeController.current === controller) {
+        nativeController.current = null
+        setNativeBusy(false)
+      }
+    }
+  }
+
+  useEffect(() => {
+    if (source) void openWardrobe(true)
+    return () => {
+      nativeController.current?.abort()
+      nativeController.current = null
+    }
+  }, [])
 
   const editNativeItem = async () => {
     if (!hasNativeItemSettings || !selectedGroup || nativeBusy || saving) return
@@ -337,9 +389,27 @@ function Editor({ outfitId, onClose, mobile }: { outfitId: string; onClose: () =
       </Button>
       <Text fw={600} size="sm" truncate>{source?.name || t('outfitEditor.title')}</Text>
     </Group>}
-    {!source ? <Alert color="orange" role="alert">{t('outfitEditor.sourceMissing')}</Alert> : <>
+    {!source ? <Alert color="orange" role="alert">{t('outfitEditor.sourceMissing')}</Alert>
+      : stage === 'opening' ? <Text size="sm" c="dimmed">{t('outfitEditor.nativeWardrobeOpening')}</Text>
+      : stage === 'failed' ? <Stack gap="sm">
+        <Alert color="red" role="alert">{error}</Alert>
+        <Group gap="xs">
+          <Button onClick={() => void openWardrobe(true)}>{t('outfitEditor.retryWardrobe')}</Button>
+          <Button variant="subtle" onClick={onClose}>{t('outfitEditor.cancel')}</Button>
+        </Group>
+      </Stack> : <Box data-testid="vpw-editor-item-page" className="vpw-outfit-editor-item-page">
       {stale && <Alert color="orange" role="alert">{t('outfitEditor.sourceChanged')}</Alert>}
       {error && <Alert color="red" role="alert">{error}</Alert>}
+      <Group justify="space-between" align="start" gap="sm">
+        <Stack gap={2}>
+          <Text size="sm" fw={600}>{t('outfitEditor.itemPageTitle')}</Text>
+          <Text size="xs" c="dimmed">{t('outfitEditor.itemPageHint')}</Text>
+        </Stack>
+        <Button size="xs" variant="light" data-testid="vpw-editor-reopen-wardrobe"
+          onClick={() => void openWardrobe(false)} disabled={saving || nativeBusy}>
+          {t('outfitEditor.reopenWardrobe')}
+        </Button>
+      </Group>
       <Box className="vpw-outfit-editor-layout">
         <Box className="vpw-outfit-editor-preview-column">
           <Text size="xs" fw={600}>{t('outfitEditor.preview')}</Text>
@@ -347,32 +417,33 @@ function Editor({ outfitId, onClose, mobile }: { outfitId: string; onClose: () =
           <Text size="xs" c="dimmed">{t('outfitEditor.previewHint')}</Text>
         </Box>
         <Box className="vpw-outfit-editor-controls">
-          <SegmentedControl className="vpw-outfit-editor-category" fullWidth
-            data-testid="vpw-editor-category" aria-label={t('outfitEditor.category')}
-            value={selectedCategory} onChange={(value) => chooseCategory(value as EditorCategory)}
-            data={[
-              { value: 'clothing', label: t('outfitEditor.clothing') },
-              { value: 'item', label: t('outfitEditor.items') },
-            ]} />
-          <Text size="sm" fw={600}>{t(selectedCategory === 'item' ? 'outfitEditor.savedItems' : 'outfitEditor.savedClothing')}</Text>
+          <Text size="sm" fw={600}>{t('outfitEditor.savedItems')}</Text>
           <ScrollArea className="vpw-outfit-editor-parts" type="auto">
             {visibleParts.length ? visibleParts.map((part) => <Button key={part.Group} variant={selectedGroup === part.Group ? 'light' : 'subtle'}
               className="vpw-outfit-editor-part" onClick={() => setSelectedGroup(part.Group)}
               aria-pressed={selectedGroup === part.Group} justify="space-between">
               <span>{groups.find((entry) => entry.Name === part.Group)?.Description || part.Group}</span>
               <span className="vpw-outfit-editor-part-name">{part.Name}</span>
-            </Button>) : <Text size="xs" c="dimmed">{t(selectedCategory === 'item' ? 'outfitEditor.noItems' : 'outfitEditor.noClothing')}</Text>}
+            </Button>) : <Text size="xs" c="dimmed">{t('outfitEditor.noItems')}</Text>}
           </ScrollArea>
           <Box className="vpw-outfit-editor-fields">
             <Select searchable clearable data={groupOptions} value={selectedGroup} onChange={setSelectedGroup}
-              label={t(selectedCategory === 'item' ? 'outfitEditor.itemGroup' : 'outfitEditor.clothingGroup')}
+              label={t('outfitEditor.itemGroup')}
               placeholder={t('outfitEditor.selectGroup')}
               nothingFoundMessage={t('outfitEditor.noGroups')}
               comboboxProps={{ withinPortal: true, zIndex: EDITOR_Z_INDEX + 1 }} />
-            <Select searchable clearable data={assets} value={selectedAsset} onChange={setSelectedAsset}
-              label={t('outfitEditor.asset')} placeholder={t('outfitEditor.selectAsset')}
-              disabled={!group} nothingFoundMessage={t('outfitEditor.noAssets')}
-              comboboxProps={{ withinPortal: true, zIndex: EDITOR_Z_INDEX + 1 }} />
+            <TextInput value={assetSearch} onChange={(event) => setAssetSearch(event.currentTarget.value)}
+              label={t('outfitEditor.itemSearch')} placeholder={t('outfitEditor.itemSearchPlaceholder')}
+              disabled={!group} />
+            <ScrollArea className="vpw-outfit-editor-assets" type="auto">
+              {filteredAssets.length ? filteredAssets.map((asset) => <Button key={asset.value}
+                size="xs" fullWidth className="vpw-outfit-editor-asset"
+                variant={selectedAsset === asset.value ? 'light' : 'subtle'}
+                aria-pressed={selectedAsset === asset.value} onClick={() => setSelectedAsset(asset.value)}>
+                {asset.label}
+              </Button>) : <Text size="xs" c="dimmed">{t(!group ? 'outfitEditor.selectGroup'
+                : assetSearch.trim() ? 'outfitEditor.noMatchingItems' : 'outfitEditor.noAssets')}</Text>}
+            </ScrollArea>
             <Group gap="xs" wrap="nowrap">
               <Button size="xs" onClick={addOrReplace} disabled={!canChooseAsset || saving || nativeBusy}>
                 {currentPart ? t('outfitEditor.replaceAsset') : t('outfitEditor.addAsset')}
@@ -382,7 +453,7 @@ function Editor({ outfitId, onClose, mobile }: { outfitId: string; onClose: () =
                 {t('outfitEditor.removeAsset')}
               </Button>}
             </Group>
-            {selectedCategory === 'item' && currentPart && <Stack gap={4}>
+            {currentPart && <Stack gap={4}>
               {hasNativeItemSettings ? <>
                 <Button size="xs" variant="light" onClick={() => void editNativeItem()}
                   loading={nativeBusy} disabled={saving}>
@@ -416,7 +487,7 @@ function Editor({ outfitId, onClose, mobile }: { outfitId: string; onClose: () =
           {t('outfitEditor.overwrite')}
         </Button>
       </Group>
-    </>}
+    </Box>}
   </>
 
   return mobile ? <Box component="section" className="vpw-outfit-editor-page"
