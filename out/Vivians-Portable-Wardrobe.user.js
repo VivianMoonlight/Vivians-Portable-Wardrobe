@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vivians Portable Wardrobe
 // @namespace    http://tampermonkey.net/
-// @version      0.10.1-react.17
+// @version      0.10.1-react.18
 // @author       VIVianMoonlight
 // @description  Portable Wardrobe for Bondage Club (React + Mantine, Shadow DOM isolated)
 // @downloadURL  https://cdn.jsdelivr.net/gh/VivianMoonlight/Vivians-Portable-Wardrobe@wardrobe-react/out/Vivians-Portable-Wardrobe.user.js
@@ -32,7 +32,7 @@
     return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
   };
   var require_main_001 = __commonJS({
-    "main-DZXeVAco.js"(exports) {
+    "main-B0kRrAAG.js"(exports) {
       function _mergeNamespaces(n, m) {
         for (var i = 0; i < m.length; i++) {
           const e = m[i];
@@ -9285,7 +9285,7 @@
       instance.hasLoadedNamespace;
       instance.loadNamespaces;
       instance.loadLanguages;
-      const version = "0.10.1-react.17";
+      const version = "0.10.1-react.18";
       var _unsafeWindow = /* @__PURE__ */ (() => typeof unsafeWindow != "undefined" ? unsafeWindow : void 0)();
       const hostWindow = typeof _unsafeWindow !== "undefined" ? _unsafeWindow : window;
       const doc = hostWindow.document;
@@ -18425,7 +18425,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
           session.requestFinish();
         });
         hook("CommonSetScreen", (args, next) => {
-          if (ownsScreen() && session.dispatchDepth > 0) return Promise.resolve();
+          if (ownsScreen()) return Promise.resolve();
           return next(args);
         });
         for (const name of ["InventoryTogglePermission", "InventorySetPermission"]) {
@@ -18674,7 +18674,6 @@ One of mods you are using is using an old version of SDK. It will work for now b
                       host.DrawText?.(title, 1150, 70, "White", "Black");
                       host.DrawButton?.(1885, 25, 90, 90, "", "White", "Icons/Exit.png", "Back to wardrobe");
                       host.DrawRect?.(1775, 25, 90, 90, "#777777");
-                      host.DrawText?.("X", 1820, 78, "White", "Black");
                     });
                   } catch (reason) {
                     current.finish("cancelled", reason);
@@ -18686,7 +18685,10 @@ One of mods you are using is using an old version of SDK. It will work for now b
                     current.withScratch(() => {
                       if (host.DialogMenuMode === "tighten" && host.DialogTightenLoosenItem) {
                         host.TightenLoosenItemClick?.(scratch, host.DialogTightenLoosenItem);
-                        if (!host.DialogTightenLoosenItem) current.back();
+                        if (!host.DialogTightenLoosenItem) {
+                          if (host.DialogFocusItem) host.DialogMenuMode = "extended";
+                          else current.requestFinish();
+                        }
                       } else host[handlerBase + "Click"]();
                       host.ExtendedItemPermissionMode = false;
                     });
