@@ -665,6 +665,8 @@
     "tabStudio": "Studio",
     "tabSettings": "Settings",
     "themeSettings": "Theme settings",
+    "halfOffsetsLabel": "Halve legacy outfit offsets",
+    "halfOffsetsDescription": "Halves converted offsets during preview and wear to compensate for doubled movement in R134 WebGL. Turn off after the game fixes it.",
     "forceSelfApplyTitle": "Outfit controls",
     "forceSelfApplyLabel": "Allow force apply to myself",
     "forceSelfApplyDescription": "Shows an extra button for your character that tries to bypass BC clothing settings. The game may still reject changes. Saved on this browser only.",

@@ -142,6 +142,7 @@ export function SidePreview({ showApply = false }: SidePreviewProps) {
   const { t } = useTranslation()
   const previewItem = useFsSelector((fs) => fs.previewItem)
   const selectedCharacter = useFsSelector((fs) => fs.character)
+  const thumbnailRefresh = useFsSelector((fs) => fs.thumbnailRefreshVersion)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const previewFrameRef = useRef<HTMLDivElement>(null)
   const [loading, setLoading] = useState(false)
@@ -276,7 +277,7 @@ export function SidePreview({ showApply = false }: SidePreviewProps) {
       io?.disconnect()
       ro?.disconnect()
     }
-  }, [previewItem, renderAttempt])
+  }, [previewItem, renderAttempt, thumbnailRefresh])
 
   return (
     <Box

@@ -1,11 +1,21 @@
+const halfOffsetKey = 'vpw.halveLegacyOffsets'
+export function halveLegacyOffsets(host) {
+  try { return host.localStorage.getItem(halfOffsetKey) === 'true' } catch { return false }
+}
+
+export function setHalveLegacyOffsets(host, enabled) {
+  host.localStorage.setItem(halfOffsetKey, String(enabled))
+}
+
 // Translate legacy absolute coordinates on the appearance bundle passed to BC.
 export function prepareOutfitOffsets(data, host, character) {
   if (!Array.isArray(data) || !host.PropertyLayerOrigin?.getOriginal ||
       !host.ServerBundledItemToAppearanceItem) return data
-  return data.map(bundle => prepareItem(bundle, host, character))
+  const divisor = halveLegacyOffsets(host) ? 2 : 1
+  return data.map(bundle => prepareItem(bundle, host, character, divisor))
 }
 
-function prepareItem(bundle, host, character) {
+function prepareItem(bundle, host, character, divisor) {
   const prop = bundle?.Property
   const overrides = prop?.LayerOverrides
   if (!Array.isArray(overrides) || !overrides.length) return bundle
@@ -34,7 +44,7 @@ function prepareItem(bundle, host, character) {
         const origin = origins[layer.Name ?? ''] ?? host.PropertyLayerOrigin.resolveLayer(layer, field, item.Property)
         if (Object.keys(coord).length !== 1 || !Number.isFinite(coord['']) ||
             !Number.isFinite(origin?.[''])) return bundle
-        shifts.push(coord[''] - origin[''])
+        shifts.push((coord[''] - origin['']) / divisor)
       }
       if (shifts.every(value => value === shifts[0])) {
         if (shifts[0]) next[globalKey] = shifts[0]

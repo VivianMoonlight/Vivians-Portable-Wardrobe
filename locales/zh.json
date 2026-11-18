@@ -666,6 +666,8 @@
     "tabStudio": "Studio",
     "tabSettings": "设置",
     "themeSettings": "主题设置",
+    "halfOffsetsLabel": "旧版服装偏移减半",
+    "halfOffsetsDescription": "预览和穿戴时，将旧码换算出的偏移除以 2。用于补偿 R134 的 WebGL 双倍位移，游戏修复后可关闭。",
     "forceSelfApplyTitle": "换装选项",
     "forceSelfApplyLabel": "允许对自己强制换装",
     "forceSelfApplyDescription": "开启后，仅在目标是自己时显示红色按钮，尝试越过 BC 换装设置。游戏仍可能拒绝更改。此设置只保存在本机。",
