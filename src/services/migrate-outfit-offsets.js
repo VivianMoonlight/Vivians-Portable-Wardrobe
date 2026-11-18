@@ -44,7 +44,8 @@ function prepareItem(bundle, host, character, divisor) {
         const origin = origins[layer.Name ?? ''] ?? host.PropertyLayerOrigin.resolveLayer(layer, field, item.Property)
         if (Object.keys(coord).length !== 1 || !Number.isFinite(coord['']) ||
             !Number.isFinite(origin?.[''])) return bundle
-        shifts.push((coord[''] - origin['']) / divisor)
+        const offset = (coord[''] - origin['']) / divisor
+        shifts.push(Math.sign(offset) * Math.round(Math.abs(offset)))
       }
       if (shifts.every(value => value === shifts[0])) {
         if (shifts[0]) next[globalKey] = shifts[0]
