@@ -1,3 +1,4 @@
+import { prepareOutfitOffsets } from '../services/migrate-outfit-offsets.js'
 /**
  * outfit_assembler.js
  * Pure data layer for collecting and assembling outfit bundles with proper handling
@@ -349,7 +350,7 @@ export function applyToCharacter({ item, targetCharacter, options } = {}) {
   }
 
   try {
-    const dataBundle = item.data;
+    const dataBundle = prepareOutfitOffsets(item.data, hostWindow, targetCharacter);
 
     // Prefer server-side appearance loader when available
     if (typeof ServerAppearanceLoadFromBundle === 'function') {

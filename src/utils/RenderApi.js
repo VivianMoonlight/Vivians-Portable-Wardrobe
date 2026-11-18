@@ -1,3 +1,4 @@
+import { prepareOutfitOffsets } from '../services/migrate-outfit-offsets.js'
 import { hostWindow } from './host-window.js'
 
 const sessions = new Map()
@@ -158,7 +159,7 @@ export function createRenderSession({ data = [], canvas, width = 500, height = 1
       capture(session, () => {
         if (!prepared) {
           hostWindow.CharacterNaked(character, false)
-          hostWindow.ServerAppearanceLoadFromBundle(character, character.AssetFamily, data, character.MemberNumber)
+          hostWindow.ServerAppearanceLoadFromBundle(character, character.AssetFamily, prepareOutfitOffsets(data, hostWindow, character), character.MemberNumber)
           hostWindow.CharacterRefresh(character, false, false)
           prepared = true
         }

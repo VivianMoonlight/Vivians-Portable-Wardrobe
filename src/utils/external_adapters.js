@@ -1,3 +1,4 @@
+import { prepareOutfitOffsets } from '../services/migrate-outfit-offsets.js'
 /**
  * external_adapters.js
  * Centralizes and safely wraps all calls to external game engine functions with error handling.
@@ -171,7 +172,7 @@ export const ExternalAdapter = {
             return false;
         }
         try {
-            return hostWindow.ServerAppearanceLoadFromBundle(C, family, bundle, memberNumber) !== false;
+            return hostWindow.ServerAppearanceLoadFromBundle(C, family, prepareOutfitOffsets(bundle, hostWindow, C), memberNumber) !== false;
         } catch (e) {
             console.error("[ExternalAdapter] ServerAppearanceLoadFromBundle failed:", e);
             return false;
