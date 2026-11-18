@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vivians Portable Wardrobe
 // @namespace    http://tampermonkey.net/
-// @version      0.10.1-react.19
+// @version      0.10.1-react.20
 // @author       VIVianMoonlight
 // @description  Portable Wardrobe for Bondage Club (React + Mantine, Shadow DOM isolated)
 // @downloadURL  https://cdn.jsdelivr.net/gh/VivianMoonlight/Vivians-Portable-Wardrobe@wardrobe-react/out/Vivians-Portable-Wardrobe.user.js
@@ -32,7 +32,7 @@
     return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
   };
   var require_main_001 = __commonJS({
-    "main-DkwqEtT5.js"(exports) {
+    "main-BwdwoFyn.js"(exports) {
       function _mergeNamespaces(n, m) {
         for (var i = 0; i < m.length; i++) {
           const e = m[i];
@@ -9285,7 +9285,7 @@
       instance.hasLoadedNamespace;
       instance.loadNamespaces;
       instance.loadLanguages;
-      const version = "0.10.1-react.19";
+      const version = "0.10.1-react.20";
       var _unsafeWindow = /* @__PURE__ */ (() => typeof unsafeWindow != "undefined" ? unsafeWindow : void 0)();
       const hostWindow = typeof _unsafeWindow !== "undefined" ? _unsafeWindow : window;
       const doc = hostWindow.document;
@@ -9738,6 +9738,61 @@ One of mods you are using is using an old version of SDK. It will work for now b
       function cleanUpItemColorLayerNamesLoad() {
         hostWindow.ItemColorFireExit(false);
       }
+      function prepareOutfitOffsets(data, host, character) {
+        if (!Array.isArray(data) || !host.PropertyLayerOrigin?.getOriginal || !host.ServerBundledItemToAppearanceItem) return data;
+        return data.map((bundle) => prepareItem(bundle, host, character));
+      }
+      function prepareItem(bundle, host, character) {
+        const prop = bundle?.Property;
+        const overrides = prop?.LayerOverrides;
+        if (!Array.isArray(overrides) || !overrides.length) return bundle;
+        const axes = [["DrawingLeft", "X"], ["DrawingTop", "Y"]];
+        if (overrides.some((layer) => !layer || Object.keys(layer).some(
+          (key) => key !== "DrawingLeft" && key !== "DrawingTop"
+        ))) return bundle;
+        try {
+          const copy2 = JSON.parse(JSON.stringify(bundle));
+          delete copy2.Property.LayerOverrides;
+          const item = host.ServerBundledItemToAppearanceItem(character.AssetFamily, copy2, { C: character });
+          const layers = item?.Asset.Layer;
+          if (layers?.length !== overrides.length) return bundle;
+          const next = { ...prop };
+          delete next.LayerOverrides;
+          for (const [field2, axis] of axes) {
+            const globalKey = "Translation" + axis;
+            const layerKey = "LayerTranslation" + axis;
+            if (prop[field2] != null || prop[globalKey] != null || prop[layerKey] != null) continue;
+            const origins = host.PropertyLayerOrigin.getOriginal(item, field2);
+            const shifts = [];
+            for (const [index2, override] of overrides.entries()) {
+              const coord = override[field2];
+              if (coord == null) {
+                shifts.push(0);
+                continue;
+              }
+              const layer = layers[index2];
+              const origin = origins[layer.Name ?? ""] ?? host.PropertyLayerOrigin.resolveLayer(layer, field2, item.Property);
+              if (Object.keys(coord).length !== 1 || !Number.isFinite(coord[""]) || !Number.isFinite(origin?.[""])) return bundle;
+              shifts.push(coord[""] - origin[""]);
+            }
+            if (shifts.every((value) => value === shifts[0])) {
+              if (shifts[0]) next[globalKey] = shifts[0];
+            } else {
+              const named = {};
+              for (const [i, value] of shifts.entries()) {
+                if (!value) continue;
+                const name = layers[i].Name;
+                if (!name || layers.filter((layer) => layer.Name === name).length !== 1) return bundle;
+                named[name] = value;
+              }
+              next[layerKey] = named;
+            }
+          }
+          return { ...bundle, Property: next };
+        } catch {
+          return bundle;
+        }
+      }
       async function fetchAssetData() {
         const filterData = await new Promise((resolve, reject) => {
           const start = Date.now();
@@ -9961,7 +10016,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
           return false;
         }
         try {
-          const dataBundle = item.data;
+          const dataBundle = prepareOutfitOffsets(item.data, hostWindow, targetCharacter);
           if (typeof ServerAppearanceLoadFromBundle === "function") {
             try {
               const family = targetCharacter.AssetFamily ?? null;
@@ -15626,7 +15681,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
             capture(session, () => {
               if (!prepared) {
                 hostWindow.CharacterNaked(character, false);
-                hostWindow.ServerAppearanceLoadFromBundle(character, character.AssetFamily, data, character.MemberNumber);
+                hostWindow.ServerAppearanceLoadFromBundle(character, character.AssetFamily, prepareOutfitOffsets(data, hostWindow, character), character.MemberNumber);
                 hostWindow.CharacterRefresh(character, false, false);
                 prepared = true;
               }
@@ -16164,7 +16219,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
             return false;
           }
           try {
-            return hostWindow.ServerAppearanceLoadFromBundle(C, family, bundle, memberNumber) !== false;
+            return hostWindow.ServerAppearanceLoadFromBundle(C, family, prepareOutfitOffsets(bundle, hostWindow, C), memberNumber) !== false;
           } catch (e) {
             console.error("[ExternalAdapter] ServerAppearanceLoadFromBundle failed:", e);
             return false;
