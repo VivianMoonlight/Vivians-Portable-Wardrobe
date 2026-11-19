@@ -1,5 +1,4 @@
 export const compatibilityKey = 'vpw.halveLegacyOffsets'
-export const patchedWebGLKey = 'vpw.patchedWebGL'
 export function readOffsetSetting(host, key) {
   try { return host.localStorage.getItem(key) === 'true' } catch { return false }
 }
@@ -10,7 +9,6 @@ const isScaled = value => Number.isFinite(value) && value !== 1
 export function prepareOutfitOffsets(data, host, character) {
   if (!Array.isArray(data)) return data
   const enabled = readOffsetSetting(host, compatibilityKey)
-  const patched = enabled && readOffsetSetting(host, patchedWebGLKey)
   return data.map(original => {
     const bundle = prepareItem(original, host, character)
     const prop = bundle?.Property
@@ -27,7 +25,7 @@ export function prepareOutfitOffsets(data, host, character) {
     }
     const scaled = [transforms.ScaleX, transforms.ScaleY,
       ...Object.values(transforms.LayerScaleX ?? {}), ...Object.values(transforms.LayerScaleY ?? {})].some(isScaled)
-    const factor = (scaled ? 2 : 1) / (patched ? 1 : 2)
+    const factor = scaled ? 1 : 0.5
     if (factor === 1) return bundle
     const next = { ...prop }
     for (const axis of ['X', 'Y']) {

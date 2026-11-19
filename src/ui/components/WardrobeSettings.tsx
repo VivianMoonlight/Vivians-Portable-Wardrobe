@@ -6,7 +6,7 @@ import { getFs, getWb, useFsSelector, useWbSelector } from '@/stores/hooks'
 import { useDialog } from '@/ui/dialog/DialogProvider'
 import { useTheme } from '@/ui/theme/ThemeProvider'
 import { hostWindow } from '@/utils/host-window.js'
-import { compatibilityKey, patchedWebGLKey, readOffsetSetting } from '@/services/migrate-outfit-offsets.js'
+import { compatibilityKey, readOffsetSetting } from '@/services/migrate-outfit-offsets.js'
 import { configuredCloudflareUrl } from '@/services/cloudflare-wardrobe-client.js'
 import { cloudflareSyncErrorKey } from '@/ui/cloudflare-sync-error'
 
@@ -24,7 +24,6 @@ export function WardrobeSettings() {
   const activeTab = useWbSelector((wb) => wb.activeTab)
   useWbSelector((wb) => wb.forceSelfApplyRevision)
   const [halfOffsets, setHalfOffsets] = useState(() => readOffsetSetting(hostWindow, compatibilityKey))
-  const [patched, setPatched] = useState(() => readOffsetSetting(hostWindow, patchedWebGLKey))
   const [cloudflareBusy, setCloudflareBusy] = useState(false)
   const [recoveryKey, setRecoveryKey] = useState('')
   const [showRestore, setShowRestore] = useState(false)
@@ -42,11 +41,10 @@ export function WardrobeSettings() {
     if (activeTab !== 'settings') setRecoveryKey('')
   }, [activeTab])
 
-  const updateOffsets = (key: string, enabled: boolean) => {
+  const updateOffsets = (enabled: boolean) => {
     try {
-      hostWindow.localStorage.setItem(key, String(enabled))
-      if (key === compatibilityKey) setHalfOffsets(enabled)
-      else setPatched(enabled)
+      hostWindow.localStorage.setItem(compatibilityKey, String(enabled))
+      setHalfOffsets(enabled)
       const fs = getFs()
       fs.renderer.removeCanvas(fs.previewItem)
       fs.refreshThumbnails()
@@ -259,11 +257,7 @@ export function WardrobeSettings() {
         <Switch mb="sm" checked={halfOffsets}
           label={t('fileManagerPanel.halfOffsetsLabel')}
           description={t('fileManagerPanel.halfOffsetsDescription')}
-          onChange={event => updateOffsets(compatibilityKey, event.currentTarget.checked)}
-        />
-        <Switch mb="sm" checked={patched} disabled={!halfOffsets}
-          label={t('fileManagerPanel.patchedWebGLLabel')}
-          onChange={event => updateOffsets(patchedWebGLKey, event.currentTarget.checked)}
+          onChange={event => updateOffsets(event.currentTarget.checked)}
         />
         <Switch
           color="red"

@@ -672,7 +672,6 @@
     "themeSettings": "Theme settings",
     "halfOffsetsLabel": "Legacy outfit offset compatibility",
     "halfOffsetsDescription": "Adjusts translations for scaled and unscaled legacy outfits during preview and wear, including converted outfits. Turn off for modern outfits.",
-    "patchedWebGLLabel": "WebGL double-translation fix installed",
     "forceSelfApplyTitle": "Outfit controls",
     "forceSelfApplyLabel": "Allow force apply to myself",
     "forceSelfApplyDescription": "Shows an extra button for your character that tries to bypass BC clothing settings. The game may still reject changes. Saved on this browser only.",
