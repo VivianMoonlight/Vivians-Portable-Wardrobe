@@ -32,7 +32,7 @@ export function createRestraintSession(host, scratch, origin, labels, complete, 
     return el
   }
   function show(visible) {
-    bar.style.display = visible ? 'flex' : 'none'
+    bar.style.display = visible && (!canvasControls || retry || message.textContent) ? 'flex' : 'none'
     retryButton.hidden = !retry
     for (const el of controls.slice(0, 3)) el.hidden = !!retry
   }
@@ -85,9 +85,9 @@ export function createRestraintSession(host, scratch, origin, labels, complete, 
     if (phase !== 'items') return
     phase = 'clothes'
     const visit = ++clothingVisit
-    leaveDialog()
-    show(false)
     try {
+      leaveDialog()
+      show(false)
       host.CharacterAppearanceLoadCharacter(scratch, () => {
         if (visit === clothingVisit) void returnToItems()
       })
@@ -155,7 +155,30 @@ export function createRestraintSession(host, scratch, origin, labels, complete, 
   }
   const previousGetter = host.CharacterGetCurrentHandlers[SCREEN]
   host.CharacterGetCurrentHandlers[SCREEN] = () => scratch
+  // R134 reserves the left column for Player when interacting with another
+  // character. Keep the scratch target at BC's normal hit-test coordinates.
+  register('DrawCharacter', (args, next) => {
+    if (atParent() && args[0] === host.Player && args[1] === 0) return
+    return next(args)
+  })
+  const canvasControls = typeof host.DrawButton === 'function' && typeof host.DialogDraw === 'function'
+  const actions = [
+    [labels.clothes, clothes],
+    [labels.export, () => finish('saved')],
+    [labels.discard, () => finish('cancelled')],
+  ]
+  register('DialogDraw', (args, next) => {
+    const result = next(args)
+    if (canvasControls && atParent() && phase === 'items' && !retry) {
+      actions.forEach(([label], i) => host.DrawButton(30, 40 + 95 * i, 420, 80, label, 'White'))
+    }
+    return result
+  })
   register('DialogClick', (args, next) => {
+    if (canvasControls && atParent() && phase === 'items' && !retry) {
+      const action = actions.find((_, i) => host.MouseIn(30, 40 + 95 * i, 420, 80))
+      if (action) { action[1](); return }
+    }
     if (atParent() && host.MouseIn(0, 0, 500, 1000)) return
     return next(args)
   })
@@ -165,7 +188,11 @@ export function createRestraintSession(host, scratch, origin, labels, complete, 
   })
   register('DialogLeave', (args, next) => {
     if (!leavingDialog && atParent() && phase === 'items' && host.CurrentCharacter === scratch) {
-      void finish('cancelled')
+      // R134 also calls DialogLeave after equipping ordinary or preset items.
+      // Keep the worn result and rebuild the inventory for the same group.
+      group = scratch.FocusGroup?.Name || group
+      next([{ reload: false }])
+      loadDialog()
       return
     }
     return next(args)

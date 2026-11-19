@@ -241,7 +241,7 @@ test('cancel before asynchronous BC Appearance entry waits for the screen then r
   context.editor.dispose()
 })
 
-function setupRestraints() {
+function setupRestraints(configure = () => {}) {
   const context = setup()
   const { host } = context
   const buttons = new Map()
@@ -274,6 +274,7 @@ function setupRestraints() {
     switchScreen(module, screen)
     host[screen + 'Load']?.()
   }
+  configure(host)
   const pending = context.editor.open({ bundle: context.source, restraints: {
     clothes: 'clothes', export: 'export', discard: 'discard', retry: 'retry', returnFailed: 'failed',
   } })
@@ -350,5 +351,38 @@ test('external navigation cancels the session and ignores a late clothing callba
   assert.equal(c.host.CurrentScreen, 'MainHall')
   assert.equal(c.deleted.length, 1)
   assert.equal(c.intervals.size, 0)
+  c.editor.dispose()
+})
+
+test('equipping a plain item keeps the target and canvas clothing entry available', async () => {
+  const drawn = []
+  const labels = []
+  const c = setupRestraints(host => {
+    host.DrawCharacter = character => drawn.push(character)
+    host.DrawButton = (_x, _y, _w, _h, label) => labels.push(label)
+    host.DialogDraw = () => {
+      host.DrawCharacter(host.Player, 0, 0, 1)
+      host.DrawCharacter(host.CurrentCharacter, 500, 0, 1)
+    }
+    host.DialogClick = () => assert.fail('toolbar click reached BC inventory')
+    host.MouseIn = (x, y) => x === 30 && y === 40
+  })
+  await new Promise(resolve => setImmediate(resolve))
+  const { host, scratch } = c
+  const collar = scratch.Appearance.find(item => item.Asset.Group.Name === 'ItemNeck')
+  collar.Property = { Mode: 'equipped' }
+  host.DialogLeave()
+  assert.equal(host.CurrentCharacter, scratch)
+  assert.equal(scratch.FocusGroup.Name, 'ItemNeck')
+  host.DialogDraw()
+  assert.deepEqual(drawn, [scratch])
+  assert.deepEqual(labels, ['clothes', 'export', 'discard'])
+  host.DialogClick()
+  assert.equal(host.CurrentScreen, 'Appearance')
+  host.CharacterAppearanceReady(scratch)
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(host.CurrentCharacter, scratch)
+  await c.buttons.get('export')()
+  assert.deepEqual((await c.pending).bundle.find(i => i.Group === 'ItemNeck').Property, collar.Property)
   c.editor.dispose()
 })
