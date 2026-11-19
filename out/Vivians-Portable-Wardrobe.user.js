@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vivians Portable Wardrobe
 // @namespace    http://tampermonkey.net/
-// @version      0.10.1-react.22
+// @version      0.10.1-react.23
 // @author       VIVianMoonlight
 // @description  Portable Wardrobe for Bondage Club (React + Mantine, Shadow DOM isolated)
 // @downloadURL  https://cdn.jsdelivr.net/gh/VivianMoonlight/Vivians-Portable-Wardrobe@wardrobe-react/out/Vivians-Portable-Wardrobe.user.js
@@ -32,7 +32,7 @@
     return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
   };
   var require_main_001 = __commonJS({
-    "main-BjDAd4TS.js"(exports) {
+    "main-RZc_AOyx.js"(exports) {
       function _mergeNamespaces(n, m) {
         for (var i = 0; i < m.length; i++) {
           const e = m[i];
@@ -9285,7 +9285,7 @@
       instance.hasLoadedNamespace;
       instance.loadNamespaces;
       instance.loadLanguages;
-      const version = "0.10.1-react.22";
+      const version = "0.10.1-react.23";
       var _unsafeWindow = /* @__PURE__ */ (() => typeof unsafeWindow != "undefined" ? unsafeWindow : void 0)();
       const hostWindow = typeof _unsafeWindow !== "undefined" ? _unsafeWindow : window;
       const doc = hostWindow.document;
@@ -14977,7 +14977,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
           const dataKey = JSON.stringify(item.data);
           const width = preview ? this.previewwidth : this.thumbwidth;
           const height = preview ? this.previewheight : this.thumbheight;
-          const key = `${width}x${height}:${dataKey}`;
+          const key = `${preview ? "preview" : "card"}:${width}x${height}:${dataKey}`;
           let meta = this.registry.get(item);
           if (!meta) {
             meta = { keys: /* @__PURE__ */ new Map(), observers: /* @__PURE__ */ new Set(), preview: false };
@@ -15012,6 +15012,11 @@ One of mods you are using is using an old version of SDK. It will work for now b
           } else if (entry.phase === "queued" && description.preview) {
             entry.preview = true;
           }
+          if (entry.phase === "snapshot") {
+            this.cacheBytes -= this.cache.get(entry.key);
+            this.cache.delete(entry.key);
+            entry.phase = "queued";
+          }
           this._touch(entry.key);
           return entry;
         }
@@ -15044,7 +15049,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
           this.observers.set(id, { key: entry.key, callback, meta: description.meta });
           description.meta.observers.add(id);
           entry.observers.add(id);
-          this._call(callback, entry.canvas, { state: entry.phase === "ready" ? "ready" : "loading" });
+          this._call(callback, entry.canvas, { state: entry.phase === "live" ? entry.liveState : entry.phase === "ready" ? "ready" : "loading" });
           this._requestPump();
           return () => this._unsubscribe(id);
         }
@@ -15069,7 +15074,12 @@ One of mods you are using is using an old version of SDK. It will work for now b
           const entry = this.entries.get(observer.key);
           if (!entry) return;
           entry.observers.delete(id);
-          if (!entry.observers.size && entry.phase !== "ready") this._drop(entry);
+          if (entry.observers.size) return;
+          if (entry.phase === "live") {
+            this._disposeSession(entry);
+            entry.phase = "snapshot";
+            this._cache(entry);
+          } else if (entry.phase !== "ready") this._drop(entry);
         }
         _next() {
           const queued = [...this.entries.values()].filter((entry) => entry.phase === "queued");
@@ -15098,10 +15108,18 @@ One of mods you are using is using an old version of SDK. It will work for now b
           else this.activeThumbnails++;
           const generation = ++entry.generation;
           const onUpdate = (canvas, status) => {
-            if (this.entries.get(entry.key) !== entry || entry.generation !== generation || entry.phase !== "active") return;
+            if (this.entries.get(entry.key) !== entry || entry.generation !== generation || !["active", "live"].includes(entry.phase)) return;
             if (canvas) entry.canvas = canvas;
             if (status.state === "error") {
               this._drop(entry, status);
+              return;
+            }
+            if (status.live) {
+              if (entry.phase === "active") this._releaseSlot(entry);
+              entry.phase = "live";
+              entry.liveState = status.state;
+              this._notify(entry, status);
+              this._requestPump();
               return;
             }
             const terminal = status.state === "ready";
@@ -15126,7 +15144,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
               height: entry.height,
               onUpdate
             });
-            if (entry.phase !== "active") session?.dispose();
+            if (entry.phase !== "active" && entry.phase !== "live") session?.dispose();
             else entry.session = session;
           } catch (error) {
             onUpdate(entry.canvas, { state: "error", error });
@@ -15192,7 +15210,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
           return this.entries.get(key)?.canvas ?? null;
         }
         /** Compatibility for callers that await a finished canvas. No polling is used. */
-        getCanvas(item, { timeout = 0, preview = this.registry.get(item)?.preview ?? false } = {}) {
+        getCanvas(item, { timeout = 2e4, preview = this.registry.get(item)?.preview ?? false } = {}) {
           if (!item) return Promise.resolve(null);
           return new Promise((resolve, reject) => {
             let unsubscribe;
@@ -15221,15 +15239,8 @@ One of mods you are using is using an old version of SDK. It will work for now b
           const description = this._describe(item, false);
           const entry = this._entry(description);
           entry.canvas ||= this.canvasFactory(entry.width, entry.height);
-          let unsubscribe;
-          let finished = false;
-          unsubscribe = this.observe(item, (_canvas, status) => {
-            if (status.state !== "loading") {
-              finished = true;
-              unsubscribe?.();
-            }
+          void this.getCanvas(item, { preview: false }).catch(() => {
           });
-          if (finished) unsubscribe();
           return entry.canvas;
         }
         stopFor(item) {
@@ -15545,6 +15556,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
       }
       const sessions = /* @__PURE__ */ new Map();
       let capturing = null;
+      let nativeCache = false;
       let hooksActive = false;
       let characterId = 0;
       const failedImagesByOutfit = /* @__PURE__ */ new Map();
@@ -15582,18 +15594,31 @@ One of mods you are using is using an old version of SDK. It will work for now b
           return true;
         };
         try {
+          nativeCache = Number(/^R(\d+)/.exec(hostWindow.GameVersion)?.[1]) >= 134;
+          if (nativeCache) {
+            hook("DrawProcess", (args, next) => {
+              const result = next(args);
+              for (const [character, session] of sessions) {
+                if (character.MustDraw) session.scheduleDraw(false);
+              }
+              return result;
+            });
+          }
           const canvasImages = hook("DrawGetImage", (args, next) => {
             const image = next(args);
-            capturing?.watchImage(image);
+            if (nativeCache) capturing?.observePixels(image);
+            else capturing?.watchImage(image);
             return image;
           });
           const glImages = hook("GLDrawLoadImage", (args, next) => {
             const texture = next(args);
-            capturing?.watchImage(hostWindow.GLDrawImageCache?.get(args[1]));
+            if (nativeCache) capturing?.observePixels(texture);
+            else capturing?.watchImage(hostWindow.GLDrawImageCache?.get(args[1]));
             return texture;
           });
           hook("CharacterAppearanceBuildCanvas", (args, next) => {
             const session = sessions.get(args[0]);
+            if (nativeCache && session) session.beginBuild();
             const result = capture(session || null, () => next(args));
             if (session && !session.drawing) session.scheduleDraw(false);
             return result;
@@ -15621,6 +15646,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
       }, timeout = 2e4 } = {}) {
         const images = /* @__PURE__ */ new Map();
         const outfitKey = JSON.stringify(data);
+        let missingPixels = false;
         let character = null;
         let frame = null;
         let deadline = null;
@@ -15650,6 +15676,12 @@ One of mods you are using is using an old version of SDK. It will work for now b
         };
         const session = {
           drawing: false,
+          beginBuild() {
+            missingPixels = false;
+          },
+          observePixels(pixels) {
+            if (!pixels) missingPixels = true;
+          },
           watchImage(image) {
             if (disposed || !image || typeof image.complete !== "boolean" || typeof image.addEventListener !== "function" || images.has(image)) return;
             const changed = (event) => {
@@ -15691,6 +15723,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
           try {
             const ctx = canvas?.getContext("2d");
             if (!ctx) throw new Error("Preview canvas is unavailable");
+            if (nativeCache && (!prepared || character.MustDraw || rebuild)) missingPixels = false;
             capture(session, () => {
               if (!prepared) {
                 hostWindow.CharacterNaked(character, false);
@@ -15709,6 +15742,10 @@ One of mods you are using is using an old version of SDK. It will work for now b
                 ctx.restore();
               }
             });
+            if (nativeCache) {
+              emit({ state: missingPixels ? "loading" : "ready", live: true });
+              return;
+            }
             const states = [...images.keys()].map(imageState);
             if (states.includes("error")) {
               emit({ state: "error", error: "A preview image failed to load after BC retried it" });
@@ -15730,7 +15767,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
           if (!character) throw new Error("BC could not create a preview character");
           character.MemberNumber = 1e9 + characterId;
           sessions.set(character, session);
-          deadline = hostWindow.setTimeout(() => emit({ state: "error", error: "Preview image loading timed out" }), timeout);
+          if (!nativeCache) deadline = hostWindow.setTimeout(() => emit({ state: "error", error: "Preview image loading timed out" }), timeout);
           draw();
         } catch (error) {
           emit({ state: "error", error: error instanceof Error ? error.message : String(error) });
@@ -18447,7 +18484,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
           }
         };
       }
-      const SCREEN = "VPWNativeItemEditor";
+      const SCREEN$1 = "VPWNativeItemEditor";
       const clone$1 = (value) => JSON.parse(JSON.stringify(value));
       let installedEditor$1 = null;
       let scratchId$1 = 0;
@@ -18479,7 +18516,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
         }
         let session = null;
         const unhooks = [];
-        const ownsScreen = () => session && host.CurrentScreen === SCREEN;
+        const ownsScreen = () => session && host.CurrentScreen === SCREEN$1;
         const hook = (name, callback) => {
           if (typeof host[name] !== "function") throw new Error(`BC item editor needs ${name}`);
           unhooks.push(modApi.hookFunction(name, 100, callback));
@@ -18557,9 +18594,9 @@ One of mods you are using is using an old version of SDK. It will work for now b
               subscreen: host.ExtendedItemSubscreen,
               permissionMode: host.ExtendedItemPermissionMode,
               tightenItem: host.DialogTightenLoosenItem,
-              currentHandler: host.CharacterGetCurrentHandlers[SCREEN],
+              currentHandler: host.CharacterGetCurrentHandlers[SCREEN$1],
               hostDisplay: hostElement.style.display,
-              background: host[`${SCREEN}Background`],
+              background: host[`${SCREEN$1}Background`],
               chatHidden: host.ChatRoomChatHidden
             };
             let scratch = null;
@@ -18574,7 +18611,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
               finish(status = "saved", error = null) {
                 if (current.closing) return;
                 current.closing = true;
-                const stillOwnsScreen = host.CurrentScreen === SCREEN;
+                const stillOwnsScreen = host.CurrentScreen === SCREEN$1;
                 let result = null;
                 try {
                   if (stillOwnsScreen) {
@@ -18634,10 +18671,10 @@ One of mods you are using is using an old version of SDK. It will work for now b
                 } catch (reason) {
                   error ||= reason;
                 } finally {
-                  if (prior.currentHandler === void 0) delete host.CharacterGetCurrentHandlers[SCREEN];
-                  else host.CharacterGetCurrentHandlers[SCREEN] = prior.currentHandler;
-                  if (prior.background === void 0) delete host[`${SCREEN}Background`];
-                  else host[`${SCREEN}Background`] = prior.background;
+                  if (prior.currentHandler === void 0) delete host.CharacterGetCurrentHandlers[SCREEN$1];
+                  else host.CharacterGetCurrentHandlers[SCREEN$1] = prior.currentHandler;
+                  if (prior.background === void 0) delete host[`${SCREEN$1}Background`];
+                  else host[`${SCREEN$1}Background`] = prior.background;
                   hostElement.style.display = prior.hostDisplay;
                   try {
                     if (scratch) host.CharacterDelete(scratch, false);
@@ -18722,12 +18759,12 @@ One of mods you are using is using an old version of SDK. It will work for now b
               current.scratch = scratch;
               session = current;
               setActive$1(true);
-              host.CharacterGetCurrentHandlers[SCREEN] = () => scratch;
-              host.CurrentScreen = SCREEN;
+              host.CharacterGetCurrentHandlers[SCREEN$1] = () => scratch;
+              host.CurrentScreen = SCREEN$1;
               host.CurrentModule = "Room";
               host.CurrentCharacter = null;
               if (prior.screen === "ChatRoom") host.ChatRoomHideElements?.();
-              host[`${SCREEN}Background`] = "Dressing";
+              host[`${SCREEN$1}Background`] = "Dressing";
               host.CurrentScreenFunctions = {
                 Run() {
                   try {
@@ -18812,7 +18849,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
               });
               if (typeof host.setInterval === "function") {
                 interval = host.setInterval(() => {
-                  if (!removed && host.CurrentScreen !== SCREEN) current.finish("cancelled");
+                  if (!removed && host.CurrentScreen !== SCREEN$1) current.finish("cancelled");
                 }, 250);
               }
             } catch (reason) {
@@ -18851,6 +18888,225 @@ One of mods you are using is using an old version of SDK. It will work for now b
         if (!installedEditor$1) throw new Error("BC item editor is not ready");
         return installedEditor$1.open(options2);
       }
+      const SCREEN = "VPWRestraints";
+      const MODULE = "Character";
+      function createRestraintSession(host, scratch, origin, labels, complete, hook) {
+        const doc2 = host.document;
+        const bar = doc2.createElement("div");
+        bar.style.cssText = "position:fixed;bottom:1rem;left:1rem;z-index:2147483647;display:flex;gap:.4rem;align-items:center;background:#25232b;color:white;padding:.45rem";
+        const message = doc2.createElement("span");
+        message.setAttribute("role", "status");
+        let group = scratch.Appearance.find((item) => item.Asset?.Group.Category === "Item")?.Asset.Group.Name || host.AssetGroup.find((entry) => entry.Category === "Item" && entry.Zone?.length)?.Name;
+        let phase = "opening";
+        let clothingVisit = 0;
+        let cancelled = false;
+        let disposed = false;
+        let retry = null;
+        let completing = false;
+        const atParent = () => host.CurrentModule === MODULE && host.CurrentScreen === SCREEN;
+        const inClothes = () => host.CurrentScreen === "Appearance" && host.CharacterAppearanceSelection === scratch;
+        let leavingDialog = false;
+        const controls = [];
+        function button(label, action) {
+          const el = doc2.createElement("button");
+          el.type = "button";
+          el.textContent = label;
+          el.addEventListener("click", action);
+          bar.append(el);
+          controls.push(el);
+          return el;
+        }
+        function show(visible2) {
+          bar.style.display = visible2 ? "flex" : "none";
+          retryButton.hidden = !retry;
+          for (const el of controls.slice(0, 3)) el.hidden = !!retry;
+        }
+        function failed(action, error) {
+          retry = action;
+          message.textContent = String(error?.message || labels.returnFailed);
+          show(true);
+        }
+        async function go(module2, screen) {
+          await host.CommonSetScreen(module2, screen);
+          if (host.CurrentModule !== module2 || host.CurrentScreen !== screen) throw new Error(labels.returnFailed);
+        }
+        function leaveDialog() {
+          if (host.CurrentCharacter !== scratch) return;
+          group = scratch.FocusGroup?.Name || group;
+          leavingDialog = true;
+          try {
+            host.DialogLeave({ reload: false });
+          } finally {
+            leavingDialog = false;
+          }
+        }
+        function loadDialog() {
+          host.DialogMenuMode = null;
+          host.DialogFocusItem = null;
+          host.DialogFocusItemName = null;
+          host.DialogFocusSourceItem = null;
+          host.DialogTightenLoosenItem = null;
+          host.ExtendedItemSubscreen = null;
+          host.ExtendedItemPermissionMode = false;
+          host.Player.FocusGroup = null;
+          host.CurrentCharacter = scratch;
+          host.DialogChangeFocusToGroup(scratch, group);
+        }
+        function ready() {
+          phase = "items";
+          show(true);
+          if (cancelled) void finish("cancelled");
+        }
+        async function returnToItems() {
+          if (disposed || phase !== "clothes" || !inClothes()) return;
+          phase = "returning";
+          try {
+            await go(MODULE, SCREEN);
+            if (!disposed) ready();
+          } catch (error) {
+            if (inClothes()) {
+              phase = "clothes";
+              failed(returnToItems, error);
+            } else if (!disposed) complete("cancelled", error);
+          }
+        }
+        function clothes() {
+          if (phase !== "items") return;
+          phase = "clothes";
+          const visit = ++clothingVisit;
+          leaveDialog();
+          show(false);
+          try {
+            host.CharacterAppearanceLoadCharacter(scratch, () => {
+              if (visit === clothingVisit) void returnToItems();
+            });
+            Promise.resolve(host.ScreenIsLoadingPromise).then(() => {
+              if (!disposed && visit === clothingVisit && phase === "clothes" && atParent()) {
+                ready();
+                message.textContent = labels.returnFailed;
+              }
+            }, (error) => {
+              if (disposed || visit !== clothingVisit || phase !== "clothes") return;
+              if (atParent()) {
+                loadDialog();
+                ready();
+                message.textContent = error.message;
+              } else if (inClothes()) failed(returnToItems, error);
+              else complete("cancelled", error);
+            });
+          } catch (error) {
+            if (atParent()) {
+              loadDialog();
+              ready();
+              message.textContent = error.message;
+            } else failed(returnToItems, error);
+          }
+        }
+        async function finish(status) {
+          if (disposed || completing) return;
+          if (!atParent()) return;
+          completing = true;
+          phase = "exiting";
+          show(false);
+          try {
+            leaveDialog();
+            await go(origin.module, origin.screen);
+            if (!disposed) complete(cancelled ? "cancelled" : status);
+          } catch (error) {
+            if (atParent()) {
+              phase = "items";
+              failed(() => finish(status), error);
+            } else if (!disposed) complete("cancelled", error);
+          } finally {
+            completing = false;
+          }
+        }
+        button(labels.clothes, clothes);
+        button(labels.export, () => finish("saved"));
+        button(labels.discard, () => finish("cancelled"));
+        const retryButton = button(labels.retry, () => {
+          const action = retry;
+          retry = null;
+          message.textContent = "";
+          show(false);
+          action?.();
+        });
+        bar.append(message);
+        const removeHooks = [];
+        const register = (name, handler) => {
+          if (typeof host[name] === "function") removeHooks.push(hook(name, handler));
+        };
+        const handlers = {
+          Run() {
+          },
+          Click() {
+          },
+          Load() {
+            if (!disposed) loadDialog();
+          },
+          Unload() {
+            if (!disposed) leaveDialog();
+          },
+          Background: "Dressing"
+        };
+        const original = /* @__PURE__ */ new Map();
+        for (const [suffix, handler] of Object.entries(handlers)) {
+          const key = SCREEN + suffix;
+          original.set(key, host[key]);
+          host[key] = handler;
+        }
+        const previousGetter = host.CharacterGetCurrentHandlers[SCREEN];
+        host.CharacterGetCurrentHandlers[SCREEN] = () => scratch;
+        register("DialogClick", (args, next) => {
+          if (atParent() && host.MouseIn(0, 0, 500, 1e3)) return;
+          return next(args);
+        });
+        register("DialogChangeFocusToGroup", (args, next) => {
+          if (atParent() && args[0] !== scratch) return;
+          return next(args);
+        });
+        register("DialogLeave", (args, next) => {
+          if (!leavingDialog && atParent() && phase === "items" && host.CurrentCharacter === scratch) {
+            void finish("cancelled");
+            return;
+          }
+          return next(args);
+        });
+        return {
+          async start() {
+            doc2.body.append(bar);
+            show(false);
+            await go(MODULE, SCREEN);
+            if (!disposed) ready();
+          },
+          owns: atParent,
+          cancel() {
+            cancelled = true;
+            if (phase === "items" || atParent() && retry) void finish("cancelled");
+            else if (phase === "clothes" && inClothes()) {
+              if (retry) void returnToItems();
+              else host.CharacterAppearanceExit(scratch);
+            }
+          },
+          check() {
+            if (phase === "items" && !atParent() || phase === "clothes" && !inClothes() && !atParent()) {
+              complete("cancelled", null, false);
+            }
+          },
+          dispose() {
+            disposed = true;
+            bar.remove();
+            for (const remove of removeHooks.reverse()) remove?.();
+            if (previousGetter === void 0) delete host.CharacterGetCurrentHandlers[SCREEN];
+            else host.CharacterGetCurrentHandlers[SCREEN] = previousGetter;
+            for (const [key, value] of original) {
+              if (value === void 0) delete host[key];
+              else host[key] = value;
+            }
+            if (host.CurrentCharacter === scratch) host.CurrentCharacter = null;
+          }
+        };
+      }
       const clone = (value) => JSON.parse(JSON.stringify(value));
       const EDITOR_SCREENS = /* @__PURE__ */ new Set(["Appearance"]);
       const BLOCKED_SENDS = /* @__PURE__ */ new Set([
@@ -18882,23 +19138,23 @@ One of mods you are using is using an old version of SDK. It will work for now b
         }
         return copy2;
       }
-      function appearanceBundle(host, character) {
+      function appearanceBundle(host, character, includeItems = false) {
         const byGroup = /* @__PURE__ */ new Map();
         for (const item of character.Appearance || []) {
           const group = item?.Asset?.Group;
-          if (!group || group.Category === "Item" || isHiddenBodySlot(group.Name)) continue;
+          if (!group || !includeItems && group.Category === "Item" || isHiddenBodySlot(group.Name)) continue;
           const bundled = host.ServerBundledItemFromAppearanceItem(item);
           if (bundled?.Group === group.Name && !byGroup.has(group.Name)) byGroup.set(group.Name, clone(bundled));
         }
         return byGroup;
       }
-      function mergeAppearance(host, source, before, after, family) {
+      function mergeAppearance(host, source, before, after, family, includeItems = false) {
         const result = [];
         const seen = /* @__PURE__ */ new Set();
         const isItem = (part) => part.IsItem === true || host.AssetGet?.(family, part.Group, part.Name)?.Group?.Category === "Item";
         for (const part of source) {
           const group = part?.Group;
-          if (typeof group !== "string" || isHiddenBodySlot(group) || isItem(part)) {
+          if (typeof group !== "string" || isHiddenBodySlot(group) || !includeItems && isItem(part)) {
             result.push(part);
             continue;
           }
@@ -18910,14 +19166,14 @@ One of mods you are using is using an old version of SDK. It will work for now b
           if (unchanged) {
             result.push(part);
           } else if (edited) {
-            result.push({ ...edited, IsItem: false });
+            result.push({ ...edited, IsItem: !!isItem(edited) });
           }
         }
         for (const [group, edited] of after) {
           if (seen.has(group) || isHiddenBodySlot(group)) continue;
           const initial = before.get(group);
           if (!initial || JSON.stringify(initial) !== JSON.stringify(edited)) {
-            result.push({ ...edited, IsItem: false });
+            result.push({ ...edited, IsItem: !!isItem(edited) });
           }
         }
         return result;
@@ -18942,7 +19198,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
         const hook = (name, handler) => {
           if (typeof host[name] === "function") unhooks.push(modApi.hookFunction(name, 100, handler));
         };
-        const ownsScratch = () => session && host.CharacterAppearanceSelection === session.scratch;
+        const ownsScratch = () => session && (session.restraints?.owns() || host.CharacterAppearanceSelection === session.scratch);
         hook("AppearanceMenuBuild", (args, next) => {
           const result = next(args);
           if (ownsScratch() && Array.isArray(host.AppearanceMenu)) {
@@ -18996,6 +19252,10 @@ One of mods you are using is using an old version of SDK. It will work for now b
         });
         const cancel = () => {
           if (!session || session.closing) return;
+          if (session.restraints) {
+            session.restraints.cancel();
+            return;
+          }
           if (host.CurrentScreen !== "Appearance") {
             session.cancelRequested = true;
             return;
@@ -19011,17 +19271,20 @@ One of mods you are using is using an old version of SDK. It will work for now b
           }
           session.finish("cancelled");
         };
-        const open = ({ bundle, signal }) => {
+        const open = ({ bundle, signal, restraints }) => {
           if (session) throw new Error("A BC wardrobe is already open");
           if (signal?.aborted) return Promise.resolve({ status: "cancelled" });
           if (!Array.isArray(bundle)) throw new Error("Saved outfit data is unavailable");
           if (host.CurrentScreen === "Appearance" || host.CurrentScreen === "Wardrobe") {
             throw new Error("Leave the BC wardrobe before editing a saved outfit");
           }
+          const useRestraints = !!restraints && typeof host.DialogChangeFocusToGroup === "function" && typeof host.DialogLeave === "function" && typeof host.CharacterSetCurrent === "function" && !!host.CharacterGetCurrentHandlers;
           const source = clone(bundle);
           return new Promise((resolve, reject) => {
             const prior = {
               screen: host.CurrentScreen,
+              playerGroup: host.Player?.FocusGroup,
+              characterGroup: host.CurrentCharacter?.FocusGroup?.Name,
               module: host.CurrentModule,
               functions: host.CurrentScreenFunctions,
               character: host.CurrentCharacter,
@@ -19052,20 +19315,20 @@ One of mods you are using is using an old version of SDK. It will work for now b
               scratch: null,
               closing: false,
               cancelRequested: false,
-              async finish(status, edited = null, error = null) {
+              async finish(status, edited = null, error = null, restoreOrigin = true) {
                 if (current.closing) return;
                 current.closing = true;
                 if (interval !== null) host.clearInterval(interval);
                 signal?.removeEventListener("abort", cancel);
                 try {
                   if (status === "saved" && !edited && !error) {
-                    edited = mergeAppearance(host, source, before, appearanceBundle(host, scratch), scratch.AssetFamily);
+                    edited = mergeAppearance(host, source, before, appearanceBundle(host, scratch, useRestraints), scratch.AssetFamily, useRestraints);
                   }
                 } catch (reason) {
                   error ||= reason;
                 }
                 try {
-                  if (EDITOR_SCREENS.has(host.CurrentScreen)) {
+                  if (!useRestraints && EDITOR_SCREENS.has(host.CurrentScreen)) {
                     if (typeof host.CommonSetScreen === "function") {
                       await host.CommonSetScreen(prior.module, prior.screen);
                     }
@@ -19075,10 +19338,8 @@ One of mods you are using is using an old version of SDK. It will work for now b
                 }
                 try {
                   if (scratch) scratch.IsPlayer = originalIsPlayer;
-                  if (EDITOR_SCREENS.has(host.CurrentScreen) || host.CurrentScreen === prior.screen) {
-                    host.CurrentScreen = prior.screen;
-                    host.CurrentModule = prior.module;
-                    host.CurrentScreenFunctions = prior.functions;
+                  if (restoreOrigin && host.CurrentScreen === prior.screen && host.CurrentModule === prior.module) {
+                    if (!useRestraints) host.CurrentScreenFunctions = prior.functions;
                     host.CurrentCharacter = prior.character;
                     host.DialogFocusItem = prior.focusItem;
                     host.DialogFocusSourceItem = prior.focusSource;
@@ -19088,9 +19349,23 @@ One of mods you are using is using an old version of SDK. It will work for now b
                     host.ExtendedItemSubscreen = prior.subscreen;
                     host.ExtendedItemPermissionMode = prior.permissionMode;
                     host.DialogTightenLoosenItem = prior.tightenItem;
+                    if (useRestraints && prior.character) {
+                      host.DialogMenuMode = null;
+                      host.DialogFocusItem = null;
+                      host.DialogFocusItemName = null;
+                      host.DialogFocusSourceItem = null;
+                      host.ExtendedItemSubscreen = null;
+                      host.DialogTightenLoosenItem = null;
+                      host.CharacterSetCurrent(prior.character);
+                      const target = prior.playerGroup ? host.Player : prior.character;
+                      if (target && (prior.playerGroup || prior.characterGroup)) {
+                        host.DialogChangeFocusToGroup(target, prior.playerGroup || prior.characterGroup);
+                      }
+                    }
+                    if (useRestraints && host.Player) host.Player.FocusGroup = prior.playerGroup;
                     if (prior.screen === "ChatRoom" && prior.chatHidden !== true) host.ChatRoomShowElements?.();
                   }
-                  if (host.CharacterAppearanceSelection === scratch || host.CurrentScreen === prior.screen) {
+                  if (host.CharacterAppearanceSelection === scratch || restoreOrigin && host.CurrentScreen === prior.screen) {
                     host.CharacterAppearanceForceUpCharacter = prior.forceUp;
                     host.CharacterAppearanceSelection = prior.selection;
                     host.CharacterAppearanceBackup = prior.backup;
@@ -19101,6 +19376,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
                 } catch (reason) {
                   error ||= reason;
                 } finally {
+                  current.restraints?.dispose();
                   hostElement.style.display = prior.hostDisplay;
                   try {
                     if (scratch) host.CharacterDelete(scratch, false);
@@ -19112,7 +19388,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
                   if (disposed) for (const unhook of unhooks.splice(0).reverse()) unhook?.();
                 }
                 if (error) reject(error);
-                else resolve(status === "saved" ? { status, bundle: edited } : { status: "cancelled" });
+                else resolve(status === "saved" ? { status, bundle: edited, ...useRestraints ? { exported: true } : {} } : { status: "cancelled" });
               }
             };
             try {
@@ -19137,17 +19413,31 @@ One of mods you are using is using an old version of SDK. It will work for now b
               scratch.CharacterID = "";
               scratch.Appearance = (scratch.Appearance || []).map(copyAppearanceItem);
               host.CharacterRefresh(scratch, false, false);
-              before = appearanceBundle(host, scratch);
+              before = appearanceBundle(host, scratch, useRestraints);
               originalIsPlayer = scratch.IsPlayer;
-              scratch.IsPlayer = () => true;
+              scratch.IsPlayer = () => !current.restraints?.owns();
               current.scratch = scratch;
               session = current;
               setActive(true);
+              if (useRestraints && prior.character) host.DialogLeave({ reload: false });
               host.CurrentCharacter = null;
               host.CharacterAppearanceForceUpCharacter = -1;
               if (prior.screen === "ChatRoom") host.ChatRoomHideElements?.();
               hostElement.style.display = "none";
               signal?.addEventListener("abort", cancel, { once: true });
+              if (useRestraints) {
+                current.restraints = createRestraintSession(
+                  host,
+                  scratch,
+                  prior,
+                  restraints,
+                  (status, error, restoreOrigin) => current.finish(status, null, error, restoreOrigin),
+                  (name, handler) => modApi.hookFunction(name, 100, handler)
+                );
+                interval = host.setInterval(() => current.restraints.check(), 250);
+                current.restraints.start().catch((error) => current.finish("cancelled", null, error));
+                return;
+              }
               host.CharacterAppearanceLoadCharacter(scratch, (accept) => {
                 current.finish(accept ? "saved" : "cancelled");
               });
@@ -36527,7 +36817,7 @@ ${lightForced}`;
           value
         }, children);
       }
-      const outfitEditor$1 = { "nativeWardrobeOpening": "Opening BC wardrobe…", "nativeWardrobeFailed": "Could not open BC wardrobe: {error}", "retryWardrobe": "Retry BC wardrobe", "reopenWardrobe": "Open BC wardrobe again", "itemPageTitle": "Items and saving", "itemPageHint": "BC wardrobe edits clothes. Add and adjust items here, then save your outfit.", "itemSearch": "Find an item", "itemSearchPlaceholder": "Search this item group", "noMatchingItems": "No matching items", "open": "Edit outfit", "title": "Edit saved outfit", "titleFor": "Edit {name}", "close": "Close outfit editor", "back": "Back", "preview": "Outfit preview", "previewLoading": "Loading preview…", "previewFailed": "Preview could not load", "retryPreview": "Retry preview", "previewHint": "Changes stay in this preview until you save. They will not dress the character.", "savedItems": "Saved items", "noItems": "No items in this outfit. Choose an item group to add one.", "itemGroup": "Item group", "noGroups": "No matching groups", "noAssets": "No assets available in this group", "addAsset": "Add part", "replaceAsset": "Replace part", "removeAsset": "Remove part", "nativeItemOpen": "Open BC item settings", "nativeItemTitle": "Item settings", "nativeItemHint": "Use BC controls for type, modules and modes. Save the outfit after returning.", "nativeItemUnavailable": "This item has no BC settings to adjust.", "nativeItemFailed": "Could not open item settings: {error}", "color": "Color", "colorLayer": "Color layer {number}", "defaultColor": "Default color", "setColor": "Set color", "resetColor": "Use default color", "cancel": "Cancel", "overwrite": "Overwrite outfit", "saveCopy": "Save as new", "newNamePrompt": "Name the new outfit:", "copyName": "{name} copy", "nameRequired": "Enter a name for the new outfit.", "discardConfirm": "Discard your unsaved outfit changes?", "sourceMissing": "This outfit is no longer available. Close the editor and choose another outfit.", "sourceChanged": "This outfit changed or was deleted. Save your draft as a new outfit, or close and reopen the latest version.", "editFailed": "Could not edit this part: {error}", "saveFailed": "Could not save this outfit: {error}", "errors": { "protected-group": "This body part cannot be changed.", "invalid-group": "This group is no longer available.", "invalid-asset": "This asset is no longer available in this group.", "required-group": "This body group cannot be empty.", "missing-part": "Add a part before setting its color.", "invalid-color": "This color is not accepted for the selected part.", "outfit-changed": "This outfit changed or was deleted. Save your draft as a new outfit, or close and reopen the latest version." } };
+      const outfitEditor$1 = { "editClothes": "Edit clothes", "exportDraft": "Export outfit", "editRestraints": "Edit restraints", "retryReturn": "Retry return", "returnFailed": "BC could not return to the previous screen.", "nativeWardrobeOpening": "Opening BC wardrobe…", "nativeWardrobeFailed": "Could not open BC wardrobe: {error}", "retryWardrobe": "Retry BC wardrobe", "reopenWardrobe": "Open BC wardrobe again", "itemPageTitle": "Items and saving", "itemPageHint": "BC wardrobe edits clothes. Add and adjust items here, then save your outfit.", "itemSearch": "Find an item", "itemSearchPlaceholder": "Search this item group", "noMatchingItems": "No matching items", "open": "Edit outfit", "title": "Edit saved outfit", "titleFor": "Edit {name}", "close": "Close outfit editor", "back": "Back", "preview": "Outfit preview", "previewLoading": "Loading preview…", "previewFailed": "Preview could not load", "retryPreview": "Retry preview", "previewHint": "Changes stay in this preview until you save. They will not dress the character.", "savedItems": "Saved items", "noItems": "No items in this outfit. Choose an item group to add one.", "itemGroup": "Item group", "noGroups": "No matching groups", "noAssets": "No assets available in this group", "addAsset": "Add part", "replaceAsset": "Replace part", "removeAsset": "Remove part", "nativeItemOpen": "Open BC item settings", "nativeItemTitle": "Item settings", "nativeItemHint": "Use BC controls for type, modules and modes. Save the outfit after returning.", "nativeItemUnavailable": "This item has no BC settings to adjust.", "nativeItemFailed": "Could not open item settings: {error}", "color": "Color", "colorLayer": "Color layer {number}", "defaultColor": "Default color", "setColor": "Set color", "resetColor": "Use default color", "cancel": "Cancel", "overwrite": "Overwrite outfit", "saveCopy": "Save as new", "newNamePrompt": "Name the new outfit:", "copyName": "{name} copy", "nameRequired": "Enter a name for the new outfit.", "discardConfirm": "Discard your unsaved outfit changes?", "sourceMissing": "This outfit is no longer available. Close the editor and choose another outfit.", "sourceChanged": "This outfit changed or was deleted. Save your draft as a new outfit, or close and reopen the latest version.", "editFailed": "Could not edit this part: {error}", "saveFailed": "Could not save this outfit: {error}", "errors": { "protected-group": "This body part cannot be changed.", "invalid-group": "This group is no longer available.", "invalid-asset": "This asset is no longer available in this group.", "required-group": "This body group cannot be empty.", "missing-part": "Add a part before setting its color.", "invalid-color": "This color is not accepted for the selected part.", "outfit-changed": "This outfit changed or was deleted. Save your draft as a new outfit, or close and reopen the latest version." } };
       const library$1 = { "searchPlaceholder": "Search outfits or tags…", "allOutfits": "All outfits", "untagged": "Untagged", "filterByTag": "Filter by tag", "manageTags": "Manage tags", "newTag": "New tag", "newTagPrompt": "Enter a unique tag name:", "renameTag": "Rename selected tag", "renameTagPrompt": "New tag name:", "deleteTag": "Delete selected tag", "deleteTagConfirm": 'Delete tag "{name}"? Your outfits will stay in the wardrobe.', "tagNameInvalid": "Enter a tag name that is different from your existing tags.", "editTags": "Edit tags", "editOutfitTags": "Tags for {name}", "tags": "Tags", "selectTags": "Select one or more tags", "noTags": "No matching tags. Create tags from Manage tags.", "multipleTagsHint": "An outfit can have multiple tags. Removing a tag does not delete the outfit.", "saveTags": "Save tags", "outfitCount": "{count} / {total} outfits", "empty": "Your wardrobe is empty", "noMatches": "No matching outfits", "clearFilters": "Clear all filters", "saveCharacter": "Save current outfit", "saveNamePrompt": "Name this outfit:", "saved": 'Saved "{name}" to this device. Check cloud status for sync progress.', "imported": "Imported {count} outfits to this device. Check cloud status for sync progress.", "nothingImported": "No outfits to import. Check that the imported data contains outfits.", "operationFailed": "The operation could not be completed: {error}", "itemUnavailable": "This outfit or tag is no longer available. Refresh your selection and try again.", "deleteOutfitConfirm": 'Delete "{name}"? It will be removed from this device, and the deletion will sync.', "previewOutfit": "Preview {name}", "outfitActions": "Actions for {name}", "moreActions": "More actions", "cloudIncluded": "Cloud enabled", "localOnly": "This device only", "localFork": "Saved local copy", "localForkHint": "Another device re-enabled cloud sync, so this device's edited version was kept as a local copy. It will not upload automatically. You can turn on cloud sync for this copy.", "cloudToggleTitle": "Include or exclude this outfit from cloud sync. Local copies are retained.", "cloudStorage": "Shared cloud storage", "otherExtensions": "Other extensions", "remainingCapacity": "Available: {amount}", "quotaAria": "{source}: {used} of {limit}", "quotaObservedLogin": "Last read from BC at login", "quotaObservedCache": "BC local cache estimate · not yet checked", "quotaObservedUnavailable": "Cloud usage has not been read yet", "observedRemaining": "Available at last read: {amount}", "proposedUpload": "Estimated next upload · not uploaded yet", "proposedRemaining": "Estimated available after upload: {amount}", "sharedQuotaInfo": "About shared cloud capacity", "sharedQuotaHint": "The wardrobe limits all extension settings to 180 kB (180000 bytes). The main figures show last-read usage; expand for the estimated next upload. VPW includes outfits and device markers.", "quotaWarning": "The estimated next upload is near the limit. Keep some outfits on this device only to reduce cloud use.", "quotaBlocked": "Upload paused: the proposed update exceeds the shared 180 kB or single-packet limit. Local outfits remain available. Reduce cloud-synced outfits, then retry.", "localSaved": "Saved on this device", "localUnsaved": "Not saved on this device", "localStorageQuotaTitle": "Browser rejected this local save", "localStorageQuotaHelp": "This edit or sync record was not confirmed saved. The cause may be this site's separate localStorage quota or a browser storage policy; this does not show how much disk space remains. It is separate from BC's 180 kB cloud limit. Export the currently readable backup, check this site's data, then retry. Do not clear all site data.", "indexedDBSaveTitle": "Wardrobe database save failed", "indexedDBSaveHelp": "This wardrobe change was not confirmed saved. You can still export any readable data. Export a backup, then retry the local save. Do not clear all site data.", "localStorageUsage": "Estimated data stored in this site's localStorage: VPW {wardrobe}, other data {other}, total {total}.", "localStorageUsageNote": "Estimated from UTF-16 text length. Excludes the rejected write; not the actual quota or space left.", "localStorageUsageUnavailable": "Could not read this site's stored localStorage usage.", "localStorageCurrentIndex": "Wardrobe indexes (all accounts)", "localStorageRecovery": "Recovery archives", "localStorageOldHistory": "Older history", "localStorageLegacyWardrobe": "Older wardrobes", "localStorageOtherVpw": "Other VPW data", "localStorageOtherApps": "Other site data", "showLocalStorageDetails": "Show details", "hideLocalStorageDetails": "Hide details", "retryLocalSave": "Retry local save", "retrySync": "Retry upload", "exportLocalBackup": "Export local backup", "deviceLimit": "Cloud sync has 16 registered installations. This new installation can still save locally and export a backup; registered installations can continue syncing. Old registrations are not removed automatically.", "exportRecovery": "Export pre-migration backup", "conflict": { "review": "Review {count} conflicts", "title": "Review sync conflicts", "back": "Back to wardrobe", "intro": "Cloud uploads are paused until you choose what to keep. Your changes remain saved on this device.", "quarantineIntro": "A device change is missing from the cloud copy. Synced outfits are temporarily hidden and uploads are paused. Reopen the original device or explicitly discard the missing change.", "quarantined": "Synced outfits are temporarily hidden and cannot be previewed or applied. This-device-only outfits remain available. Saving, importing, and enabling cloud sync are paused until you resolve the missing change.", "hiddenEmpty": "Synced outfits are temporarily hidden. No this-device-only outfits are available.", "cloudEnablePaused": "Resolve the missing change before enabling cloud sync.", "paused": "Cloud upload paused. Review conflicting changes to continue.", "itemTitle": "{name} · {field}", "unnamed": "Item", "changed": "Changed", "deleted": "Deleted", "partCount": "{count} parts", "tagCount": "{count} tags", "thisDevice": "This device", "cloud": "Cloud copy", "chooseExplanation": "These versions changed separately. Choose which one to keep.", "deleteEditExplanation": "One device deleted this item while another edited it. Restoring the edit creates a new item.", "privacyExplanation": "One device kept this outfit locally while another enabled cloud sync. Choose which storage choice and outfit to keep.", "keepLocal": "Keep this device's version", "keepCloud": "Keep cloud version", "keepDeletion": "Keep deletion", "restoreAsNewOutfit": "Restore as new outfit", "restoreAsNewTag": "Restore as new tag", "missingTitle": "A reported change is missing", "missingExplanation": "A device reported a change, but its content is missing from the cloud copy. Reopen the wardrobe on the original device to recover it, or discard the missing change.", "waitForDevice": "Wait for original device", "discardMissing": "Discard missing change", "discardConfirm": "Stop waiting for this missing change? The cloud cannot restore its content. If the original device still has a local copy, you may recover it there.", "resolveFailed": "This conflict could not be resolved. Your local changes are still saved. Try again.", "fields": { "name": "Name", "data": "Outfit", "tagIds": "Tags", "cloudSync": "Cloud sync", "enabled": "Cloud sync", "$record": "Deletion and edit", "sequence": "Change record", "record": "Item", "deleted": "Deletion" } }, "sync": { "idle": "Cloud ready", "pending": "Saved locally", "submitted": "Sent (assumed saved)", "verified": "Verified against cloud data", "offline": "Offline · waiting to retry", "quota": "Upload paused · over limit", "error": "Sync needs attention", "conflict": "Conflict · upload paused" }, "selected": "Selected", "browseLibrary": "Browse wardrobe", "findTag": "Find a tag…", "storageFilter": "Cloud sync", "filters": "Filters", "storageDetails": "Storage details", "showResults": "Show {count} outfits" };
       const fileItem$1 = { "open": "Open", "rename": "Rename", "delete": "Delete", "apply": "Apply to Character", "sendToStudio": "Send to Studio", "cancel": "Cancel", "promptNewName": "New name", "confirmDelete": "Are you sure you want to delete this item?", "elementDefaultName": "Element", "sendError": "Send to Studio failed", "exportBCX": "Export as BCX", "cloudOn": "Cloud On", "cloudOff": "Cloud Off", "cloudToggleFileTitle": "Toggle cloud sync for this file", "cloudToggleFolderTitle": "Toggle cloud sync for this folder and its children" };
       const fileManager$1 = { "title": "Wardrobe", "newFolderTitle": "New folder", "restoreTitle": "Restore", "refreshThumbnails": "Refresh thumbnails", "closePanel": "Close panel", "promptNewFolderName": "New folder name", "goUp": "Go to parent folder", "parentFolder": "Parent folder", "dropToParentTitle": "Drop here to move to the parent folder", "searchPlaceholderCurrent": "Search in current folder...", "searchPlaceholderAll": "Search all folders...", "searchAria": "Search files", "clearSearch": "Clear search", "switchToGlobalSearch": "Switch to global search", "switchToCurrentSearch": "Switch to current-folder search", "emptyTip": "No matching files or folders", "scopeCurrent": "Current folder", "scopeAll": "Global", "sortBy": "Sort by", "sortToggle": "Sort", "sortToggleAria": "Cycle sort mode", "viewMode": "View mode", "viewCard": "Cards", "viewList": "List", "sortRecent": "Recent", "sortName": "Name", "sortType": "Type", "cloudUsageTitle": "Cloud Usage", "cloudUsageAria": "Cloud storage usage", "cloudUsageOk": "Within limit", "cloudUsageWarn": "Approaching limit", "cloudUsageOver": "Over 180KB limit", "filterAll": "All", "filterFolder": "Folders", "filterOutfit": "Outfits", "filterCharacter": "Character snapshots" };
@@ -36587,7 +36877,7 @@ ${lightForced}`;
         wardrobeIO: wardrobeIO$1,
         outfitFlow: outfitFlow$1
       };
-      const outfitEditor = { "nativeWardrobeOpening": "正在打开 BC 原生衣柜…", "nativeWardrobeFailed": "无法打开 BC 原生衣柜：{error}", "retryWardrobe": "重试打开 BC 衣柜", "reopenWardrobe": "再次打开 BC 衣柜", "itemPageTitle": "道具与保存", "itemPageHint": "衣物在 BC 原生衣柜中编辑；在这里添加和调整道具，然后保存搭配。", "itemSearch": "查找道具", "itemSearchPlaceholder": "搜索当前道具分组", "noMatchingItems": "没有匹配的道具", "savedItems": "已存道具", "noItems": "这套搭配中没有道具。请选择道具分组添加。", "itemGroup": "道具分组", "open": "编辑衣物", "title": "编辑已保存的衣物", "titleFor": "编辑「{name}」", "close": "关闭衣物编辑器", "back": "返回", "preview": "衣物预览", "previewLoading": "正在加载预览…", "previewFailed": "预览加载失败", "retryPreview": "重试预览", "previewHint": "修改会先留在预览中，保存后才写入衣柜，不会直接给角色换装。", "selectGroup": "搜索分组", "noGroups": "没有匹配的分组", "noAssets": "这个分组没有可选物件", "addAsset": "添加部位", "replaceAsset": "替换部位", "removeAsset": "移除部位", "nativeItemOpen": "打开 BC 道具设置", "nativeItemTitle": "道具设置", "nativeItemHint": "可用 BC 原生控件调整型号、模块和模式。返回后记得保存这套搭配。", "nativeItemUnavailable": "这个道具没有可调整的 BC 设置。", "nativeItemFailed": "无法打开道具设置：{error}", "color": "颜色", "colorLayer": "第 {number} 层颜色", "defaultColor": "默认颜色", "setColor": "设置颜色", "resetColor": "恢复默认颜色", "cancel": "取消", "overwrite": "覆盖原衣物", "saveCopy": "另存为新衣物", "newNamePrompt": "为新衣物命名：", "copyName": "{name} 副本", "nameRequired": "请输入新衣物的名称。", "discardConfirm": "放弃尚未保存的衣物修改？", "sourceMissing": "这件衣物已不存在。请关闭编辑器后重新选择。", "sourceChanged": "这件衣物已被修改或删除。请将草稿另存为新衣物，或关闭后重新打开最新版本。", "editFailed": "无法编辑这个部位：{error}", "saveFailed": "无法保存这件衣物：{error}", "errors": { "protected-group": "这个身体部位不能修改。", "invalid-group": "这个分组已不可用。", "invalid-asset": "这个物件在当前分组中已不可用。", "required-group": "这个身体分组不能置空。", "missing-part": "请先添加物件，再设置颜色。", "invalid-color": "所选物件不支持这个颜色。", "outfit-changed": "这件衣物已被修改或删除。请将草稿另存为新衣物，或关闭后重新打开最新版本。" } };
+      const outfitEditor = { "editClothes": "编辑服装", "exportDraft": "导出套装", "editRestraints": "编辑拘束物品", "retryReturn": "重试返回", "returnFailed": "BC 未能返回原界面。", "nativeWardrobeOpening": "正在打开 BC 原生衣柜…", "nativeWardrobeFailed": "无法打开 BC 原生衣柜：{error}", "retryWardrobe": "重试打开 BC 衣柜", "reopenWardrobe": "再次打开 BC 衣柜", "itemPageTitle": "道具与保存", "itemPageHint": "衣物在 BC 原生衣柜中编辑；在这里添加和调整道具，然后保存搭配。", "itemSearch": "查找道具", "itemSearchPlaceholder": "搜索当前道具分组", "noMatchingItems": "没有匹配的道具", "savedItems": "已存道具", "noItems": "这套搭配中没有道具。请选择道具分组添加。", "itemGroup": "道具分组", "open": "编辑衣物", "title": "编辑已保存的衣物", "titleFor": "编辑「{name}」", "close": "关闭衣物编辑器", "back": "返回", "preview": "衣物预览", "previewLoading": "正在加载预览…", "previewFailed": "预览加载失败", "retryPreview": "重试预览", "previewHint": "修改会先留在预览中，保存后才写入衣柜，不会直接给角色换装。", "selectGroup": "搜索分组", "noGroups": "没有匹配的分组", "noAssets": "这个分组没有可选物件", "addAsset": "添加部位", "replaceAsset": "替换部位", "removeAsset": "移除部位", "nativeItemOpen": "打开 BC 道具设置", "nativeItemTitle": "道具设置", "nativeItemHint": "可用 BC 原生控件调整型号、模块和模式。返回后记得保存这套搭配。", "nativeItemUnavailable": "这个道具没有可调整的 BC 设置。", "nativeItemFailed": "无法打开道具设置：{error}", "color": "颜色", "colorLayer": "第 {number} 层颜色", "defaultColor": "默认颜色", "setColor": "设置颜色", "resetColor": "恢复默认颜色", "cancel": "取消", "overwrite": "覆盖原衣物", "saveCopy": "另存为新衣物", "newNamePrompt": "为新衣物命名：", "copyName": "{name} 副本", "nameRequired": "请输入新衣物的名称。", "discardConfirm": "放弃尚未保存的衣物修改？", "sourceMissing": "这件衣物已不存在。请关闭编辑器后重新选择。", "sourceChanged": "这件衣物已被修改或删除。请将草稿另存为新衣物，或关闭后重新打开最新版本。", "editFailed": "无法编辑这个部位：{error}", "saveFailed": "无法保存这件衣物：{error}", "errors": { "protected-group": "这个身体部位不能修改。", "invalid-group": "这个分组已不可用。", "invalid-asset": "这个物件在当前分组中已不可用。", "required-group": "这个身体分组不能置空。", "missing-part": "请先添加物件，再设置颜色。", "invalid-color": "所选物件不支持这个颜色。", "outfit-changed": "这件衣物已被修改或删除。请将草稿另存为新衣物，或关闭后重新打开最新版本。" } };
       const library = { "searchPlaceholder": "搜索衣物或标签…", "allOutfits": "全部衣物", "untagged": "未加标签", "filterByTag": "按标签筛选", "manageTags": "管理标签", "newTag": "新建标签", "newTagPrompt": "输入唯一的标签名称：", "renameTag": "重命名当前标签", "renameTagPrompt": "新的标签名称：", "deleteTag": "删除当前标签", "deleteTagConfirm": "删除标签「{name}」？衣物会保留在衣橱中。", "tagNameInvalid": "请输入标签名称，并使用与现有标签不同的名称。", "editTags": "编辑标签", "editOutfitTags": "「{name}」的标签", "tags": "标签", "selectTags": "选择一个或多个标签", "noTags": "没有匹配标签，可在「管理标签」中新建。", "multipleTagsHint": "每件衣物可添加多个标签。移除标签不会删除衣物。", "saveTags": "保存标签", "outfitCount": "{count} / {total} 件衣物", "empty": "衣橱里还没有衣物", "noMatches": "没有符合条件的衣物", "clearFilters": "清除所有筛选", "saveCharacter": "保存当前穿着", "saveNamePrompt": "衣物名称：", "saved": "已将「{name}」保存到本机衣橱，云端进度请查看同步状态。", "imported": "已将 {count} 件衣物导入本机衣橱，云端进度请查看同步状态。", "nothingImported": "没有可导入的衣物。请检查导入内容是否为空。", "operationFailed": "操作未完成：{error}", "itemUnavailable": "这件衣物或标签已不可用，请重新选择后再试。", "deleteOutfitConfirm": "删除「{name}」？本机衣橱会删除它，并同步这次删除。", "previewOutfit": "预览「{name}」", "outfitActions": "「{name}」的操作", "moreActions": "更多操作", "cloudIncluded": "参与云同步", "localOnly": "仅保存在本机", "localFork": "保留的本机副本", "localForkHint": "另一台设备重新开启云同步时，这台设备修改过的版本被保留为本机副本。此副本不会自动上传，可手动开启云同步。", "cloudToggleTitle": "开启或关闭这件衣物的云同步，本机副本会保留。", "cloudStorage": "共享云端容量", "otherExtensions": "其他扩展", "remainingCapacity": "可用：{amount}", "quotaAria": "{source}：已用 {used}，上限 {limit}", "quotaObservedLogin": "最近一次登录从 BC 读取的占用", "quotaObservedCache": "BC 本机缓存估计，尚未核对", "quotaObservedUnavailable": "尚未读取到云端占用数据", "observedRemaining": "最近读取的可用空间：{amount}", "proposedUpload": "下次上传预计占用，尚未上传", "proposedRemaining": "预计上传后可用：{amount}", "sharedQuotaInfo": "共享云端容量说明", "sharedQuotaHint": "衣橱按 180 kB（180000 字节）控制全部扩展设置。上方显示最近读取的占用，展开可查看下次上传预计占用。VPW 包括衣物和设备标记。", "quotaWarning": "预计上传后接近容量上限。可将部分衣物设为仅保存在本机。", "quotaBlocked": "上传已暂停：预计更新超过 180 kB 的共享或单包限制。本机衣物仍可使用，请减少云同步衣物后重试。", "localSaved": "已保存到本机", "localUnsaved": "尚未保存到本机", "localStorageQuotaTitle": "浏览器拒绝了本次本机写入", "localStorageQuotaHelp": "这次修改或同步记录未确认保存。原因可能是此站点 localStorage 的独立配额或浏览器存储策略，不能据此判断磁盘空间；与 BC 云端 180 kB 限额无关。请先导出当前可读取的备份，再检查同站点数据并重试。不要直接清除整个站点数据。", "indexedDBSaveTitle": "衣柜数据库写入失败", "indexedDBSaveHelp": "这次衣柜修改未确认保存。仍可导出当前能读取的数据。请先导出备份，再重试本机保存。不要清除整个站点数据。", "localStorageUsage": "此站点 localStorage 已存数据估算：VPW {wardrobe}，其他数据 {other}，合计 {total}。", "localStorageUsageNote": "按 UTF-16 字符长度估算；不含被拒绝的写入，也不是实际配额或剩余空间。", "localStorageUsageUnavailable": "无法读取此站点的 localStorage 已存数据占用。", "localStorageCurrentIndex": "衣柜索引（所有账号）", "localStorageRecovery": "恢复档案", "localStorageOldHistory": "旧版历史", "localStorageLegacyWardrobe": "旧版衣柜", "localStorageOtherVpw": "其他 VPW 数据", "localStorageOtherApps": "其他站点数据", "showLocalStorageDetails": "查看详情", "hideLocalStorageDetails": "收起详情", "retryLocalSave": "重试本机保存", "retrySync": "重试上传", "exportLocalBackup": "导出本机备份", "deviceLimit": "云同步已登记 16 台安装环境。当前新设备仍可保存到本机并导出备份；已登记设备可继续同步。旧设备记录不会自动清除。", "exportRecovery": "导出迁移前备份", "conflict": { "review": "处理 {count} 处冲突", "title": "处理同步冲突", "back": "返回衣橱", "intro": "选择要保留的版本后，云端才能继续上传。你的修改仍保存在本机。", "quarantineIntro": "检测到云端缺少一次设备修改。同步衣物已暂时隐藏，上传暂停；请在原设备找回，或明确舍弃缺失修改。", "quarantined": "同步衣物暂时隐藏，不能预览或应用；仅本机衣物仍可使用。处理缺失修改前，保存、导入和开启云同步暂不可用。", "hiddenEmpty": "同步衣物已暂时隐藏，目前没有仅保存在本机的衣物。", "cloudEnablePaused": "请先处理缺失修改，再开启云同步。", "paused": "云端上传已暂停。处理冲突后可继续同步。", "itemTitle": "{name} · {field}", "unnamed": "项目", "changed": "已修改", "deleted": "已删除", "partCount": "{count} 个部件", "tagCount": "{count} 个标签", "thisDevice": "本机版本", "cloud": "云端版本", "chooseExplanation": "两边分别修改了这项内容，请选择要保留的版本。", "deleteEditExplanation": "一台设备删除了这项内容，另一台设备修改了它。选择修改版会以新项目恢复。", "privacyExplanation": "一台设备将这件衣物设为仅保存在本机，另一台开启了云同步。请选择要保留的存储设置和衣物版本。", "keepLocal": "保留本机版本", "keepCloud": "保留云端版本", "keepDeletion": "保留删除结果", "restoreAsNewOutfit": "作为新衣物恢复", "restoreAsNewTag": "作为新标签恢复", "missingTitle": "发现未合入的修改", "missingExplanation": "一台设备报告过修改，但云端衣橱里没有修改内容。可在原设备重新打开衣橱以找回，或明确舍弃这次修改。", "waitForDevice": "等待原设备", "discardMissing": "舍弃缺失修改", "discardConfirm": "确定不再等待这次缺失的修改？云端无法还原其内容；如果原设备仍保存它，可从那里找回。", "resolveFailed": "冲突未能处理。本机修改仍已保存，请重试。", "fields": { "name": "名称", "data": "衣物内容", "tagIds": "标签", "cloudSync": "云同步", "enabled": "云同步", "$record": "删除与修改", "sequence": "修改记录", "record": "项目", "deleted": "删除" } }, "sync": { "idle": "云同步就绪", "pending": "本机已保存", "submitted": "已提交（默认成功）", "verified": "已与云端核对", "offline": "离线，等待重试", "quota": "容量超限，上传暂停", "error": "同步需要处理", "conflict": "存在冲突，上传暂停" }, "selected": "已选择", "browseLibrary": "浏览衣橱", "findTag": "搜索标签…", "storageFilter": "云同步范围", "filters": "筛选", "storageDetails": "容量明细", "showResults": "查看 {count} 件衣物" };
       const fileItem = { "open": "打开", "rename": "重命名", "delete": "删除", "apply": "应用到角色", "sendToStudio": "发送到 Studio", "cancel": "取消", "promptNewName": "新名字", "confirmDelete": "确认删除该项目吗？", "elementDefaultName": "元素", "sendError": "发送到 Studio 失败", "exportBCX": "导出为 BCX", "cloudOn": "云同步开", "cloudOff": "云同步关", "cloudToggleFileTitle": "切换此文件是否云同步", "cloudToggleFolderTitle": "切换此文件夹及其子项是否云同步" };
       const fileManager = { "title": "衣橱", "newFolderTitle": "新建文件夹", "restoreTitle": "恢复", "refreshThumbnails": "刷新缩略图", "closePanel": "关闭面板", "promptNewFolderName": "新建文件夹名", "goUp": "返回上一级", "parentFolder": "上一级", "dropToParentTitle": "拖到这里移到上一级文件夹", "searchPlaceholderCurrent": "在当前文件夹搜索...", "searchPlaceholderAll": "搜索所有文件夹...", "searchAria": "搜索文件", "clearSearch": "清除搜索", "switchToGlobalSearch": "切换到全局搜索", "switchToCurrentSearch": "切换到当前文件夹", "emptyTip": "没有匹配的文件/文件夹", "scopeCurrent": "当前目录", "scopeAll": "全局", "sortBy": "排序方式", "sortToggle": "排序", "sortToggleAria": "切换排序方式", "viewMode": "视图模式", "viewCard": "卡牌", "viewList": "列表", "sortRecent": "最近修改", "sortName": "名称", "sortType": "类型", "cloudUsageTitle": "云端占用", "cloudUsageAria": "云端容量占用", "cloudUsageOk": "容量正常", "cloudUsageWarn": "容量接近上限", "cloudUsageOver": "超出 180KB 上限", "filterAll": "全部", "filterFolder": "文件夹", "filterOutfit": "套装", "filterCharacter": "角色快照" };
@@ -37192,7 +37482,7 @@ ${lightForced}`;
                 if (inViewport) start();
                 else stop();
               },
-              { root: null, rootMargin: "180px 0px", threshold: 0.01 }
+              { root: null, rootMargin: "0px", threshold: 0.01 }
             );
             io.observe(root);
           } else {
@@ -39144,6 +39434,7 @@ ${lightForced}`;
         const nativeController = reactExports.useRef(null);
         const [source] = reactExports.useState(() => readSource(outfitId));
         const [draft, setDraft] = reactExports.useState(() => source ? createOutfitDraft(source.data) : []);
+        const [exported, setExported] = reactExports.useState(false);
         const [groups, setGroups] = reactExports.useState([]);
         const [stage, setStage] = reactExports.useState("opening");
         const [selectedGroup, setSelectedGroup] = reactExports.useState(null);
@@ -39257,12 +39548,19 @@ ${lightForced}`;
           setNativeBusy(true);
           setError("");
           try {
-            const result = await openNativeWardrobeEditor({ bundle: draft, signal: controller.signal });
+            const result = await openNativeWardrobeEditor({ bundle: draft, signal: controller.signal, restraints: {
+              clothes: t("outfitEditor.editClothes"),
+              export: t("outfitEditor.exportDraft"),
+              discard: t("outfitEditor.cancel"),
+              retry: t("outfitEditor.retryReturn"),
+              returnFailed: t("outfitEditor.returnFailed")
+            } });
             if (controller.signal.aborted) return;
             if (result.status === "cancelled") {
               if (initial) onClose();
               else setStage("items");
             } else {
+              setExported("exported" in result && !!result.exported);
               setDraft((before) => keepProtectedParts(before, result.bundle));
               setStage("items");
             }
@@ -39389,8 +39687,8 @@ ${lightForced}`;
             error && /* @__PURE__ */ jsxRuntimeExports.jsx(Alert, { color: "red", role: "alert", children: error }),
             /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { justify: "space-between", align: "start", gap: "sm", children: [
               /* @__PURE__ */ jsxRuntimeExports.jsxs(Stack, { gap: 2, children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "sm", fw: 600, children: t("outfitEditor.itemPageTitle") }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "dimmed", children: t("outfitEditor.itemPageHint") })
+                /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "sm", fw: 600, children: t(exported ? "outfitEditor.exportDraft" : "outfitEditor.itemPageTitle") }),
+                !exported && /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "dimmed", children: t("outfitEditor.itemPageHint") })
               ] }),
               /* @__PURE__ */ jsxRuntimeExports.jsx(
                 Button,
@@ -39400,11 +39698,11 @@ ${lightForced}`;
                   "data-testid": "vpw-editor-reopen-wardrobe",
                   onClick: () => void openWardrobe(false),
                   disabled: saving || nativeBusy,
-                  children: t("outfitEditor.reopenWardrobe")
+                  children: t(exported ? "outfitEditor.editRestraints" : "outfitEditor.reopenWardrobe")
                 }
               )
             ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs(Box, { className: "vpw-outfit-editor-layout", children: [
+            exported ? /* @__PURE__ */ jsxRuntimeExports.jsx(DraftPreview, { draft }) : /* @__PURE__ */ jsxRuntimeExports.jsxs(Box, { className: "vpw-outfit-editor-layout", children: [
               /* @__PURE__ */ jsxRuntimeExports.jsxs(Box, { className: "vpw-outfit-editor-preview-column", children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", fw: 600, children: t("outfitEditor.preview") }),
                 /* @__PURE__ */ jsxRuntimeExports.jsx(DraftPreview, { draft }),
