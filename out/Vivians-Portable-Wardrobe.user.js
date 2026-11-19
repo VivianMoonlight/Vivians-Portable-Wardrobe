@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vivians Portable Wardrobe
 // @namespace    http://tampermonkey.net/
-// @version      0.10.1-react.26
+// @version      0.10.1-react.27
 // @author       VIVianMoonlight
 // @description  Portable Wardrobe for Bondage Club (React + Mantine, Shadow DOM isolated)
 // @downloadURL  https://cdn.jsdelivr.net/gh/VivianMoonlight/Vivians-Portable-Wardrobe@wardrobe-react/out/Vivians-Portable-Wardrobe.user.js
@@ -32,7 +32,7 @@
     return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
   };
   var require_main_001 = __commonJS({
-    "main-DkFJKQVb.js"(exports) {
+    "main-CK-LnxfE.js"(exports) {
       function _mergeNamespaces(n, m) {
         for (var i = 0; i < m.length; i++) {
           const e = m[i];
@@ -9285,7 +9285,7 @@
       instance.hasLoadedNamespace;
       instance.loadNamespaces;
       instance.loadLanguages;
-      const version = "0.10.1-react.26";
+      const version = "0.10.1-react.27";
       var _unsafeWindow = /* @__PURE__ */ (() => typeof unsafeWindow != "undefined" ? unsafeWindow : void 0)();
       const hostWindow = typeof _unsafeWindow !== "undefined" ? _unsafeWindow : window;
       const doc = hostWindow.document;
@@ -9738,23 +9738,59 @@ One of mods you are using is using an old version of SDK. It will work for now b
       function cleanUpItemColorLayerNamesLoad() {
         hostWindow.ItemColorFireExit(false);
       }
-      const halfOffsetKey = "vpw.halveLegacyOffsets";
-      function halveLegacyOffsets(host) {
+      const compatibilityKey = "vpw.halveLegacyOffsets";
+      const patchedWebGLKey = "vpw.patchedWebGL";
+      function readOffsetSetting(host, key) {
         try {
-          return host.localStorage.getItem(halfOffsetKey) === "true";
+          return host.localStorage.getItem(key) === "true";
         } catch {
           return false;
         }
       }
-      function setHalveLegacyOffsets(host, enabled) {
-        host.localStorage.setItem(halfOffsetKey, String(enabled));
-      }
+      const roundOffset = (value) => Math.sign(value) * Math.round(Math.abs(value));
+      const isScaled = (value) => Number.isFinite(value) && value !== 1;
       function prepareOutfitOffsets(data, host, character) {
-        if (!Array.isArray(data) || !host.PropertyLayerOrigin?.getOriginal || !host.ServerBundledItemToAppearanceItem) return data;
-        const divisor = halveLegacyOffsets(host) ? 2 : 1;
-        return data.map((bundle) => prepareItem(bundle, host, character, divisor));
+        if (!Array.isArray(data)) return data;
+        const enabled = readOffsetSetting(host, compatibilityKey);
+        const patched = enabled && readOffsetSetting(host, patchedWebGLKey);
+        return data.map((original) => {
+          const bundle = prepareItem(original, host, character);
+          const prop = bundle?.Property;
+          if (!enabled || !prop) return bundle;
+          let transforms = prop;
+          if (["LayerScaleX", "LayerScaleY", "LayerTranslationX", "LayerTranslationY"].some((key) => typeof prop[key] === "string")) {
+            try {
+              transforms = host.ServerBundledItemToAppearanceItem(
+                character.AssetFamily,
+                JSON.parse(JSON.stringify(bundle)),
+                { C: character }
+              )?.Property;
+            } catch {
+              return bundle;
+            }
+            if (!transforms) return bundle;
+          }
+          const scaled = [
+            transforms.ScaleX,
+            transforms.ScaleY,
+            ...Object.values(transforms.LayerScaleX ?? {}),
+            ...Object.values(transforms.LayerScaleY ?? {})
+          ].some(isScaled);
+          const factor = (scaled ? 2 : 1) / (patched ? 1 : 2);
+          if (factor === 1) return bundle;
+          const next = { ...prop };
+          for (const axis of ["X", "Y"]) {
+            const global = "Translation" + axis;
+            const layer = "LayerTranslation" + axis;
+            if (Number.isFinite(prop[global])) next[global] = roundOffset(prop[global] * factor);
+            if (prop[layer] != null && transforms[layer] && typeof transforms[layer] === "object") {
+              next[layer] = Object.fromEntries(Object.entries(transforms[layer]).map(([name, value]) => [name, Number.isFinite(value) ? roundOffset(value * factor) : value]));
+            }
+          }
+          return { ...bundle, Property: next };
+        });
       }
-      function prepareItem(bundle, host, character, divisor) {
+      function prepareItem(bundle, host, character) {
         const prop = bundle?.Property;
         const overrides = prop?.LayerOverrides;
         if (!Array.isArray(overrides) || !overrides.length) return bundle;
@@ -9787,8 +9823,8 @@ One of mods you are using is using an old version of SDK. It will work for now b
               const pose = character.DrawPose?.find((pose2) => origin?.[pose2] != null) ?? "";
               const drawOrigin = origin?.[pose];
               if (Object.keys(coord).length !== 1 || !Number.isFinite(coord[""]) || !Number.isFinite(drawOrigin)) return bundle;
-              const offset2 = (coord[""] - drawOrigin) / divisor;
-              shifts.push(Math.sign(offset2) * Math.round(Math.abs(offset2)));
+              const offset2 = coord[""] - drawOrigin;
+              shifts.push(roundOffset(offset2));
             }
             if (shifts.every((value) => value === shifts[0])) {
               if (shifts[0]) next[globalKey] = shifts[0];
@@ -36859,7 +36895,7 @@ ${lightForced}`;
       const history$1 = { "title": "History", "clear": "Clear", "clearTitle": "Clear all history", "clearConfirmMessage": "Are you sure you want to clear all history? This cannot be undone.", "currentState": "Current State", "timelineSubtitle": "Browse and jump between edit states", "undoCount": "Undo", "redoCount": "Redo", "undoAction": "Undo", "redoAction": "Redo", "totalStates": "Total", "emptyState": "No history yet. Your changes will be tracked here.", "justNow": "Just now", "minutesAgo": "{count} min ago", "hoursAgo": "{count} hours ago", "undoItem": "Previous state", "redoItem": "Future state", "pastTag": "Past", "futureTag": "Future", "currentTag": "Now", "scrollHint": "Scroll horizontally to browse more states", "jumpLatest": "Jump to latest", "hasFutureState": "Future states available", "stateChange": "State Change", "initialState": "Initial State", "actionTypeLabels": { "part": { "updateMetadata": "Update part metadata", "updateProperty": "Update part properties", "applyLayerDeltas": "Apply part layer changes" }, "layer": { "batchApplyLayerDeltas": "Apply layer batch changes" }, "batch": { "updateOpacity": "Batch update opacity", "updateOffset": "Batch update offset", "updateColor": "Batch update color", "updatePriority": "Batch update priority" }, "palette": { "applyColor": "Apply color", "applyTag": "Apply palette tag", "applyTagOffset": "Apply tag offset", "resetTagOffset": "Reset tag offset", "updateTag": "Update palette tag", "createTagAndReplace": "Create tag and replace", "renameTagReferences": "Rename tag references", "deleteTag": "Delete palette tag", "clear": "Clear palette", "savedColor": { "add": "Add saved color", "update": "Update saved color", "delete": "Delete saved color", "clear": "Clear saved colors" } }, "stack": { "add": "Add stack", "remove": "Remove stack", "move": "Move stack", "clear": "Clear stacks", "rename": "Rename stack" }, "asset": { "apply": "Apply asset" } }, "actionScopeLabels": { "part": "Part", "layer": "Layer", "batch": "Batch", "palette": "Palette", "stack": "Stack", "asset": "Asset" }, "operationContentLabels": { "color": "Color", "opacity": "Opacity", "shift": "Shift", "order": "Order", "layer": "Layer", "property": "Property", "tag": "Tag", "general": "Edit" } };
       const groupNames$1 = { "Item": "Item", "Cosplay": "Cosplay", "Hair": "Hair", "Headwear": "Headwear", "Face": "Face", "Markings": "Markings / Tattoos", "ClothUpper": "Upper Clothing", "ClothLower": "Lower Clothing", "Hands": "Hands", "Feet": "Feet", "Accessories": "Accessories", "HiddenBody": "Hidden Body Parts", "Appearance": "Appearance" };
       const cloudflareSync$1 = { "title": "Sync provider", "enable": "Use Cloudflare sync", "description": "Cloudflare becomes the main wardrobe sync source. BC stops uploading wardrobe data. Turning this off returns to BC sync; it does not delete the Cloudflare copy.", "allDevicesHint": "Turn on Cloudflare sync on every device. Older devices still using BC sync will form a separate copy.", "bcLegacyChanged": "We cannot confirm that the old BC wardrobe is unchanged, so automatic cleanup is paused. Export a backup and check the sync mode and wardrobe on every device. After reviewing them, switch each device to Cloudflare. Do not delete the old data yet.", "bcLegacyChangedShort": "Old BC data needs review; automatic cleanup is paused.", "notConfigured": "This version has no Cloudflare service URL. Deploy and configure the service, then update the script. BC sync remains active for now.", "serviceUnavailable": "This version has no Cloudflare service URL. Your wardrobe remains on this device; Cloudflare sync is paused and BC will not take over automatically. Update the script or turn off this switch to use BC.", "serviceNotReady": "Service not configured", "bcCleanupPending": "The old BC wardrobe copy still uses space. Cleanup is submitted after a successful Cloudflare save. BC gives no receipt, so a later login must confirm removal.", "bcCleanupPendingShort": "The old BC copy is awaiting cleanup and still uses BC space.", "bcCleanupUnknown": "The old BC wardrobe copy has not been checked. If cleanup was submitted, the next login will check the result.", "bcCleanupUnknownShort": "The old BC copy awaits a login check.", "bcCleanupVerified": "A BC login readback confirmed that the old wardrobe copy is absent.", "syncing": "Syncing to Cloudflare…", "syncingShort": "Syncing", "pending": "Local changes waiting to sync to Cloudflare", "pendingShort": "Pending sync", "needsAttention": "Cloudflare sync needs attention", "needsAttentionShort": "Needs attention", "syncedShort": "Last sync OK", "lastSynced": "Last synced: {time}", "waiting": "Waiting for first sync", "syncNow": "Sync now", "estimatedSize": "Estimated cloud data", "sizeAria": "Estimated Cloudflare upload {used}, limit {limit}", "sizeHint": "UTF-8 JSON estimate for the next sync; device-only outfits are excluded.", "sizeOver": "The estimate exceeds the limit, so the upload may be rejected. Your local copy remains available; reduce synced content.", "changeFailed": "Could not switch sync providers. Check your connection or service configuration, then try again.", "syncFailed": "Could not finish Cloudflare sync. Check your connection and try again.", "errorTooLarge": "The cloud wardrobe exceeds the 8 MB limit. Reduce the content included in sync and retry. Your local copy remains available.", "errorCapacityReached": "This free service has reached its wardrobe or daily creation limit. Try later or check Cloudflare service capacity. Your local copy remains available.", "errorWriteLimit": "This key has reached the service's daily write limit (500 writes). Your local changes remain saved; retry on the next UTC day.", "errorProvisioningUnavailable": "The service cannot create a new cloud wardrobe. Configure the provisioning secret in the Cloudflare deployment and retry. Your local copy remains available.", "keyStorage": "The recovery key was submitted to BC extension settings (assumed successful; no receipt). Save another copy. Anyone with this key can access your cloud wardrobe.", "keyNotSaved": "The recovery key has not been submitted to BC. Copy it now and keep it safe.", "keyMissing": "This device cannot find the recovery key. Turn off Cloudflare sync, then import your original key.", "showKey": "Show recovery key", "recoveryKey": "Recovery key", "copyKey": "Copy key", "downloadKey": "Download recovery key", "keyDownloadFailed": "Could not download the recovery key. Show the key and copy it manually.", "hideKey": "Hide key", "keyCopied": "Key copied. Keep it somewhere safe.", "copyManually": "The browser blocked copying. Select the key above and copy it manually.", "keepKeySafe": "Keep this key somewhere safe. Do not share it.", "keyUnavailable": "Could not read the recovery key. Try again; do not clear this site's data.", "restoreKey": "Have a recovery key?", "changeKey": "Switch cloud wardrobe", "restoreHint": "Importing saves the key on this device and attempts to submit it to BC. When you turn sync on again, this device's wardrobe will merge with the cloud wardrobe for that key. The old key still opens its old cloud wardrobe and is not revoked.", "restore": "Import key", "restoreFailed": "Could not import the key. Check it and try again.", "openDashboard": "Open cloud data page", "dashboardHint": "The data page asks for your recovery key when opened. The key is not included in the link or saved by the page." };
-      const fileManagerPanel$1 = { "ariaLabel": "Wardrobe panel", "title": "Portable wardrobe", "saveBackup": "Save backup", "importBackup": "Import backup", "saveCharacter": "Save current outfit", "importBCX": "Import from BCX", "importPlayerWardrobe": "Import player wardrobe", "settings": "Settings", "toggleFilters": "Adjust outfit", "lightMode": "Light mode", "darkMode": "Dark mode", "themedMode": "Themed mode", "toggleTheme": "Switch theme", "tabAriaLabel": "Workbench tabs", "tabWardrobe": "Wardrobe", "tabHistory": "History", "tabStudio": "Studio", "tabSettings": "Settings", "themeSettings": "Theme settings", "halfOffsetsLabel": "Halve legacy outfit offsets", "halfOffsetsDescription": "Halves converted offsets during preview and wear to compensate for doubled movement in R134 WebGL. Turn off after the game fixes it.", "forceSelfApplyTitle": "Outfit controls", "forceSelfApplyLabel": "Allow force apply to myself", "forceSelfApplyDescription": "Shows an extra button for your character that tries to bypass BC clothing settings. The game may still reject changes. Saved on this browser only.", "forceSelfApplySaveFailed": "Could not save this setting. Check browser storage and try again.", "themedNotAvailable": "Themed BC not detected, using default light theme", "themedModeDesc": "Themed mode uses colors from Themed BC plugin. Themed BC must be installed and enabled." };
+      const fileManagerPanel$1 = { "ariaLabel": "Wardrobe panel", "title": "Portable wardrobe", "saveBackup": "Save backup", "importBackup": "Import backup", "saveCharacter": "Save current outfit", "importBCX": "Import from BCX", "importPlayerWardrobe": "Import player wardrobe", "settings": "Settings", "toggleFilters": "Adjust outfit", "lightMode": "Light mode", "darkMode": "Dark mode", "themedMode": "Themed mode", "toggleTheme": "Switch theme", "tabAriaLabel": "Workbench tabs", "tabWardrobe": "Wardrobe", "tabHistory": "History", "tabStudio": "Studio", "tabSettings": "Settings", "themeSettings": "Theme settings", "halfOffsetsLabel": "Legacy outfit offset compatibility", "halfOffsetsDescription": "Adjusts translations for scaled and unscaled legacy outfits during preview and wear, including converted outfits. Turn off for modern outfits.", "patchedWebGLLabel": "WebGL double-translation fix installed", "forceSelfApplyTitle": "Outfit controls", "forceSelfApplyLabel": "Allow force apply to myself", "forceSelfApplyDescription": "Shows an extra button for your character that tries to bypass BC clothing settings. The game may still reject changes. Saved on this browser only.", "forceSelfApplySaveFailed": "Could not save this setting. Check browser storage and try again.", "themedNotAvailable": "Themed BC not detected, using default light theme", "themedModeDesc": "Themed mode uses colors from Themed BC plugin. Themed BC must be installed and enabled." };
       const historyViewer$1 = { "title": "History", "toggleToHistory": "View History", "toggleToFileManager": "View wardrobe", "clearAll": "Clear All", "clearAllConfirm": "Clear the current history? Archived older copies remain available through Export history. This cannot be undone.", "deleteRecord": "Delete", "deleteConfirm": "Delete this history record?", "delete": "Delete", "searchPlaceholder": "Search history records...", "clearSearch": "Clear", "timeFilter": "Time filters", "filterAll": "All", "filterToday": "Today", "filterWeek": "Last 7 days", "loadRecord": "Load this record", "apply": "Apply", "cancel": "Cancel", "loadToPreview": "Load to preview", "recordedAt": "Recorded at", "emptyState": "No history records yet. Your outfit changes will be automatically recorded here.", "recordCount": "{count} records", "saveFailedTitle": "History changes were not saved", "saveFailedHelp": "Recent changes may be lost if you refresh. Check this site's storage permissions, then retry.", "retrySave": "Retry saving", "copiesDifferTitle": "Older history copy is still stored locally", "copiesDifferHelp": "The browser could not archive it. It may still use limited local storage. Retry, or export both copies now.", "retryArchive": "Retry archive", "copyArchivedTitle": "Older history copy preserved", "copyArchivedHelp": "Both copies are in the browser database. Export a history backup to keep them outside this browser.", "exportHistory": "Export history", "exportPartial": "History exported, but archived copies could not be read. Keep this site's data and retry later.", "exportFailed": "Could not export history. Try again.", "attentionRequired": "History storage needs attention", "archivedReminder": "Archived history copy available to export" };
       const sidePreview$1 = { "ariaLabel": "Character preview", "hint": "Check the preview, then apply it to the selected character.", "targetCharacter": "Target character", "noTargetCharacter": "No available character", "renderFailed": "The preview could not load. Try again.", "retry": "Reload preview", "loading": "Loading preview" };
       const stackDetail$1 = { "ariaLabel": "Stack Detail Panel", "title": "Details", "name": "Name", "group": "Group", "color": "Color", "property": "Property", "overridePriority": "OverridePriority", "opacity": "Opacity", "typeRecord": "TypeRecord", "offset": "Offset", "craft": "Craft", "craftSummary": "Craft (summary)", "download": "Download", "downloadTitle": "Download entire element", "copy": "Copy", "copyTitle": "Copy entire element JSON", "placeholder": "Select a stack item to view details", "unnamed": "(unnamed)" };
@@ -36919,7 +36955,7 @@ ${lightForced}`;
       const history = { "title": "历史记录", "clear": "清空", "clearTitle": "清空所有历史记录", "clearConfirmMessage": "确定要清空所有历史记录吗？此操作无法撤销。", "currentState": "当前状态", "timelineSubtitle": "浏览并跳转到任意编辑状态", "undoCount": "可撤销", "redoCount": "可重做", "undoAction": "撤销", "redoAction": "重做", "totalStates": "总数", "emptyState": "暂无历史记录。您的更改将在此处跟踪。", "justNow": "刚刚", "minutesAgo": "{count} 分钟前", "hoursAgo": "{count} 小时前", "undoItem": "之前的状态", "redoItem": "未来的状态", "pastTag": "过去", "futureTag": "未来", "currentTag": "当前", "scrollHint": "横向滚动可查看更多状态", "jumpLatest": "跳至最新", "hasFutureState": "存在可重做状态", "stateChange": "状态变更", "initialState": "初始状态", "actionTypeLabels": { "part": { "updateMetadata": "更新部件元数据", "updateProperty": "更新部件属性", "applyLayerDeltas": "应用部件图层改动" }, "layer": { "batchApplyLayerDeltas": "批量应用图层改动" }, "batch": { "updateOpacity": "批量更新不透明度", "updateOffset": "批量更新偏移", "updateColor": "批量更新颜色", "updatePriority": "批量更新优先级" }, "palette": { "applyColor": "应用颜色", "applyTag": "应用调色标签", "applyTagOffset": "应用标签偏移", "resetTagOffset": "重置标签偏移", "updateTag": "更新调色标签", "createTagAndReplace": "创建标签并替换", "renameTagReferences": "重命名标签引用", "deleteTag": "删除调色标签", "clear": "清空调色板", "savedColor": { "add": "添加收藏颜色", "update": "更新收藏颜色", "delete": "删除收藏颜色", "clear": "清空收藏颜色" } }, "stack": { "add": "新增堆栈", "remove": "删除堆栈", "move": "移动堆栈", "clear": "清空堆栈", "rename": "重命名堆栈" }, "asset": { "apply": "应用资源" } }, "actionScopeLabels": { "part": "部件", "layer": "图层", "batch": "批量", "palette": "调色", "stack": "堆栈", "asset": "资源" }, "operationContentLabels": { "color": "颜色", "opacity": "透明度", "shift": "位移", "order": "顺序", "layer": "图层", "property": "属性", "tag": "标签", "general": "编辑" } };
       const groupNames = { "Item": "道具", "Cosplay": "Cosplay", "Hair": "头发", "Headwear": "头饰", "Face": "面部", "Markings": "痕迹/纹身", "ClothUpper": "上身服装", "ClothLower": "下身服装", "Hands": "手部", "Feet": "足部", "Accessories": "配饰", "HiddenBody": "隐藏身体部件", "Appearance": "外观" };
       const cloudflareSync = { "title": "同步方式", "enable": "使用 Cloudflare 同步", "description": "开启后，Cloudflare 成为衣橱的主要同步源；BC 不再上传衣橱内容。关闭后改用 BC，云端副本不会自动删除。", "allDevicesHint": "请在每台设备开启 Cloudflare；仍使用 BC 同步的旧设备会形成分叉。", "bcLegacyChanged": "无法确认旧 BC 衣柜的数据没有变化，自动清理已暂停。请先导出备份，并检查所有设备的同步方式与衣柜内容；核对后再逐台开启 Cloudflare。不要直接删除旧数据。", "bcLegacyChangedShort": "旧 BC 数据尚未核对；自动清理已暂停。", "notConfigured": "此版本尚未配置 Cloudflare 服务地址。完成部署并更新脚本后才能开启；目前继续使用 BC 同步。", "serviceUnavailable": "当前版本未配置 Cloudflare 服务地址。衣橱仍保存在本机，Cloudflare 同步暂停；BC 不会自动接管。更新脚本后重试，或关闭此开关改用 BC。", "serviceNotReady": "服务未配置", "bcCleanupPending": "BC 旧衣柜副本仍占空间。Cloudflare 保存成功后会提交清理；BC 不回执，需在后续登录核对。", "bcCleanupPendingShort": "BC 旧副本待清理，暂时仍占 BC 空间。", "bcCleanupUnknown": "尚未核对 BC 旧衣柜副本。若已提交清理，将在下次登录核对结果。", "bcCleanupUnknownShort": "BC 旧副本状态待登录核对。", "bcCleanupVerified": "已在 BC 登录回读中核对：旧衣柜副本不存在。", "syncing": "正在同步到 Cloudflare…", "syncingShort": "同步中", "pending": "本机修改等待同步到 Cloudflare", "pendingShort": "待同步", "needsAttention": "Cloudflare 同步需要处理", "needsAttentionShort": "需处理", "syncedShort": "上次成功", "lastSynced": "最近同步：{time}", "waiting": "等待首次同步", "syncNow": "立即同步", "estimatedSize": "预计云端数据", "sizeAria": "Cloudflare 预计上传 {used}，上限 {limit}", "sizeHint": "按 UTF-8 JSON 估算下一次同步；仅本机衣物不计入。", "sizeOver": "预计已超上限，上传可能被拒绝。本机副本仍保留，请减少同步内容。", "changeFailed": "未能切换同步方式。请检查网络或服务配置后重试。", "syncFailed": "未能完成 Cloudflare 同步。请检查网络后重试。", "errorTooLarge": "云衣柜超过 8 MB 上限。请减少参与同步的内容后重试；本机副本仍保留。", "errorCapacityReached": "此免费服务已达到衣柜数量或今日创建额度。请稍后重试，或检查 Cloudflare 服务容量；本机副本仍保留。", "errorWriteLimit": "这把密钥今天已达到服务设置的写入上限（500 次）。本机修改仍保留，请在 UTC 次日重试。", "errorProvisioningUnavailable": "服务暂不能创建新云衣柜。请在 Cloudflare 部署中配置创建密钥后重试；本机副本仍保留。", "keyStorage": "恢复密钥已提交到 BC 扩展设置（默认成功，无回执）。建议另存一份；持有密钥的人可以访问云衣橱。", "keyNotSaved": "恢复密钥尚未提交到 BC。请立即复制并妥善保管。", "keyMissing": "此设备找不到恢复密钥。请先关闭 Cloudflare 同步，再导入原来的密钥。", "showKey": "显示恢复密钥", "recoveryKey": "恢复密钥", "copyKey": "复制密钥", "downloadKey": "下载恢复密钥", "keyDownloadFailed": "未能下载恢复密钥。请显示密钥并手动复制。", "hideKey": "隐藏密钥", "keyCopied": "已复制密钥。请保存在安全位置。", "copyManually": "浏览器未允许自动复制。请选中上方密钥手动复制。", "keepKeySafe": "请将密钥保存在安全位置。不要分享给他人。", "keyUnavailable": "无法读取恢复密钥。请重试；不要清除本站数据。", "restoreKey": "已有恢复密钥？", "changeKey": "切换云衣柜", "restoreHint": "导入会在本机保存密钥并尝试提交到 BC。重新开启同步后，本机衣橱会与这把密钥对应的云衣柜合并；旧密钥仍可访问旧云衣柜，不会被撤销。", "restore": "导入密钥", "restoreFailed": "未能导入密钥。请检查输入后重试。", "openDashboard": "打开云端数据页", "dashboardHint": "数据页只在打开时要求输入恢复密钥；密钥不会放进链接，也不会由网页保存。" };
-      const fileManagerPanel = { "ariaLabel": "衣橱面板", "title": "随身衣橱", "saveBackup": "保存备份", "importBackup": "备份导入", "saveCharacter": "保存当前穿着", "importBCX": "从 BCX 导入", "importPlayerWardrobe": "导入玩家衣柜", "settings": "设置", "toggleFilters": "微调部位", "lightMode": "浅色模式", "darkMode": "深色模式", "themedMode": "Themed 模式", "toggleTheme": "切换主题", "tabAriaLabel": "工作台标签", "tabWardrobe": "衣橱", "tabHistory": "历史", "tabStudio": "Studio", "tabSettings": "设置", "themeSettings": "主题设置", "halfOffsetsLabel": "旧版服装偏移减半", "halfOffsetsDescription": "预览和穿戴时，将旧码换算出的偏移除以 2。用于补偿 R134 的 WebGL 双倍位移，游戏修复后可关闭。", "forceSelfApplyTitle": "换装选项", "forceSelfApplyLabel": "允许对自己强制换装", "forceSelfApplyDescription": "开启后，仅在目标是自己时显示红色按钮，尝试越过 BC 换装设置。游戏仍可能拒绝更改。此设置只保存在本机。", "forceSelfApplySaveFailed": "未能保存此设置。请检查浏览器存储后重试。", "themedNotAvailable": "未检测到 Themed BC，使用默认浅色主题", "themedModeDesc": "Themed 模式使用 Themed BC 的颜色配置，需要安装并启用 Themed BC 插件。" };
+      const fileManagerPanel = { "ariaLabel": "衣橱面板", "title": "随身衣橱", "saveBackup": "保存备份", "importBackup": "备份导入", "saveCharacter": "保存当前穿着", "importBCX": "从 BCX 导入", "importPlayerWardrobe": "导入玩家衣柜", "settings": "设置", "toggleFilters": "微调部位", "lightMode": "浅色模式", "darkMode": "深色模式", "themedMode": "Themed 模式", "toggleTheme": "切换主题", "tabAriaLabel": "工作台标签", "tabWardrobe": "衣橱", "tabHistory": "历史", "tabStudio": "Studio", "tabSettings": "设置", "themeSettings": "主题设置", "halfOffsetsLabel": "旧衣偏移兼容", "halfOffsetsDescription": "按旧衣是否使用缩放调整预览和穿戴的平移，包括已转存的原生平移。穿戴新版服装时可关闭。", "patchedWebGLLabel": "已安装 WebGL 重复平移修复补丁", "forceSelfApplyTitle": "换装选项", "forceSelfApplyLabel": "允许对自己强制换装", "forceSelfApplyDescription": "开启后，仅在目标是自己时显示红色按钮，尝试越过 BC 换装设置。游戏仍可能拒绝更改。此设置只保存在本机。", "forceSelfApplySaveFailed": "未能保存此设置。请检查浏览器存储后重试。", "themedNotAvailable": "未检测到 Themed BC，使用默认浅色主题", "themedModeDesc": "Themed 模式使用 Themed BC 的颜色配置，需要安装并启用 Themed BC 插件。" };
       const historyViewer = { "title": "历史记录", "toggleToHistory": "查看历史", "toggleToFileManager": "查看衣橱", "clearAll": "清空全部", "clearAllConfirm": "清空当前历史记录？旧版归档副本仍可通过“导出历史”保存。此操作无法撤销。", "deleteRecord": "删除", "deleteConfirm": "确定要删除此历史记录吗？", "delete": "删除", "searchPlaceholder": "搜索历史记录...", "clearSearch": "清除", "timeFilter": "时间筛选", "filterAll": "全部", "filterToday": "今天", "filterWeek": "近7天", "loadRecord": "载入此记录", "apply": "应用", "cancel": "取消", "loadToPreview": "加载到预览", "recordedAt": "记录于", "emptyState": "暂无历史记录。您的装扮更改将自动记录在此。", "recordCount": "{count} 条记录", "saveFailedTitle": "历史记录未能保存", "saveFailedHelp": "刷新后可能丢失本次更改。请检查本站的存储权限，然后重试。", "retrySave": "重试保存", "copiesDifferTitle": "旧版历史副本仍占本机空间", "copiesDifferHelp": "浏览器暂未能归档它。请重试，或先导出包含两份记录的历史备份。", "retryArchive": "重试归档", "copyArchivedTitle": "旧版历史副本已保留", "copyArchivedHelp": "两份记录已存入浏览器数据库。可导出历史备份，另存到浏览器外。", "exportHistory": "导出历史", "exportPartial": "历史已导出，但未能读取归档副本。请保留本站数据，稍后重试。", "exportFailed": "无法导出历史，请重试。", "attentionRequired": "历史记录存储需要处理", "archivedReminder": "有旧版历史副本可导出" };
       const sidePreview = { "ariaLabel": "角色预览", "hint": "确认目标角色和预览效果后，再应用。", "targetCharacter": "目标角色", "noTargetCharacter": "无可用角色", "renderFailed": "预览加载失败，请重试。", "retry": "重新加载预览", "loading": "正在加载预览" };
       const stackDetail = { "ariaLabel": "Stack 详细信息面板", "title": "详细信息", "name": "名称", "group": "分组", "color": "颜色", "property": "属性", "overridePriority": "覆盖优先级", "opacity": "不透明度", "typeRecord": "类型记录", "offset": "偏移", "craft": "Craft", "craftSummary": "Craft（摘要）", "download": "下载", "downloadTitle": "下载整个 element", "copy": "复制", "copyTitle": "复制整个 element JSON", "placeholder": "请选择一个 stack 项查看详细信息", "unnamed": "（未命名）" };
@@ -40299,7 +40335,8 @@ ${lightForced}`;
         const cloudflareErrorKey = cloudflareSyncErrorKey(cloudflare.errorCode);
         const activeTab = useWbSelector((wb) => wb.activeTab);
         useWbSelector((wb) => wb.forceSelfApplyRevision);
-        const [halfOffsets, setHalfOffsets] = reactExports.useState(() => halveLegacyOffsets(hostWindow));
+        const [halfOffsets, setHalfOffsets] = reactExports.useState(() => readOffsetSetting(hostWindow, compatibilityKey));
+        const [patched, setPatched] = reactExports.useState(() => readOffsetSetting(hostWindow, patchedWebGLKey));
         const [cloudflareBusy, setCloudflareBusy] = reactExports.useState(false);
         const [recoveryKey, setRecoveryKey] = reactExports.useState("");
         const [showRestore, setShowRestore] = reactExports.useState(false);
@@ -40314,6 +40351,18 @@ ${lightForced}`;
         reactExports.useEffect(() => {
           if (activeTab !== "settings") setRecoveryKey("");
         }, [activeTab]);
+        const updateOffsets = (key, enabled) => {
+          try {
+            hostWindow.localStorage.setItem(key, String(enabled));
+            if (key === compatibilityKey) setHalfOffsets(enabled);
+            else setPatched(enabled);
+            const fs = getFs();
+            fs.renderer.removeCanvas(fs.previewItem);
+            fs.refreshThumbnails();
+          } catch {
+            void dialog2.alert(t("fileManagerPanel.forceSelfApplySaveFailed"));
+          }
+        };
         const onForceSelfApplyChange = async (enabled) => {
           if (!getWb().setForceSelfApplyEnabled(enabled)) {
             await dialog2.alert(t("fileManagerPanel.forceSelfApplySaveFailed"));
@@ -40574,18 +40623,17 @@ ${lightForced}`;
                 checked: halfOffsets,
                 label: t("fileManagerPanel.halfOffsetsLabel"),
                 description: t("fileManagerPanel.halfOffsetsDescription"),
-                onChange: (event) => {
-                  const enabled = event.currentTarget.checked;
-                  try {
-                    setHalveLegacyOffsets(hostWindow, enabled);
-                    setHalfOffsets(enabled);
-                    const fs = getFs();
-                    fs.renderer.removeCanvas(fs.previewItem);
-                    fs.refreshThumbnails();
-                  } catch {
-                    void dialog2.alert(t("fileManagerPanel.forceSelfApplySaveFailed"));
-                  }
-                }
+                onChange: (event) => updateOffsets(compatibilityKey, event.currentTarget.checked)
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              Switch,
+              {
+                mb: "sm",
+                checked: patched,
+                disabled: !halfOffsets,
+                label: t("fileManagerPanel.patchedWebGLLabel"),
+                onChange: (event) => updateOffsets(patchedWebGLKey, event.currentTarget.checked)
               }
             ),
             /* @__PURE__ */ jsxRuntimeExports.jsx(
