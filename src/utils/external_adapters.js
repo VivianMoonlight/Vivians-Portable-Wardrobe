@@ -1,4 +1,4 @@
-import { prepareOutfitOffsets } from '../services/migrate-outfit-offsets.js'
+import { markLiveOffsets, prepareOutfitOffsets } from '../services/migrate-outfit-offsets.js'
 /**
  * external_adapters.js
  * Centralizes and safely wraps all calls to external game engine functions with error handling.
@@ -15,7 +15,7 @@ function currentAppearanceBundle(character) {
     if (typeof hostWindow.ServerAppearanceBundle === 'function') {
         try {
             const bundle = hostWindow.ServerAppearanceBundle(character.Appearance);
-            if (Array.isArray(bundle)) return bundle;
+            if (Array.isArray(bundle)) return bundle.map(markLiveOffsets);
         } catch (error) {
             console.warn('[ExternalAdapter] Could not bundle current appearance:', error);
         }

@@ -3,6 +3,14 @@ export function readOffsetSetting(host, key) {
   try { return host.localStorage.getItem(key) === 'true' } catch { return false }
 }
 
+// Character snapshots contain the translations BC is already rendering.
+export function markLiveOffsets(bundle) {
+  const prop = bundle?.Property
+  if (!prop || !['TranslationX', 'TranslationY', 'LayerTranslationX', 'LayerTranslationY']
+    .some(key => prop[key] != null)) return bundle
+  return { ...bundle, vpwNativeOffsets: true }
+}
+
 const roundOffset = value => Math.sign(value) * Math.round(Math.abs(value))
 const isScaled = value => Number.isFinite(value) && value !== 1
 
@@ -10,6 +18,10 @@ export function prepareOutfitOffsets(data, host, character) {
   if (!Array.isArray(data)) return data
   const enabled = readOffsetSetting(host, compatibilityKey)
   return data.map(original => {
+    if (original?.vpwNativeOffsets === true) {
+      const { vpwNativeOffsets, ...live } = original
+      return live
+    }
     const bundle = prepareItem(original, host, character)
     const prop = bundle?.Property
     if (!enabled || !prop) return bundle

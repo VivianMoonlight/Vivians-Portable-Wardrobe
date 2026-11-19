@@ -1,4 +1,4 @@
-import { prepareOutfitOffsets } from '../services/migrate-outfit-offsets.js'
+import { markLiveOffsets, prepareOutfitOffsets } from '../services/migrate-outfit-offsets.js'
 /**
  * outfit_assembler.js
  * Pure data layer for collecting and assembling outfit bundles with proper handling
@@ -125,7 +125,7 @@ export function collectOutfitData(character) {
   if (!character?.Appearance) return [];
   return character.Appearance
     .filter(item => item?.Asset?.Group)
-    .map(item => ({
+    .map(item => markLiveOffsets({
       IsItem: item.Asset.Group.Category === "Item",
       Name: item.Asset.Name,
       Group: item.Asset.Group.Name,
@@ -452,7 +452,7 @@ export function assembleBundle({ baseCharacter, outfitData = [], filterSet = new
   if (!outfitData || !filterSet) return [];
   const processedList = _filter(outfitData, filterSet);
   if (!baseCharacter) return processedList;
-  const original = _safe('ServerAppearanceBundle', [])(baseCharacter.Appearance) || [];
+  const original = (_safe('ServerAppearanceBundle', [])(baseCharacter.Appearance) || []).map(markLiveOffsets);
 
   const lockedSet = new Set(
     (baseCharacter.Appearance || [])
