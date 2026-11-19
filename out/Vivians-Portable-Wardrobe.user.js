@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vivians Portable Wardrobe
 // @namespace    http://tampermonkey.net/
-// @version      0.10.1-react.28
+// @version      0.10.1-react.29
 // @author       VIVianMoonlight
 // @description  Portable Wardrobe for Bondage Club (React + Mantine, Shadow DOM isolated)
 // @downloadURL  https://cdn.jsdelivr.net/gh/VivianMoonlight/Vivians-Portable-Wardrobe@wardrobe-react/out/Vivians-Portable-Wardrobe.user.js
@@ -32,7 +32,7 @@
     return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
   };
   var require_main_001 = __commonJS({
-    "main-C-_AvRh_.js"(exports) {
+    "main-CQcaVJjL.js"(exports) {
       function _mergeNamespaces(n, m) {
         for (var i = 0; i < m.length; i++) {
           const e = m[i];
@@ -9285,7 +9285,7 @@
       instance.hasLoadedNamespace;
       instance.loadNamespaces;
       instance.loadLanguages;
-      const version = "0.10.1-react.28";
+      const version = "0.10.1-react.29";
       var _unsafeWindow = /* @__PURE__ */ (() => typeof unsafeWindow != "undefined" ? unsafeWindow : void 0)();
       const hostWindow = typeof _unsafeWindow !== "undefined" ? _unsafeWindow : window;
       const doc = hostWindow.document;
@@ -9746,12 +9746,21 @@ One of mods you are using is using an old version of SDK. It will work for now b
           return false;
         }
       }
+      function markLiveOffsets(bundle) {
+        const prop = bundle?.Property;
+        if (!prop || !["TranslationX", "TranslationY", "LayerTranslationX", "LayerTranslationY"].some((key) => prop[key] != null)) return bundle;
+        return { ...bundle, vpwNativeOffsets: true };
+      }
       const roundOffset = (value) => Math.sign(value) * Math.round(Math.abs(value));
       const isScaled = (value) => Number.isFinite(value) && value !== 1;
       function prepareOutfitOffsets(data, host, character) {
         if (!Array.isArray(data)) return data;
         const enabled = readOffsetSetting(host, compatibilityKey);
         return data.map((original) => {
+          if (original?.vpwNativeOffsets === true) {
+            const { vpwNativeOffsets, ...live } = original;
+            return live;
+          }
           const bundle = prepareItem(original, host, character);
           const prop = bundle?.Property;
           if (!enabled || !prop) return bundle;
@@ -9921,7 +9930,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
       }
       function collectOutfitData(character) {
         if (!character?.Appearance) return [];
-        return character.Appearance.filter((item) => item?.Asset?.Group).map((item) => ({
+        return character.Appearance.filter((item) => item?.Asset?.Group).map((item) => markLiveOffsets({
           IsItem: item.Asset.Group.Category === "Item",
           Name: item.Asset.Name,
           Group: item.Asset.Group.Name,
@@ -10124,7 +10133,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
         if (!outfitData || !filterSet) return [];
         const processedList = _filter(outfitData, filterSet);
         if (!baseCharacter) return processedList;
-        const original = _safe("ServerAppearanceBundle", [])(baseCharacter.Appearance) || [];
+        const original = (_safe("ServerAppearanceBundle", [])(baseCharacter.Appearance) || []).map(markLiveOffsets);
         const lockedSet = new Set(
           (baseCharacter.Appearance || []).filter((a) => _safe("InventoryItemHasEffect", false)(_safe("InventoryGet", null)(baseCharacter, a.Asset?.Group?.Name), "Lock")).map((a) => a.Asset?.Group?.Name)
         );
@@ -16159,7 +16168,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
         if (typeof hostWindow.ServerAppearanceBundle === "function") {
           try {
             const bundle = hostWindow.ServerAppearanceBundle(character.Appearance);
-            if (Array.isArray(bundle)) return bundle;
+            if (Array.isArray(bundle)) return bundle.map(markLiveOffsets);
           } catch (error) {
             console.warn("[ExternalAdapter] Could not bundle current appearance:", error);
           }
