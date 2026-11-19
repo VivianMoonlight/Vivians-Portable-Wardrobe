@@ -73,7 +73,7 @@ export function FileThumbnail({ item }: FileThumbnailProps) {
           if (inViewport) start()
           else stop()
         },
-        { root: null, rootMargin: '180px 0px', threshold: 0.01 },
+        { root: null, rootMargin: '0px', threshold: 0.01 },
       )
       io.observe(root)
     } else {

@@ -39,7 +39,7 @@ export class RenderService {
         const dataKey = JSON.stringify(item.data);
         const width = preview ? this.previewwidth : this.thumbwidth;
         const height = preview ? this.previewheight : this.thumbheight;
-        const key = `${width}x${height}:${dataKey}`;
+        const key = `${preview ? 'preview' : 'card'}:${width}x${height}:${dataKey}`;
         let meta = this.registry.get(item);
         if (!meta) {
             meta = { keys: new Map(), observers: new Set(), preview: false };
@@ -68,6 +68,11 @@ export class RenderService {
             this.entries.set(entry.key, entry);
         } else if (entry.phase === 'queued' && description.preview) {
             entry.preview = true;
+        }
+        if (entry.phase === 'snapshot') {
+            this.cacheBytes -= this.cache.get(entry.key);
+            this.cache.delete(entry.key);
+            entry.phase = 'queued';
         }
         this._touch(entry.key);
         return entry;
@@ -103,7 +108,7 @@ export class RenderService {
         this.observers.set(id, { key: entry.key, callback, meta: description.meta });
         description.meta.observers.add(id);
         entry.observers.add(id);
-        this._call(callback, entry.canvas, { state: entry.phase === 'ready' ? 'ready' : 'loading' });
+        this._call(callback, entry.canvas, { state: entry.phase === 'live' ? entry.liveState : entry.phase === 'ready' ? 'ready' : 'loading' });
         this._requestPump();
         return () => this._unsubscribe(id);
     }
@@ -128,7 +133,12 @@ export class RenderService {
         const entry = this.entries.get(observer.key);
         if (!entry) return;
         entry.observers.delete(id);
-        if (!entry.observers.size && entry.phase !== 'ready') this._drop(entry);
+        if (entry.observers.size) return;
+        if (entry.phase === 'live') {
+            this._disposeSession(entry);
+            entry.phase = 'snapshot';
+            this._cache(entry);
+        } else if (entry.phase !== 'ready') this._drop(entry);
     }
 
     _next() {
@@ -161,10 +171,18 @@ export class RenderService {
         else this.activeThumbnails++;
         const generation = ++entry.generation;
         const onUpdate = (canvas, status) => {
-            if (this.entries.get(entry.key) !== entry || entry.generation !== generation || entry.phase !== 'active') return;
+            if (this.entries.get(entry.key) !== entry || entry.generation !== generation || !['active', 'live'].includes(entry.phase)) return;
             if (canvas) entry.canvas = canvas;
             if (status.state === 'error') {
                 this._drop(entry, status);
+                return;
+            }
+            if (status.live) {
+                if (entry.phase === 'active') this._releaseSlot(entry);
+                entry.phase = 'live';
+                entry.liveState = status.state;
+                this._notify(entry, status);
+                this._requestPump();
                 return;
             }
             const terminal = status.state === 'ready';
@@ -187,7 +205,7 @@ export class RenderService {
                 width: entry.width, height: entry.height, onUpdate,
             });
             // A warm BC image cache can finish during createRenderSession itself.
-            if (entry.phase !== 'active') session?.dispose();
+            if (entry.phase !== 'active' && entry.phase !== 'live') session?.dispose();
             else entry.session = session;
         } catch (error) {
             onUpdate(entry.canvas, { state: 'error', error });
@@ -261,7 +279,7 @@ export class RenderService {
     }
 
     /** Compatibility for callers that await a finished canvas. No polling is used. */
-    getCanvas(item, { timeout = 0, preview = this.registry.get(item)?.preview ?? false } = {}) {
+    getCanvas(item, { timeout = 20000, preview = this.registry.get(item)?.preview ?? false } = {}) {
         if (!item) return Promise.resolve(null);
         return new Promise((resolve, reject) => {
             let unsubscribe;
@@ -291,15 +309,7 @@ export class RenderService {
         const description = this._describe(item, false);
         const entry = this._entry(description);
         entry.canvas ||= this.canvasFactory(entry.width, entry.height);
-        let unsubscribe;
-        let finished = false;
-        unsubscribe = this.observe(item, (_canvas, status) => {
-            if (status.state !== 'loading') {
-                finished = true;
-                unsubscribe?.();
-            }
-        });
-        if (finished) unsubscribe();
+        void this.getCanvas(item, { preview: false }).catch(() => {});
         return entry.canvas;
     }
 

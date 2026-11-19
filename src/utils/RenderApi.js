@@ -3,6 +3,7 @@ import { hostWindow } from './host-window.js'
 
 const sessions = new Map()
 let capturing = null
+let nativeCache = false
 let hooksActive = false
 let characterId = 0
 const failedImagesByOutfit = new Map()
@@ -40,18 +41,31 @@ export function installRenderHooks(modApi) {
     return true
   }
   try {
+    nativeCache = Number(/^R(\d+)/.exec(hostWindow.GameVersion)?.[1]) >= 134
+    if (nativeCache) {
+      hook('DrawProcess', (args, next) => {
+        const result = next(args)
+        for (const [character, session] of sessions) {
+          if (character.MustDraw) session.scheduleDraw(false)
+        }
+        return result
+      })
+    }
     const canvasImages = hook('DrawGetImage', (args, next) => {
       const image = next(args)
-      capturing?.watchImage(image)
+      if (nativeCache) capturing?.observePixels(image)
+      else capturing?.watchImage(image)
       return image
     })
     const glImages = hook('GLDrawLoadImage', (args, next) => {
       const texture = next(args)
-      capturing?.watchImage(hostWindow.GLDrawImageCache?.get(args[1]))
+      if (nativeCache) capturing?.observePixels(texture)
+      else capturing?.watchImage(hostWindow.GLDrawImageCache?.get(args[1]))
       return texture
     })
     hook('CharacterAppearanceBuildCanvas', (args, next) => {
       const session = sessions.get(args[0])
+      if (nativeCache && session) session.beginBuild()
       const result = capture(session || null, () => next(args))
       // The game can rebuild this character itself, e.g. after context recovery.
       if (session && !session.drawing) session.scheduleDraw(false)
@@ -83,6 +97,7 @@ function imageState(image) {
 export function createRenderSession({ data = [], canvas, width = 500, height = 1000, onUpdate = () => {}, timeout = 20000 } = {}) {
   const images = new Map()
   const outfitKey = JSON.stringify(data)
+  let missingPixels = false
   let character = null
   let frame = null
   let deadline = null
@@ -111,6 +126,10 @@ export function createRenderSession({ data = [], canvas, width = 500, height = 1
 
   const session = {
     drawing: false,
+    beginBuild() { missingPixels = false },
+    observePixels(pixels) {
+      if (!pixels) missingPixels = true
+    },
     watchImage(image) {
       // Dynamic layers can supply a ready-made canvas instead of an Image.
       if (disposed || !image || typeof image.complete !== 'boolean'
@@ -156,6 +175,7 @@ export function createRenderSession({ data = [], canvas, width = 500, height = 1
     try {
       const ctx = canvas?.getContext('2d')
       if (!ctx) throw new Error('Preview canvas is unavailable')
+      if (nativeCache && (!prepared || character.MustDraw || rebuild)) missingPixels = false
       capture(session, () => {
         if (!prepared) {
           hostWindow.CharacterNaked(character, false)
@@ -172,6 +192,10 @@ export function createRenderSession({ data = [], canvas, width = 500, height = 1
           hostWindow.DrawCharacter(character, 0, 0, Math.min(width / 500, height / 1000), true, ctx)
         } finally { ctx.restore() }
       })
+      if (nativeCache) {
+        emit({ state: missingPixels ? 'loading' : 'ready', live: true })
+        return
+      }
       const states = [...images.keys()].map(imageState)
       if (states.includes('error')) {
         emit({ state: 'error', error: 'A preview image failed to load after BC retried it' })
@@ -194,7 +218,7 @@ export function createRenderSession({ data = [], canvas, width = 500, height = 1
     character.MemberNumber = 1000000000 + characterId
     sessions.set(character, session)
     // A stalled request ends with a retryable error, never a cached partial success.
-    deadline = hostWindow.setTimeout(() => emit({ state: 'error', error: 'Preview image loading timed out' }), timeout)
+    if (!nativeCache) deadline = hostWindow.setTimeout(() => emit({ state: 'error', error: 'Preview image loading timed out' }), timeout)
     draw()
   } catch (error) {
     emit({ state: 'error', error: error instanceof Error ? error.message : String(error) })
