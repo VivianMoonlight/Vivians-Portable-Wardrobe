@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vivians Portable Wardrobe
 // @namespace    http://tampermonkey.net/
-// @version      0.10.1-react.23
+// @version      0.10.1-react.24
 // @author       VIVianMoonlight
 // @description  Portable Wardrobe for Bondage Club (React + Mantine, Shadow DOM isolated)
 // @downloadURL  https://cdn.jsdelivr.net/gh/VivianMoonlight/Vivians-Portable-Wardrobe@wardrobe-react/out/Vivians-Portable-Wardrobe.user.js
@@ -32,7 +32,7 @@
     return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
   };
   var require_main_001 = __commonJS({
-    "main-RZc_AOyx.js"(exports) {
+    "main-D0Zeupif.js"(exports) {
       function _mergeNamespaces(n, m) {
         for (var i = 0; i < m.length; i++) {
           const e = m[i];
@@ -9285,7 +9285,7 @@
       instance.hasLoadedNamespace;
       instance.loadNamespaces;
       instance.loadLanguages;
-      const version = "0.10.1-react.23";
+      const version = "0.10.1-react.24";
       var _unsafeWindow = /* @__PURE__ */ (() => typeof unsafeWindow != "undefined" ? unsafeWindow : void 0)();
       const hostWindow = typeof _unsafeWindow !== "undefined" ? _unsafeWindow : window;
       const doc = hostWindow.document;
@@ -9784,8 +9784,10 @@ One of mods you are using is using an old version of SDK. It will work for now b
               }
               const layer = layers[index2];
               const origin = origins[layer.Name ?? ""] ?? host.PropertyLayerOrigin.resolveLayer(layer, field2, item.Property);
-              if (Object.keys(coord).length !== 1 || !Number.isFinite(coord[""]) || !Number.isFinite(origin?.[""])) return bundle;
-              const offset2 = (coord[""] - origin[""]) / divisor;
+              const pose = character.DrawPose?.find((pose2) => origin?.[pose2] != null) ?? "";
+              const drawOrigin = origin?.[pose];
+              if (Object.keys(coord).length !== 1 || !Number.isFinite(coord[""]) || !Number.isFinite(drawOrigin)) return bundle;
+              const offset2 = (coord[""] - drawOrigin) / divisor;
               shifts.push(Math.sign(offset2) * Math.round(Math.abs(offset2)));
             }
             if (shifts.every((value) => value === shifts[0])) {
