@@ -1,21 +1,49 @@
-const halfOffsetKey = 'vpw.halveLegacyOffsets'
-export function halveLegacyOffsets(host) {
-  try { return host.localStorage.getItem(halfOffsetKey) === 'true' } catch { return false }
+export const compatibilityKey = 'vpw.halveLegacyOffsets'
+export const patchedWebGLKey = 'vpw.patchedWebGL'
+export function readOffsetSetting(host, key) {
+  try { return host.localStorage.getItem(key) === 'true' } catch { return false }
 }
 
-export function setHalveLegacyOffsets(host, enabled) {
-  host.localStorage.setItem(halfOffsetKey, String(enabled))
-}
+const roundOffset = value => Math.sign(value) * Math.round(Math.abs(value))
+const isScaled = value => Number.isFinite(value) && value !== 1
 
-// Translate legacy absolute coordinates on the appearance bundle passed to BC.
 export function prepareOutfitOffsets(data, host, character) {
-  if (!Array.isArray(data) || !host.PropertyLayerOrigin?.getOriginal ||
-      !host.ServerBundledItemToAppearanceItem) return data
-  const divisor = halveLegacyOffsets(host) ? 2 : 1
-  return data.map(bundle => prepareItem(bundle, host, character, divisor))
+  if (!Array.isArray(data)) return data
+  const enabled = readOffsetSetting(host, compatibilityKey)
+  const patched = enabled && readOffsetSetting(host, patchedWebGLKey)
+  return data.map(original => {
+    const bundle = prepareItem(original, host, character)
+    const prop = bundle?.Property
+    if (!enabled || !prop) return bundle
+    let transforms = prop
+    // BC may serialize per-layer numeric records as strings in item bundles.
+    if (['LayerScaleX', 'LayerScaleY', 'LayerTranslationX', 'LayerTranslationY']
+      .some(key => typeof prop[key] === 'string')) {
+      try {
+        transforms = host.ServerBundledItemToAppearanceItem(character.AssetFamily,
+          JSON.parse(JSON.stringify(bundle)), { C: character })?.Property
+      } catch { return bundle }
+      if (!transforms) return bundle
+    }
+    const scaled = [transforms.ScaleX, transforms.ScaleY,
+      ...Object.values(transforms.LayerScaleX ?? {}), ...Object.values(transforms.LayerScaleY ?? {})].some(isScaled)
+    const factor = (scaled ? 2 : 1) / (patched ? 1 : 2)
+    if (factor === 1) return bundle
+    const next = { ...prop }
+    for (const axis of ['X', 'Y']) {
+      const global = 'Translation' + axis
+      const layer = 'LayerTranslation' + axis
+      if (Number.isFinite(prop[global])) next[global] = roundOffset(prop[global] * factor)
+      if (prop[layer] != null && transforms[layer] && typeof transforms[layer] === 'object') {
+        next[layer] = Object.fromEntries(Object.entries(transforms[layer]).map(([name, value]) =>
+          [name, Number.isFinite(value) ? roundOffset(value * factor) : value]))
+      }
+    }
+    return { ...bundle, Property: next }
+  })
 }
 
-function prepareItem(bundle, host, character, divisor) {
+function prepareItem(bundle, host, character) {
   const prop = bundle?.Property
   const overrides = prop?.LayerOverrides
   if (!Array.isArray(overrides) || !overrides.length) return bundle
@@ -46,8 +74,8 @@ function prepareItem(bundle, host, character, divisor) {
         const drawOrigin = origin?.[pose]
         if (Object.keys(coord).length !== 1 || !Number.isFinite(coord['']) ||
             !Number.isFinite(drawOrigin)) return bundle
-        const offset = (coord[''] - drawOrigin) / divisor
-        shifts.push(Math.sign(offset) * Math.round(Math.abs(offset)))
+        const offset = coord[''] - drawOrigin
+        shifts.push(roundOffset(offset))
       }
       if (shifts.every(value => value === shifts[0])) {
         if (shifts[0]) next[globalKey] = shifts[0]

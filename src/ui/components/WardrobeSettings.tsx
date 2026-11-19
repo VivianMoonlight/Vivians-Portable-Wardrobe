@@ -6,7 +6,7 @@ import { getFs, getWb, useFsSelector, useWbSelector } from '@/stores/hooks'
 import { useDialog } from '@/ui/dialog/DialogProvider'
 import { useTheme } from '@/ui/theme/ThemeProvider'
 import { hostWindow } from '@/utils/host-window.js'
-import { halveLegacyOffsets, setHalveLegacyOffsets } from '@/services/migrate-outfit-offsets.js'
+import { compatibilityKey, patchedWebGLKey, readOffsetSetting } from '@/services/migrate-outfit-offsets.js'
 import { configuredCloudflareUrl } from '@/services/cloudflare-wardrobe-client.js'
 import { cloudflareSyncErrorKey } from '@/ui/cloudflare-sync-error'
 
@@ -23,7 +23,8 @@ export function WardrobeSettings() {
   const cloudflareErrorKey = cloudflareSyncErrorKey(cloudflare.errorCode)
   const activeTab = useWbSelector((wb) => wb.activeTab)
   useWbSelector((wb) => wb.forceSelfApplyRevision)
-  const [halfOffsets, setHalfOffsets] = useState(() => halveLegacyOffsets(hostWindow))
+  const [halfOffsets, setHalfOffsets] = useState(() => readOffsetSetting(hostWindow, compatibilityKey))
+  const [patched, setPatched] = useState(() => readOffsetSetting(hostWindow, patchedWebGLKey))
   const [cloudflareBusy, setCloudflareBusy] = useState(false)
   const [recoveryKey, setRecoveryKey] = useState('')
   const [showRestore, setShowRestore] = useState(false)
@@ -40,6 +41,17 @@ export function WardrobeSettings() {
   useEffect(() => {
     if (activeTab !== 'settings') setRecoveryKey('')
   }, [activeTab])
+
+  const updateOffsets = (key: string, enabled: boolean) => {
+    try {
+      hostWindow.localStorage.setItem(key, String(enabled))
+      if (key === compatibilityKey) setHalfOffsets(enabled)
+      else setPatched(enabled)
+      const fs = getFs()
+      fs.renderer.removeCanvas(fs.previewItem)
+      fs.refreshThumbnails()
+    } catch { void dialog.alert(t('fileManagerPanel.forceSelfApplySaveFailed')) }
+  }
 
   const onForceSelfApplyChange = async (enabled: boolean) => {
     if (!getWb().setForceSelfApplyEnabled(enabled)) {
@@ -247,16 +259,11 @@ export function WardrobeSettings() {
         <Switch mb="sm" checked={halfOffsets}
           label={t('fileManagerPanel.halfOffsetsLabel')}
           description={t('fileManagerPanel.halfOffsetsDescription')}
-          onChange={(event) => {
-            const enabled = event.currentTarget.checked
-            try {
-              setHalveLegacyOffsets(hostWindow, enabled)
-              setHalfOffsets(enabled)
-              const fs = getFs()
-              fs.renderer.removeCanvas(fs.previewItem)
-              fs.refreshThumbnails()
-            } catch { void dialog.alert(t('fileManagerPanel.forceSelfApplySaveFailed')) }
-          }}
+          onChange={event => updateOffsets(compatibilityKey, event.currentTarget.checked)}
+        />
+        <Switch mb="sm" checked={patched} disabled={!halfOffsets}
+          label={t('fileManagerPanel.patchedWebGLLabel')}
+          onChange={event => updateOffsets(patchedWebGLKey, event.currentTarget.checked)}
         />
         <Switch
           color="red"
