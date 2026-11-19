@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vivians Portable Wardrobe
 // @namespace    http://tampermonkey.net/
-// @version      0.10.1-react.24
+// @version      0.10.1-react.25
 // @author       VIVianMoonlight
 // @description  Portable Wardrobe for Bondage Club (React + Mantine, Shadow DOM isolated)
 // @downloadURL  https://cdn.jsdelivr.net/gh/VivianMoonlight/Vivians-Portable-Wardrobe@wardrobe-react/out/Vivians-Portable-Wardrobe.user.js
@@ -32,7 +32,7 @@
     return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
   };
   var require_main_001 = __commonJS({
-    "main-D0Zeupif.js"(exports) {
+    "main-C_R_5-Dr.js"(exports) {
       function _mergeNamespaces(n, m) {
         for (var i = 0; i < m.length; i++) {
           const e = m[i];
@@ -9285,7 +9285,7 @@
       instance.hasLoadedNamespace;
       instance.loadNamespaces;
       instance.loadLanguages;
-      const version = "0.10.1-react.24";
+      const version = "0.10.1-react.25";
       var _unsafeWindow = /* @__PURE__ */ (() => typeof unsafeWindow != "undefined" ? unsafeWindow : void 0)();
       const hostWindow = typeof _unsafeWindow !== "undefined" ? _unsafeWindow : window;
       const doc = hostWindow.document;
@@ -18919,7 +18919,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
           return el;
         }
         function show(visible2) {
-          bar.style.display = visible2 ? "flex" : "none";
+          bar.style.display = visible2 && (!canvasControls || retry || message.textContent) ? "flex" : "none";
           retryButton.hidden = !retry;
           for (const el of controls.slice(0, 3)) el.hidden = !!retry;
         }
@@ -18976,9 +18976,9 @@ One of mods you are using is using an old version of SDK. It will work for now b
           if (phase !== "items") return;
           phase = "clothes";
           const visit = ++clothingVisit;
-          leaveDialog();
-          show(false);
           try {
+            leaveDialog();
+            show(false);
             host.CharacterAppearanceLoadCharacter(scratch, () => {
               if (visit === clothingVisit) void returnToItems();
             });
@@ -19059,7 +19059,31 @@ One of mods you are using is using an old version of SDK. It will work for now b
         }
         const previousGetter = host.CharacterGetCurrentHandlers[SCREEN];
         host.CharacterGetCurrentHandlers[SCREEN] = () => scratch;
+        register("DrawCharacter", (args, next) => {
+          if (atParent() && args[0] === host.Player && args[1] === 0) return;
+          return next(args);
+        });
+        const canvasControls = typeof host.DrawButton === "function" && typeof host.DialogDraw === "function";
+        const actions = [
+          [labels.clothes, clothes],
+          [labels.export, () => finish("saved")],
+          [labels.discard, () => finish("cancelled")]
+        ];
+        register("DialogDraw", (args, next) => {
+          const result = next(args);
+          if (canvasControls && atParent() && phase === "items" && !retry) {
+            actions.forEach(([label], i) => host.DrawButton(30, 40 + 95 * i, 420, 80, label, "White"));
+          }
+          return result;
+        });
         register("DialogClick", (args, next) => {
+          if (canvasControls && atParent() && phase === "items" && !retry) {
+            const action = actions.find((_, i) => host.MouseIn(30, 40 + 95 * i, 420, 80));
+            if (action) {
+              action[1]();
+              return;
+            }
+          }
           if (atParent() && host.MouseIn(0, 0, 500, 1e3)) return;
           return next(args);
         });
@@ -19069,7 +19093,9 @@ One of mods you are using is using an old version of SDK. It will work for now b
         });
         register("DialogLeave", (args, next) => {
           if (!leavingDialog && atParent() && phase === "items" && host.CurrentCharacter === scratch) {
-            void finish("cancelled");
+            group = scratch.FocusGroup?.Name || group;
+            next([{ reload: false }]);
+            loadDialog();
             return;
           }
           return next(args);
