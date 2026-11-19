@@ -42,9 +42,11 @@ function prepareItem(bundle, host, character, divisor) {
         if (coord == null) { shifts.push(0); continue }
         const layer = layers[index]
         const origin = origins[layer.Name ?? ''] ?? host.PropertyLayerOrigin.resolveLayer(layer, field, item.Property)
+        const pose = character.DrawPose?.find(pose => origin?.[pose] != null) ?? ''
+        const drawOrigin = origin?.[pose]
         if (Object.keys(coord).length !== 1 || !Number.isFinite(coord['']) ||
-            !Number.isFinite(origin?.[''])) return bundle
-        const offset = (coord[''] - origin['']) / divisor
+            !Number.isFinite(drawOrigin)) return bundle
+        const offset = (coord[''] - drawOrigin) / divisor
         shifts.push(Math.sign(offset) * Math.round(Math.abs(offset)))
       }
       if (shifts.every(value => value === shifts[0])) {
