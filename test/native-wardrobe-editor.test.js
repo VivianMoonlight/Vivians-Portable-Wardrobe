@@ -240,3 +240,115 @@ test('cancel before asynchronous BC Appearance entry waits for the screen then r
   context.assertRestored()
   context.editor.dispose()
 })
+
+function setupRestraints() {
+  const context = setup()
+  const { host } = context
+  const buttons = new Map()
+  function element(tag) {
+    return {
+      style: {}, setAttribute() {}, remove() {}, append() {},
+      addEventListener(event, handler) {
+        if (tag === 'button' && event === 'click') buttons.set(this.textContent, handler)
+      },
+    }
+  }
+  host.document = { createElement: element, body: element('body') }
+  host.AssetGroup = [{ Name: 'ItemNeck', Category: 'Item', Zone: [[0, 0, 10, 10]] }]
+  host.CharacterGetCurrentHandlers = {}
+  host.DialogLeave = () => { host.CurrentCharacter = null; host.DialogMenuMode = null }
+  host.CharacterSetCurrent = c => { host.CurrentCharacter = c }
+  host.DialogChangeFocusToGroup = (c, group) => {
+    c.FocusGroup = typeof group === 'string' ? { Name: group } : group
+    host.DialogMenuMode = 'items'
+  }
+  const switchScreen = host.CommonSetScreen
+  let failNext = null
+  host.CommonSetScreen = async (module, screen) => {
+    host[host.CurrentScreen + 'Unload']?.()
+    if (screen === failNext) {
+      failNext = null
+      host[host.CurrentScreen + 'Load']?.()
+      return
+    }
+    switchScreen(module, screen)
+    host[screen + 'Load']?.()
+  }
+  const pending = context.editor.open({ bundle: context.source, restraints: {
+    clothes: 'clothes', export: 'export', discard: 'discard', retry: 'retry', returnFailed: 'failed',
+  } })
+  return { ...context, pending, buttons, scratch: host.CurrentCharacter,
+    failReturnTo(screen) { failNext = screen } }
+}
+
+test('restraint editing nests Appearance on the same character and exports once', async () => {
+  const c = setupRestraints()
+  await new Promise(resolve => setImmediate(resolve))
+  const { host, scratch } = c
+  assert.equal(host.CurrentScreen, 'VPWRestraints')
+  assert.equal(scratch.FocusGroup.Name, 'ItemNeck')
+  const collar = scratch.Appearance.find(i => i.Asset?.Group.Name === 'ItemNeck')
+  collar.Property = { Mode: 'new' }
+  for (const accept of [false, true]) {
+    c.buttons.get('clothes')()
+    assert.equal(host.CharacterAppearanceSelection, scratch)
+    const shirt = scratch.Appearance.find(i => i.Asset?.Group.Name === 'Cloth')
+    shirt.Color = '#abcdef'
+    if (accept) host.CharacterAppearanceReady(scratch)
+    else host.CharacterAppearanceExit(scratch)
+    await new Promise(resolve => setImmediate(resolve))
+    assert.equal(host.CurrentCharacter, scratch)
+    assert.equal(scratch.FocusGroup.Name, 'ItemNeck')
+    assert.equal(scratch.Appearance.find(i => i.Asset?.Group.Name === 'Cloth').Color,
+      accept ? '#abcdef' : '#112233')
+    assert.equal(c.deleted.length, 0)
+  }
+  c.failReturnTo('ChatRoom')
+  c.buttons.get('export')()
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(c.deleted.length, 0)
+  c.buttons.get('retry')()
+  const result = await c.pending
+  assert.equal(result.exported, true)
+  assert.deepEqual(result.bundle.find(i => i.Group === 'ItemNeck').Property, { Mode: 'new' })
+  assert.equal(result.bundle.find(i => i.Group === 'Cloth').Color, '#abcdef')
+  assert.equal(host.CurrentScreen, 'ChatRoom')
+  assert.equal(c.deleted.length, 1)
+  assert.equal(host.VPWRestraintsRun, undefined)
+  assert.equal(c.intervals.size, 0)
+  c.editor.dispose()
+})
+
+test('failed clothing return retains the scratch, discard after retry drops all changes', async () => {
+  const c = setupRestraints()
+  await new Promise(resolve => setImmediate(resolve))
+  c.buttons.get('clothes')()
+  c.failReturnTo('VPWRestraints')
+  c.host.CharacterAppearanceReady(c.scratch)
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(c.host.CurrentScreen, 'Appearance')
+  assert.equal(c.deleted.length, 0)
+  c.buttons.get('retry')()
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(c.host.CurrentCharacter, c.scratch)
+  c.buttons.get('discard')()
+  assert.deepEqual(await c.pending, { status: 'cancelled' })
+  assert.equal(c.deleted.length, 1)
+  c.editor.dispose()
+})
+
+test('external navigation cancels the session and ignores a late clothing callback', async () => {
+  const c = setupRestraints()
+  await new Promise(resolve => setImmediate(resolve))
+  c.buttons.get('clothes')()
+  const late = c.host.CharacterAppearanceResultCallback
+  c.host.CurrentScreen = 'MainHall'
+  c.host.CurrentModule = 'Room'
+  c.tickIntervals()
+  assert.deepEqual(await c.pending, { status: 'cancelled' })
+  late(true)
+  assert.equal(c.host.CurrentScreen, 'MainHall')
+  assert.equal(c.deleted.length, 1)
+  assert.equal(c.intervals.size, 0)
+  c.editor.dispose()
+})

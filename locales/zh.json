@@ -1,5 +1,10 @@
 {
   "outfitEditor": {
+    "editClothes": "编辑服装",
+    "exportDraft": "导出套装",
+    "editRestraints": "编辑拘束物品",
+    "retryReturn": "重试返回",
+    "returnFailed": "BC 未能返回原界面。",
     "nativeWardrobeOpening": "正在打开 BC 原生衣柜…",
     "nativeWardrobeFailed": "无法打开 BC 原生衣柜：{error}",
     "retryWardrobe": "重试打开 BC 衣柜",

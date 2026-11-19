@@ -215,3 +215,47 @@ test('mobile Appearance returns to the item page; BC item settings remain draft 
   expect(state.appearance).toEqual(state.original)
   expect(pageErrors).toEqual([])
 })
+
+test('restraint entry returns from clothing editing before exporting a saved outfit', async ({ page }) => {
+  const name = 'Native restraint set'
+  await setupWardrobe(page, name, [
+    { Group: 'ItemNeck', Name: 'PlainCollar', IsItem: true, Property: { Mode: 'old' } },
+    { Group: 'Cloth', Name: 'TealShirt' },
+  ])
+  await page.evaluate(() => {
+    window.CharacterSetCurrent = character => { window.CurrentCharacter = character }
+    window.DialogChangeFocusToGroup = (character, group) => {
+      character.FocusGroup = window.AssetGroup.find(entry => entry.Name === group)
+    }
+    window.DialogLeave = () => { window.CurrentCharacter = null }
+    const changeScreen = window.CommonSetScreen
+    window.CommonSetScreen = async (module, screen) => {
+      window[window.CurrentScreen + 'Unload']?.()
+      await changeScreen(module, screen)
+      await window[screen + 'Load']?.()
+    }
+  })
+  await page.getByTitle("Vivian's Portable Wardrobe", { exact: true }).click()
+  await page.getByRole('button', { name: 'Preview ' + name, exact: true }).click()
+  await page.getByRole('button', { name: 'Edit outfit', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Edit clothes' })).toBeVisible()
+  await page.evaluate(() => {
+    if (window.CurrentCharacter === window.Player) throw new Error('Editing Player')
+    window.InventoryGet(window.CurrentCharacter, 'ItemNeck').Property = { Mode: 'edited' }
+  })
+  await page.getByRole('button', { name: 'Edit clothes' }).click()
+  await expect.poll(() => page.evaluate(() => window.CurrentScreen)).toBe('Appearance')
+  await page.evaluate(() => window.__wardrobeEditorProbe.accept(true))
+  await expect.poll(() => page.evaluate(() => window.CurrentCharacter?.FocusGroup?.Name)).toBe('ItemNeck')
+  await page.getByRole('button', { name: 'Export outfit' }).click()
+  await expect(page.getByTestId('vpw-editor-item-page')).toBeVisible()
+  expect((await savedPart(page, name, 'ItemNeck')).Property.Mode).toBe('old')
+  await page.getByRole('button', { name: 'Overwrite outfit' }).click()
+  await expect.poll(async () => (await savedPart(page, name, 'ItemNeck')).Property.Mode).toBe('edited')
+  const state = await page.evaluate(() => ({
+    deleted: window.__wardrobeEditorProbe.deleted.length,
+    sent: window.__wardrobeEditorProbe.sent,
+    unchanged: JSON.stringify(window.Player.Appearance) === JSON.stringify(window.__wardrobeEditorProbe.appearance),
+  }))
+  expect(state).toEqual({ deleted: 1, sent: [], unchanged: true })
+})

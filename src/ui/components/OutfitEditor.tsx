@@ -158,6 +158,7 @@ function Editor({ outfitId, onClose, mobile }: { outfitId: string; onClose: () =
   const nativeController = useRef<AbortController | null>(null)
   const [source] = useState(() => readSource(outfitId))
   const [draft, setDraft] = useState<EditorPart[]>(() => source ? createOutfitDraft(source.data) as EditorPart[] : [])
+  const [exported, setExported] = useState(false)
   const [groups, setGroups] = useState<AssetGroupData[]>([])
   const [stage, setStage] = useState<'opening' | 'items' | 'failed'>('opening')
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null)
@@ -279,12 +280,17 @@ function Editor({ outfitId, onClose, mobile }: { outfitId: string; onClose: () =
     setNativeBusy(true)
     setError('')
     try {
-      const result = await openNativeWardrobeEditor({ bundle: draft, signal: controller.signal })
+      const result = await openNativeWardrobeEditor({ bundle: draft, signal: controller.signal, restraints: {
+        clothes: t('outfitEditor.editClothes'), export: t('outfitEditor.exportDraft'),
+        discard: t('outfitEditor.cancel'), retry: t('outfitEditor.retryReturn'),
+        returnFailed: t('outfitEditor.returnFailed'),
+      } })
       if (controller.signal.aborted) return
       if (result.status === 'cancelled') {
         if (initial) onClose()
         else setStage('items')
       } else {
+        setExported('exported' in result && !!result.exported)
         setDraft((before) => keepProtectedParts(before, result.bundle as EditorPart[]))
         setStage('items')
       }
@@ -402,15 +408,15 @@ function Editor({ outfitId, onClose, mobile }: { outfitId: string; onClose: () =
       {error && <Alert color="red" role="alert">{error}</Alert>}
       <Group justify="space-between" align="start" gap="sm">
         <Stack gap={2}>
-          <Text size="sm" fw={600}>{t('outfitEditor.itemPageTitle')}</Text>
-          <Text size="xs" c="dimmed">{t('outfitEditor.itemPageHint')}</Text>
+          <Text size="sm" fw={600}>{t(exported ? 'outfitEditor.exportDraft' : 'outfitEditor.itemPageTitle')}</Text>
+          {!exported && <Text size="xs" c="dimmed">{t('outfitEditor.itemPageHint')}</Text>}
         </Stack>
         <Button size="xs" variant="light" data-testid="vpw-editor-reopen-wardrobe"
           onClick={() => void openWardrobe(false)} disabled={saving || nativeBusy}>
-          {t('outfitEditor.reopenWardrobe')}
+          {t(exported ? 'outfitEditor.editRestraints' : 'outfitEditor.reopenWardrobe')}
         </Button>
       </Group>
-      <Box className="vpw-outfit-editor-layout">
+      {exported ? <DraftPreview draft={draft} /> : <Box className="vpw-outfit-editor-layout">
         <Box className="vpw-outfit-editor-preview-column">
           <Text size="xs" fw={600}>{t('outfitEditor.preview')}</Text>
           <DraftPreview draft={draft} />
@@ -479,7 +485,7 @@ function Editor({ outfitId, onClose, mobile }: { outfitId: string; onClose: () =
             </Stack>}
           </Box>
         </Box>
-      </Box>
+      </Box>}
       <Group className="vpw-outfit-editor-footer" gap="xs" justify="flex-end">
         <Button variant="subtle" onClick={() => void closeWithDiscardCheck()} disabled={saving || nativeBusy}>{t('outfitEditor.cancel')}</Button>
         <Button variant="default" onClick={() => void saveCopy()} disabled={saving || nativeBusy}>{t('outfitEditor.saveCopy')}</Button>

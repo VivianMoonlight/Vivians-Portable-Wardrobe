@@ -1,3 +1,4 @@
+import { createRestraintSession } from './native-restraint-session.js'
 import { isHiddenBodySlot } from './hidden-body-slots.js'
 
 const clone = value => JSON.parse(JSON.stringify(value))
@@ -32,18 +33,18 @@ function copyAppearanceItem(item) {
   return copy
 }
 
-function appearanceBundle(host, character) {
+function appearanceBundle(host, character, includeItems = false) {
   const byGroup = new Map()
   for (const item of character.Appearance || []) {
     const group = item?.Asset?.Group
-    if (!group || group.Category === 'Item' || isHiddenBodySlot(group.Name)) continue
+    if (!group || (!includeItems && group.Category === 'Item') || isHiddenBodySlot(group.Name)) continue
     const bundled = host.ServerBundledItemFromAppearanceItem(item)
     if (bundled?.Group === group.Name && !byGroup.has(group.Name)) byGroup.set(group.Name, clone(bundled))
   }
   return byGroup
 }
 
-function mergeAppearance(host, source, before, after, family) {
+function mergeAppearance(host, source, before, after, family, includeItems = false) {
   const result = []
   const seen = new Set()
   const isItem = part => part.IsItem === true
@@ -51,7 +52,7 @@ function mergeAppearance(host, source, before, after, family) {
 
   for (const part of source) {
     const group = part?.Group
-    if (typeof group !== 'string' || isHiddenBodySlot(group) || isItem(part)) {
+    if (typeof group !== 'string' || isHiddenBodySlot(group) || (!includeItems && isItem(part))) {
       result.push(part)
       continue
     }
@@ -64,7 +65,7 @@ function mergeAppearance(host, source, before, after, family) {
     if (unchanged) {
       result.push(part)
     } else if (edited) {
-      result.push({ ...edited, IsItem: false })
+      result.push({ ...edited, IsItem: !!isItem(edited) })
     }
   }
 
@@ -72,7 +73,7 @@ function mergeAppearance(host, source, before, after, family) {
     if (seen.has(group) || isHiddenBodySlot(group)) continue
     const initial = before.get(group)
     if (!initial || JSON.stringify(initial) !== JSON.stringify(edited)) {
-      result.push({ ...edited, IsItem: false })
+      result.push({ ...edited, IsItem: !!isItem(edited) })
     }
   }
   return result
@@ -92,7 +93,7 @@ export function createNativeWardrobeEditor({ host, modApi, hostElement }) {
   const hook = (name, handler) => {
     if (typeof host[name] === 'function') unhooks.push(modApi.hookFunction(name, 100, handler))
   }
-  const ownsScratch = () => session && host.CharacterAppearanceSelection === session.scratch
+  const ownsScratch = () => session && (session.restraints?.owns() || host.CharacterAppearanceSelection === session.scratch)
 
   hook('AppearanceMenuBuild', (args, next) => {
     const result = next(args)
@@ -150,6 +151,7 @@ export function createNativeWardrobeEditor({ host, modApi, hostElement }) {
 
   const cancel = () => {
     if (!session || session.closing) return
+    if (session.restraints) { session.restraints.cancel(); return }
     if (host.CurrentScreen !== 'Appearance') {
       session.cancelRequested = true
       return
@@ -161,18 +163,23 @@ export function createNativeWardrobeEditor({ host, modApi, hostElement }) {
     session.finish('cancelled')
   }
 
-  const open = ({ bundle, signal }) => {
+  const open = ({ bundle, signal, restraints }) => {
     if (session) throw new Error('A BC wardrobe is already open')
     if (signal?.aborted) return Promise.resolve({ status: 'cancelled' })
     if (!Array.isArray(bundle)) throw new Error('Saved outfit data is unavailable')
     if (host.CurrentScreen === 'Appearance' || host.CurrentScreen === 'Wardrobe') {
       throw new Error('Leave the BC wardrobe before editing a saved outfit')
     }
+    const useRestraints = !!restraints && typeof host.DialogChangeFocusToGroup === 'function'
+      && typeof host.DialogLeave === 'function' && typeof host.CharacterSetCurrent === 'function'
+      && !!host.CharacterGetCurrentHandlers
     const source = clone(bundle)
 
     return new Promise((resolve, reject) => {
       const prior = {
         screen: host.CurrentScreen,
+        playerGroup: host.Player?.FocusGroup,
+        characterGroup: host.CurrentCharacter?.FocusGroup?.Name,
         module: host.CurrentModule,
         functions: host.CurrentScreenFunctions,
         character: host.CurrentCharacter,
@@ -203,18 +210,18 @@ export function createNativeWardrobeEditor({ host, modApi, hostElement }) {
         scratch: null,
         closing: false,
         cancelRequested: false,
-        async finish(status, edited = null, error = null) {
+        async finish(status, edited = null, error = null, restoreOrigin = true) {
           if (current.closing) return
           current.closing = true
           if (interval !== null) host.clearInterval(interval)
           signal?.removeEventListener('abort', cancel)
           try {
             if (status === 'saved' && !edited && !error) {
-              edited = mergeAppearance(host, source, before, appearanceBundle(host, scratch), scratch.AssetFamily)
+              edited = mergeAppearance(host, source, before, appearanceBundle(host, scratch, useRestraints), scratch.AssetFamily, useRestraints)
             }
           } catch (reason) { error ||= reason }
           try {
-            if (EDITOR_SCREENS.has(host.CurrentScreen)) {
+            if (!useRestraints && EDITOR_SCREENS.has(host.CurrentScreen)) {
               if (typeof host.CommonSetScreen === 'function') {
                 await host.CommonSetScreen(prior.module, prior.screen)
               }
@@ -222,10 +229,8 @@ export function createNativeWardrobeEditor({ host, modApi, hostElement }) {
           } catch (reason) { error ||= reason }
           try {
             if (scratch) scratch.IsPlayer = originalIsPlayer
-            if (EDITOR_SCREENS.has(host.CurrentScreen) || host.CurrentScreen === prior.screen) {
-              host.CurrentScreen = prior.screen
-              host.CurrentModule = prior.module
-              host.CurrentScreenFunctions = prior.functions
+            if (restoreOrigin && host.CurrentScreen === prior.screen && host.CurrentModule === prior.module) {
+              if (!useRestraints) host.CurrentScreenFunctions = prior.functions
               host.CurrentCharacter = prior.character
               host.DialogFocusItem = prior.focusItem
               host.DialogFocusSourceItem = prior.focusSource
@@ -235,9 +240,23 @@ export function createNativeWardrobeEditor({ host, modApi, hostElement }) {
               host.ExtendedItemSubscreen = prior.subscreen
               host.ExtendedItemPermissionMode = prior.permissionMode
               host.DialogTightenLoosenItem = prior.tightenItem
+              if (useRestraints && prior.character) {
+                host.DialogMenuMode = null
+                host.DialogFocusItem = null
+                host.DialogFocusItemName = null
+                host.DialogFocusSourceItem = null
+                host.ExtendedItemSubscreen = null
+                host.DialogTightenLoosenItem = null
+                host.CharacterSetCurrent(prior.character)
+                const target = prior.playerGroup ? host.Player : prior.character
+                if (target && (prior.playerGroup || prior.characterGroup)) {
+                  host.DialogChangeFocusToGroup(target, prior.playerGroup || prior.characterGroup)
+                }
+              }
+              if (useRestraints && host.Player) host.Player.FocusGroup = prior.playerGroup
               if (prior.screen === 'ChatRoom' && prior.chatHidden !== true) host.ChatRoomShowElements?.()
             }
-            if (host.CharacterAppearanceSelection === scratch || host.CurrentScreen === prior.screen) {
+            if (host.CharacterAppearanceSelection === scratch || (restoreOrigin && host.CurrentScreen === prior.screen)) {
               host.CharacterAppearanceForceUpCharacter = prior.forceUp
               host.CharacterAppearanceSelection = prior.selection
               host.CharacterAppearanceBackup = prior.backup
@@ -247,6 +266,7 @@ export function createNativeWardrobeEditor({ host, modApi, hostElement }) {
             }
           } catch (reason) { error ||= reason }
           finally {
+            current.restraints?.dispose()
             hostElement.style.display = prior.hostDisplay
             try { if (scratch) host.CharacterDelete(scratch, false) } catch (reason) { error ||= reason }
             session = null
@@ -254,7 +274,7 @@ export function createNativeWardrobeEditor({ host, modApi, hostElement }) {
             if (disposed) for (const unhook of unhooks.splice(0).reverse()) unhook?.()
           }
           if (error) reject(error)
-          else resolve(status === 'saved' ? { status, bundle: edited } : { status: 'cancelled' })
+          else resolve(status === 'saved' ? { status, bundle: edited, ...(useRestraints ? { exported: true } : {}) } : { status: 'cancelled' })
         },
       }
 
@@ -277,17 +297,26 @@ export function createNativeWardrobeEditor({ host, modApi, hostElement }) {
         scratch.CharacterID = ''
         scratch.Appearance = (scratch.Appearance || []).map(copyAppearanceItem)
         host.CharacterRefresh(scratch, false, false)
-        before = appearanceBundle(host, scratch)
+        before = appearanceBundle(host, scratch, useRestraints)
         originalIsPlayer = scratch.IsPlayer
-        scratch.IsPlayer = () => true
+        scratch.IsPlayer = () => !current.restraints?.owns()
         current.scratch = scratch
         session = current
         setActive(true)
+        if (useRestraints && prior.character) host.DialogLeave({ reload: false })
         host.CurrentCharacter = null
         host.CharacterAppearanceForceUpCharacter = -1
         if (prior.screen === 'ChatRoom') host.ChatRoomHideElements?.()
         hostElement.style.display = 'none'
         signal?.addEventListener('abort', cancel, { once: true })
+        if (useRestraints) {
+          current.restraints = createRestraintSession(host, scratch, prior, restraints,
+            (status, error, restoreOrigin) => current.finish(status, null, error, restoreOrigin),
+            (name, handler) => modApi.hookFunction(name, 100, handler))
+          interval = host.setInterval(() => current.restraints.check(), 250)
+          current.restraints.start().catch(error => current.finish('cancelled', null, error))
+          return
+        }
         host.CharacterAppearanceLoadCharacter(scratch, accept => {
           current.finish(accept ? 'saved' : 'cancelled')
         })

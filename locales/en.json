@@ -1,5 +1,10 @@
 {
   "outfitEditor": {
+    "editClothes": "Edit clothes",
+    "exportDraft": "Export outfit",
+    "editRestraints": "Edit restraints",
+    "retryReturn": "Retry return",
+    "returnFailed": "BC could not return to the previous screen.",
     "nativeWardrobeOpening": "Opening BC wardrobe…",
     "nativeWardrobeFailed": "Could not open BC wardrobe: {error}",
     "retryWardrobe": "Retry BC wardrobe",
