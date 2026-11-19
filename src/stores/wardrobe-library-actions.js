@@ -1,3 +1,4 @@
+import { outfitRenderData } from '../services/migrate-outfit-offsets.js'
 import { hostWindow } from '@/utils/host-window.js'
 import { HistoryRecord } from '@/utils/history_record.js'
 import { AssetApi } from '@/utils/AssetApi'
@@ -131,7 +132,7 @@ export const wardrobeLibraryActions = {
       }
       if (lockedId) {
         this.lockedItem = this.outfits.find(item => item.id === lockedId) || null
-        this.activeItem = { data: this.lockedItem?.data || clone(this.characterItem) }
+        this.activeItem = { data: outfitRenderData(this.lockedItem) || clone(this.characterItem) }
         this.updatePreviewItem({ preserveSlotControls: true })
       }
       this.fileTreeVersion++

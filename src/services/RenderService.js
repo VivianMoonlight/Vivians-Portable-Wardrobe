@@ -1,3 +1,4 @@
+import { outfitRenderData } from '../services/migrate-outfit-offsets.js'
 import { hostWindow, setTimeoutHost, clearTimeoutHost } from '@/utils/host-window.js';
 import { createCanvas } from '@/utils/canvas.js';
 
@@ -36,7 +37,7 @@ export class RenderService {
 
     _describe(item, preview) {
         if (!item || !Array.isArray(item.data)) throw new Error('An outfit is required for rendering');
-        const dataKey = JSON.stringify(item.data);
+        const dataKey = JSON.stringify(outfitRenderData(item));
         const width = preview ? this.previewwidth : this.thumbwidth;
         const height = preview ? this.previewheight : this.thumbheight;
         const key = `${preview ? 'preview' : 'card'}:${width}x${height}:${dataKey}`;

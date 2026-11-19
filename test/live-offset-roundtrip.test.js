@@ -1,14 +1,15 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { markLiveOffsets, prepareOutfitOffsets } from '../src/services/migrate-outfit-offsets.js'
+import { outfitRenderData, prepareOutfitOffsets } from '../src/services/migrate-outfit-offsets.js'
 
-test('saving and applying a live outfit preserves compensated and native translations', () => {
-  const host = { localStorage: { getItem: () => 'true' } }
-  const source = [{ Property: { LayerTranslationX: { Left: -13 } } }]
-  const applied = prepareOutfitOffsets(source, host, {})
-  assert.equal(applied[0].Property.LayerTranslationX.Left, -7)
-  const worn = [...applied, { Property: { TranslationY: 15 } }]
-  const saved = JSON.parse(JSON.stringify(worn.map(markLiveOffsets)))
-  assert.deepEqual(prepareOutfitOffsets(saved, host, {}), worn)
-  assert.equal(source[0].Property.LayerTranslationX.Left, -13)
+test('explicit outfit format controls conversion without mutating the undo source', () => {
+  const host = { localStorage: { getItem: () => 'false' } }
+  const data = [{ Property: { LayerTranslationX: { Left: -13 } } }]
+  assert.deepEqual(outfitRenderData({ data }), data)
+  const converted = prepareOutfitOffsets(data, host, {}, true)
+  assert.equal(converted[0].Property.LayerTranslationX.Left, -7)
+  host.localStorage.getItem = () => 'true'
+  assert.deepEqual(prepareOutfitOffsets(outfitRenderData({ data: converted, offsetFormat: 'new' }), host, {}), converted)
+  assert.deepEqual(prepareOutfitOffsets(outfitRenderData({ data, offsetFormat: 'new' }), host, {}), data)
+  assert.equal(data[0].Property.LayerTranslationX.Left, -13)
 })

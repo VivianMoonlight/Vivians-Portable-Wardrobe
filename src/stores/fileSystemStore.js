@@ -1,3 +1,4 @@
+import { outfitRenderData } from '../services/migrate-outfit-offsets.js'
 import { createStore } from 'zustand/vanilla'
 import { useStore } from 'zustand'
 import LZString from 'lz-string'
@@ -531,7 +532,7 @@ const fileSystemStoreDefinition = {
       } else {
         if (!item || item.type === 'folder') return
         if (!ignoreLock && this.lockedItem && item !== this.lockedItem) return
-        this.activeItem = { data: item.data }
+        this.activeItem = { data: outfitRenderData(item) }
       }
 
       this._resetSlotSources('incoming')

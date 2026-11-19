@@ -56,7 +56,12 @@ async function applyImportedData(
     }
     const name = await dialog.prompt(t('library.saveNamePrompt'), defaultFilename('imported'))
     if (!name?.trim()) return
-    parsed = { name: name.trim(), type: 'outfit', data: parsed }
+    const offsetFormat = parsed[0]?.vpwOutfitFormat === 'new' ? 'new' : 'old'
+    if (offsetFormat === 'new') {
+      const { vpwOutfitFormat, ...first } = parsed[0]
+      parsed = [first, ...parsed.slice(1)]
+    }
+    parsed = { name: name.trim(), type: 'outfit', data: parsed, offsetFormat }
   }
 
   try {
@@ -65,6 +70,7 @@ async function applyImportedData(
         name: typeof parsed.name === 'string' && parsed.name.trim() ? parsed.name.trim() : defaultFilename('imported'),
         type: typeof parsed.type === 'string' ? parsed.type : 'outfit',
         data: parsed.data,
+        offsetFormat: parsed.offsetFormat === 'new' ? 'new' : 'old',
         tagIds: fs.selectedTagId && fs.selectedTagId !== 'untagged' ? [fs.selectedTagId] : [],
         cloudSync: typeof parsed.cloudSync === 'boolean' ? parsed.cloudSync : undefined,
       })

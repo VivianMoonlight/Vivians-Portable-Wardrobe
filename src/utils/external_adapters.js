@@ -1,4 +1,4 @@
-import { markLiveOffsets, prepareOutfitOffsets } from '../services/migrate-outfit-offsets.js'
+import { prepareOutfitOffsets } from '../services/migrate-outfit-offsets.js'
 /**
  * external_adapters.js
  * Centralizes and safely wraps all calls to external game engine functions with error handling.
@@ -15,7 +15,7 @@ function currentAppearanceBundle(character) {
     if (typeof hostWindow.ServerAppearanceBundle === 'function') {
         try {
             const bundle = hostWindow.ServerAppearanceBundle(character.Appearance);
-            if (Array.isArray(bundle)) return bundle.map(markLiveOffsets);
+            if (Array.isArray(bundle)) return bundle;
         } catch (error) {
             console.warn('[ExternalAdapter] Could not bundle current appearance:', error);
         }
@@ -108,11 +108,13 @@ export const ExternalAdapter = {
      * Exports outfit data as compressed BCX code and copies to clipboard
      * @param {string} name - Outfit name
      * @param {Array} dataList - Outfit data list
+     * @param {string} [offsetFormat] Explicit wardrobe format
      * @returns {string} Compressed BCX code
      */
-    exportOutfitAsBCX(name, dataList) {
+    exportOutfitAsBCX(name, dataList, offsetFormat = undefined) {
         const normalizedData = Array.isArray(dataList) ? dataList : [];
-        const code = LZString.compressToBase64(JSON.stringify(normalizedData));
+        const code = LZString.compressToBase64(JSON.stringify(offsetFormat === 'new' && normalizedData.length
+            ? [{ ...normalizedData[0], vpwOutfitFormat: 'new' }, ...normalizedData.slice(1)] : normalizedData));
         this.copyTextToClipboard(code);
         return code;
     },

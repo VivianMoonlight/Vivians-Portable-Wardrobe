@@ -24,6 +24,7 @@ export interface FileNode {
 }
 
 export interface WardrobeOutfit extends FileNode {
+  offsetFormat?: 'old' | 'new'
   id: string
   rev: [number, string]
   type: string
@@ -131,9 +132,9 @@ export interface FsCtx {
   createTag: (name: string) => Promise<string>
   renameTag: (id: string, name: string) => Promise<boolean>
   deleteTag: (id: string) => Promise<boolean>
-  addOutfit: (outfit: { name: string; type: string; data: unknown[]; tagIds?: string[]; cloudSync?: boolean }) => Promise<string>
-  updateOutfit: (id: string, changes: Partial<Pick<WardrobeOutfit, 'name' | 'type' | 'data' | 'tagIds' | 'cloudSync'>>) => Promise<boolean>
-  updateOutfitIfUnchanged: (id: string, expectedRev: [number, string], changes: Partial<Pick<WardrobeOutfit, 'name' | 'type' | 'data' | 'tagIds' | 'cloudSync'>>) => Promise<boolean>
+  addOutfit: (outfit: { offsetFormat?: 'old' | 'new'; name: string; type: string; data: unknown[]; tagIds?: string[]; cloudSync?: boolean }) => Promise<string>
+  updateOutfit: (id: string, changes: Partial<Pick<WardrobeOutfit, 'name' | 'type' | 'data' | 'tagIds' | 'cloudSync' | 'offsetFormat'>>) => Promise<boolean>
+  updateOutfitIfUnchanged: (id: string, expectedRev: [number, string], changes: Partial<Pick<WardrobeOutfit, 'name' | 'type' | 'data' | 'tagIds' | 'cloudSync' | 'offsetFormat'>>) => Promise<boolean>
   removeOutfit: (id: string) => Promise<boolean>
   setOutfitTags: (id: string, tagIds: string[]) => Promise<boolean>
   setOutfitCloudSync: (id: string, enabled: boolean) => Promise<boolean>

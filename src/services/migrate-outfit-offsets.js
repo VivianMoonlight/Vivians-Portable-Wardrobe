@@ -3,27 +3,31 @@ export function readOffsetSetting(host, key) {
   try { return host.localStorage.getItem(key) === 'true' } catch { return false }
 }
 
-// Character snapshots contain the translations BC is already rendering.
-export function markLiveOffsets(bundle) {
-  const prop = bundle?.Property
-  if (!prop || !['TranslationX', 'TranslationY', 'LayerTranslationX', 'LayerTranslationY']
-    .some(key => prop[key] != null)) return bundle
-  return { ...bundle, vpwNativeOffsets: true }
+// Carry the outfit's explicit format through slot merging on temporary copies.
+export function outfitRenderData(outfit) {
+  return outfit?.offsetFormat === 'new'
+    ? outfit.data.map(part => ({ ...part, vpwSkipOffsetConversion: true }))
+    : outfit?.data
 }
 
 const roundOffset = value => Math.sign(value) * Math.round(Math.abs(value))
 const isScaled = value => Number.isFinite(value) && value !== 1
 
-export function prepareOutfitOffsets(data, host, character) {
+export function prepareOutfitOffsets(data, host, character, convert = false) {
   if (!Array.isArray(data)) return data
-  const enabled = readOffsetSetting(host, compatibilityKey)
+  const enabled = convert || readOffsetSetting(host, compatibilityKey)
   return data.map(original => {
-    if (original?.vpwNativeOffsets === true) {
-      const { vpwNativeOffsets, ...live } = original
-      return live
+    if (original?.vpwSkipOffsetConversion) {
+      const { vpwSkipOffsetConversion, ...part } = original
+      return part
     }
-    const bundle = prepareItem(original, host, character)
+    // Ignore retired automatic snapshot flags; unlabeled outfits are legacy.
+    const { vpwNativeOffsets, ...part } = original ?? {}
+    const bundle = prepareItem(vpwNativeOffsets === undefined ? original : part, host, character)
     const prop = bundle?.Property
+    if (convert && prop?.LayerOverrides?.some(layer => layer?.DrawingLeft || layer?.DrawingTop)) {
+      throw new Error(bundle.Group + '/' + bundle.Name)
+    }
     if (!enabled || !prop) return bundle
     let transforms = prop
     // BC may serialize per-layer numeric records as strings in item bundles.
@@ -32,8 +36,11 @@ export function prepareOutfitOffsets(data, host, character) {
       try {
         transforms = host.ServerBundledItemToAppearanceItem(character.AssetFamily,
           JSON.parse(JSON.stringify(bundle)), { C: character })?.Property
-      } catch { return bundle }
-      if (!transforms) return bundle
+      } catch (error) { if (convert) throw error; return bundle }
+      if (!transforms) {
+        if (convert) throw new Error(bundle.Group + '/' + bundle.Name)
+        return bundle
+      }
     }
     const scaled = [transforms.ScaleX, transforms.ScaleY,
       ...Object.values(transforms.LayerScaleX ?? {}), ...Object.values(transforms.LayerScaleY ?? {})].some(isScaled)
