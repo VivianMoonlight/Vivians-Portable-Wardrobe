@@ -284,8 +284,8 @@ function Editor({ outfitId, onClose, mobile }: { outfitId: string; onClose: () =
     setError('')
     try {
       const result = await openNativeWardrobeEditor({ bundle: draft, signal: controller.signal, restraints: {
-        clothes: t('outfitEditor.editClothes'), export: t('outfitEditor.exportDraft'),
-        discard: t('outfitEditor.cancel'), retry: t('outfitEditor.retryReturn'),
+        clothes: t('outfitEditor.edit'), copy: t('outfitEditor.copy'), save: t('outfitEditor.save'),
+        retry: t('outfitEditor.retryReturn'),
         returnFailed: t('outfitEditor.returnFailed'),
       } })
       if (controller.signal.aborted) return
@@ -294,8 +294,13 @@ function Editor({ outfitId, onClose, mobile }: { outfitId: string; onClose: () =
         else setStage('items')
       } else {
         setExported('exported' in result && !!result.exported)
-        setDraft((before) => keepProtectedParts(before, result.bundle as EditorPart[]))
+        const edited = keepProtectedParts(draft, result.bundle as EditorPart[])
+        setDraft(edited)
         setStage('items')
+        if ('exported' in result && result.exported) {
+          if (result.status === 'copy') await saveCopy(edited)
+          else await overwrite(edited)
+        }
       }
     } catch (reason) {
       if (!controller.signal.aborted) {
@@ -349,13 +354,13 @@ function Editor({ outfitId, onClose, mobile }: { outfitId: string; onClose: () =
     onClose()
   }
 
-  const overwrite = async () => {
-    if (!source || !dirty || saving || nativeBusy) return
+  const overwrite = async (data = draft) => {
+    if (!source || saving) return
     if (sourceChanged(source)) { setError(t('outfitEditor.sourceChanged')); return }
     setSaving(true)
     setError('')
     try {
-      await getFs().updateOutfitIfUnchanged(source.id, source.rev, prepareSavedOutfit(draft, hostWindow, getFs().character, source.offsetFormat))
+      await getFs().updateOutfitIfUnchanged(source.id, source.rev, prepareSavedOutfit(data, hostWindow, getFs().character, source.offsetFormat))
       onClose()
     } catch (reason) {
       const code = (reason as { code?: string })?.code
@@ -365,8 +370,8 @@ function Editor({ outfitId, onClose, mobile }: { outfitId: string; onClose: () =
     } finally { setSaving(false) }
   }
 
-  const saveCopy = async () => {
-    if (!source || saving || nativeBusy) return
+  const saveCopy = async (data = draft) => {
+    if (!source || saving) return
     const name = (await dialog.prompt(t('outfitEditor.newNamePrompt'),
       t('outfitEditor.copyName', { name: source.name })))?.trim()
     if (name === undefined) return
@@ -374,7 +379,7 @@ function Editor({ outfitId, onClose, mobile }: { outfitId: string; onClose: () =
     setSaving(true)
     setError('')
     try {
-      await getFs().addOutfit({ name, type: source.type, ...prepareSavedOutfit(draft, hostWindow, getFs().character, source.offsetFormat),
+      await getFs().addOutfit({ name, type: source.type, ...prepareSavedOutfit(data, hostWindow, getFs().character, source.offsetFormat),
         tagIds: source.tagIds, cloudSync: source.cloudSync })
       onClose()
     } catch (reason) { setError(t('outfitEditor.saveFailed', { error: reason instanceof Error ? reason.message : String(reason) })) }

@@ -127,9 +127,12 @@ export function createRestraintSession(host, scratch, origin, labels, complete, 
       else if (!disposed) complete('cancelled', error)
     } finally { completing = false }
   }
-  button(labels.clothes, clothes)
-  button(labels.export, () => finish('saved'))
-  button(labels.discard, () => finish('cancelled'))
+  const actions = [
+    [labels.clothes, clothes],
+    [labels.copy, () => finish('copy')],
+    [labels.save, () => finish('saved')],
+  ]
+  for (const [label, action] of actions) button(label, action)
   const retryButton = button(labels.retry, () => {
     const action = retry
     retry = null
@@ -162,11 +165,6 @@ export function createRestraintSession(host, scratch, origin, labels, complete, 
     return next(args)
   })
   const canvasControls = typeof host.DrawButton === 'function' && typeof host.DialogDraw === 'function'
-  const actions = [
-    [labels.clothes, clothes],
-    [labels.export, () => finish('saved')],
-    [labels.discard, () => finish('cancelled')],
-  ]
   register('DialogDraw', (args, next) => {
     const result = next(args)
     if (canvasControls && atParent() && phase === 'items' && !retry) {
@@ -188,6 +186,7 @@ export function createRestraintSession(host, scratch, origin, labels, complete, 
   })
   register('DialogLeave', (args, next) => {
     if (!leavingDialog && atParent() && phase === 'items' && host.CurrentCharacter === scratch) {
+      if (host.DialogMenuMode === 'dialog') { void finish('cancelled'); return }
       // R134 also calls DialogLeave after equipping ordinary or preset items.
       // Keep the worn result and rebuild the inventory for the same group.
       group = scratch.FocusGroup?.Name || group

@@ -276,7 +276,7 @@ function setupRestraints(configure = () => {}) {
   }
   configure(host)
   const pending = context.editor.open({ bundle: context.source, restraints: {
-    clothes: 'clothes', export: 'export', discard: 'discard', retry: 'retry', returnFailed: 'failed',
+    clothes: 'clothes', copy: 'copy', save: 'save', retry: 'retry', returnFailed: 'failed',
   } })
   return { ...context, pending, buttons, scratch: host.CurrentCharacter,
     failReturnTo(screen) { failNext = screen } }
@@ -305,7 +305,7 @@ test('restraint editing nests Appearance on the same character and exports once'
     assert.equal(c.deleted.length, 0)
   }
   c.failReturnTo('ChatRoom')
-  c.buttons.get('export')()
+  c.buttons.get('save')()
   await new Promise(resolve => setImmediate(resolve))
   assert.equal(c.deleted.length, 0)
   c.buttons.get('retry')()
@@ -332,7 +332,8 @@ test('failed clothing return retains the scratch, discard after retry drops all 
   c.buttons.get('retry')()
   await new Promise(resolve => setImmediate(resolve))
   assert.equal(c.host.CurrentCharacter, c.scratch)
-  c.buttons.get('discard')()
+  c.host.DialogMenuMode = 'dialog'
+  c.host.DialogLeave()
   assert.deepEqual(await c.pending, { status: 'cancelled' })
   assert.equal(c.deleted.length, 1)
   c.editor.dispose()
@@ -376,13 +377,13 @@ test('equipping a plain item keeps the target and canvas clothing entry availabl
   assert.equal(scratch.FocusGroup.Name, 'ItemNeck')
   host.DialogDraw()
   assert.deepEqual(drawn, [scratch])
-  assert.deepEqual(labels, ['clothes', 'export', 'discard'])
+  assert.deepEqual(labels, ['clothes', 'copy', 'save'])
   host.DialogClick()
   assert.equal(host.CurrentScreen, 'Appearance')
   host.CharacterAppearanceReady(scratch)
   await new Promise(resolve => setImmediate(resolve))
   assert.equal(host.CurrentCharacter, scratch)
-  await c.buttons.get('export')()
+  await c.buttons.get('save')()
   assert.deepEqual((await c.pending).bundle.find(i => i.Group === 'ItemNeck').Property, collar.Property)
   c.editor.dispose()
 })

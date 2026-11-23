@@ -1,5 +1,8 @@
 {
   "outfitEditor": {
+    "edit": "Edit",
+    "copy": "Save as",
+    "save": "Save",
     "editClothes": "Edit clothes",
     "exportDraft": "Export outfit",
     "editRestraints": "Edit restraints",

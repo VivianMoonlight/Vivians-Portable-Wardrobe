@@ -1,5 +1,8 @@
 {
   "outfitEditor": {
+    "edit": "编辑",
+    "copy": "另存",
+    "save": "保存",
     "editClothes": "编辑服装",
     "exportDraft": "导出套装",
     "editRestraints": "编辑拘束物品",

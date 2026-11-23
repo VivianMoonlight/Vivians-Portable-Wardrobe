@@ -216,7 +216,7 @@ export function createNativeWardrobeEditor({ host, modApi, hostElement }) {
           if (interval !== null) host.clearInterval(interval)
           signal?.removeEventListener('abort', cancel)
           try {
-            if (status === 'saved' && !edited && !error) {
+            if ((status === 'saved' || status === 'copy') && !edited && !error) {
               edited = mergeAppearance(host, source, before, appearanceBundle(host, scratch, useRestraints), scratch.AssetFamily, useRestraints)
             }
           } catch (reason) { error ||= reason }
@@ -274,7 +274,7 @@ export function createNativeWardrobeEditor({ host, modApi, hostElement }) {
             if (disposed) for (const unhook of unhooks.splice(0).reverse()) unhook?.()
           }
           if (error) reject(error)
-          else resolve(status === 'saved' ? { status, bundle: edited, ...(useRestraints ? { exported: true } : {}) } : { status: 'cancelled' })
+          else resolve(status === 'saved' || status === 'copy' ? { status, bundle: edited, ...(useRestraints ? { exported: true } : {}) } : { status: 'cancelled' })
         },
       }
 

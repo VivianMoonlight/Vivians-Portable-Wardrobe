@@ -238,19 +238,17 @@ test('restraint entry returns from clothing editing before exporting a saved out
   await page.getByTitle("Vivian's Portable Wardrobe", { exact: true }).click()
   await page.getByRole('button', { name: 'Preview ' + name, exact: true }).click()
   await page.getByRole('button', { name: 'Edit outfit', exact: true }).click()
-  await expect(page.getByRole('button', { name: 'Edit clothes' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Edit', exact: true })).toBeVisible()
   await page.evaluate(() => {
     if (window.CurrentCharacter === window.Player) throw new Error('Editing Player')
     window.InventoryGet(window.CurrentCharacter, 'ItemNeck').Property = { Mode: 'edited' }
   })
-  await page.getByRole('button', { name: 'Edit clothes' }).click()
+  await page.getByRole('button', { name: 'Edit', exact: true }).click()
   await expect.poll(() => page.evaluate(() => window.CurrentScreen)).toBe('Appearance')
   await page.evaluate(() => window.__wardrobeEditorProbe.accept(true))
   await expect.poll(() => page.evaluate(() => window.CurrentCharacter?.FocusGroup?.Name)).toBe('ItemNeck')
-  await page.getByRole('button', { name: 'Export outfit' }).click()
-  await expect(page.getByTestId('vpw-editor-item-page')).toBeVisible()
   expect((await savedPart(page, name, 'ItemNeck')).Property.Mode).toBe('old')
-  await page.getByRole('button', { name: 'Overwrite outfit' }).click()
+  await page.getByRole('button', { name: 'Save', exact: true }).click()
   await expect.poll(async () => (await savedPart(page, name, 'ItemNeck')).Property.Mode).toBe('edited')
   const state = await page.evaluate(() => ({
     deleted: window.__wardrobeEditorProbe.deleted.length,
@@ -258,4 +256,16 @@ test('restraint entry returns from clothing editing before exporting a saved out
     unchanged: JSON.stringify(window.Player.Appearance) === JSON.stringify(window.__wardrobeEditorProbe.appearance),
   }))
   expect(state).toEqual({ deleted: 1, sent: [], unchanged: true })
+
+  await page.getByRole('button', { name: 'Edit outfit', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Save as', exact: true })).toBeVisible()
+  await page.evaluate(() => {
+    window.InventoryGet(window.CurrentCharacter, 'ItemNeck').Property = { Mode: 'copy' }
+  })
+  await page.getByRole('button', { name: 'Save as', exact: true }).click()
+  const prompt = page.getByRole('dialog').filter({ hasText: 'Name the new outfit:' })
+  await prompt.getByRole('textbox').fill('Restraint copy')
+  await prompt.getByRole('button', { name: 'OK', exact: true }).click()
+  await expect.poll(async () => (await savedPart(page, 'Restraint copy', 'ItemNeck'))?.Property.Mode).toBe('copy')
+  expect((await savedPart(page, name, 'ItemNeck')).Property.Mode).toBe('edited')
 })
