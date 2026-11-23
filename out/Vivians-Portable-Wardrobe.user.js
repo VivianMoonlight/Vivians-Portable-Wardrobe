@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vivians Portable Wardrobe
 // @namespace    http://tampermonkey.net/
-// @version      0.10.1-react.31
+// @version      0.10.1-react.32
 // @author       VIVianMoonlight
 // @description  Portable Wardrobe for Bondage Club (React + Mantine, Shadow DOM isolated)
 // @downloadURL  https://cdn.jsdelivr.net/gh/VivianMoonlight/Vivians-Portable-Wardrobe@wardrobe-react/out/Vivians-Portable-Wardrobe.user.js
@@ -32,7 +32,7 @@
     return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
   };
   var require_main_001 = __commonJS({
-    "main-D8sWffZY.js"(exports) {
+    "main-Cj48N2cu.js"(exports) {
       function _mergeNamespaces(n, m) {
         for (var i = 0; i < m.length; i++) {
           const e = m[i];
@@ -9285,7 +9285,7 @@
       instance.hasLoadedNamespace;
       instance.loadNamespaces;
       instance.loadLanguages;
-      const version = "0.10.1-react.31";
+      const version = "0.10.1-react.32";
       var _unsafeWindow = /* @__PURE__ */ (() => typeof unsafeWindow != "undefined" ? unsafeWindow : void 0)();
       const hostWindow = typeof _unsafeWindow !== "undefined" ? _unsafeWindow : window;
       const doc = hostWindow.document;
@@ -19032,9 +19032,12 @@ One of mods you are using is using an old version of SDK. It will work for now b
             completing = false;
           }
         }
-        button(labels.clothes, clothes);
-        button(labels.export, () => finish("saved"));
-        button(labels.discard, () => finish("cancelled"));
+        const actions = [
+          [labels.clothes, clothes],
+          [labels.copy, () => finish("copy")],
+          [labels.save, () => finish("saved")]
+        ];
+        for (const [label, action] of actions) button(label, action);
         const retryButton = button(labels.retry, () => {
           const action = retry;
           retry = null;
@@ -19073,11 +19076,6 @@ One of mods you are using is using an old version of SDK. It will work for now b
           return next(args);
         });
         const canvasControls = typeof host.DrawButton === "function" && typeof host.DialogDraw === "function";
-        const actions = [
-          [labels.clothes, clothes],
-          [labels.export, () => finish("saved")],
-          [labels.discard, () => finish("cancelled")]
-        ];
         register("DialogDraw", (args, next) => {
           const result = next(args);
           if (canvasControls && atParent() && phase === "items" && !retry) {
@@ -19102,6 +19100,10 @@ One of mods you are using is using an old version of SDK. It will work for now b
         });
         register("DialogLeave", (args, next) => {
           if (!leavingDialog && atParent() && phase === "items" && host.CurrentCharacter === scratch) {
+            if (host.DialogMenuMode === "dialog") {
+              void finish("cancelled");
+              return;
+            }
             group = scratch.FocusGroup?.Name || group;
             next([{ reload: false }]);
             loadDialog();
@@ -19358,7 +19360,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
                 if (interval !== null) host.clearInterval(interval);
                 signal?.removeEventListener("abort", cancel);
                 try {
-                  if (status === "saved" && !edited && !error) {
+                  if ((status === "saved" || status === "copy") && !edited && !error) {
                     edited = mergeAppearance(host, source, before, appearanceBundle(host, scratch, useRestraints), scratch.AssetFamily, useRestraints);
                   }
                 } catch (reason) {
@@ -19425,7 +19427,7 @@ One of mods you are using is using an old version of SDK. It will work for now b
                   if (disposed) for (const unhook of unhooks.splice(0).reverse()) unhook?.();
                 }
                 if (error) reject(error);
-                else resolve(status === "saved" ? { status, bundle: edited, ...useRestraints ? { exported: true } : {} } : { status: "cancelled" });
+                else resolve(status === "saved" || status === "copy" ? { status, bundle: edited, ...useRestraints ? { exported: true } : {} } : { status: "cancelled" });
               }
             };
             try {
@@ -36854,7 +36856,7 @@ ${lightForced}`;
           value
         }, children);
       }
-      const outfitEditor$1 = { "editClothes": "Edit clothes", "exportDraft": "Export outfit", "editRestraints": "Edit restraints", "retryReturn": "Retry return", "returnFailed": "BC could not return to the previous screen.", "nativeWardrobeOpening": "Opening BC wardrobe…", "nativeWardrobeFailed": "Could not open BC wardrobe: {error}", "retryWardrobe": "Retry BC wardrobe", "reopenWardrobe": "Open BC wardrobe again", "itemPageTitle": "Items and saving", "itemPageHint": "BC wardrobe edits clothes. Add and adjust items here, then save your outfit.", "itemSearch": "Find an item", "itemSearchPlaceholder": "Search this item group", "noMatchingItems": "No matching items", "open": "Edit outfit", "title": "Edit saved outfit", "titleFor": "Edit {name}", "close": "Close outfit editor", "back": "Back", "preview": "Outfit preview", "previewLoading": "Loading preview…", "previewFailed": "Preview could not load", "retryPreview": "Retry preview", "previewHint": "Changes stay in this preview until you save. They will not dress the character.", "savedItems": "Saved items", "noItems": "No items in this outfit. Choose an item group to add one.", "itemGroup": "Item group", "noGroups": "No matching groups", "noAssets": "No assets available in this group", "addAsset": "Add part", "replaceAsset": "Replace part", "removeAsset": "Remove part", "nativeItemOpen": "Open BC item settings", "nativeItemTitle": "Item settings", "nativeItemHint": "Use BC controls for type, modules and modes. Save the outfit after returning.", "nativeItemUnavailable": "This item has no BC settings to adjust.", "nativeItemFailed": "Could not open item settings: {error}", "color": "Color", "colorLayer": "Color layer {number}", "defaultColor": "Default color", "setColor": "Set color", "resetColor": "Use default color", "cancel": "Cancel", "overwrite": "Overwrite outfit", "saveCopy": "Save as new", "newNamePrompt": "Name the new outfit:", "copyName": "{name} copy", "nameRequired": "Enter a name for the new outfit.", "discardConfirm": "Discard your unsaved outfit changes?", "sourceMissing": "This outfit is no longer available. Close the editor and choose another outfit.", "sourceChanged": "This outfit changed or was deleted. Save your draft as a new outfit, or close and reopen the latest version.", "editFailed": "Could not edit this part: {error}", "saveFailed": "Could not save this outfit: {error}", "errors": { "protected-group": "This body part cannot be changed.", "invalid-group": "This group is no longer available.", "invalid-asset": "This asset is no longer available in this group.", "required-group": "This body group cannot be empty.", "missing-part": "Add a part before setting its color.", "invalid-color": "This color is not accepted for the selected part.", "outfit-changed": "This outfit changed or was deleted. Save your draft as a new outfit, or close and reopen the latest version." } };
+      const outfitEditor$1 = { "edit": "Edit", "copy": "Save as", "save": "Save", "editClothes": "Edit clothes", "exportDraft": "Export outfit", "editRestraints": "Edit restraints", "retryReturn": "Retry return", "returnFailed": "BC could not return to the previous screen.", "nativeWardrobeOpening": "Opening BC wardrobe…", "nativeWardrobeFailed": "Could not open BC wardrobe: {error}", "retryWardrobe": "Retry BC wardrobe", "reopenWardrobe": "Open BC wardrobe again", "itemPageTitle": "Items and saving", "itemPageHint": "BC wardrobe edits clothes. Add and adjust items here, then save your outfit.", "itemSearch": "Find an item", "itemSearchPlaceholder": "Search this item group", "noMatchingItems": "No matching items", "open": "Edit outfit", "title": "Edit saved outfit", "titleFor": "Edit {name}", "close": "Close outfit editor", "back": "Back", "preview": "Outfit preview", "previewLoading": "Loading preview…", "previewFailed": "Preview could not load", "retryPreview": "Retry preview", "previewHint": "Changes stay in this preview until you save. They will not dress the character.", "savedItems": "Saved items", "noItems": "No items in this outfit. Choose an item group to add one.", "itemGroup": "Item group", "noGroups": "No matching groups", "noAssets": "No assets available in this group", "addAsset": "Add part", "replaceAsset": "Replace part", "removeAsset": "Remove part", "nativeItemOpen": "Open BC item settings", "nativeItemTitle": "Item settings", "nativeItemHint": "Use BC controls for type, modules and modes. Save the outfit after returning.", "nativeItemUnavailable": "This item has no BC settings to adjust.", "nativeItemFailed": "Could not open item settings: {error}", "color": "Color", "colorLayer": "Color layer {number}", "defaultColor": "Default color", "setColor": "Set color", "resetColor": "Use default color", "cancel": "Cancel", "overwrite": "Overwrite outfit", "saveCopy": "Save as new", "newNamePrompt": "Name the new outfit:", "copyName": "{name} copy", "nameRequired": "Enter a name for the new outfit.", "discardConfirm": "Discard your unsaved outfit changes?", "sourceMissing": "This outfit is no longer available. Close the editor and choose another outfit.", "sourceChanged": "This outfit changed or was deleted. Save your draft as a new outfit, or close and reopen the latest version.", "editFailed": "Could not edit this part: {error}", "saveFailed": "Could not save this outfit: {error}", "errors": { "protected-group": "This body part cannot be changed.", "invalid-group": "This group is no longer available.", "invalid-asset": "This asset is no longer available in this group.", "required-group": "This body group cannot be empty.", "missing-part": "Add a part before setting its color.", "invalid-color": "This color is not accepted for the selected part.", "outfit-changed": "This outfit changed or was deleted. Save your draft as a new outfit, or close and reopen the latest version." } };
       const library$1 = { "searchPlaceholder": "Search outfits or tags…", "allOutfits": "All outfits", "untagged": "Untagged", "filterByTag": "Filter by tag", "manageTags": "Manage tags", "newTag": "New tag", "newTagPrompt": "Enter a unique tag name:", "renameTag": "Rename selected tag", "renameTagPrompt": "New tag name:", "deleteTag": "Delete selected tag", "deleteTagConfirm": 'Delete tag "{name}"? Your outfits will stay in the wardrobe.', "tagNameInvalid": "Enter a tag name that is different from your existing tags.", "editTags": "Edit tags", "editOutfitTags": "Tags for {name}", "tags": "Tags", "selectTags": "Select one or more tags", "noTags": "No matching tags. Create tags from Manage tags.", "multipleTagsHint": "An outfit can have multiple tags. Removing a tag does not delete the outfit.", "saveTags": "Save tags", "outfitCount": "{count} / {total} outfits", "empty": "Your wardrobe is empty", "noMatches": "No matching outfits", "clearFilters": "Clear all filters", "saveCharacter": "Save current outfit", "saveNamePrompt": "Name this outfit:", "saved": 'Saved "{name}" to this device. Check cloud status for sync progress.', "imported": "Imported {count} outfits to this device. Check cloud status for sync progress.", "nothingImported": "No outfits to import. Check that the imported data contains outfits.", "operationFailed": "The operation could not be completed: {error}", "itemUnavailable": "This outfit or tag is no longer available. Refresh your selection and try again.", "deleteOutfitConfirm": 'Delete "{name}"? It will be removed from this device, and the deletion will sync.', "previewOutfit": "Preview {name}", "outfitActions": "Actions for {name}", "moreActions": "More actions", "cloudIncluded": "Cloud enabled", "localOnly": "This device only", "localFork": "Saved local copy", "localForkHint": "Another device re-enabled cloud sync, so this device's edited version was kept as a local copy. It will not upload automatically. You can turn on cloud sync for this copy.", "cloudToggleTitle": "Include or exclude this outfit from cloud sync. Local copies are retained.", "cloudStorage": "Shared cloud storage", "otherExtensions": "Other extensions", "remainingCapacity": "Available: {amount}", "quotaAria": "{source}: {used} of {limit}", "quotaObservedLogin": "Last read from BC at login", "quotaObservedCache": "BC local cache estimate · not yet checked", "quotaObservedUnavailable": "Cloud usage has not been read yet", "observedRemaining": "Available at last read: {amount}", "proposedUpload": "Estimated next upload · not uploaded yet", "proposedRemaining": "Estimated available after upload: {amount}", "sharedQuotaInfo": "About shared cloud capacity", "sharedQuotaHint": "The wardrobe limits all extension settings to 180 kB (180000 bytes). The main figures show last-read usage; expand for the estimated next upload. VPW includes outfits and device markers.", "quotaWarning": "The estimated next upload is near the limit. Keep some outfits on this device only to reduce cloud use.", "quotaBlocked": "Upload paused: the proposed update exceeds the shared 180 kB or single-packet limit. Local outfits remain available. Reduce cloud-synced outfits, then retry.", "localSaved": "Saved on this device", "localUnsaved": "Not saved on this device", "localStorageQuotaTitle": "Browser rejected this local save", "localStorageQuotaHelp": "This edit or sync record was not confirmed saved. The cause may be this site's separate localStorage quota or a browser storage policy; this does not show how much disk space remains. It is separate from BC's 180 kB cloud limit. Export the currently readable backup, check this site's data, then retry. Do not clear all site data.", "indexedDBSaveTitle": "Wardrobe database save failed", "indexedDBSaveHelp": "This wardrobe change was not confirmed saved. You can still export any readable data. Export a backup, then retry the local save. Do not clear all site data.", "localStorageUsage": "Estimated data stored in this site's localStorage: VPW {wardrobe}, other data {other}, total {total}.", "localStorageUsageNote": "Estimated from UTF-16 text length. Excludes the rejected write; not the actual quota or space left.", "localStorageUsageUnavailable": "Could not read this site's stored localStorage usage.", "localStorageCurrentIndex": "Wardrobe indexes (all accounts)", "localStorageRecovery": "Recovery archives", "localStorageOldHistory": "Older history", "localStorageLegacyWardrobe": "Older wardrobes", "localStorageOtherVpw": "Other VPW data", "localStorageOtherApps": "Other site data", "showLocalStorageDetails": "Show details", "hideLocalStorageDetails": "Hide details", "retryLocalSave": "Retry local save", "retrySync": "Retry upload", "exportLocalBackup": "Export local backup", "deviceLimit": "Cloud sync has 16 registered installations. This new installation can still save locally and export a backup; registered installations can continue syncing. Old registrations are not removed automatically.", "exportRecovery": "Export pre-migration backup", "conflict": { "review": "Review {count} conflicts", "title": "Review sync conflicts", "back": "Back to wardrobe", "intro": "Cloud uploads are paused until you choose what to keep. Your changes remain saved on this device.", "quarantineIntro": "A device change is missing from the cloud copy. Synced outfits are temporarily hidden and uploads are paused. Reopen the original device or explicitly discard the missing change.", "quarantined": "Synced outfits are temporarily hidden and cannot be previewed or applied. This-device-only outfits remain available. Saving, importing, and enabling cloud sync are paused until you resolve the missing change.", "hiddenEmpty": "Synced outfits are temporarily hidden. No this-device-only outfits are available.", "cloudEnablePaused": "Resolve the missing change before enabling cloud sync.", "paused": "Cloud upload paused. Review conflicting changes to continue.", "itemTitle": "{name} · {field}", "unnamed": "Item", "changed": "Changed", "deleted": "Deleted", "partCount": "{count} parts", "tagCount": "{count} tags", "thisDevice": "This device", "cloud": "Cloud copy", "chooseExplanation": "These versions changed separately. Choose which one to keep.", "deleteEditExplanation": "One device deleted this item while another edited it. Restoring the edit creates a new item.", "privacyExplanation": "One device kept this outfit locally while another enabled cloud sync. Choose which storage choice and outfit to keep.", "keepLocal": "Keep this device's version", "keepCloud": "Keep cloud version", "keepDeletion": "Keep deletion", "restoreAsNewOutfit": "Restore as new outfit", "restoreAsNewTag": "Restore as new tag", "missingTitle": "A reported change is missing", "missingExplanation": "A device reported a change, but its content is missing from the cloud copy. Reopen the wardrobe on the original device to recover it, or discard the missing change.", "waitForDevice": "Wait for original device", "discardMissing": "Discard missing change", "discardConfirm": "Stop waiting for this missing change? The cloud cannot restore its content. If the original device still has a local copy, you may recover it there.", "resolveFailed": "This conflict could not be resolved. Your local changes are still saved. Try again.", "fields": { "name": "Name", "data": "Outfit", "tagIds": "Tags", "cloudSync": "Cloud sync", "enabled": "Cloud sync", "$record": "Deletion and edit", "sequence": "Change record", "record": "Item", "deleted": "Deletion" } }, "sync": { "idle": "Cloud ready", "pending": "Saved locally", "submitted": "Sent (assumed saved)", "verified": "Verified against cloud data", "offline": "Offline · waiting to retry", "quota": "Upload paused · over limit", "error": "Sync needs attention", "conflict": "Conflict · upload paused" }, "selected": "Selected", "browseLibrary": "Browse wardrobe", "findTag": "Find a tag…", "storageFilter": "Cloud sync", "filters": "Filters", "storageDetails": "Storage details", "showResults": "Show {count} outfits" };
       const fileItem$1 = { "open": "Open", "rename": "Rename", "delete": "Delete", "apply": "Apply to Character", "sendToStudio": "Send to Studio", "cancel": "Cancel", "promptNewName": "New name", "confirmDelete": "Are you sure you want to delete this item?", "elementDefaultName": "Element", "sendError": "Send to Studio failed", "oldData": "Legacy data", "newData": "New data", "setOld": "Set as legacy data", "setNew": "Set as new data", "convertNew": "Convert to new data", "undoConversion": "Undo conversion", "exportBCX": "Export as BCX", "cloudOn": "Cloud On", "cloudOff": "Cloud Off", "cloudToggleFileTitle": "Toggle cloud sync for this file", "cloudToggleFolderTitle": "Toggle cloud sync for this folder and its children" };
       const fileManager$1 = { "title": "Wardrobe", "newFolderTitle": "New folder", "restoreTitle": "Restore", "refreshThumbnails": "Refresh thumbnails", "closePanel": "Close panel", "promptNewFolderName": "New folder name", "goUp": "Go to parent folder", "parentFolder": "Parent folder", "dropToParentTitle": "Drop here to move to the parent folder", "searchPlaceholderCurrent": "Search in current folder...", "searchPlaceholderAll": "Search all folders...", "searchAria": "Search files", "clearSearch": "Clear search", "switchToGlobalSearch": "Switch to global search", "switchToCurrentSearch": "Switch to current-folder search", "emptyTip": "No matching files or folders", "scopeCurrent": "Current folder", "scopeAll": "Global", "sortBy": "Sort by", "sortToggle": "Sort", "sortToggleAria": "Cycle sort mode", "viewMode": "View mode", "viewCard": "Cards", "viewList": "List", "sortRecent": "Recent", "sortName": "Name", "sortType": "Type", "cloudUsageTitle": "Cloud Usage", "cloudUsageAria": "Cloud storage usage", "cloudUsageOk": "Within limit", "cloudUsageWarn": "Approaching limit", "cloudUsageOver": "Over 180KB limit", "filterAll": "All", "filterFolder": "Folders", "filterOutfit": "Outfits", "filterCharacter": "Character snapshots" };
@@ -36914,7 +36916,7 @@ ${lightForced}`;
         wardrobeIO: wardrobeIO$1,
         outfitFlow: outfitFlow$1
       };
-      const outfitEditor = { "editClothes": "编辑服装", "exportDraft": "导出套装", "editRestraints": "编辑拘束物品", "retryReturn": "重试返回", "returnFailed": "BC 未能返回原界面。", "nativeWardrobeOpening": "正在打开 BC 原生衣柜…", "nativeWardrobeFailed": "无法打开 BC 原生衣柜：{error}", "retryWardrobe": "重试打开 BC 衣柜", "reopenWardrobe": "再次打开 BC 衣柜", "itemPageTitle": "道具与保存", "itemPageHint": "衣物在 BC 原生衣柜中编辑；在这里添加和调整道具，然后保存搭配。", "itemSearch": "查找道具", "itemSearchPlaceholder": "搜索当前道具分组", "noMatchingItems": "没有匹配的道具", "savedItems": "已存道具", "noItems": "这套搭配中没有道具。请选择道具分组添加。", "itemGroup": "道具分组", "open": "编辑衣物", "title": "编辑已保存的衣物", "titleFor": "编辑「{name}」", "close": "关闭衣物编辑器", "back": "返回", "preview": "衣物预览", "previewLoading": "正在加载预览…", "previewFailed": "预览加载失败", "retryPreview": "重试预览", "previewHint": "修改会先留在预览中，保存后才写入衣柜，不会直接给角色换装。", "selectGroup": "搜索分组", "noGroups": "没有匹配的分组", "noAssets": "这个分组没有可选物件", "addAsset": "添加部位", "replaceAsset": "替换部位", "removeAsset": "移除部位", "nativeItemOpen": "打开 BC 道具设置", "nativeItemTitle": "道具设置", "nativeItemHint": "可用 BC 原生控件调整型号、模块和模式。返回后记得保存这套搭配。", "nativeItemUnavailable": "这个道具没有可调整的 BC 设置。", "nativeItemFailed": "无法打开道具设置：{error}", "color": "颜色", "colorLayer": "第 {number} 层颜色", "defaultColor": "默认颜色", "setColor": "设置颜色", "resetColor": "恢复默认颜色", "cancel": "取消", "overwrite": "覆盖原衣物", "saveCopy": "另存为新衣物", "newNamePrompt": "为新衣物命名：", "copyName": "{name} 副本", "nameRequired": "请输入新衣物的名称。", "discardConfirm": "放弃尚未保存的衣物修改？", "sourceMissing": "这件衣物已不存在。请关闭编辑器后重新选择。", "sourceChanged": "这件衣物已被修改或删除。请将草稿另存为新衣物，或关闭后重新打开最新版本。", "editFailed": "无法编辑这个部位：{error}", "saveFailed": "无法保存这件衣物：{error}", "errors": { "protected-group": "这个身体部位不能修改。", "invalid-group": "这个分组已不可用。", "invalid-asset": "这个物件在当前分组中已不可用。", "required-group": "这个身体分组不能置空。", "missing-part": "请先添加物件，再设置颜色。", "invalid-color": "所选物件不支持这个颜色。", "outfit-changed": "这件衣物已被修改或删除。请将草稿另存为新衣物，或关闭后重新打开最新版本。" } };
+      const outfitEditor = { "edit": "编辑", "copy": "另存", "save": "保存", "editClothes": "编辑服装", "exportDraft": "导出套装", "editRestraints": "编辑拘束物品", "retryReturn": "重试返回", "returnFailed": "BC 未能返回原界面。", "nativeWardrobeOpening": "正在打开 BC 原生衣柜…", "nativeWardrobeFailed": "无法打开 BC 原生衣柜：{error}", "retryWardrobe": "重试打开 BC 衣柜", "reopenWardrobe": "再次打开 BC 衣柜", "itemPageTitle": "道具与保存", "itemPageHint": "衣物在 BC 原生衣柜中编辑；在这里添加和调整道具，然后保存搭配。", "itemSearch": "查找道具", "itemSearchPlaceholder": "搜索当前道具分组", "noMatchingItems": "没有匹配的道具", "savedItems": "已存道具", "noItems": "这套搭配中没有道具。请选择道具分组添加。", "itemGroup": "道具分组", "open": "编辑衣物", "title": "编辑已保存的衣物", "titleFor": "编辑「{name}」", "close": "关闭衣物编辑器", "back": "返回", "preview": "衣物预览", "previewLoading": "正在加载预览…", "previewFailed": "预览加载失败", "retryPreview": "重试预览", "previewHint": "修改会先留在预览中，保存后才写入衣柜，不会直接给角色换装。", "selectGroup": "搜索分组", "noGroups": "没有匹配的分组", "noAssets": "这个分组没有可选物件", "addAsset": "添加部位", "replaceAsset": "替换部位", "removeAsset": "移除部位", "nativeItemOpen": "打开 BC 道具设置", "nativeItemTitle": "道具设置", "nativeItemHint": "可用 BC 原生控件调整型号、模块和模式。返回后记得保存这套搭配。", "nativeItemUnavailable": "这个道具没有可调整的 BC 设置。", "nativeItemFailed": "无法打开道具设置：{error}", "color": "颜色", "colorLayer": "第 {number} 层颜色", "defaultColor": "默认颜色", "setColor": "设置颜色", "resetColor": "恢复默认颜色", "cancel": "取消", "overwrite": "覆盖原衣物", "saveCopy": "另存为新衣物", "newNamePrompt": "为新衣物命名：", "copyName": "{name} 副本", "nameRequired": "请输入新衣物的名称。", "discardConfirm": "放弃尚未保存的衣物修改？", "sourceMissing": "这件衣物已不存在。请关闭编辑器后重新选择。", "sourceChanged": "这件衣物已被修改或删除。请将草稿另存为新衣物，或关闭后重新打开最新版本。", "editFailed": "无法编辑这个部位：{error}", "saveFailed": "无法保存这件衣物：{error}", "errors": { "protected-group": "这个身体部位不能修改。", "invalid-group": "这个分组已不可用。", "invalid-asset": "这个物件在当前分组中已不可用。", "required-group": "这个身体分组不能置空。", "missing-part": "请先添加物件，再设置颜色。", "invalid-color": "所选物件不支持这个颜色。", "outfit-changed": "这件衣物已被修改或删除。请将草稿另存为新衣物，或关闭后重新打开最新版本。" } };
       const library = { "searchPlaceholder": "搜索衣物或标签…", "allOutfits": "全部衣物", "untagged": "未加标签", "filterByTag": "按标签筛选", "manageTags": "管理标签", "newTag": "新建标签", "newTagPrompt": "输入唯一的标签名称：", "renameTag": "重命名当前标签", "renameTagPrompt": "新的标签名称：", "deleteTag": "删除当前标签", "deleteTagConfirm": "删除标签「{name}」？衣物会保留在衣橱中。", "tagNameInvalid": "请输入标签名称，并使用与现有标签不同的名称。", "editTags": "编辑标签", "editOutfitTags": "「{name}」的标签", "tags": "标签", "selectTags": "选择一个或多个标签", "noTags": "没有匹配标签，可在「管理标签」中新建。", "multipleTagsHint": "每件衣物可添加多个标签。移除标签不会删除衣物。", "saveTags": "保存标签", "outfitCount": "{count} / {total} 件衣物", "empty": "衣橱里还没有衣物", "noMatches": "没有符合条件的衣物", "clearFilters": "清除所有筛选", "saveCharacter": "保存当前穿着", "saveNamePrompt": "衣物名称：", "saved": "已将「{name}」保存到本机衣橱，云端进度请查看同步状态。", "imported": "已将 {count} 件衣物导入本机衣橱，云端进度请查看同步状态。", "nothingImported": "没有可导入的衣物。请检查导入内容是否为空。", "operationFailed": "操作未完成：{error}", "itemUnavailable": "这件衣物或标签已不可用，请重新选择后再试。", "deleteOutfitConfirm": "删除「{name}」？本机衣橱会删除它，并同步这次删除。", "previewOutfit": "预览「{name}」", "outfitActions": "「{name}」的操作", "moreActions": "更多操作", "cloudIncluded": "参与云同步", "localOnly": "仅保存在本机", "localFork": "保留的本机副本", "localForkHint": "另一台设备重新开启云同步时，这台设备修改过的版本被保留为本机副本。此副本不会自动上传，可手动开启云同步。", "cloudToggleTitle": "开启或关闭这件衣物的云同步，本机副本会保留。", "cloudStorage": "共享云端容量", "otherExtensions": "其他扩展", "remainingCapacity": "可用：{amount}", "quotaAria": "{source}：已用 {used}，上限 {limit}", "quotaObservedLogin": "最近一次登录从 BC 读取的占用", "quotaObservedCache": "BC 本机缓存估计，尚未核对", "quotaObservedUnavailable": "尚未读取到云端占用数据", "observedRemaining": "最近读取的可用空间：{amount}", "proposedUpload": "下次上传预计占用，尚未上传", "proposedRemaining": "预计上传后可用：{amount}", "sharedQuotaInfo": "共享云端容量说明", "sharedQuotaHint": "衣橱按 180 kB（180000 字节）控制全部扩展设置。上方显示最近读取的占用，展开可查看下次上传预计占用。VPW 包括衣物和设备标记。", "quotaWarning": "预计上传后接近容量上限。可将部分衣物设为仅保存在本机。", "quotaBlocked": "上传已暂停：预计更新超过 180 kB 的共享或单包限制。本机衣物仍可使用，请减少云同步衣物后重试。", "localSaved": "已保存到本机", "localUnsaved": "尚未保存到本机", "localStorageQuotaTitle": "浏览器拒绝了本次本机写入", "localStorageQuotaHelp": "这次修改或同步记录未确认保存。原因可能是此站点 localStorage 的独立配额或浏览器存储策略，不能据此判断磁盘空间；与 BC 云端 180 kB 限额无关。请先导出当前可读取的备份，再检查同站点数据并重试。不要直接清除整个站点数据。", "indexedDBSaveTitle": "衣柜数据库写入失败", "indexedDBSaveHelp": "这次衣柜修改未确认保存。仍可导出当前能读取的数据。请先导出备份，再重试本机保存。不要清除整个站点数据。", "localStorageUsage": "此站点 localStorage 已存数据估算：VPW {wardrobe}，其他数据 {other}，合计 {total}。", "localStorageUsageNote": "按 UTF-16 字符长度估算；不含被拒绝的写入，也不是实际配额或剩余空间。", "localStorageUsageUnavailable": "无法读取此站点的 localStorage 已存数据占用。", "localStorageCurrentIndex": "衣柜索引（所有账号）", "localStorageRecovery": "恢复档案", "localStorageOldHistory": "旧版历史", "localStorageLegacyWardrobe": "旧版衣柜", "localStorageOtherVpw": "其他 VPW 数据", "localStorageOtherApps": "其他站点数据", "showLocalStorageDetails": "查看详情", "hideLocalStorageDetails": "收起详情", "retryLocalSave": "重试本机保存", "retrySync": "重试上传", "exportLocalBackup": "导出本机备份", "deviceLimit": "云同步已登记 16 台安装环境。当前新设备仍可保存到本机并导出备份；已登记设备可继续同步。旧设备记录不会自动清除。", "exportRecovery": "导出迁移前备份", "conflict": { "review": "处理 {count} 处冲突", "title": "处理同步冲突", "back": "返回衣橱", "intro": "选择要保留的版本后，云端才能继续上传。你的修改仍保存在本机。", "quarantineIntro": "检测到云端缺少一次设备修改。同步衣物已暂时隐藏，上传暂停；请在原设备找回，或明确舍弃缺失修改。", "quarantined": "同步衣物暂时隐藏，不能预览或应用；仅本机衣物仍可使用。处理缺失修改前，保存、导入和开启云同步暂不可用。", "hiddenEmpty": "同步衣物已暂时隐藏，目前没有仅保存在本机的衣物。", "cloudEnablePaused": "请先处理缺失修改，再开启云同步。", "paused": "云端上传已暂停。处理冲突后可继续同步。", "itemTitle": "{name} · {field}", "unnamed": "项目", "changed": "已修改", "deleted": "已删除", "partCount": "{count} 个部件", "tagCount": "{count} 个标签", "thisDevice": "本机版本", "cloud": "云端版本", "chooseExplanation": "两边分别修改了这项内容，请选择要保留的版本。", "deleteEditExplanation": "一台设备删除了这项内容，另一台设备修改了它。选择修改版会以新项目恢复。", "privacyExplanation": "一台设备将这件衣物设为仅保存在本机，另一台开启了云同步。请选择要保留的存储设置和衣物版本。", "keepLocal": "保留本机版本", "keepCloud": "保留云端版本", "keepDeletion": "保留删除结果", "restoreAsNewOutfit": "作为新衣物恢复", "restoreAsNewTag": "作为新标签恢复", "missingTitle": "发现未合入的修改", "missingExplanation": "一台设备报告过修改，但云端衣橱里没有修改内容。可在原设备重新打开衣橱以找回，或明确舍弃这次修改。", "waitForDevice": "等待原设备", "discardMissing": "舍弃缺失修改", "discardConfirm": "确定不再等待这次缺失的修改？云端无法还原其内容；如果原设备仍保存它，可从那里找回。", "resolveFailed": "冲突未能处理。本机修改仍已保存，请重试。", "fields": { "name": "名称", "data": "衣物内容", "tagIds": "标签", "cloudSync": "云同步", "enabled": "云同步", "$record": "删除与修改", "sequence": "修改记录", "record": "项目", "deleted": "删除" } }, "sync": { "idle": "云同步就绪", "pending": "本机已保存", "submitted": "已提交（默认成功）", "verified": "已与云端核对", "offline": "离线，等待重试", "quota": "容量超限，上传暂停", "error": "同步需要处理", "conflict": "存在冲突，上传暂停" }, "selected": "已选择", "browseLibrary": "浏览衣橱", "findTag": "搜索标签…", "storageFilter": "云同步范围", "filters": "筛选", "storageDetails": "容量明细", "showResults": "查看 {count} 件衣物" };
       const fileItem = { "open": "打开", "rename": "重命名", "delete": "删除", "apply": "应用到角色", "sendToStudio": "发送到 Studio", "cancel": "取消", "promptNewName": "新名字", "confirmDelete": "确认删除该项目吗？", "elementDefaultName": "元素", "sendError": "发送到 Studio 失败", "oldData": "旧数据", "newData": "新数据", "setOld": "设置为旧数据", "setNew": "设置为新数据", "convertNew": "转换为新数据", "undoConversion": "撤销转换", "exportBCX": "导出为 BCX", "cloudOn": "云同步开", "cloudOff": "云同步关", "cloudToggleFileTitle": "切换此文件是否云同步", "cloudToggleFolderTitle": "切换此文件夹及其子项是否云同步" };
       const fileManager = { "title": "衣橱", "newFolderTitle": "新建文件夹", "restoreTitle": "恢复", "refreshThumbnails": "刷新缩略图", "closePanel": "关闭面板", "promptNewFolderName": "新建文件夹名", "goUp": "返回上一级", "parentFolder": "上一级", "dropToParentTitle": "拖到这里移到上一级文件夹", "searchPlaceholderCurrent": "在当前文件夹搜索...", "searchPlaceholderAll": "搜索所有文件夹...", "searchAria": "搜索文件", "clearSearch": "清除搜索", "switchToGlobalSearch": "切换到全局搜索", "switchToCurrentSearch": "切换到当前文件夹", "emptyTip": "没有匹配的文件/文件夹", "scopeCurrent": "当前目录", "scopeAll": "全局", "sortBy": "排序方式", "sortToggle": "排序", "sortToggleAria": "切换排序方式", "viewMode": "视图模式", "viewCard": "卡牌", "viewList": "列表", "sortRecent": "最近修改", "sortName": "名称", "sortType": "类型", "cloudUsageTitle": "云端占用", "cloudUsageAria": "云端容量占用", "cloudUsageOk": "容量正常", "cloudUsageWarn": "容量接近上限", "cloudUsageOver": "超出 180KB 上限", "filterAll": "全部", "filterFolder": "文件夹", "filterOutfit": "套装", "filterCharacter": "角色快照" };
@@ -39593,9 +39595,9 @@ ${lightForced}`;
           setError("");
           try {
             const result = await openNativeWardrobeEditor({ bundle: draft, signal: controller.signal, restraints: {
-              clothes: t("outfitEditor.editClothes"),
-              export: t("outfitEditor.exportDraft"),
-              discard: t("outfitEditor.cancel"),
+              clothes: t("outfitEditor.edit"),
+              copy: t("outfitEditor.copy"),
+              save: t("outfitEditor.save"),
               retry: t("outfitEditor.retryReturn"),
               returnFailed: t("outfitEditor.returnFailed")
             } });
@@ -39605,8 +39607,13 @@ ${lightForced}`;
               else setStage("items");
             } else {
               setExported("exported" in result && !!result.exported);
-              setDraft((before) => keepProtectedParts(before, result.bundle));
+              const edited = keepProtectedParts(draft, result.bundle);
+              setDraft(edited);
               setStage("items");
+              if ("exported" in result && result.exported) {
+                if (result.status === "copy") await saveCopy(edited);
+                else await overwrite(edited);
+              }
             }
           } catch (reason) {
             if (!controller.signal.aborted) {
@@ -39660,8 +39667,8 @@ ${lightForced}`;
           if (dirty && !await dialog2.confirm(t("outfitEditor.discardConfirm"))) return;
           onClose();
         };
-        const overwrite = async () => {
-          if (!source || !dirty || saving || nativeBusy) return;
+        const overwrite = async (data = draft) => {
+          if (!source || saving) return;
           if (sourceChanged(source)) {
             setError(t("outfitEditor.sourceChanged"));
             return;
@@ -39669,7 +39676,7 @@ ${lightForced}`;
           setSaving(true);
           setError("");
           try {
-            await getFs().updateOutfitIfUnchanged(source.id, source.rev, prepareSavedOutfit(draft, hostWindow, getFs().character, source.offsetFormat));
+            await getFs().updateOutfitIfUnchanged(source.id, source.rev, prepareSavedOutfit(data, hostWindow, getFs().character, source.offsetFormat));
             onClose();
           } catch (reason) {
             const code = reason?.code;
@@ -39678,8 +39685,8 @@ ${lightForced}`;
             setSaving(false);
           }
         };
-        const saveCopy = async () => {
-          if (!source || saving || nativeBusy) return;
+        const saveCopy = async (data = draft) => {
+          if (!source || saving) return;
           const name = (await dialog2.prompt(
             t("outfitEditor.newNamePrompt"),
             t("outfitEditor.copyName", { name: source.name })
@@ -39695,7 +39702,7 @@ ${lightForced}`;
             await getFs().addOutfit({
               name,
               type: source.type,
-              ...prepareSavedOutfit(draft, hostWindow, getFs().character, source.offsetFormat),
+              ...prepareSavedOutfit(data, hostWindow, getFs().character, source.offsetFormat),
               tagIds: source.tagIds,
               cloudSync: source.cloudSync
             });
