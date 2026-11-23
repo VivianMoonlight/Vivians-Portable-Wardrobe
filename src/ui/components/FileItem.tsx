@@ -1,4 +1,4 @@
-import { prepareOutfitOffsets } from '@/services/migrate-outfit-offsets.js'
+import { prepareSavedOutfit } from '@/services/migrate-outfit-offsets.js'
 import { memo, useId, useState, type MouseEvent } from 'react'
 import { ActionIcon, Badge, Box, Button, FocusTrap, Group, Paper, Portal, Text, UnstyledButton, VisuallyHidden } from '@mantine/core'
 import { useTranslation } from 'react-i18next'
@@ -35,30 +35,6 @@ export const FileItem = memo(function FileItem({ item, tagNames, viewMode, cloud
   const thumbnailRefresh = useFsSelector(() => item.__thumbRefresh)
   const [menu, setMenu] = useState<MenuState | null>(null)
   void thumbnailRefresh
-
-  const isNew = item.offsetFormat === 'new'
-  const [undo, setUndo] = useState<{ rev: string; data: unknown[] } | null>(null)
-  const canUndo = undo !== null && undo.rev === JSON.stringify(item.rev)
-  const changeFormat = async (action: 'set' | 'convert' | 'undo') => {
-    setMenu(null)
-    try {
-      const fs = getFs()
-      if (action === 'undo') {
-        if (!undo || !canUndo) return
-        await fs.updateOutfitIfUnchanged(item.id, item.rev, { data: undo.data, offsetFormat: 'old' })
-      } else if (action === 'convert') {
-        if (isNew) return
-        const data = prepareOutfitOffsets(item.data, hostWindow, fs.character ?? (hostWindow as Window & { Player?: unknown }).Player, true)
-        await fs.updateOutfitIfUnchanged(item.id, item.rev, { data, offsetFormat: 'new' })
-        const saved = getFs().outfits.find(outfit => outfit.id === item.id)
-        if (saved?.offsetFormat === 'new') setUndo({ rev: JSON.stringify(saved.rev), data: item.data })
-        return
-      } else {
-        await fs.updateOutfitIfUnchanged(item.id, item.rev, { offsetFormat: isNew ? 'old' : 'new' })
-      }
-      setUndo(null)
-    } catch (error) { await reportError(error) }
-  }
 
   const closeMenu = () => setMenu(null)
   const reportError = (error: unknown) => dialog.alert(t('library.operationFailed', {
@@ -102,7 +78,8 @@ export const FileItem = memo(function FileItem({ item, tagNames, viewMode, cloud
   const exportBcx = async () => {
     closeMenu()
     try {
-      ExternalAdapter.exportOutfitAsBCX(item.name, item.data, item.offsetFormat)
+      const saved = prepareSavedOutfit(item.data, hostWindow, getFs().character, item.offsetFormat)
+      ExternalAdapter.exportOutfitAsBCX(item.name, saved.data, saved.offsetFormat)
       await dialog.alert(t('wardrobeIO.bcxCopied'))
     } catch (error) { await reportError(error) }
   }
@@ -132,7 +109,6 @@ export const FileItem = memo(function FileItem({ item, tagNames, viewMode, cloud
           </Box>
         )}
         <Box className="vpw-outfit-caption">
-          <Text size="xs">{t(isNew ? 'fileItem.newData' : 'fileItem.oldData')}</Text>
           <Group gap={6} wrap="nowrap" align="start">
             <Text size="sm" fw={600} className="vpw-outfit-name">{item.name}</Text>
             {isList && isPreviewLocked && <Badge size="xs" variant="light" color="teal" style={{ flexShrink: 0 }}>
@@ -168,7 +144,6 @@ export const FileItem = memo(function FileItem({ item, tagNames, viewMode, cloud
           </Group>
       </Paper>
       {menu && <Portal><ContextMenu x={menu.x} y={menu.y} onClose={closeMenu}
-        isNew={isNew} canUndo={canUndo} onFormat={action => void changeFormat(action)}
         onEdit={() => { closeMenu(); onEditOutfit(item) }}
         onRename={() => void renameItem()} onDelete={() => void deleteItem()}
         onExport={() => void exportBcx()} onEditTags={() => { closeMenu(); onEditTags() }} /></Portal>}
@@ -177,9 +152,6 @@ export const FileItem = memo(function FileItem({ item, tagNames, viewMode, cloud
 })
 
 interface ContextMenuProps {
-  isNew: boolean
-  canUndo: boolean
-  onFormat: (action: 'set' | 'convert' | 'undo') => void
   x: number
   y: number
   onClose: () => void
@@ -197,9 +169,6 @@ function ContextMenu(props: ContextMenuProps) {
     { key: 'tags', label: t('library.editTags'), action: props.onEditTags },
     { key: 'rename', label: t('fileItem.rename'), action: props.onRename },
     { key: 'export', label: t('fileItem.exportBCX'), action: props.onExport },
-    { key: 'format', label: t(props.isNew ? 'fileItem.setOld' : 'fileItem.setNew'), action: () => props.onFormat('set') },
-    { key: 'convert', label: t('fileItem.convertNew'), disabled: props.isNew, action: () => props.onFormat('convert') },
-    { key: 'undo', label: t('fileItem.undoConversion'), disabled: !props.canUndo, action: () => props.onFormat('undo') },
     { key: 'delete', label: t('fileItem.delete'), action: props.onDelete, color: 'red' },
     { key: 'cancel', label: t('fileItem.cancel'), action: props.onClose, color: 'gray' },
   ]
@@ -213,7 +182,7 @@ function ContextMenu(props: ContextMenuProps) {
         onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}
         onContextMenu={(event) => event.preventDefault()} onKeyDown={(event) => { if (event.key === 'Escape') props.onClose() }}
         style={{ position: 'fixed', left: props.x, top: props.y, zIndex: OVERLAY_Z_INDEX + 1, minWidth: 188, padding: 6 }}>
-        {items.map((item) => <Button key={item.key} role="menuitem" disabled={item.disabled} variant="subtle" color={item.color} size="sm"
+        {items.map((item) => <Button key={item.key} role="menuitem" variant="subtle" color={item.color} size="sm"
           fullWidth justify="flex-start" radius="sm" onClick={item.action}
           styles={{ root: { height: 34, paddingInline: 10 }, label: { fontWeight: 500 } }}>
           {item.label}

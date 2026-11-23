@@ -1,4 +1,5 @@
-﻿import { useMemo } from 'react'
+import { prepareSavedOutfit } from '@/services/migrate-outfit-offsets.js'
+import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import LZString from 'lz-string'
@@ -69,8 +70,7 @@ async function applyImportedData(
       const id = await fs.addOutfit({
         name: typeof parsed.name === 'string' && parsed.name.trim() ? parsed.name.trim() : defaultFilename('imported'),
         type: typeof parsed.type === 'string' ? parsed.type : 'outfit',
-        data: parsed.data,
-        offsetFormat: parsed.offsetFormat === 'new' ? 'new' : 'old',
+        ...prepareSavedOutfit(parsed.data, hostWindow, fs.character, parsed.offsetFormat),
         tagIds: fs.selectedTagId && fs.selectedTagId !== 'untagged' ? [fs.selectedTagId] : [],
         cloudSync: typeof parsed.cloudSync === 'boolean' ? parsed.cloudSync : undefined,
       })
@@ -186,7 +186,7 @@ export function useWardrobeActions(): WardrobeActions {
       if (!name?.trim()) return
       try {
         const id = await fs.addOutfit({
-          name: name.trim(), type: 'character', data: fs.characterItem,
+          name: name.trim(), type: 'character', ...prepareSavedOutfit(fs.characterItem, hostWindow, fs.character),
           tagIds: fs.selectedTagId && fs.selectedTagId !== 'untagged' ? [fs.selectedTagId] : [],
         })
         if (!id) {
