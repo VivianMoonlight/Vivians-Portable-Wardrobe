@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vivians Portable Wardrobe
 // @namespace    http://tampermonkey.net/
-// @version      0.10.1-react.34
+// @version      0.10.1-react.35
 // @author       VIVianMoonlight
 // @description  Portable Wardrobe for Bondage Club (React + Mantine, Shadow DOM isolated)
 // @downloadURL  https://cdn.jsdelivr.net/gh/VivianMoonlight/Vivians-Portable-Wardrobe@wardrobe-react/out/Vivians-Portable-Wardrobe.user.js
@@ -32,7 +32,7 @@
     return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
   };
   var require_main_001 = __commonJS({
-    "main-BClyY2Vl.js"(exports) {
+    "main-D306-Poe.js"(exports) {
       function _mergeNamespaces(n, m) {
         for (var i = 0; i < m.length; i++) {
           const e = m[i];
@@ -9285,7 +9285,7 @@
       instance.hasLoadedNamespace;
       instance.loadNamespaces;
       instance.loadLanguages;
-      const version = "0.10.1-react.34";
+      const version = "0.10.1-react.35";
       var _unsafeWindow = /* @__PURE__ */ (() => typeof unsafeWindow != "undefined" ? unsafeWindow : void 0)();
       const hostWindow = typeof _unsafeWindow !== "undefined" ? _unsafeWindow : window;
       const doc = hostWindow.document;
@@ -23600,7 +23600,7 @@ ${lightForced}`;
         }
         return getCollapseProps;
       }
-      const defaultProps$N = {
+      const defaultProps$M = {
         transitionDuration: 200,
         transitionTimingFunction: "ease",
         animateOpacity: true
@@ -23616,7 +23616,7 @@ ${lightForced}`;
           animateOpacity,
           keepMounted,
           ...others
-        } = useProps("Collapse", defaultProps$N, props);
+        } = useProps("Collapse", defaultProps$M, props);
         const theme = useMantineTheme();
         const shouldReduceMotion = useReducedMotion();
         const reduceMotion = theme.respectReducedMotion ? shouldReduceMotion : false;
@@ -27112,14 +27112,14 @@ ${lightForced}`;
         const hasCorner = ctx.type !== "scroll" && hasBothScrollbarsVisible;
         return hasCorner ? /* @__PURE__ */ jsxRuntimeExports.jsx(Corner, { ...props, ref }) : null;
       });
-      const defaultProps$M = {
+      const defaultProps$L = {
         scrollHideDelay: 1e3,
         type: "hover"
       };
       const ScrollAreaRoot = reactExports.forwardRef((_props, ref) => {
         const { type, scrollHideDelay, scrollbars, getStyles: getStyles2, ...others } = useProps(
           "ScrollAreaRoot",
-          defaultProps$M,
+          defaultProps$L,
           _props
         );
         const [scrollArea, setScrollArea] = reactExports.useState(null);
@@ -27761,7 +27761,7 @@ ${lightForced}`;
         }
       );
       ScrollAreaViewport.displayName = "@mantine/core/ScrollAreaViewport";
-      const defaultProps$L = {
+      const defaultProps$K = {
         scrollHideDelay: 1e3,
         type: "hover",
         scrollbars: "xy"
@@ -27785,7 +27785,7 @@ ${lightForced}`;
         }
       );
       const ScrollArea = factory((_props, ref) => {
-        const props = useProps("ScrollArea", defaultProps$L, _props);
+        const props = useProps("ScrollArea", defaultProps$K, _props);
         const {
           classNames,
           className,
@@ -27937,7 +27937,7 @@ ${lightForced}`;
           onTopReached,
           onOverflowChange,
           ...others
-        } = useProps("ScrollAreaAutosize", defaultProps$L, props);
+        } = useProps("ScrollAreaAutosize", defaultProps$K, props);
         const viewportObserverRef = reactExports.useRef(null);
         const combinedViewportRef = useMergeRefs([viewportRef, viewportObserverRef]);
         const [overflowing, setOverflowing] = reactExports.useState(false);
@@ -28014,12 +28014,12 @@ ${lightForced}`;
       ScrollAreaAutosize.classes = classes$z;
       ScrollArea.Autosize = ScrollAreaAutosize;
       var classes$y = { "root": "m_87cf2631" };
-      const defaultProps$K = {
+      const defaultProps$J = {
         __staticSelector: "UnstyledButton"
       };
       const UnstyledButton = polymorphicFactory(
         (_props, ref) => {
-          const props = useProps("UnstyledButton", defaultProps$K, _props);
+          const props = useProps("UnstyledButton", defaultProps$J, _props);
           const {
             className,
             component = "button",
@@ -28265,7 +28265,7 @@ ${lightForced}`;
         return position;
       }
       var classes$v = { "root": "m_9814e45f" };
-      const defaultProps$J = {
+      const defaultProps$I = {
         zIndex: getDefaultZIndex("modal")
       };
       const varsResolver$B = createVarsResolver(
@@ -28279,7 +28279,7 @@ ${lightForced}`;
         })
       );
       const Overlay = polymorphicFactory((_props, ref) => {
-        const props = useProps("Overlay", defaultProps$J, _props);
+        const props = useProps("Overlay", defaultProps$I, _props);
         const {
           classNames,
           className,
@@ -28344,11 +28344,11 @@ ${lightForced}`;
         }
         return createPortalNode(others);
       }
-      const defaultProps$I = {
+      const defaultProps$H = {
         reuseTargetNode: true
       };
       const Portal = factory((props, ref) => {
-        const { children, target, reuseTargetNode, ...others } = useProps("Portal", defaultProps$I, props);
+        const { children, target, reuseTargetNode, ...others } = useProps("Portal", defaultProps$H, props);
         const [mounted, setMounted] = reactExports.useState(false);
         const nodeRef = reactExports.useRef(null);
         useIsomorphicEffect(() => {
@@ -28784,14 +28784,14 @@ ${lightForced}`;
       });
       PopoverDropdown.classes = classes$u;
       PopoverDropdown.displayName = "@mantine/core/PopoverDropdown";
-      const defaultProps$H = {
+      const defaultProps$G = {
         refProp: "ref",
         popupType: "dialog"
       };
       const PopoverTarget = factory((props, ref) => {
         const { children, refProp, popupType, ...others } = useProps(
           "PopoverTarget",
-          defaultProps$H,
+          defaultProps$G,
           props
         );
         const child = getSingleElementChild(children);
@@ -28958,7 +28958,7 @@ ${lightForced}`;
           onToggle
         };
       }
-      const defaultProps$G = {
+      const defaultProps$F = {
         position: "bottom",
         offset: 8,
         positionDependencies: [],
@@ -28988,7 +28988,7 @@ ${lightForced}`;
         }
       }));
       function Popover(_props) {
-        const props = useProps("Popover", defaultProps$G, _props);
+        const props = useProps("Popover", defaultProps$F, _props);
         const {
           children,
           position,
@@ -29218,7 +29218,7 @@ ${lightForced}`;
         oval: Oval,
         dots: Dots
       };
-      const defaultProps$F = {
+      const defaultProps$E = {
         loaders: defaultLoaders,
         type: "oval"
       };
@@ -29229,7 +29229,7 @@ ${lightForced}`;
         }
       }));
       const Loader = factory((_props, ref) => {
-        const props = useProps("Loader", defaultProps$F, _props);
+        const props = useProps("Loader", defaultProps$E, _props);
         const {
           size: size2,
           color,
@@ -29278,14 +29278,14 @@ ${lightForced}`;
       Loader.classes = classes$t;
       Loader.displayName = "@mantine/core/Loader";
       var classes$s = { "root": "m_8d3f4000", "icon": "m_8d3afb97", "loader": "m_302b9fb1", "group": "m_1a0f1b21", "groupSection": "m_437b6484" };
-      const defaultProps$E = {
+      const defaultProps$D = {
         orientation: "horizontal"
       };
       const varsResolver$y = createVarsResolver((_, { borderWidth }) => ({
         group: { "--ai-border-width": rem(borderWidth) }
       }));
       const ActionIconGroup = factory((_props, ref) => {
-        const props = useProps("ActionIconGroup", defaultProps$E, _props);
+        const props = useProps("ActionIconGroup", defaultProps$D, _props);
         const {
           className,
           style,
@@ -29299,7 +29299,7 @@ ${lightForced}`;
           mod,
           attributes,
           ...others
-        } = useProps("ActionIconGroup", defaultProps$E, _props);
+        } = useProps("ActionIconGroup", defaultProps$D, _props);
         const getStyles2 = useStyles({
           name: "ActionIconGroup",
           props,
@@ -29490,7 +29490,7 @@ ${lightForced}`;
       );
       CloseIcon.displayName = "@mantine/core/CloseIcon";
       var classes$r = { "root": "m_86a44da5", "root--subtle": "m_220c80f2" };
-      const defaultProps$D = {
+      const defaultProps$C = {
         variant: "subtle"
       };
       const varsResolver$v = createVarsResolver((_, { size: size2, radius, iconSize }) => ({
@@ -29501,7 +29501,7 @@ ${lightForced}`;
         }
       }));
       const CloseButton = polymorphicFactory((_props, ref) => {
-        const props = useProps("CloseButton", defaultProps$D, _props);
+        const props = useProps("CloseButton", defaultProps$C, _props);
         const {
           iconSize,
           children,
@@ -29557,7 +29557,7 @@ ${lightForced}`;
         return reactExports.Children.toArray(children).filter(Boolean);
       }
       var classes$q = { "root": "m_4081bf90" };
-      const defaultProps$C = {
+      const defaultProps$B = {
         preventGrowOverflow: true,
         gap: "md",
         align: "center",
@@ -29576,7 +29576,7 @@ ${lightForced}`;
         })
       );
       const Group = factory((_props, ref) => {
-        const props = useProps("Group", defaultProps$C, _props);
+        const props = useProps("Group", defaultProps$B, _props);
         const {
           classNames,
           className,
@@ -30106,7 +30106,7 @@ ${lightForced}`;
       });
       InputError.classes = classes$o;
       InputError.displayName = "@mantine/core/InputError";
-      const defaultProps$B = {
+      const defaultProps$A = {
         labelElement: "label"
       };
       const varsResolver$r = createVarsResolver((_, { size: size2 }) => ({
@@ -30116,7 +30116,7 @@ ${lightForced}`;
         }
       }));
       const InputLabel = factory((_props, ref) => {
-        const props = useProps("InputLabel", defaultProps$B, _props);
+        const props = useProps("InputLabel", defaultProps$A, _props);
         const {
           classNames,
           className,
@@ -30135,7 +30135,7 @@ ${lightForced}`;
           mod,
           attributes,
           ...others
-        } = useProps("InputLabel", defaultProps$B, props);
+        } = useProps("InputLabel", defaultProps$A, props);
         const _getStyles = useStyles({
           name: ["InputWrapper", __staticSelector],
           props,
@@ -30228,7 +30228,7 @@ ${lightForced}`;
         const offsetBottom = hasDescription && belowInput.includes("description") || hasError && belowInput.includes("error");
         return { offsetBottom, offsetTop };
       }
-      const defaultProps$A = {
+      const defaultProps$z = {
         labelElement: "label",
         inputContainer: (children) => children,
         inputWrapperOrder: ["label", "description", "input", "error"]
@@ -30246,7 +30246,7 @@ ${lightForced}`;
         }
       }));
       const InputWrapper = factory((_props, ref) => {
-        const props = useProps("InputWrapper", defaultProps$A, _props);
+        const props = useProps("InputWrapper", defaultProps$z, _props);
         const {
           classNames,
           className,
@@ -30380,7 +30380,7 @@ ${lightForced}`;
       });
       InputWrapper.classes = classes$o;
       InputWrapper.displayName = "@mantine/core/InputWrapper";
-      const defaultProps$z = {
+      const defaultProps$y = {
         variant: "default",
         leftSectionPointerEvents: "none",
         rightSectionPointerEvents: "none",
@@ -30403,7 +30403,7 @@ ${lightForced}`;
         }
       }));
       const Input = polymorphicFactory((_props, ref) => {
-        const props = useProps("Input", defaultProps$z, _props);
+        const props = useProps("Input", defaultProps$y, _props);
         const {
           classNames,
           className,
@@ -30619,13 +30619,13 @@ ${lightForced}`;
           }
         };
       }
-      const defaultProps$y = {
+      const defaultProps$x = {
         __staticSelector: "InputBase",
         withAria: true,
         size: "sm"
       };
       const InputBase = polymorphicFactory((props, ref) => {
-        const { inputProps, wrapperProps, ...others } = useInputProps("InputBase", defaultProps$y, props);
+        const { inputProps, wrapperProps, ...others } = useInputProps("InputBase", defaultProps$x, props);
         return /* @__PURE__ */ jsxRuntimeExports.jsx(Input.Wrapper, { ...wrapperProps, children: /* @__PURE__ */ jsxRuntimeExports.jsx(Input, { ...inputProps, ...others, ref }) });
       });
       InputBase.classes = { ...Input.classes, ...Input.Wrapper.classes };
@@ -31018,7 +31018,7 @@ ${lightForced}`;
         }
         return void 0;
       }
-      const defaultProps$x = {
+      const defaultProps$w = {
         inherit: false
       };
       const varsResolver$m = createVarsResolver(
@@ -31035,7 +31035,7 @@ ${lightForced}`;
         })
       );
       const Text = polymorphicFactory((_props, ref) => {
-        const props = useProps("Text", defaultProps$x, _props);
+        const props = useProps("Text", defaultProps$w, _props);
         const {
           lineClamp,
           truncate,
@@ -31126,7 +31126,7 @@ ${lightForced}`;
         }, {});
       }
       var classes$j = { "dropdown": "m_88b62a41", "search": "m_985517d8", "options": "m_b2821a6e", "option": "m_92253aa5", "empty": "m_2530cd1d", "header": "m_858f94bd", "footer": "m_82b967cb", "group": "m_254f3e4f", "groupLabel": "m_2bb2e9e5", "chevron": "m_2943220b", "optionsDropdownOption": "m_390b5f4", "optionsDropdownCheckIcon": "m_8ee53fc2", "optionsDropdownCheckPlaceholder": "m_a530ee0a" };
-      const defaultProps$w = {
+      const defaultProps$v = {
         error: null
       };
       const varsResolver$l = createVarsResolver((theme, { size: size2, color }) => ({
@@ -31136,7 +31136,7 @@ ${lightForced}`;
         }
       }));
       const ComboboxChevron = factory((_props, ref) => {
-        const props = useProps("ComboboxChevron", defaultProps$w, _props);
+        const props = useProps("ComboboxChevron", defaultProps$v, _props);
         const { size: size2, error, style, className, classNames, styles: styles2, unstyled, vars, mod, ...others } = props;
         const getStyles2 = useStyles({
           name: "ComboboxChevron",
@@ -31220,11 +31220,11 @@ ${lightForced}`;
       });
       ComboboxDropdown.classes = classes$j;
       ComboboxDropdown.displayName = "@mantine/core/ComboboxDropdown";
-      const defaultProps$v = {
+      const defaultProps$u = {
         refProp: "ref"
       };
       const ComboboxDropdownTarget = factory((props, ref) => {
-        const { children, refProp } = useProps("ComboboxDropdownTarget", defaultProps$v, props);
+        const { children, refProp } = useProps("ComboboxDropdownTarget", defaultProps$u, props);
         useComboboxContext();
         if (!isElement$1(children)) {
           throw new Error(
@@ -31329,7 +31329,7 @@ ${lightForced}`;
           onKeyDown: handleKeyDown
         };
       }
-      const defaultProps$u = {
+      const defaultProps$t = {
         refProp: "ref",
         targetType: "input",
         withKeyboardNavigation: true,
@@ -31347,7 +31347,7 @@ ${lightForced}`;
           targetType,
           autoComplete,
           ...others
-        } = useProps("ComboboxEventsTarget", defaultProps$u, props);
+        } = useProps("ComboboxEventsTarget", defaultProps$t, props);
         const child = getSingleElementChild(children);
         if (!child) {
           throw new Error(
@@ -31535,12 +31535,12 @@ ${lightForced}`;
       });
       ComboboxOptions.classes = classes$j;
       ComboboxOptions.displayName = "@mantine/core/ComboboxOptions";
-      const defaultProps$t = {
+      const defaultProps$s = {
         withAriaAttributes: true,
         withKeyboardNavigation: true
       };
       const ComboboxSearch = factory((_props, ref) => {
-        const props = useProps("ComboboxSearch", defaultProps$t, _props);
+        const props = useProps("ComboboxSearch", defaultProps$s, _props);
         const {
           classNames,
           styles: styles2,
@@ -31577,7 +31577,7 @@ ${lightForced}`;
       });
       ComboboxSearch.classes = classes$j;
       ComboboxSearch.displayName = "@mantine/core/ComboboxSearch";
-      const defaultProps$s = {
+      const defaultProps$r = {
         refProp: "ref",
         targetType: "input",
         withKeyboardNavigation: true,
@@ -31595,7 +31595,7 @@ ${lightForced}`;
           targetType,
           autoComplete,
           ...others
-        } = useProps("ComboboxTarget", defaultProps$s, props);
+        } = useProps("ComboboxTarget", defaultProps$r, props);
         const child = getSingleElementChild(children);
         if (!child) {
           throw new Error(
@@ -31844,7 +31844,7 @@ ${lightForced}`;
           focusTarget
         };
       }
-      const defaultProps$r = {
+      const defaultProps$q = {
         keepMounted: true,
         withinPortal: true,
         resetSelectionOnOptionHover: false,
@@ -31864,7 +31864,7 @@ ${lightForced}`;
         }
       }));
       function Combobox(_props) {
-        const props = useProps("Combobox", defaultProps$r, _props);
+        const props = useProps("Combobox", defaultProps$q, _props);
         const {
           classNames,
           styles: styles2,
@@ -32030,7 +32030,7 @@ ${lightForced}`;
       const useCheckboxGroupContext = () => reactExports.useContext(CheckboxGroupContext);
       const [CheckboxCardProvider, useCheckboxCardContext] = createOptionalContext();
       var classes$g = { "card": "m_26775b0a" };
-      const defaultProps$q = {
+      const defaultProps$p = {
         withBorder: true
       };
       const varsResolver$j = createVarsResolver((_, { radius }) => ({
@@ -32039,7 +32039,7 @@ ${lightForced}`;
         }
       }));
       const CheckboxCard = factory((_props, ref) => {
-        const props = useProps("CheckboxCard", defaultProps$q, _props);
+        const props = useProps("CheckboxCard", defaultProps$p, _props);
         const {
           classNames,
           className,
@@ -32184,7 +32184,7 @@ ${lightForced}`;
         return /* @__PURE__ */ jsxRuntimeExports.jsx(CheckIcon, { ...others });
       }
       var classes$f = { "indicator": "m_5e5256ee", "icon": "m_1b1c543a", "indicator--outline": "m_76e20374" };
-      const defaultProps$p = {
+      const defaultProps$o = {
         icon: CheckboxIcon,
         variant: "filled"
       };
@@ -32203,7 +32203,7 @@ ${lightForced}`;
         }
       );
       const CheckboxIndicator = factory((_props, ref) => {
-        const props = useProps("CheckboxIndicator", defaultProps$p, _props);
+        const props = useProps("CheckboxIndicator", defaultProps$o, _props);
         const {
           classNames,
           className,
@@ -32254,7 +32254,7 @@ ${lightForced}`;
       });
       CheckboxIndicator.displayName = "@mantine/core/CheckboxIndicator";
       CheckboxIndicator.classes = classes$f;
-      const defaultProps$o = {
+      const defaultProps$n = {
         labelPosition: "right",
         icon: CheckboxIcon,
         variant: "filled"
@@ -32274,7 +32274,7 @@ ${lightForced}`;
         }
       );
       const Checkbox = factory((_props, forwardedRef) => {
-        const props = useProps("Checkbox", defaultProps$o, _props);
+        const props = useProps("Checkbox", defaultProps$n, _props);
         const {
           classNames,
           className,
@@ -32654,14 +32654,14 @@ ${lightForced}`;
       Badge.classes = classes$e;
       Badge.displayName = "@mantine/core/Badge";
       var classes$d = { "root": "m_77c9d27d", "inner": "m_80f1301b", "label": "m_811560b9", "section": "m_a74036a", "loader": "m_a25b86ee", "group": "m_80d6d844", "groupSection": "m_70be2a01" };
-      const defaultProps$n = {
+      const defaultProps$m = {
         orientation: "horizontal"
       };
       const varsResolver$f = createVarsResolver((_, { borderWidth }) => ({
         group: { "--button-border-width": rem(borderWidth) }
       }));
       const ButtonGroup = factory((_props, ref) => {
-        const props = useProps("ButtonGroup", defaultProps$n, _props);
+        const props = useProps("ButtonGroup", defaultProps$m, _props);
         const {
           className,
           style,
@@ -32675,7 +32675,7 @@ ${lightForced}`;
           mod,
           attributes,
           ...others
-        } = useProps("ButtonGroup", defaultProps$n, _props);
+        } = useProps("ButtonGroup", defaultProps$m, _props);
         const getStyles2 = useStyles({
           name: "ButtonGroup",
           props,
@@ -32874,7 +32874,7 @@ ${lightForced}`;
       Button.Group = ButtonGroup;
       Button.GroupSection = ButtonGroupSection;
       var classes$c = { "root": "m_3eebeb36", "label": "m_9e365f20" };
-      const defaultProps$m = {
+      const defaultProps$l = {
         orientation: "horizontal"
       };
       const varsResolver$c = createVarsResolver((theme, { color, variant, size: size2 }) => ({
@@ -32885,7 +32885,7 @@ ${lightForced}`;
         }
       }));
       const Divider = factory((_props, ref) => {
-        const props = useProps("Divider", defaultProps$m, _props);
+        const props = useProps("Divider", defaultProps$l, _props);
         const {
           classNames,
           className,
@@ -33040,7 +33040,7 @@ ${lightForced}`;
         right: "slide-right",
         left: "slide-left"
       };
-      const defaultProps$l = {
+      const defaultProps$k = {
         closeOnClickOutside: true,
         withinPortal: true,
         lockScroll: true,
@@ -33062,7 +33062,7 @@ ${lightForced}`;
         }
       }));
       const DrawerRoot = factory((_props, ref) => {
-        const props = useProps("DrawerRoot", defaultProps$l, _props);
+        const props = useProps("DrawerRoot", defaultProps$k, _props);
         const {
           classNames,
           className,
@@ -33146,7 +33146,7 @@ ${lightForced}`;
       });
       DrawerTitle.classes = classes$b;
       DrawerTitle.displayName = "@mantine/core/DrawerTitle";
-      const defaultProps$k = {
+      const defaultProps$j = {
         closeOnClickOutside: true,
         withinPortal: true,
         lockScroll: true,
@@ -33170,7 +33170,7 @@ ${lightForced}`;
           stackId,
           zIndex,
           ...others
-        } = useProps("Drawer", defaultProps$k, _props);
+        } = useProps("Drawer", defaultProps$j, _props);
         const ctx = useDrawerStackContext();
         const hasHeader = !!title || withCloseButton;
         const stackProps = ctx && stackId ? {
@@ -33532,7 +33532,7 @@ ${lightForced}`;
         return /* @__PURE__ */ jsxRuntimeExports.jsx(Popover.Target, { refProp, popupType: "menu", children });
       }
       MenuSubTarget.displayName = "@mantine/core/MenuSubTarget";
-      const defaultProps$j = {
+      const defaultProps$i = {
         offset: 0,
         position: "right-start",
         transitionProps: { duration: 0 },
@@ -33545,7 +33545,7 @@ ${lightForced}`;
         }
       };
       function MenuSub(_props) {
-        const { children, closeDelay, openDelay, ...others } = useProps("MenuSub", defaultProps$j, _props);
+        const { children, closeDelay, openDelay, ...others } = useProps("MenuSub", defaultProps$i, _props);
         const id = useId$1();
         const [opened, { open, close }] = useDisclosure(false);
         const ctx = useSubMenuContext();
@@ -33581,11 +33581,11 @@ ${lightForced}`;
       MenuSub.Target = MenuSubTarget;
       MenuSub.Dropdown = MenuSubDropdown;
       MenuSub.Item = MenuSubItem;
-      const defaultProps$i = {
+      const defaultProps$h = {
         refProp: "ref"
       };
       const MenuTarget = reactExports.forwardRef((props, ref) => {
-        const { children, refProp, ...others } = useProps("MenuTarget", defaultProps$i, props);
+        const { children, refProp, ...others } = useProps("MenuTarget", defaultProps$h, props);
         const child = getSingleElementChild(children);
         if (!child) {
           throw new Error(
@@ -33623,7 +33623,7 @@ ${lightForced}`;
         }) });
       });
       MenuTarget.displayName = "@mantine/core/MenuTarget";
-      const defaultProps$h = {
+      const defaultProps$g = {
         trapFocus: true,
         closeOnItemClick: true,
         withInitialFocusPlaceholder: true,
@@ -33635,7 +33635,7 @@ ${lightForced}`;
         menuItemTabIndex: -1
       };
       function Menu(_props) {
-        const props = useProps("Menu", defaultProps$h, _props);
+        const props = useProps("Menu", defaultProps$g, _props);
         const {
           children,
           onOpen,
@@ -33841,7 +33841,7 @@ ${lightForced}`;
       });
       ModalOverlay.classes = classes$9;
       ModalOverlay.displayName = "@mantine/core/ModalOverlay";
-      const defaultProps$g = {
+      const defaultProps$f = {
         __staticSelector: "Modal",
         closeOnClickOutside: true,
         withinPortal: true,
@@ -33865,7 +33865,7 @@ ${lightForced}`;
         })
       );
       const ModalRoot = factory((_props, ref) => {
-        const props = useProps("ModalRoot", defaultProps$g, _props);
+        const props = useProps("ModalRoot", defaultProps$f, _props);
         const {
           classNames,
           className,
@@ -33951,7 +33951,7 @@ ${lightForced}`;
       });
       ModalTitle.classes = classes$9;
       ModalTitle.displayName = "@mantine/core/ModalTitle";
-      const defaultProps$f = {
+      const defaultProps$e = {
         closeOnClickOutside: true,
         withinPortal: true,
         lockScroll: true,
@@ -33977,7 +33977,7 @@ ${lightForced}`;
           stackId,
           zIndex,
           ...others
-        } = useProps("Modal", defaultProps$f, _props);
+        } = useProps("Modal", defaultProps$e, _props);
         const ctx = useModalStackContext();
         const hasHeader = !!title || withCloseButton;
         const stackProps = ctx && stackId ? {
@@ -34080,7 +34080,7 @@ ${lightForced}`;
       });
       PillGroup.classes = classes$8;
       PillGroup.displayName = "@mantine/core/PillGroup";
-      const defaultProps$e = {
+      const defaultProps$d = {
         variant: "default"
       };
       const varsResolver$8 = createVarsResolver((_, { radius }, { size: size2 }) => ({
@@ -34091,7 +34091,7 @@ ${lightForced}`;
         }
       }));
       const Pill = factory((_props, ref) => {
-        const props = useProps("Pill", defaultProps$e, _props);
+        const props = useProps("Pill", defaultProps$d, _props);
         const {
           classNames,
           className,
@@ -34177,11 +34177,11 @@ ${lightForced}`;
       Pill.displayName = "@mantine/core/Pill";
       Pill.Group = PillGroup;
       var classes$7 = { "field": "m_45c4369d" };
-      const defaultProps$d = {
+      const defaultProps$c = {
         type: "visible"
       };
       const PillsInputField = factory((_props, ref) => {
-        const props = useProps("PillsInputField", defaultProps$d, _props);
+        const props = useProps("PillsInputField", defaultProps$c, _props);
         const {
           classNames,
           className,
@@ -34232,11 +34232,11 @@ ${lightForced}`;
       });
       PillsInputField.classes = classes$7;
       PillsInputField.displayName = "@mantine/core/PillsInputField";
-      const defaultProps$c = {
+      const defaultProps$b = {
         size: "sm"
       };
       const PillsInput = factory((_props, ref) => {
-        const props = useProps("PillsInput", defaultProps$c, _props);
+        const props = useProps("PillsInput", defaultProps$b, _props);
         const {
           children,
           onMouseDown,
@@ -34306,7 +34306,7 @@ ${lightForced}`;
         lg: 72,
         xl: 89
       };
-      const defaultProps$b = {
+      const defaultProps$a = {
         maxValues: Infinity,
         withCheckIcon: true,
         checkIconPosition: "left",
@@ -34316,7 +34316,7 @@ ${lightForced}`;
         size: "sm"
       };
       const MultiSelect = factory((_props, ref) => {
-        const props = useProps("MultiSelect", defaultProps$b, _props);
+        const props = useProps("MultiSelect", defaultProps$a, _props);
         const {
           classNames,
           className,
@@ -34674,46 +34674,6 @@ ${lightForced}`;
       });
       MultiSelect.classes = { ...InputBase.classes, ...Combobox.classes };
       MultiSelect.displayName = "@mantine/core/MultiSelect";
-      function isGroup(input) {
-        return "group" in input;
-      }
-      function NativeSelectOption({ data }) {
-        if (isGroup(data)) {
-          const items = data.items.map((item) => /* @__PURE__ */ jsxRuntimeExports.jsx(NativeSelectOption, { data: item }, item.value));
-          return /* @__PURE__ */ jsxRuntimeExports.jsx("optgroup", { label: data.group, children: items });
-        }
-        const { value, label, ...others } = data;
-        return /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: data.value, ...others, children: data.label }, data.value);
-      }
-      NativeSelectOption.displayName = "@mantine/core/NativeSelectOption";
-      const defaultProps$a = {
-        rightSectionPointerEvents: "none"
-      };
-      const NativeSelect = factory((props, ref) => {
-        const { data, children, size: size2, error, rightSection, unstyled, ...others } = useProps(
-          "NativeSelect",
-          defaultProps$a,
-          props
-        );
-        const options2 = getParsedComboboxData(data).map((item, index2) => /* @__PURE__ */ jsxRuntimeExports.jsx(NativeSelectOption, { data: item }, index2));
-        return /* @__PURE__ */ jsxRuntimeExports.jsx(
-          InputBase,
-          {
-            component: "select",
-            ref,
-            ...others,
-            __staticSelector: "NativeSelect",
-            size: size2,
-            pointer: true,
-            error,
-            unstyled,
-            rightSection: rightSection || /* @__PURE__ */ jsxRuntimeExports.jsx(ComboboxChevron, { size: size2, error, unstyled }),
-            children: children || options2
-          }
-        );
-      });
-      NativeSelect.classes = InputBase.classes;
-      NativeSelect.displayName = "@mantine/core/NativeSelect";
       var classes$6 = { "root": "m_f61ca620", "input": "m_ccf8da4c", "innerInput": "m_f2d85dd2", "visibilityToggle": "m_b1072d44" };
       const PasswordToggleIcon = ({
         reveal
@@ -40480,15 +40440,21 @@ ${lightForced}`;
           }
         };
         return /* @__PURE__ */ jsxRuntimeExports.jsxs(Stack, { gap: "lg", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            NativeSelect,
-            {
-              label: t("fileManagerPanel.language"),
-              value: i18n2.language,
-              data: [{ value: "zh", label: "简体中文" }, { value: "en", label: "English" }],
-              onChange: (event) => setLocale(event.currentTarget.value === "zh" ? "zh" : "en")
-            }
-          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(Box, { children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { fw: 600, mb: "xs", children: t("fileManagerPanel.language") }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(Group, { gap: "xs", role: "group", "aria-label": t("fileManagerPanel.language"), children: [{ value: "zh", label: "简体中文", flag: "🇨🇳" }, { value: "en", label: "English", flag: "🇬🇧" }].map(({ value, label, flag }) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+              Button,
+              {
+                variant: i18n2.language === value ? "filled" : "default",
+                "aria-pressed": i18n2.language === value,
+                "aria-label": label,
+                title: label,
+                onClick: () => setLocale(value),
+                children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { "aria-hidden": "true", children: flag })
+              },
+              value
+            )) })
+          ] }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs(Box, { children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { fw: 600, mb: "sm", children: t("fileManagerPanel.themeSettings") }),
             /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { children: [
