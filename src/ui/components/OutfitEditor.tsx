@@ -1,3 +1,4 @@
+import { prepareSavedOutfit } from '@/services/migrate-outfit-offsets.js'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { Alert, Box, Button, Group, Modal, ScrollArea, Select, Stack, Text, TextInput } from '@mantine/core'
 import { useTranslation } from 'react-i18next'
@@ -39,6 +40,7 @@ interface AssetGroupData {
 }
 
 interface SourceSnapshot {
+  offsetFormat?: string
   id: string
   name: string
   type: string
@@ -55,6 +57,7 @@ function readSource(id: string): SourceSnapshot | null {
   return {
     id, name: outfit.name, type: outfit.type, tagIds: [...outfit.tagIds],
     cloudSync: outfit.cloudSync, rev: [outfit.rev[0], outfit.rev[1]],
+    offsetFormat: outfit.offsetFormat,
     data: createOutfitDraft(outfit.data) as EditorPart[],
   }
 }
@@ -352,7 +355,7 @@ function Editor({ outfitId, onClose, mobile }: { outfitId: string; onClose: () =
     setSaving(true)
     setError('')
     try {
-      await getFs().updateOutfitIfUnchanged(source.id, source.rev, { data: draft })
+      await getFs().updateOutfitIfUnchanged(source.id, source.rev, prepareSavedOutfit(draft, hostWindow, getFs().character, source.offsetFormat))
       onClose()
     } catch (reason) {
       const code = (reason as { code?: string })?.code
@@ -371,7 +374,7 @@ function Editor({ outfitId, onClose, mobile }: { outfitId: string; onClose: () =
     setSaving(true)
     setError('')
     try {
-      await getFs().addOutfit({ name, type: source.type, data: draft,
+      await getFs().addOutfit({ name, type: source.type, ...prepareSavedOutfit(draft, hostWindow, getFs().character, source.offsetFormat),
         tagIds: source.tagIds, cloudSync: source.cloudSync })
       onClose()
     } catch (reason) { setError(t('outfitEditor.saveFailed', { error: reason instanceof Error ? reason.message : String(reason) })) }

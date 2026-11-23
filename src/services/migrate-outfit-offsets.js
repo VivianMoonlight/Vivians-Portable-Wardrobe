@@ -1,8 +1,3 @@
-export const compatibilityKey = 'vpw.halveLegacyOffsets'
-export function readOffsetSetting(host, key) {
-  try { return host.localStorage.getItem(key) === 'true' } catch { return false }
-}
-
 // Carry the outfit's explicit format through slot merging on temporary copies.
 export function outfitRenderData(outfit) {
   return outfit?.offsetFormat === 'new'
@@ -11,101 +6,80 @@ export function outfitRenderData(outfit) {
 }
 
 const roundOffset = value => Math.sign(value) * Math.round(Math.abs(value))
-const isScaled = value => Number.isFinite(value) && value !== 1
-
-export function prepareOutfitOffsets(data, host, character, convert = false) {
+export function prepareOutfitOffsets(data, host, character, onProblem) {
   if (!Array.isArray(data)) return data
-  const enabled = convert || readOffsetSetting(host, compatibilityKey)
-  return data.map(original => {
-    if (original?.vpwSkipOffsetConversion) {
-      const { vpwSkipOffsetConversion, ...part } = original
-      return part
+  return data.map(part => {
+    if (part?.vpwSkipOffsetConversion) {
+      const { vpwSkipOffsetConversion, ...original } = part
+      return original
     }
-    // Ignore retired automatic snapshot flags; unlabeled outfits are legacy.
-    const { vpwNativeOffsets, ...part } = original ?? {}
-    const bundle = prepareItem(vpwNativeOffsets === undefined ? original : part, host, character)
-    const prop = bundle?.Property
-    if (convert && prop?.LayerOverrides?.some(layer => layer?.DrawingLeft || layer?.DrawingTop)) {
-      throw new Error(bundle.Group + '/' + bundle.Name)
-    }
-    if (!enabled || !prop) return bundle
-    let transforms = prop
-    // BC may serialize per-layer numeric records as strings in item bundles.
-    if (['LayerScaleX', 'LayerScaleY', 'LayerTranslationX', 'LayerTranslationY']
-      .some(key => typeof prop[key] === 'string')) {
-      try {
-        transforms = host.ServerBundledItemToAppearanceItem(character.AssetFamily,
-          JSON.parse(JSON.stringify(bundle)), { C: character })?.Property
-      } catch (error) { if (convert) throw error; return bundle }
-      if (!transforms) {
-        if (convert) throw new Error(bundle.Group + '/' + bundle.Name)
-        return bundle
-      }
-    }
-    const scaled = [transforms.ScaleX, transforms.ScaleY,
-      ...Object.values(transforms.LayerScaleX ?? {}), ...Object.values(transforms.LayerScaleY ?? {})].some(isScaled)
-    const factor = scaled ? 1 : 0.5
-    if (factor === 1) return bundle
-    const next = { ...prop }
-    for (const axis of ['X', 'Y']) {
-      const global = 'Translation' + axis
-      const layer = 'LayerTranslation' + axis
-      if (Number.isFinite(prop[global])) next[global] = roundOffset(prop[global] * factor)
-      if (prop[layer] != null && transforms[layer] && typeof transforms[layer] === 'object') {
-        next[layer] = Object.fromEntries(Object.entries(transforms[layer]).map(([name, value]) =>
-          [name, Number.isFinite(value) ? roundOffset(value * factor) : value]))
-      }
-    }
-    return { ...bundle, Property: next }
+    const result = prepareItem(part, host, character, onProblem)
+    return result
   })
 }
 
-function prepareItem(bundle, host, character) {
+function hasLegacyCoordinates(prop) {
+  if (prop?.LayerOverrides != null && !Array.isArray(prop.LayerOverrides)) return true
+  return prop?.DrawingLeft != null || prop?.DrawingTop != null ||
+    (Array.isArray(prop?.LayerOverrides) && prop.LayerOverrides.some(slot => slot?.DrawingLeft != null || slot?.DrawingTop != null))
+}
+
+/** @returns {{ data: any[], offsetFormat: "old" | "new" }} */
+export function prepareSavedOutfit(data, host, character, format) {
+  if (format === 'new') return { data, offsetFormat: 'new' }
+  const problems = []
+  const converted = prepareOutfitOffsets(data, host, character, (part, detail) => problems.push(part.Group + '/' + part.Name + ' — ' + detail))
+  if (problems.length) host.alert((host.TranslationLanguage === 'CN' ? '无法换算位移，已保留原记录：' : 'Original offsets retained: ') + problems.join(', '))
+  return { data: converted, offsetFormat: converted.some(part => hasLegacyCoordinates(part?.Property)) ? 'old' : 'new' }
+}
+function prepareItem(bundle, host, character, onProblem) {
   const prop = bundle?.Property
   const overrides = prop?.LayerOverrides
-  if (!Array.isArray(overrides) || !overrides.length) return bundle
+  if (!hasLegacyCoordinates(prop)) return bundle
   const axes = [['DrawingLeft', 'X'], ['DrawingTop', 'Y']]
-  if (overrides.some(layer => !layer || Object.keys(layer).some(
+  if (overrides != null && !Array.isArray(overrides)) return bundle
+  if (axes.some(([, axis]) => prop["Translation" + axis] != null || prop["LayerTranslation" + axis] != null)) return bundle
+  if (overrides?.some(layer => !layer || Object.keys(layer).some(
     key => key !== 'DrawingLeft' && key !== 'DrawingTop'))) return bundle
 
   try {
+    const version = host.GameVersion ?? (typeof GameVersion !== "undefined" ? GameVersion : null)
+    const glVersion = host.GLVersion ?? (typeof GLVersion !== "undefined" ? GLVersion : null)
+    const canvas = host.GLDrawCanvas ?? (typeof GLDrawCanvas !== "undefined" ? GLDrawCanvas : null)
+    if (!/^R134(?:$|[^0-9])/.test(version) || !glVersion) return bundle
+    const factor = glVersion === "No WebGL" ? 1 : canvas?.GL && !canvas.GL.isContextLost() ? 2 : null
+    if (!factor) return bundle
     const copy = JSON.parse(JSON.stringify(bundle))
     delete copy.Property.LayerOverrides
-    const item = host.ServerBundledItemToAppearanceItem(character.AssetFamily, copy, { C: character })
+    for (const [field] of axes) delete copy.Property[field]
+    const item = host.ServerBundledItemToAppearanceItem((character ?? host.Player).AssetFamily, copy, { C: character })
     const layers = item?.Asset.Layer
-    if (layers?.length !== overrides.length) return bundle
+    if (!layers?.length || (overrides && layers.length !== overrides.length)) return bundle
     const next = { ...prop }
     delete next.LayerOverrides
     for (const [field, axis] of axes) {
-      const globalKey = 'Translation' + axis
-      const layerKey = 'LayerTranslation' + axis
-      if (prop[field] != null || prop[globalKey] != null || prop[layerKey] != null) continue
-      const origins = host.PropertyLayerOrigin.getOriginal(item, field)
-      const shifts = []
-      for (const [index, override] of overrides.entries()) {
-        const coord = override[field]
-        if (coord == null) { shifts.push(0); continue }
-        const layer = layers[index]
-        const origin = origins[layer.Name ?? ''] ?? host.PropertyLayerOrigin.resolveLayer(layer, field, item.Property)
-        const pose = character.DrawPose?.find(pose => origin?.[pose] != null) ?? ''
-        const drawOrigin = origin?.[pose]
-        if (Object.keys(coord).length !== 1 || !Number.isFinite(coord['']) ||
-            !Number.isFinite(drawOrigin)) return bundle
-        const offset = coord[''] - drawOrigin
-        shifts.push(roundOffset(offset))
-      }
-      if (shifts.every(value => value === shifts[0])) {
-        if (shifts[0]) next[globalKey] = shifts[0]
-      } else {
-        const named = {}
-        for (const [i, value] of shifts.entries()) {
-          if (!value) continue
-          const name = layers[i].Name
-          if (!name || layers.filter(layer => layer.Name === name).length !== 1) return bundle
-          named[name] = value
+      const absolute = prop[field]
+      if (absolute != null && (typeof absolute !== 'object' || Array.isArray(absolute) ||
+        Object.keys(absolute).some(name => !layers.some(layer => (layer.Name ?? '') === name)))) return bundle
+      const shifts = Object.create(null)
+      for (const [i, layer] of layers.entries()) {
+        const name = layer.Name ?? ''
+        const slot = overrides?.[i]?.[field]
+        if (slot != null && (absolute != null || Object.keys(slot).length !== 1 || !Number.isFinite(slot['']))) return bundle
+        const coordinate = slot?.[''] ?? absolute?.[name]
+        if (coordinate === undefined) continue
+        const origin = host.PropertyLayerOrigin.getOriginal(item, field)[name] ?? host.PropertyLayerOrigin.resolveLayer(layer, field, item.Property)
+        if (!Number.isFinite(coordinate) || !Number.isFinite(origin?.['']) || Object.keys(origin).length !== 1 ||
+            layers.filter(other => (other.Name ?? '') === name).length !== 1) return bundle
+        const shift = roundOffset((coordinate - origin['']) / factor)
+        if (Math.abs(shift) > 500) {
+          onProblem?.(bundle, field + "[" + name + "] = " + coordinate + " → " + shift + " (±500)")
+          return bundle
         }
-        next[layerKey] = named
+        if (shift) shifts[name] = shift
       }
+      delete next[field]
+      if (Object.keys(shifts).length) next['LayerTranslation' + axis] = shifts
     }
     return { ...bundle, Property: next }
   } catch {
