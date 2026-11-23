@@ -65,8 +65,16 @@ export class HistoryPersistence {
       }
       const request = transaction.objectStore(STORE_NAME).get(member)
       transaction.oncomplete = () => resolve(request.result ?? null)
-      transaction.onerror = () => reject(transaction.error || new Error('History read failed'))
+      request.onerror = () => reject(request.error || transaction.error || new Error('History read failed'))
+      transaction.onerror = event => reject(event.target?.error || transaction.error || new Error('History read failed'))
       transaction.onabort = () => reject(transaction.error || new Error('History read aborted'))
+    }).catch(error => {
+      if (this.connection === database) {
+        this.connection = null
+        this.database = null
+        database.close()
+      }
+      throw error
     })
   }
 
