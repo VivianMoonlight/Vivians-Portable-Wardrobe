@@ -1,6 +1,6 @@
 import { setLocale } from '@/i18n'
 import { useEffect, useState } from 'react'
-import { Alert, Box, Button, Group, PasswordInput, Stack, Switch, Text, TextInput } from '@mantine/core'
+import { Alert, Button, Group, PasswordInput, Paper, Stack, Switch, Text, TextInput } from '@mantine/core'
 import { useTranslation } from 'react-i18next'
 import { isForceSelfApplyEnabled } from '@/stores/workbenchStore.js'
 import { getFs, getWb, useFsSelector, useWbSelector } from '@/stores/hooks'
@@ -134,30 +134,32 @@ export function WardrobeSettings() {
 
   return (
     <Stack gap="lg">
-      <Box>
-        <Text fw={600} mb="xs">{t('fileManagerPanel.language')}</Text>
-        <Group gap="xs" role="group" aria-label={t('fileManagerPanel.language')}>
-          {([{ value: 'zh', label: '简体中文', flag: '🇨🇳' }, { value: 'en', label: 'English', flag: '🇬🇧' }] as const).map(({ value, label, flag }) => (
-            <Button key={value} variant={i18n.language === value ? 'filled' : 'default'}
-              aria-pressed={i18n.language === value} aria-label={label} title={label}
-              onClick={() => setLocale(value)}>
-              <span aria-hidden="true">{flag}</span>
+      <Paper withBorder radius="md" p="md">
+        <Group justify="space-between" gap="xs">
+          <Text fw={600}>{t('fileManagerPanel.language')}</Text>
+          <Group gap="xs" role="group" aria-label={t('fileManagerPanel.language')}>
+            {([{ value: 'zh', label: '简体中文', flag: '🇨🇳' }, { value: 'en', label: 'English', flag: '🇬🇧' }] as const).map(({ value, label, flag }) => (
+              <Button key={value} variant={i18n.language === value ? 'filled' : 'default'}
+                aria-pressed={i18n.language === value} aria-label={label} title={label}
+                onClick={() => setLocale(value)}>
+                <span aria-hidden="true">{flag}</span>
+              </Button>
+            ))}
+          </Group>
+        </Group>
+        <Group mt="sm" pt="sm" justify="space-between" gap="xs" style={{ borderTop: "1px solid var(--mantine-color-default-border)" }}>
+          <Text fw={600}>{t('fileManagerPanel.themeSettings')}</Text>
+          <Group gap="xs">
+            <Button aria-pressed={!theme.isDark} variant={!theme.isDark ? 'filled' : 'default'} onClick={() => theme.setColorScheme('light')}>
+              ☀ {t('fileManagerPanel.lightMode')}
             </Button>
-          ))}
+            <Button aria-pressed={theme.isDark} variant={theme.isDark ? 'filled' : 'default'} onClick={() => theme.setColorScheme('dark')}>
+              ☾ {t('fileManagerPanel.darkMode')}
+            </Button>
+          </Group>
         </Group>
-      </Box>
-      <Box>
-        <Text fw={600} mb="sm">{t('fileManagerPanel.themeSettings')}</Text>
-        <Group>
-          <Button variant={!theme.isDark ? 'filled' : 'default'} onClick={() => theme.setColorScheme('light')}>
-            ☀ {t('fileManagerPanel.lightMode')}
-          </Button>
-          <Button variant={theme.isDark ? 'filled' : 'default'} onClick={() => theme.setColorScheme('dark')}>
-            ☾ {t('fileManagerPanel.darkMode')}
-          </Button>
-        </Group>
-      </Box>
-      <Box>
+      </Paper>
+      <Paper withBorder radius="md" p="md">
         <Text fw={600} mb="sm">{t('cloudflareSync.title')}</Text>
         <Stack gap="xs">
           <Switch
@@ -194,9 +196,6 @@ export function WardrobeSettings() {
           </Text>}
           {cloudflare.enabled && !cloudflare.bcLegacyChanged && cloudflare.bcLegacyRetained == null && <Text size="xs" c="dimmed">
             {t('cloudflareSync.bcCleanupUnknown')}
-          </Text>}
-          {cloudflare.enabled && !cloudflare.bcLegacyChanged && cloudflare.bcLegacyRetained === false && <Text size="xs" c="dimmed">
-            {t('cloudflareSync.bcCleanupVerified')}
           </Text>}
           {cloudflare.enabled && !cloudflare.keyAvailable && <Text size="xs" c="orange">
             {t('cloudflareSync.keyMissing')}
@@ -252,9 +251,8 @@ export function WardrobeSettings() {
             <Text size="xs" c="dimmed">{t('cloudflareSync.dashboardHint')}</Text>
           </>}
         </Stack>
-      </Box>
-      <Box>
-        <Text fw={600} mb="sm">{t('fileManagerPanel.forceSelfApplyTitle')}</Text>
+      </Paper>
+      <Paper withBorder radius="md" p="md">
         <Switch
           color="red"
           checked={isForceSelfApplyEnabled()}
@@ -262,7 +260,7 @@ export function WardrobeSettings() {
           label={t('fileManagerPanel.forceSelfApplyLabel')}
           description={t('fileManagerPanel.forceSelfApplyDescription')}
         />
-      </Box>
+      </Paper>
     </Stack>
   )
 }
