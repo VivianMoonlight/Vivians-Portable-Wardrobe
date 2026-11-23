@@ -1,6 +1,6 @@
 import { setLocale } from '@/i18n'
 import { useEffect, useState } from 'react'
-import { Alert, Box, Button, Group, PasswordInput, NativeSelect, Stack, Switch, Text, TextInput } from '@mantine/core'
+import { Alert, Box, Button, Group, PasswordInput, Stack, Switch, Text, TextInput } from '@mantine/core'
 import { useTranslation } from 'react-i18next'
 import { isForceSelfApplyEnabled } from '@/stores/workbenchStore.js'
 import { getFs, getWb, useFsSelector, useWbSelector } from '@/stores/hooks'
@@ -134,9 +134,18 @@ export function WardrobeSettings() {
 
   return (
     <Stack gap="lg">
-      <NativeSelect label={t('fileManagerPanel.language')} value={i18n.language}
-        data={[{ value: 'zh', label: '简体中文' }, { value: 'en', label: 'English' }]}
-        onChange={event => setLocale(event.currentTarget.value === 'zh' ? 'zh' : 'en')} />
+      <Box>
+        <Text fw={600} mb="xs">{t('fileManagerPanel.language')}</Text>
+        <Group gap="xs" role="group" aria-label={t('fileManagerPanel.language')}>
+          {([{ value: 'zh', label: '简体中文', flag: '🇨🇳' }, { value: 'en', label: 'English', flag: '🇬🇧' }] as const).map(({ value, label, flag }) => (
+            <Button key={value} variant={i18n.language === value ? 'filled' : 'default'}
+              aria-pressed={i18n.language === value} aria-label={label} title={label}
+              onClick={() => setLocale(value)}>
+              <span aria-hidden="true">{flag}</span>
+            </Button>
+          ))}
+        </Group>
+      </Box>
       <Box>
         <Text fw={600} mb="sm">{t('fileManagerPanel.themeSettings')}</Text>
         <Group>
