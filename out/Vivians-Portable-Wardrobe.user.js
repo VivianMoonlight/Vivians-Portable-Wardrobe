@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vivians Portable Wardrobe
 // @namespace    http://tampermonkey.net/
-// @version      0.10.1-react.33
+// @version      0.10.1-react.34
 // @author       VIVianMoonlight
 // @description  Portable Wardrobe for Bondage Club (React + Mantine, Shadow DOM isolated)
 // @downloadURL  https://cdn.jsdelivr.net/gh/VivianMoonlight/Vivians-Portable-Wardrobe@wardrobe-react/out/Vivians-Portable-Wardrobe.user.js
@@ -32,7 +32,7 @@
     return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
   };
   var require_main_001 = __commonJS({
-    "main-33-Rvjkx.js"(exports) {
+    "main-BClyY2Vl.js"(exports) {
       function _mergeNamespaces(n, m) {
         for (var i = 0; i < m.length; i++) {
           const e = m[i];
@@ -9285,7 +9285,7 @@
       instance.hasLoadedNamespace;
       instance.loadNamespaces;
       instance.loadLanguages;
-      const version = "0.10.1-react.33";
+      const version = "0.10.1-react.34";
       var _unsafeWindow = /* @__PURE__ */ (() => typeof unsafeWindow != "undefined" ? unsafeWindow : void 0)();
       const hostWindow = typeof _unsafeWindow !== "undefined" ? _unsafeWindow : window;
       const doc = hostWindow.document;
@@ -19043,7 +19043,8 @@ One of mods you are using is using an old version of SDK. It will work for now b
         const actions = [
           [labels.clothes, clothes],
           [labels.copy, () => finish("copy")],
-          [labels.save, () => finish("saved")]
+          [labels.save, () => finish("saved")],
+          [labels.exit, () => finish("cancelled")]
         ];
         for (const [label, action] of actions) button(label, action);
         const retryButton = button(labels.retry, () => {
@@ -23599,7 +23600,7 @@ ${lightForced}`;
         }
         return getCollapseProps;
       }
-      const defaultProps$M = {
+      const defaultProps$N = {
         transitionDuration: 200,
         transitionTimingFunction: "ease",
         animateOpacity: true
@@ -23615,7 +23616,7 @@ ${lightForced}`;
           animateOpacity,
           keepMounted,
           ...others
-        } = useProps("Collapse", defaultProps$M, props);
+        } = useProps("Collapse", defaultProps$N, props);
         const theme = useMantineTheme();
         const shouldReduceMotion = useReducedMotion();
         const reduceMotion = theme.respectReducedMotion ? shouldReduceMotion : false;
@@ -27111,14 +27112,14 @@ ${lightForced}`;
         const hasCorner = ctx.type !== "scroll" && hasBothScrollbarsVisible;
         return hasCorner ? /* @__PURE__ */ jsxRuntimeExports.jsx(Corner, { ...props, ref }) : null;
       });
-      const defaultProps$L = {
+      const defaultProps$M = {
         scrollHideDelay: 1e3,
         type: "hover"
       };
       const ScrollAreaRoot = reactExports.forwardRef((_props, ref) => {
         const { type, scrollHideDelay, scrollbars, getStyles: getStyles2, ...others } = useProps(
           "ScrollAreaRoot",
-          defaultProps$L,
+          defaultProps$M,
           _props
         );
         const [scrollArea, setScrollArea] = reactExports.useState(null);
@@ -27760,7 +27761,7 @@ ${lightForced}`;
         }
       );
       ScrollAreaViewport.displayName = "@mantine/core/ScrollAreaViewport";
-      const defaultProps$K = {
+      const defaultProps$L = {
         scrollHideDelay: 1e3,
         type: "hover",
         scrollbars: "xy"
@@ -27784,7 +27785,7 @@ ${lightForced}`;
         }
       );
       const ScrollArea = factory((_props, ref) => {
-        const props = useProps("ScrollArea", defaultProps$K, _props);
+        const props = useProps("ScrollArea", defaultProps$L, _props);
         const {
           classNames,
           className,
@@ -27936,7 +27937,7 @@ ${lightForced}`;
           onTopReached,
           onOverflowChange,
           ...others
-        } = useProps("ScrollAreaAutosize", defaultProps$K, props);
+        } = useProps("ScrollAreaAutosize", defaultProps$L, props);
         const viewportObserverRef = reactExports.useRef(null);
         const combinedViewportRef = useMergeRefs([viewportRef, viewportObserverRef]);
         const [overflowing, setOverflowing] = reactExports.useState(false);
@@ -28013,12 +28014,12 @@ ${lightForced}`;
       ScrollAreaAutosize.classes = classes$z;
       ScrollArea.Autosize = ScrollAreaAutosize;
       var classes$y = { "root": "m_87cf2631" };
-      const defaultProps$J = {
+      const defaultProps$K = {
         __staticSelector: "UnstyledButton"
       };
       const UnstyledButton = polymorphicFactory(
         (_props, ref) => {
-          const props = useProps("UnstyledButton", defaultProps$J, _props);
+          const props = useProps("UnstyledButton", defaultProps$K, _props);
           const {
             className,
             component = "button",
@@ -28264,7 +28265,7 @@ ${lightForced}`;
         return position;
       }
       var classes$v = { "root": "m_9814e45f" };
-      const defaultProps$I = {
+      const defaultProps$J = {
         zIndex: getDefaultZIndex("modal")
       };
       const varsResolver$B = createVarsResolver(
@@ -28278,7 +28279,7 @@ ${lightForced}`;
         })
       );
       const Overlay = polymorphicFactory((_props, ref) => {
-        const props = useProps("Overlay", defaultProps$I, _props);
+        const props = useProps("Overlay", defaultProps$J, _props);
         const {
           classNames,
           className,
@@ -28343,11 +28344,11 @@ ${lightForced}`;
         }
         return createPortalNode(others);
       }
-      const defaultProps$H = {
+      const defaultProps$I = {
         reuseTargetNode: true
       };
       const Portal = factory((props, ref) => {
-        const { children, target, reuseTargetNode, ...others } = useProps("Portal", defaultProps$H, props);
+        const { children, target, reuseTargetNode, ...others } = useProps("Portal", defaultProps$I, props);
         const [mounted, setMounted] = reactExports.useState(false);
         const nodeRef = reactExports.useRef(null);
         useIsomorphicEffect(() => {
@@ -28783,14 +28784,14 @@ ${lightForced}`;
       });
       PopoverDropdown.classes = classes$u;
       PopoverDropdown.displayName = "@mantine/core/PopoverDropdown";
-      const defaultProps$G = {
+      const defaultProps$H = {
         refProp: "ref",
         popupType: "dialog"
       };
       const PopoverTarget = factory((props, ref) => {
         const { children, refProp, popupType, ...others } = useProps(
           "PopoverTarget",
-          defaultProps$G,
+          defaultProps$H,
           props
         );
         const child = getSingleElementChild(children);
@@ -28957,7 +28958,7 @@ ${lightForced}`;
           onToggle
         };
       }
-      const defaultProps$F = {
+      const defaultProps$G = {
         position: "bottom",
         offset: 8,
         positionDependencies: [],
@@ -28987,7 +28988,7 @@ ${lightForced}`;
         }
       }));
       function Popover(_props) {
-        const props = useProps("Popover", defaultProps$F, _props);
+        const props = useProps("Popover", defaultProps$G, _props);
         const {
           children,
           position,
@@ -29217,7 +29218,7 @@ ${lightForced}`;
         oval: Oval,
         dots: Dots
       };
-      const defaultProps$E = {
+      const defaultProps$F = {
         loaders: defaultLoaders,
         type: "oval"
       };
@@ -29228,7 +29229,7 @@ ${lightForced}`;
         }
       }));
       const Loader = factory((_props, ref) => {
-        const props = useProps("Loader", defaultProps$E, _props);
+        const props = useProps("Loader", defaultProps$F, _props);
         const {
           size: size2,
           color,
@@ -29277,14 +29278,14 @@ ${lightForced}`;
       Loader.classes = classes$t;
       Loader.displayName = "@mantine/core/Loader";
       var classes$s = { "root": "m_8d3f4000", "icon": "m_8d3afb97", "loader": "m_302b9fb1", "group": "m_1a0f1b21", "groupSection": "m_437b6484" };
-      const defaultProps$D = {
+      const defaultProps$E = {
         orientation: "horizontal"
       };
       const varsResolver$y = createVarsResolver((_, { borderWidth }) => ({
         group: { "--ai-border-width": rem(borderWidth) }
       }));
       const ActionIconGroup = factory((_props, ref) => {
-        const props = useProps("ActionIconGroup", defaultProps$D, _props);
+        const props = useProps("ActionIconGroup", defaultProps$E, _props);
         const {
           className,
           style,
@@ -29298,7 +29299,7 @@ ${lightForced}`;
           mod,
           attributes,
           ...others
-        } = useProps("ActionIconGroup", defaultProps$D, _props);
+        } = useProps("ActionIconGroup", defaultProps$E, _props);
         const getStyles2 = useStyles({
           name: "ActionIconGroup",
           props,
@@ -29489,7 +29490,7 @@ ${lightForced}`;
       );
       CloseIcon.displayName = "@mantine/core/CloseIcon";
       var classes$r = { "root": "m_86a44da5", "root--subtle": "m_220c80f2" };
-      const defaultProps$C = {
+      const defaultProps$D = {
         variant: "subtle"
       };
       const varsResolver$v = createVarsResolver((_, { size: size2, radius, iconSize }) => ({
@@ -29500,7 +29501,7 @@ ${lightForced}`;
         }
       }));
       const CloseButton = polymorphicFactory((_props, ref) => {
-        const props = useProps("CloseButton", defaultProps$C, _props);
+        const props = useProps("CloseButton", defaultProps$D, _props);
         const {
           iconSize,
           children,
@@ -29556,7 +29557,7 @@ ${lightForced}`;
         return reactExports.Children.toArray(children).filter(Boolean);
       }
       var classes$q = { "root": "m_4081bf90" };
-      const defaultProps$B = {
+      const defaultProps$C = {
         preventGrowOverflow: true,
         gap: "md",
         align: "center",
@@ -29575,7 +29576,7 @@ ${lightForced}`;
         })
       );
       const Group = factory((_props, ref) => {
-        const props = useProps("Group", defaultProps$B, _props);
+        const props = useProps("Group", defaultProps$C, _props);
         const {
           classNames,
           className,
@@ -30105,7 +30106,7 @@ ${lightForced}`;
       });
       InputError.classes = classes$o;
       InputError.displayName = "@mantine/core/InputError";
-      const defaultProps$A = {
+      const defaultProps$B = {
         labelElement: "label"
       };
       const varsResolver$r = createVarsResolver((_, { size: size2 }) => ({
@@ -30115,7 +30116,7 @@ ${lightForced}`;
         }
       }));
       const InputLabel = factory((_props, ref) => {
-        const props = useProps("InputLabel", defaultProps$A, _props);
+        const props = useProps("InputLabel", defaultProps$B, _props);
         const {
           classNames,
           className,
@@ -30134,7 +30135,7 @@ ${lightForced}`;
           mod,
           attributes,
           ...others
-        } = useProps("InputLabel", defaultProps$A, props);
+        } = useProps("InputLabel", defaultProps$B, props);
         const _getStyles = useStyles({
           name: ["InputWrapper", __staticSelector],
           props,
@@ -30227,7 +30228,7 @@ ${lightForced}`;
         const offsetBottom = hasDescription && belowInput.includes("description") || hasError && belowInput.includes("error");
         return { offsetBottom, offsetTop };
       }
-      const defaultProps$z = {
+      const defaultProps$A = {
         labelElement: "label",
         inputContainer: (children) => children,
         inputWrapperOrder: ["label", "description", "input", "error"]
@@ -30245,7 +30246,7 @@ ${lightForced}`;
         }
       }));
       const InputWrapper = factory((_props, ref) => {
-        const props = useProps("InputWrapper", defaultProps$z, _props);
+        const props = useProps("InputWrapper", defaultProps$A, _props);
         const {
           classNames,
           className,
@@ -30379,7 +30380,7 @@ ${lightForced}`;
       });
       InputWrapper.classes = classes$o;
       InputWrapper.displayName = "@mantine/core/InputWrapper";
-      const defaultProps$y = {
+      const defaultProps$z = {
         variant: "default",
         leftSectionPointerEvents: "none",
         rightSectionPointerEvents: "none",
@@ -30402,7 +30403,7 @@ ${lightForced}`;
         }
       }));
       const Input = polymorphicFactory((_props, ref) => {
-        const props = useProps("Input", defaultProps$y, _props);
+        const props = useProps("Input", defaultProps$z, _props);
         const {
           classNames,
           className,
@@ -30618,13 +30619,13 @@ ${lightForced}`;
           }
         };
       }
-      const defaultProps$x = {
+      const defaultProps$y = {
         __staticSelector: "InputBase",
         withAria: true,
         size: "sm"
       };
       const InputBase = polymorphicFactory((props, ref) => {
-        const { inputProps, wrapperProps, ...others } = useInputProps("InputBase", defaultProps$x, props);
+        const { inputProps, wrapperProps, ...others } = useInputProps("InputBase", defaultProps$y, props);
         return /* @__PURE__ */ jsxRuntimeExports.jsx(Input.Wrapper, { ...wrapperProps, children: /* @__PURE__ */ jsxRuntimeExports.jsx(Input, { ...inputProps, ...others, ref }) });
       });
       InputBase.classes = { ...Input.classes, ...Input.Wrapper.classes };
@@ -31017,7 +31018,7 @@ ${lightForced}`;
         }
         return void 0;
       }
-      const defaultProps$w = {
+      const defaultProps$x = {
         inherit: false
       };
       const varsResolver$m = createVarsResolver(
@@ -31034,7 +31035,7 @@ ${lightForced}`;
         })
       );
       const Text = polymorphicFactory((_props, ref) => {
-        const props = useProps("Text", defaultProps$w, _props);
+        const props = useProps("Text", defaultProps$x, _props);
         const {
           lineClamp,
           truncate,
@@ -31125,7 +31126,7 @@ ${lightForced}`;
         }, {});
       }
       var classes$j = { "dropdown": "m_88b62a41", "search": "m_985517d8", "options": "m_b2821a6e", "option": "m_92253aa5", "empty": "m_2530cd1d", "header": "m_858f94bd", "footer": "m_82b967cb", "group": "m_254f3e4f", "groupLabel": "m_2bb2e9e5", "chevron": "m_2943220b", "optionsDropdownOption": "m_390b5f4", "optionsDropdownCheckIcon": "m_8ee53fc2", "optionsDropdownCheckPlaceholder": "m_a530ee0a" };
-      const defaultProps$v = {
+      const defaultProps$w = {
         error: null
       };
       const varsResolver$l = createVarsResolver((theme, { size: size2, color }) => ({
@@ -31135,7 +31136,7 @@ ${lightForced}`;
         }
       }));
       const ComboboxChevron = factory((_props, ref) => {
-        const props = useProps("ComboboxChevron", defaultProps$v, _props);
+        const props = useProps("ComboboxChevron", defaultProps$w, _props);
         const { size: size2, error, style, className, classNames, styles: styles2, unstyled, vars, mod, ...others } = props;
         const getStyles2 = useStyles({
           name: "ComboboxChevron",
@@ -31219,11 +31220,11 @@ ${lightForced}`;
       });
       ComboboxDropdown.classes = classes$j;
       ComboboxDropdown.displayName = "@mantine/core/ComboboxDropdown";
-      const defaultProps$u = {
+      const defaultProps$v = {
         refProp: "ref"
       };
       const ComboboxDropdownTarget = factory((props, ref) => {
-        const { children, refProp } = useProps("ComboboxDropdownTarget", defaultProps$u, props);
+        const { children, refProp } = useProps("ComboboxDropdownTarget", defaultProps$v, props);
         useComboboxContext();
         if (!isElement$1(children)) {
           throw new Error(
@@ -31328,7 +31329,7 @@ ${lightForced}`;
           onKeyDown: handleKeyDown
         };
       }
-      const defaultProps$t = {
+      const defaultProps$u = {
         refProp: "ref",
         targetType: "input",
         withKeyboardNavigation: true,
@@ -31346,7 +31347,7 @@ ${lightForced}`;
           targetType,
           autoComplete,
           ...others
-        } = useProps("ComboboxEventsTarget", defaultProps$t, props);
+        } = useProps("ComboboxEventsTarget", defaultProps$u, props);
         const child = getSingleElementChild(children);
         if (!child) {
           throw new Error(
@@ -31534,12 +31535,12 @@ ${lightForced}`;
       });
       ComboboxOptions.classes = classes$j;
       ComboboxOptions.displayName = "@mantine/core/ComboboxOptions";
-      const defaultProps$s = {
+      const defaultProps$t = {
         withAriaAttributes: true,
         withKeyboardNavigation: true
       };
       const ComboboxSearch = factory((_props, ref) => {
-        const props = useProps("ComboboxSearch", defaultProps$s, _props);
+        const props = useProps("ComboboxSearch", defaultProps$t, _props);
         const {
           classNames,
           styles: styles2,
@@ -31576,7 +31577,7 @@ ${lightForced}`;
       });
       ComboboxSearch.classes = classes$j;
       ComboboxSearch.displayName = "@mantine/core/ComboboxSearch";
-      const defaultProps$r = {
+      const defaultProps$s = {
         refProp: "ref",
         targetType: "input",
         withKeyboardNavigation: true,
@@ -31594,7 +31595,7 @@ ${lightForced}`;
           targetType,
           autoComplete,
           ...others
-        } = useProps("ComboboxTarget", defaultProps$r, props);
+        } = useProps("ComboboxTarget", defaultProps$s, props);
         const child = getSingleElementChild(children);
         if (!child) {
           throw new Error(
@@ -31843,7 +31844,7 @@ ${lightForced}`;
           focusTarget
         };
       }
-      const defaultProps$q = {
+      const defaultProps$r = {
         keepMounted: true,
         withinPortal: true,
         resetSelectionOnOptionHover: false,
@@ -31863,7 +31864,7 @@ ${lightForced}`;
         }
       }));
       function Combobox(_props) {
-        const props = useProps("Combobox", defaultProps$q, _props);
+        const props = useProps("Combobox", defaultProps$r, _props);
         const {
           classNames,
           styles: styles2,
@@ -32029,7 +32030,7 @@ ${lightForced}`;
       const useCheckboxGroupContext = () => reactExports.useContext(CheckboxGroupContext);
       const [CheckboxCardProvider, useCheckboxCardContext] = createOptionalContext();
       var classes$g = { "card": "m_26775b0a" };
-      const defaultProps$p = {
+      const defaultProps$q = {
         withBorder: true
       };
       const varsResolver$j = createVarsResolver((_, { radius }) => ({
@@ -32038,7 +32039,7 @@ ${lightForced}`;
         }
       }));
       const CheckboxCard = factory((_props, ref) => {
-        const props = useProps("CheckboxCard", defaultProps$p, _props);
+        const props = useProps("CheckboxCard", defaultProps$q, _props);
         const {
           classNames,
           className,
@@ -32183,7 +32184,7 @@ ${lightForced}`;
         return /* @__PURE__ */ jsxRuntimeExports.jsx(CheckIcon, { ...others });
       }
       var classes$f = { "indicator": "m_5e5256ee", "icon": "m_1b1c543a", "indicator--outline": "m_76e20374" };
-      const defaultProps$o = {
+      const defaultProps$p = {
         icon: CheckboxIcon,
         variant: "filled"
       };
@@ -32202,7 +32203,7 @@ ${lightForced}`;
         }
       );
       const CheckboxIndicator = factory((_props, ref) => {
-        const props = useProps("CheckboxIndicator", defaultProps$o, _props);
+        const props = useProps("CheckboxIndicator", defaultProps$p, _props);
         const {
           classNames,
           className,
@@ -32253,7 +32254,7 @@ ${lightForced}`;
       });
       CheckboxIndicator.displayName = "@mantine/core/CheckboxIndicator";
       CheckboxIndicator.classes = classes$f;
-      const defaultProps$n = {
+      const defaultProps$o = {
         labelPosition: "right",
         icon: CheckboxIcon,
         variant: "filled"
@@ -32273,7 +32274,7 @@ ${lightForced}`;
         }
       );
       const Checkbox = factory((_props, forwardedRef) => {
-        const props = useProps("Checkbox", defaultProps$n, _props);
+        const props = useProps("Checkbox", defaultProps$o, _props);
         const {
           classNames,
           className,
@@ -32653,14 +32654,14 @@ ${lightForced}`;
       Badge.classes = classes$e;
       Badge.displayName = "@mantine/core/Badge";
       var classes$d = { "root": "m_77c9d27d", "inner": "m_80f1301b", "label": "m_811560b9", "section": "m_a74036a", "loader": "m_a25b86ee", "group": "m_80d6d844", "groupSection": "m_70be2a01" };
-      const defaultProps$m = {
+      const defaultProps$n = {
         orientation: "horizontal"
       };
       const varsResolver$f = createVarsResolver((_, { borderWidth }) => ({
         group: { "--button-border-width": rem(borderWidth) }
       }));
       const ButtonGroup = factory((_props, ref) => {
-        const props = useProps("ButtonGroup", defaultProps$m, _props);
+        const props = useProps("ButtonGroup", defaultProps$n, _props);
         const {
           className,
           style,
@@ -32674,7 +32675,7 @@ ${lightForced}`;
           mod,
           attributes,
           ...others
-        } = useProps("ButtonGroup", defaultProps$m, _props);
+        } = useProps("ButtonGroup", defaultProps$n, _props);
         const getStyles2 = useStyles({
           name: "ButtonGroup",
           props,
@@ -32873,7 +32874,7 @@ ${lightForced}`;
       Button.Group = ButtonGroup;
       Button.GroupSection = ButtonGroupSection;
       var classes$c = { "root": "m_3eebeb36", "label": "m_9e365f20" };
-      const defaultProps$l = {
+      const defaultProps$m = {
         orientation: "horizontal"
       };
       const varsResolver$c = createVarsResolver((theme, { color, variant, size: size2 }) => ({
@@ -32884,7 +32885,7 @@ ${lightForced}`;
         }
       }));
       const Divider = factory((_props, ref) => {
-        const props = useProps("Divider", defaultProps$l, _props);
+        const props = useProps("Divider", defaultProps$m, _props);
         const {
           classNames,
           className,
@@ -33039,7 +33040,7 @@ ${lightForced}`;
         right: "slide-right",
         left: "slide-left"
       };
-      const defaultProps$k = {
+      const defaultProps$l = {
         closeOnClickOutside: true,
         withinPortal: true,
         lockScroll: true,
@@ -33061,7 +33062,7 @@ ${lightForced}`;
         }
       }));
       const DrawerRoot = factory((_props, ref) => {
-        const props = useProps("DrawerRoot", defaultProps$k, _props);
+        const props = useProps("DrawerRoot", defaultProps$l, _props);
         const {
           classNames,
           className,
@@ -33145,7 +33146,7 @@ ${lightForced}`;
       });
       DrawerTitle.classes = classes$b;
       DrawerTitle.displayName = "@mantine/core/DrawerTitle";
-      const defaultProps$j = {
+      const defaultProps$k = {
         closeOnClickOutside: true,
         withinPortal: true,
         lockScroll: true,
@@ -33169,7 +33170,7 @@ ${lightForced}`;
           stackId,
           zIndex,
           ...others
-        } = useProps("Drawer", defaultProps$j, _props);
+        } = useProps("Drawer", defaultProps$k, _props);
         const ctx = useDrawerStackContext();
         const hasHeader = !!title || withCloseButton;
         const stackProps = ctx && stackId ? {
@@ -33531,7 +33532,7 @@ ${lightForced}`;
         return /* @__PURE__ */ jsxRuntimeExports.jsx(Popover.Target, { refProp, popupType: "menu", children });
       }
       MenuSubTarget.displayName = "@mantine/core/MenuSubTarget";
-      const defaultProps$i = {
+      const defaultProps$j = {
         offset: 0,
         position: "right-start",
         transitionProps: { duration: 0 },
@@ -33544,7 +33545,7 @@ ${lightForced}`;
         }
       };
       function MenuSub(_props) {
-        const { children, closeDelay, openDelay, ...others } = useProps("MenuSub", defaultProps$i, _props);
+        const { children, closeDelay, openDelay, ...others } = useProps("MenuSub", defaultProps$j, _props);
         const id = useId$1();
         const [opened, { open, close }] = useDisclosure(false);
         const ctx = useSubMenuContext();
@@ -33580,11 +33581,11 @@ ${lightForced}`;
       MenuSub.Target = MenuSubTarget;
       MenuSub.Dropdown = MenuSubDropdown;
       MenuSub.Item = MenuSubItem;
-      const defaultProps$h = {
+      const defaultProps$i = {
         refProp: "ref"
       };
       const MenuTarget = reactExports.forwardRef((props, ref) => {
-        const { children, refProp, ...others } = useProps("MenuTarget", defaultProps$h, props);
+        const { children, refProp, ...others } = useProps("MenuTarget", defaultProps$i, props);
         const child = getSingleElementChild(children);
         if (!child) {
           throw new Error(
@@ -33622,7 +33623,7 @@ ${lightForced}`;
         }) });
       });
       MenuTarget.displayName = "@mantine/core/MenuTarget";
-      const defaultProps$g = {
+      const defaultProps$h = {
         trapFocus: true,
         closeOnItemClick: true,
         withInitialFocusPlaceholder: true,
@@ -33634,7 +33635,7 @@ ${lightForced}`;
         menuItemTabIndex: -1
       };
       function Menu(_props) {
-        const props = useProps("Menu", defaultProps$g, _props);
+        const props = useProps("Menu", defaultProps$h, _props);
         const {
           children,
           onOpen,
@@ -33840,7 +33841,7 @@ ${lightForced}`;
       });
       ModalOverlay.classes = classes$9;
       ModalOverlay.displayName = "@mantine/core/ModalOverlay";
-      const defaultProps$f = {
+      const defaultProps$g = {
         __staticSelector: "Modal",
         closeOnClickOutside: true,
         withinPortal: true,
@@ -33864,7 +33865,7 @@ ${lightForced}`;
         })
       );
       const ModalRoot = factory((_props, ref) => {
-        const props = useProps("ModalRoot", defaultProps$f, _props);
+        const props = useProps("ModalRoot", defaultProps$g, _props);
         const {
           classNames,
           className,
@@ -33950,7 +33951,7 @@ ${lightForced}`;
       });
       ModalTitle.classes = classes$9;
       ModalTitle.displayName = "@mantine/core/ModalTitle";
-      const defaultProps$e = {
+      const defaultProps$f = {
         closeOnClickOutside: true,
         withinPortal: true,
         lockScroll: true,
@@ -33976,7 +33977,7 @@ ${lightForced}`;
           stackId,
           zIndex,
           ...others
-        } = useProps("Modal", defaultProps$e, _props);
+        } = useProps("Modal", defaultProps$f, _props);
         const ctx = useModalStackContext();
         const hasHeader = !!title || withCloseButton;
         const stackProps = ctx && stackId ? {
@@ -34079,7 +34080,7 @@ ${lightForced}`;
       });
       PillGroup.classes = classes$8;
       PillGroup.displayName = "@mantine/core/PillGroup";
-      const defaultProps$d = {
+      const defaultProps$e = {
         variant: "default"
       };
       const varsResolver$8 = createVarsResolver((_, { radius }, { size: size2 }) => ({
@@ -34090,7 +34091,7 @@ ${lightForced}`;
         }
       }));
       const Pill = factory((_props, ref) => {
-        const props = useProps("Pill", defaultProps$d, _props);
+        const props = useProps("Pill", defaultProps$e, _props);
         const {
           classNames,
           className,
@@ -34176,11 +34177,11 @@ ${lightForced}`;
       Pill.displayName = "@mantine/core/Pill";
       Pill.Group = PillGroup;
       var classes$7 = { "field": "m_45c4369d" };
-      const defaultProps$c = {
+      const defaultProps$d = {
         type: "visible"
       };
       const PillsInputField = factory((_props, ref) => {
-        const props = useProps("PillsInputField", defaultProps$c, _props);
+        const props = useProps("PillsInputField", defaultProps$d, _props);
         const {
           classNames,
           className,
@@ -34231,11 +34232,11 @@ ${lightForced}`;
       });
       PillsInputField.classes = classes$7;
       PillsInputField.displayName = "@mantine/core/PillsInputField";
-      const defaultProps$b = {
+      const defaultProps$c = {
         size: "sm"
       };
       const PillsInput = factory((_props, ref) => {
-        const props = useProps("PillsInput", defaultProps$b, _props);
+        const props = useProps("PillsInput", defaultProps$c, _props);
         const {
           children,
           onMouseDown,
@@ -34305,7 +34306,7 @@ ${lightForced}`;
         lg: 72,
         xl: 89
       };
-      const defaultProps$a = {
+      const defaultProps$b = {
         maxValues: Infinity,
         withCheckIcon: true,
         checkIconPosition: "left",
@@ -34315,7 +34316,7 @@ ${lightForced}`;
         size: "sm"
       };
       const MultiSelect = factory((_props, ref) => {
-        const props = useProps("MultiSelect", defaultProps$a, _props);
+        const props = useProps("MultiSelect", defaultProps$b, _props);
         const {
           classNames,
           className,
@@ -34673,6 +34674,46 @@ ${lightForced}`;
       });
       MultiSelect.classes = { ...InputBase.classes, ...Combobox.classes };
       MultiSelect.displayName = "@mantine/core/MultiSelect";
+      function isGroup(input) {
+        return "group" in input;
+      }
+      function NativeSelectOption({ data }) {
+        if (isGroup(data)) {
+          const items = data.items.map((item) => /* @__PURE__ */ jsxRuntimeExports.jsx(NativeSelectOption, { data: item }, item.value));
+          return /* @__PURE__ */ jsxRuntimeExports.jsx("optgroup", { label: data.group, children: items });
+        }
+        const { value, label, ...others } = data;
+        return /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: data.value, ...others, children: data.label }, data.value);
+      }
+      NativeSelectOption.displayName = "@mantine/core/NativeSelectOption";
+      const defaultProps$a = {
+        rightSectionPointerEvents: "none"
+      };
+      const NativeSelect = factory((props, ref) => {
+        const { data, children, size: size2, error, rightSection, unstyled, ...others } = useProps(
+          "NativeSelect",
+          defaultProps$a,
+          props
+        );
+        const options2 = getParsedComboboxData(data).map((item, index2) => /* @__PURE__ */ jsxRuntimeExports.jsx(NativeSelectOption, { data: item }, index2));
+        return /* @__PURE__ */ jsxRuntimeExports.jsx(
+          InputBase,
+          {
+            component: "select",
+            ref,
+            ...others,
+            __staticSelector: "NativeSelect",
+            size: size2,
+            pointer: true,
+            error,
+            unstyled,
+            rightSection: rightSection || /* @__PURE__ */ jsxRuntimeExports.jsx(ComboboxChevron, { size: size2, error, unstyled }),
+            children: children || options2
+          }
+        );
+      });
+      NativeSelect.classes = InputBase.classes;
+      NativeSelect.displayName = "@mantine/core/NativeSelect";
       var classes$6 = { "root": "m_f61ca620", "input": "m_ccf8da4c", "innerInput": "m_f2d85dd2", "visibilityToggle": "m_b1072d44" };
       const PasswordToggleIcon = ({
         reveal
@@ -36864,7 +36905,7 @@ ${lightForced}`;
           value
         }, children);
       }
-      const outfitEditor$1 = { "edit": "Edit", "copy": "Save as", "save": "Save", "editClothes": "Edit clothes", "exportDraft": "Export outfit", "editRestraints": "Edit restraints", "retryReturn": "Retry return", "returnFailed": "BC could not return to the previous screen.", "nativeWardrobeOpening": "Opening BC wardrobe…", "nativeWardrobeFailed": "Could not open BC wardrobe: {error}", "retryWardrobe": "Retry BC wardrobe", "reopenWardrobe": "Open BC wardrobe again", "itemPageTitle": "Items and saving", "itemPageHint": "BC wardrobe edits clothes. Add and adjust items here, then save your outfit.", "itemSearch": "Find an item", "itemSearchPlaceholder": "Search this item group", "noMatchingItems": "No matching items", "open": "Edit outfit", "title": "Edit saved outfit", "titleFor": "Edit {name}", "close": "Close outfit editor", "back": "Back", "preview": "Outfit preview", "previewLoading": "Loading preview…", "previewFailed": "Preview could not load", "retryPreview": "Retry preview", "previewHint": "Changes stay in this preview until you save. They will not dress the character.", "savedItems": "Saved items", "noItems": "No items in this outfit. Choose an item group to add one.", "itemGroup": "Item group", "noGroups": "No matching groups", "noAssets": "No assets available in this group", "addAsset": "Add part", "replaceAsset": "Replace part", "removeAsset": "Remove part", "nativeItemOpen": "Open BC item settings", "nativeItemTitle": "Item settings", "nativeItemHint": "Use BC controls for type, modules and modes. Save the outfit after returning.", "nativeItemUnavailable": "This item has no BC settings to adjust.", "nativeItemFailed": "Could not open item settings: {error}", "color": "Color", "colorLayer": "Color layer {number}", "defaultColor": "Default color", "setColor": "Set color", "resetColor": "Use default color", "cancel": "Cancel", "overwrite": "Overwrite outfit", "saveCopy": "Save as new", "newNamePrompt": "Name the new outfit:", "copyName": "{name} copy", "nameRequired": "Enter a name for the new outfit.", "discardConfirm": "Discard your unsaved outfit changes?", "sourceMissing": "This outfit is no longer available. Close the editor and choose another outfit.", "sourceChanged": "This outfit changed or was deleted. Save your draft as a new outfit, or close and reopen the latest version.", "editFailed": "Could not edit this part: {error}", "saveFailed": "Could not save this outfit: {error}", "errors": { "protected-group": "This body part cannot be changed.", "invalid-group": "This group is no longer available.", "invalid-asset": "This asset is no longer available in this group.", "required-group": "This body group cannot be empty.", "missing-part": "Add a part before setting its color.", "invalid-color": "This color is not accepted for the selected part.", "outfit-changed": "This outfit changed or was deleted. Save your draft as a new outfit, or close and reopen the latest version." } };
+      const outfitEditor$1 = { "exit": "Exit", "edit": "Edit", "copy": "Save as", "save": "Save", "editClothes": "Edit clothes", "exportDraft": "Export outfit", "editRestraints": "Edit restraints", "retryReturn": "Retry return", "returnFailed": "BC could not return to the previous screen.", "nativeWardrobeOpening": "Opening BC wardrobe…", "nativeWardrobeFailed": "Could not open BC wardrobe: {error}", "retryWardrobe": "Retry BC wardrobe", "reopenWardrobe": "Open BC wardrobe again", "itemPageTitle": "Items and saving", "itemPageHint": "BC wardrobe edits clothes. Add and adjust items here, then save your outfit.", "itemSearch": "Find an item", "itemSearchPlaceholder": "Search this item group", "noMatchingItems": "No matching items", "open": "Edit outfit", "title": "Edit saved outfit", "titleFor": "Edit {name}", "close": "Close outfit editor", "back": "Back", "preview": "Outfit preview", "previewLoading": "Loading preview…", "previewFailed": "Preview could not load", "retryPreview": "Retry preview", "previewHint": "Changes stay in this preview until you save. They will not dress the character.", "savedItems": "Saved items", "noItems": "No items in this outfit. Choose an item group to add one.", "itemGroup": "Item group", "noGroups": "No matching groups", "noAssets": "No assets available in this group", "addAsset": "Add part", "replaceAsset": "Replace part", "removeAsset": "Remove part", "nativeItemOpen": "Open BC item settings", "nativeItemTitle": "Item settings", "nativeItemHint": "Use BC controls for type, modules and modes. Save the outfit after returning.", "nativeItemUnavailable": "This item has no BC settings to adjust.", "nativeItemFailed": "Could not open item settings: {error}", "color": "Color", "colorLayer": "Color layer {number}", "defaultColor": "Default color", "setColor": "Set color", "resetColor": "Use default color", "cancel": "Cancel", "overwrite": "Overwrite outfit", "saveCopy": "Save as new", "newNamePrompt": "Name the new outfit:", "copyName": "{name} copy", "nameRequired": "Enter a name for the new outfit.", "discardConfirm": "Discard your unsaved outfit changes?", "sourceMissing": "This outfit is no longer available. Close the editor and choose another outfit.", "sourceChanged": "This outfit changed or was deleted. Save your draft as a new outfit, or close and reopen the latest version.", "editFailed": "Could not edit this part: {error}", "saveFailed": "Could not save this outfit: {error}", "errors": { "protected-group": "This body part cannot be changed.", "invalid-group": "This group is no longer available.", "invalid-asset": "This asset is no longer available in this group.", "required-group": "This body group cannot be empty.", "missing-part": "Add a part before setting its color.", "invalid-color": "This color is not accepted for the selected part.", "outfit-changed": "This outfit changed or was deleted. Save your draft as a new outfit, or close and reopen the latest version." } };
       const library$1 = { "searchPlaceholder": "Search outfits or tags…", "allOutfits": "All outfits", "untagged": "Untagged", "filterByTag": "Filter by tag", "manageTags": "Manage tags", "newTag": "New tag", "newTagPrompt": "Enter a unique tag name:", "renameTag": "Rename selected tag", "renameTagPrompt": "New tag name:", "deleteTag": "Delete selected tag", "deleteTagConfirm": 'Delete tag "{name}"? Your outfits will stay in the wardrobe.', "tagNameInvalid": "Enter a tag name that is different from your existing tags.", "editTags": "Edit tags", "editOutfitTags": "Tags for {name}", "tags": "Tags", "selectTags": "Select one or more tags", "noTags": "No matching tags. Create tags from Manage tags.", "multipleTagsHint": "An outfit can have multiple tags. Removing a tag does not delete the outfit.", "saveTags": "Save tags", "outfitCount": "{count} / {total} outfits", "empty": "Your wardrobe is empty", "noMatches": "No matching outfits", "clearFilters": "Clear all filters", "saveCharacter": "Save current outfit", "saveNamePrompt": "Name this outfit:", "saved": 'Saved "{name}" to this device. Check cloud status for sync progress.', "imported": "Imported {count} outfits to this device. Check cloud status for sync progress.", "nothingImported": "No outfits to import. Check that the imported data contains outfits.", "operationFailed": "The operation could not be completed: {error}", "itemUnavailable": "This outfit or tag is no longer available. Refresh your selection and try again.", "deleteOutfitConfirm": 'Delete "{name}"? It will be removed from this device, and the deletion will sync.', "previewOutfit": "Preview {name}", "outfitActions": "Actions for {name}", "moreActions": "More actions", "cloudIncluded": "Cloud enabled", "localOnly": "This device only", "localFork": "Saved local copy", "localForkHint": "Another device re-enabled cloud sync, so this device's edited version was kept as a local copy. It will not upload automatically. You can turn on cloud sync for this copy.", "cloudToggleTitle": "Include or exclude this outfit from cloud sync. Local copies are retained.", "cloudStorage": "Shared cloud storage", "otherExtensions": "Other extensions", "remainingCapacity": "Available: {amount}", "quotaAria": "{source}: {used} of {limit}", "quotaObservedLogin": "Last read from BC at login", "quotaObservedCache": "BC local cache estimate · not yet checked", "quotaObservedUnavailable": "Cloud usage has not been read yet", "observedRemaining": "Available at last read: {amount}", "proposedUpload": "Estimated next upload · not uploaded yet", "proposedRemaining": "Estimated available after upload: {amount}", "sharedQuotaInfo": "About shared cloud capacity", "sharedQuotaHint": "The wardrobe limits all extension settings to 180 kB (180000 bytes). The main figures show last-read usage; expand for the estimated next upload. VPW includes outfits and device markers.", "quotaWarning": "The estimated next upload is near the limit. Keep some outfits on this device only to reduce cloud use.", "quotaBlocked": "Upload paused: the proposed update exceeds the shared 180 kB or single-packet limit. Local outfits remain available. Reduce cloud-synced outfits, then retry.", "localSaved": "Saved on this device", "localUnsaved": "Not saved on this device", "localStorageQuotaTitle": "Browser rejected this local save", "localStorageQuotaHelp": "This edit or sync record was not confirmed saved. The cause may be this site's separate localStorage quota or a browser storage policy; this does not show how much disk space remains. It is separate from BC's 180 kB cloud limit. Export the currently readable backup, check this site's data, then retry. Do not clear all site data.", "indexedDBSaveTitle": "Wardrobe database save failed", "indexedDBSaveHelp": "This wardrobe change was not confirmed saved. You can still export any readable data. Export a backup, then retry the local save. Do not clear all site data.", "localStorageUsage": "Estimated data stored in this site's localStorage: VPW {wardrobe}, other data {other}, total {total}.", "localStorageUsageNote": "Estimated from UTF-16 text length. Excludes the rejected write; not the actual quota or space left.", "localStorageUsageUnavailable": "Could not read this site's stored localStorage usage.", "localStorageCurrentIndex": "Wardrobe indexes (all accounts)", "localStorageRecovery": "Recovery archives", "localStorageOldHistory": "Older history", "localStorageLegacyWardrobe": "Older wardrobes", "localStorageOtherVpw": "Other VPW data", "localStorageOtherApps": "Other site data", "showLocalStorageDetails": "Show details", "hideLocalStorageDetails": "Hide details", "retryLocalSave": "Retry local save", "retrySync": "Retry upload", "exportLocalBackup": "Export local backup", "deviceLimit": "Cloud sync has 16 registered installations. This new installation can still save locally and export a backup; registered installations can continue syncing. Old registrations are not removed automatically.", "exportRecovery": "Export pre-migration backup", "conflict": { "review": "Review {count} conflicts", "title": "Review sync conflicts", "back": "Back to wardrobe", "intro": "Cloud uploads are paused until you choose what to keep. Your changes remain saved on this device.", "quarantineIntro": "A device change is missing from the cloud copy. Synced outfits are temporarily hidden and uploads are paused. Reopen the original device or explicitly discard the missing change.", "quarantined": "Synced outfits are temporarily hidden and cannot be previewed or applied. This-device-only outfits remain available. Saving, importing, and enabling cloud sync are paused until you resolve the missing change.", "hiddenEmpty": "Synced outfits are temporarily hidden. No this-device-only outfits are available.", "cloudEnablePaused": "Resolve the missing change before enabling cloud sync.", "paused": "Cloud upload paused. Review conflicting changes to continue.", "itemTitle": "{name} · {field}", "unnamed": "Item", "changed": "Changed", "deleted": "Deleted", "partCount": "{count} parts", "tagCount": "{count} tags", "thisDevice": "This device", "cloud": "Cloud copy", "chooseExplanation": "These versions changed separately. Choose which one to keep.", "deleteEditExplanation": "One device deleted this item while another edited it. Restoring the edit creates a new item.", "privacyExplanation": "One device kept this outfit locally while another enabled cloud sync. Choose which storage choice and outfit to keep.", "keepLocal": "Keep this device's version", "keepCloud": "Keep cloud version", "keepDeletion": "Keep deletion", "restoreAsNewOutfit": "Restore as new outfit", "restoreAsNewTag": "Restore as new tag", "missingTitle": "A reported change is missing", "missingExplanation": "A device reported a change, but its content is missing from the cloud copy. Reopen the wardrobe on the original device to recover it, or discard the missing change.", "waitForDevice": "Wait for original device", "discardMissing": "Discard missing change", "discardConfirm": "Stop waiting for this missing change? The cloud cannot restore its content. If the original device still has a local copy, you may recover it there.", "resolveFailed": "This conflict could not be resolved. Your local changes are still saved. Try again.", "fields": { "name": "Name", "data": "Outfit", "tagIds": "Tags", "cloudSync": "Cloud sync", "enabled": "Cloud sync", "$record": "Deletion and edit", "sequence": "Change record", "record": "Item", "deleted": "Deletion" } }, "sync": { "idle": "Cloud ready", "pending": "Saved locally", "submitted": "Sent (assumed saved)", "verified": "Verified against cloud data", "offline": "Offline · waiting to retry", "quota": "Upload paused · over limit", "error": "Sync needs attention", "conflict": "Conflict · upload paused" }, "selected": "Selected", "browseLibrary": "Browse wardrobe", "findTag": "Find a tag…", "storageFilter": "Cloud sync", "filters": "Filters", "storageDetails": "Storage details", "showResults": "Show {count} outfits" };
       const fileItem$1 = { "open": "Open", "rename": "Rename", "delete": "Delete", "apply": "Apply to Character", "sendToStudio": "Send to Studio", "cancel": "Cancel", "promptNewName": "New name", "confirmDelete": "Are you sure you want to delete this item?", "elementDefaultName": "Element", "sendError": "Send to Studio failed", "oldData": "Legacy data", "newData": "New data", "setOld": "Set as legacy data", "setNew": "Set as new data", "convertNew": "Convert to new data", "undoConversion": "Undo conversion", "exportBCX": "Export as BCX", "cloudOn": "Cloud On", "cloudOff": "Cloud Off", "cloudToggleFileTitle": "Toggle cloud sync for this file", "cloudToggleFolderTitle": "Toggle cloud sync for this folder and its children" };
       const fileManager$1 = { "title": "Wardrobe", "newFolderTitle": "New folder", "restoreTitle": "Restore", "refreshThumbnails": "Refresh thumbnails", "closePanel": "Close panel", "promptNewFolderName": "New folder name", "goUp": "Go to parent folder", "parentFolder": "Parent folder", "dropToParentTitle": "Drop here to move to the parent folder", "searchPlaceholderCurrent": "Search in current folder...", "searchPlaceholderAll": "Search all folders...", "searchAria": "Search files", "clearSearch": "Clear search", "switchToGlobalSearch": "Switch to global search", "switchToCurrentSearch": "Switch to current-folder search", "emptyTip": "No matching files or folders", "scopeCurrent": "Current folder", "scopeAll": "Global", "sortBy": "Sort by", "sortToggle": "Sort", "sortToggleAria": "Cycle sort mode", "viewMode": "View mode", "viewCard": "Cards", "viewList": "List", "sortRecent": "Recent", "sortName": "Name", "sortType": "Type", "cloudUsageTitle": "Cloud Usage", "cloudUsageAria": "Cloud storage usage", "cloudUsageOk": "Within limit", "cloudUsageWarn": "Approaching limit", "cloudUsageOver": "Over 180KB limit", "filterAll": "All", "filterFolder": "Folders", "filterOutfit": "Outfits", "filterCharacter": "Character snapshots" };
@@ -36878,7 +36919,7 @@ ${lightForced}`;
       const history$1 = { "title": "History", "clear": "Clear", "clearTitle": "Clear all history", "clearConfirmMessage": "Are you sure you want to clear all history? This cannot be undone.", "currentState": "Current State", "timelineSubtitle": "Browse and jump between edit states", "undoCount": "Undo", "redoCount": "Redo", "undoAction": "Undo", "redoAction": "Redo", "totalStates": "Total", "emptyState": "No history yet. Your changes will be tracked here.", "justNow": "Just now", "minutesAgo": "{count} min ago", "hoursAgo": "{count} hours ago", "undoItem": "Previous state", "redoItem": "Future state", "pastTag": "Past", "futureTag": "Future", "currentTag": "Now", "scrollHint": "Scroll horizontally to browse more states", "jumpLatest": "Jump to latest", "hasFutureState": "Future states available", "stateChange": "State Change", "initialState": "Initial State", "actionTypeLabels": { "part": { "updateMetadata": "Update part metadata", "updateProperty": "Update part properties", "applyLayerDeltas": "Apply part layer changes" }, "layer": { "batchApplyLayerDeltas": "Apply layer batch changes" }, "batch": { "updateOpacity": "Batch update opacity", "updateOffset": "Batch update offset", "updateColor": "Batch update color", "updatePriority": "Batch update priority" }, "palette": { "applyColor": "Apply color", "applyTag": "Apply palette tag", "applyTagOffset": "Apply tag offset", "resetTagOffset": "Reset tag offset", "updateTag": "Update palette tag", "createTagAndReplace": "Create tag and replace", "renameTagReferences": "Rename tag references", "deleteTag": "Delete palette tag", "clear": "Clear palette", "savedColor": { "add": "Add saved color", "update": "Update saved color", "delete": "Delete saved color", "clear": "Clear saved colors" } }, "stack": { "add": "Add stack", "remove": "Remove stack", "move": "Move stack", "clear": "Clear stacks", "rename": "Rename stack" }, "asset": { "apply": "Apply asset" } }, "actionScopeLabels": { "part": "Part", "layer": "Layer", "batch": "Batch", "palette": "Palette", "stack": "Stack", "asset": "Asset" }, "operationContentLabels": { "color": "Color", "opacity": "Opacity", "shift": "Shift", "order": "Order", "layer": "Layer", "property": "Property", "tag": "Tag", "general": "Edit" } };
       const groupNames$1 = { "Item": "Item", "Cosplay": "Cosplay", "Hair": "Hair", "Headwear": "Headwear", "Face": "Face", "Markings": "Markings / Tattoos", "ClothUpper": "Upper Clothing", "ClothLower": "Lower Clothing", "Hands": "Hands", "Feet": "Feet", "Accessories": "Accessories", "HiddenBody": "Hidden Body Parts", "Appearance": "Appearance" };
       const cloudflareSync$1 = { "title": "Sync provider", "enable": "Use Cloudflare sync", "description": "Cloudflare becomes the main wardrobe sync source. BC stops uploading wardrobe data. Turning this off returns to BC sync; it does not delete the Cloudflare copy.", "allDevicesHint": "Turn on Cloudflare sync on every device. Older devices still using BC sync will form a separate copy.", "bcLegacyChanged": "We cannot confirm that the old BC wardrobe is unchanged, so automatic cleanup is paused. Export a backup and check the sync mode and wardrobe on every device. After reviewing them, switch each device to Cloudflare. Do not delete the old data yet.", "bcLegacyChangedShort": "Old BC data needs review; automatic cleanup is paused.", "notConfigured": "This version has no Cloudflare service URL. Deploy and configure the service, then update the script. BC sync remains active for now.", "serviceUnavailable": "This version has no Cloudflare service URL. Your wardrobe remains on this device; Cloudflare sync is paused and BC will not take over automatically. Update the script or turn off this switch to use BC.", "serviceNotReady": "Service not configured", "bcCleanupPending": "The old BC wardrobe copy still uses space. Cleanup is submitted after a successful Cloudflare save. BC gives no receipt, so a later login must confirm removal.", "bcCleanupPendingShort": "The old BC copy is awaiting cleanup and still uses BC space.", "bcCleanupUnknown": "The old BC wardrobe copy has not been checked. If cleanup was submitted, the next login will check the result.", "bcCleanupUnknownShort": "The old BC copy awaits a login check.", "bcCleanupVerified": "A BC login readback confirmed that the old wardrobe copy is absent.", "syncing": "Syncing to Cloudflare…", "syncingShort": "Syncing", "pending": "Local changes waiting to sync to Cloudflare", "pendingShort": "Pending sync", "needsAttention": "Cloudflare sync needs attention", "needsAttentionShort": "Needs attention", "syncedShort": "Last sync OK", "lastSynced": "Last synced: {time}", "waiting": "Waiting for first sync", "syncNow": "Sync now", "estimatedSize": "Estimated cloud data", "sizeAria": "Estimated Cloudflare upload {used}, limit {limit}", "sizeHint": "UTF-8 JSON estimate for the next sync; device-only outfits are excluded.", "sizeOver": "The estimate exceeds the limit, so the upload may be rejected. Your local copy remains available; reduce synced content.", "changeFailed": "Could not switch sync providers. Check your connection or service configuration, then try again.", "syncFailed": "Could not finish Cloudflare sync. Check your connection and try again.", "errorTooLarge": "The cloud wardrobe exceeds the 8 MB limit. Reduce the content included in sync and retry. Your local copy remains available.", "errorCapacityReached": "This free service has reached its wardrobe or daily creation limit. Try later or check Cloudflare service capacity. Your local copy remains available.", "errorWriteLimit": "This key has reached the service's daily write limit (500 writes). Your local changes remain saved; retry on the next UTC day.", "errorProvisioningUnavailable": "The service cannot create a new cloud wardrobe. Configure the provisioning secret in the Cloudflare deployment and retry. Your local copy remains available.", "keyStorage": "The recovery key was submitted to BC extension settings (assumed successful; no receipt). Save another copy. Anyone with this key can access your cloud wardrobe.", "keyNotSaved": "The recovery key has not been submitted to BC. Copy it now and keep it safe.", "keyMissing": "This device cannot find the recovery key. Turn off Cloudflare sync, then import your original key.", "showKey": "Show recovery key", "recoveryKey": "Recovery key", "copyKey": "Copy key", "downloadKey": "Download recovery key", "keyDownloadFailed": "Could not download the recovery key. Show the key and copy it manually.", "hideKey": "Hide key", "keyCopied": "Key copied. Keep it somewhere safe.", "copyManually": "The browser blocked copying. Select the key above and copy it manually.", "keepKeySafe": "Keep this key somewhere safe. Do not share it.", "keyUnavailable": "Could not read the recovery key. Try again; do not clear this site's data.", "restoreKey": "Have a recovery key?", "changeKey": "Switch cloud wardrobe", "restoreHint": "Importing saves the key on this device and attempts to submit it to BC. When you turn sync on again, this device's wardrobe will merge with the cloud wardrobe for that key. The old key still opens its old cloud wardrobe and is not revoked.", "restore": "Import key", "restoreFailed": "Could not import the key. Check it and try again.", "openDashboard": "Open cloud data page", "dashboardHint": "The data page asks for your recovery key when opened. The key is not included in the link or saved by the page." };
-      const fileManagerPanel$1 = { "ariaLabel": "Wardrobe panel", "title": "Portable wardrobe", "saveBackup": "Save backup", "importBackup": "Import backup", "saveCharacter": "Save current outfit", "importBCX": "Import from BCX", "importPlayerWardrobe": "Import player wardrobe", "settings": "Settings", "toggleFilters": "Adjust outfit", "lightMode": "Light mode", "darkMode": "Dark mode", "themedMode": "Themed mode", "toggleTheme": "Switch theme", "tabAriaLabel": "Workbench tabs", "tabWardrobe": "Wardrobe", "tabHistory": "History", "tabStudio": "Studio", "tabSettings": "Settings", "themeSettings": "Theme settings", "halfOffsetsLabel": "Legacy outfit offset compatibility", "halfOffsetsDescription": "Adjusts translations for scaled and unscaled legacy outfits during preview and wear, including converted outfits. Turn off for modern outfits.", "forceSelfApplyTitle": "Outfit controls", "forceSelfApplyLabel": "Allow force apply to myself", "forceSelfApplyDescription": "Shows an extra button for your character that tries to bypass BC clothing settings. The game may still reject changes. Saved on this browser only.", "forceSelfApplySaveFailed": "Could not save this setting. Check browser storage and try again.", "themedNotAvailable": "Themed BC not detected, using default light theme", "themedModeDesc": "Themed mode uses colors from Themed BC plugin. Themed BC must be installed and enabled." };
+      const fileManagerPanel$1 = { "language": "Language", "ariaLabel": "Wardrobe panel", "title": "Portable wardrobe", "saveBackup": "Save backup", "importBackup": "Import backup", "saveCharacter": "Save current outfit", "importBCX": "Import from BCX", "importPlayerWardrobe": "Import player wardrobe", "settings": "Settings", "toggleFilters": "Adjust outfit", "lightMode": "Light mode", "darkMode": "Dark mode", "themedMode": "Themed mode", "toggleTheme": "Switch theme", "tabAriaLabel": "Workbench tabs", "tabWardrobe": "Wardrobe", "tabHistory": "History", "tabStudio": "Studio", "tabSettings": "Settings", "themeSettings": "Theme settings", "halfOffsetsLabel": "Legacy outfit offset compatibility", "halfOffsetsDescription": "Adjusts translations for scaled and unscaled legacy outfits during preview and wear, including converted outfits. Turn off for modern outfits.", "forceSelfApplyTitle": "Outfit controls", "forceSelfApplyLabel": "Allow force apply to myself", "forceSelfApplyDescription": "Shows an extra button for your character that tries to bypass BC clothing settings. The game may still reject changes. Saved on this browser only.", "forceSelfApplySaveFailed": "Could not save this setting. Check browser storage and try again.", "themedNotAvailable": "Themed BC not detected, using default light theme", "themedModeDesc": "Themed mode uses colors from Themed BC plugin. Themed BC must be installed and enabled." };
       const historyViewer$1 = { "title": "History", "toggleToHistory": "View History", "toggleToFileManager": "View wardrobe", "clearAll": "Clear All", "clearAllConfirm": "Clear the current history? Archived older copies remain available through Export history. This cannot be undone.", "deleteRecord": "Delete", "deleteConfirm": "Delete this history record?", "delete": "Delete", "searchPlaceholder": "Search history records...", "clearSearch": "Clear", "timeFilter": "Time filters", "filterAll": "All", "filterToday": "Today", "filterWeek": "Last 7 days", "loadRecord": "Load this record", "apply": "Apply", "cancel": "Cancel", "loadToPreview": "Load to preview", "recordedAt": "Recorded at", "emptyState": "No history records yet. Your outfit changes will be automatically recorded here.", "recordCount": "{count} records", "saveFailedTitle": "History changes were not saved", "saveFailedHelp": "Recent changes may be lost if you refresh. Check this site's storage permissions, then retry.", "retrySave": "Retry saving", "copiesDifferTitle": "Older history copy is still stored locally", "copiesDifferHelp": "The browser could not archive it. It may still use limited local storage. Retry, or export both copies now.", "retryArchive": "Retry archive", "copyArchivedTitle": "Older history copy preserved", "copyArchivedHelp": "Both copies are in the browser database. Export a history backup to keep them outside this browser.", "exportHistory": "Export history", "exportPartial": "History exported, but archived copies could not be read. Keep this site's data and retry later.", "exportFailed": "Could not export history. Try again.", "attentionRequired": "History storage needs attention", "archivedReminder": "Archived history copy available to export" };
       const sidePreview$1 = { "ariaLabel": "Character preview", "hint": "Check the preview, then apply it to the selected character.", "targetCharacter": "Target character", "noTargetCharacter": "No available character", "renderFailed": "The preview could not load. Try again.", "retry": "Reload preview", "loading": "Loading preview" };
       const stackDetail$1 = { "ariaLabel": "Stack Detail Panel", "title": "Details", "name": "Name", "group": "Group", "color": "Color", "property": "Property", "overridePriority": "OverridePriority", "opacity": "Opacity", "typeRecord": "TypeRecord", "offset": "Offset", "craft": "Craft", "craftSummary": "Craft (summary)", "download": "Download", "downloadTitle": "Download entire element", "copy": "Copy", "copyTitle": "Copy entire element JSON", "placeholder": "Select a stack item to view details", "unnamed": "(unnamed)" };
@@ -36924,7 +36965,7 @@ ${lightForced}`;
         wardrobeIO: wardrobeIO$1,
         outfitFlow: outfitFlow$1
       };
-      const outfitEditor = { "edit": "编辑", "copy": "另存", "save": "保存", "editClothes": "编辑服装", "exportDraft": "导出套装", "editRestraints": "编辑拘束物品", "retryReturn": "重试返回", "returnFailed": "BC 未能返回原界面。", "nativeWardrobeOpening": "正在打开 BC 原生衣柜…", "nativeWardrobeFailed": "无法打开 BC 原生衣柜：{error}", "retryWardrobe": "重试打开 BC 衣柜", "reopenWardrobe": "再次打开 BC 衣柜", "itemPageTitle": "道具与保存", "itemPageHint": "衣物在 BC 原生衣柜中编辑；在这里添加和调整道具，然后保存搭配。", "itemSearch": "查找道具", "itemSearchPlaceholder": "搜索当前道具分组", "noMatchingItems": "没有匹配的道具", "savedItems": "已存道具", "noItems": "这套搭配中没有道具。请选择道具分组添加。", "itemGroup": "道具分组", "open": "编辑衣物", "title": "编辑已保存的衣物", "titleFor": "编辑「{name}」", "close": "关闭衣物编辑器", "back": "返回", "preview": "衣物预览", "previewLoading": "正在加载预览…", "previewFailed": "预览加载失败", "retryPreview": "重试预览", "previewHint": "修改会先留在预览中，保存后才写入衣柜，不会直接给角色换装。", "selectGroup": "搜索分组", "noGroups": "没有匹配的分组", "noAssets": "这个分组没有可选物件", "addAsset": "添加部位", "replaceAsset": "替换部位", "removeAsset": "移除部位", "nativeItemOpen": "打开 BC 道具设置", "nativeItemTitle": "道具设置", "nativeItemHint": "可用 BC 原生控件调整型号、模块和模式。返回后记得保存这套搭配。", "nativeItemUnavailable": "这个道具没有可调整的 BC 设置。", "nativeItemFailed": "无法打开道具设置：{error}", "color": "颜色", "colorLayer": "第 {number} 层颜色", "defaultColor": "默认颜色", "setColor": "设置颜色", "resetColor": "恢复默认颜色", "cancel": "取消", "overwrite": "覆盖原衣物", "saveCopy": "另存为新衣物", "newNamePrompt": "为新衣物命名：", "copyName": "{name} 副本", "nameRequired": "请输入新衣物的名称。", "discardConfirm": "放弃尚未保存的衣物修改？", "sourceMissing": "这件衣物已不存在。请关闭编辑器后重新选择。", "sourceChanged": "这件衣物已被修改或删除。请将草稿另存为新衣物，或关闭后重新打开最新版本。", "editFailed": "无法编辑这个部位：{error}", "saveFailed": "无法保存这件衣物：{error}", "errors": { "protected-group": "这个身体部位不能修改。", "invalid-group": "这个分组已不可用。", "invalid-asset": "这个物件在当前分组中已不可用。", "required-group": "这个身体分组不能置空。", "missing-part": "请先添加物件，再设置颜色。", "invalid-color": "所选物件不支持这个颜色。", "outfit-changed": "这件衣物已被修改或删除。请将草稿另存为新衣物，或关闭后重新打开最新版本。" } };
+      const outfitEditor = { "exit": "退出", "edit": "编辑", "copy": "另存", "save": "保存", "editClothes": "编辑服装", "exportDraft": "导出套装", "editRestraints": "编辑拘束物品", "retryReturn": "重试返回", "returnFailed": "BC 未能返回原界面。", "nativeWardrobeOpening": "正在打开 BC 原生衣柜…", "nativeWardrobeFailed": "无法打开 BC 原生衣柜：{error}", "retryWardrobe": "重试打开 BC 衣柜", "reopenWardrobe": "再次打开 BC 衣柜", "itemPageTitle": "道具与保存", "itemPageHint": "衣物在 BC 原生衣柜中编辑；在这里添加和调整道具，然后保存搭配。", "itemSearch": "查找道具", "itemSearchPlaceholder": "搜索当前道具分组", "noMatchingItems": "没有匹配的道具", "savedItems": "已存道具", "noItems": "这套搭配中没有道具。请选择道具分组添加。", "itemGroup": "道具分组", "open": "编辑衣物", "title": "编辑已保存的衣物", "titleFor": "编辑「{name}」", "close": "关闭衣物编辑器", "back": "返回", "preview": "衣物预览", "previewLoading": "正在加载预览…", "previewFailed": "预览加载失败", "retryPreview": "重试预览", "previewHint": "修改会先留在预览中，保存后才写入衣柜，不会直接给角色换装。", "selectGroup": "搜索分组", "noGroups": "没有匹配的分组", "noAssets": "这个分组没有可选物件", "addAsset": "添加部位", "replaceAsset": "替换部位", "removeAsset": "移除部位", "nativeItemOpen": "打开 BC 道具设置", "nativeItemTitle": "道具设置", "nativeItemHint": "可用 BC 原生控件调整型号、模块和模式。返回后记得保存这套搭配。", "nativeItemUnavailable": "这个道具没有可调整的 BC 设置。", "nativeItemFailed": "无法打开道具设置：{error}", "color": "颜色", "colorLayer": "第 {number} 层颜色", "defaultColor": "默认颜色", "setColor": "设置颜色", "resetColor": "恢复默认颜色", "cancel": "取消", "overwrite": "覆盖原衣物", "saveCopy": "另存为新衣物", "newNamePrompt": "为新衣物命名：", "copyName": "{name} 副本", "nameRequired": "请输入新衣物的名称。", "discardConfirm": "放弃尚未保存的衣物修改？", "sourceMissing": "这件衣物已不存在。请关闭编辑器后重新选择。", "sourceChanged": "这件衣物已被修改或删除。请将草稿另存为新衣物，或关闭后重新打开最新版本。", "editFailed": "无法编辑这个部位：{error}", "saveFailed": "无法保存这件衣物：{error}", "errors": { "protected-group": "这个身体部位不能修改。", "invalid-group": "这个分组已不可用。", "invalid-asset": "这个物件在当前分组中已不可用。", "required-group": "这个身体分组不能置空。", "missing-part": "请先添加物件，再设置颜色。", "invalid-color": "所选物件不支持这个颜色。", "outfit-changed": "这件衣物已被修改或删除。请将草稿另存为新衣物，或关闭后重新打开最新版本。" } };
       const library = { "searchPlaceholder": "搜索衣物或标签…", "allOutfits": "全部衣物", "untagged": "未加标签", "filterByTag": "按标签筛选", "manageTags": "管理标签", "newTag": "新建标签", "newTagPrompt": "输入唯一的标签名称：", "renameTag": "重命名当前标签", "renameTagPrompt": "新的标签名称：", "deleteTag": "删除当前标签", "deleteTagConfirm": "删除标签「{name}」？衣物会保留在衣橱中。", "tagNameInvalid": "请输入标签名称，并使用与现有标签不同的名称。", "editTags": "编辑标签", "editOutfitTags": "「{name}」的标签", "tags": "标签", "selectTags": "选择一个或多个标签", "noTags": "没有匹配标签，可在「管理标签」中新建。", "multipleTagsHint": "每件衣物可添加多个标签。移除标签不会删除衣物。", "saveTags": "保存标签", "outfitCount": "{count} / {total} 件衣物", "empty": "衣橱里还没有衣物", "noMatches": "没有符合条件的衣物", "clearFilters": "清除所有筛选", "saveCharacter": "保存当前穿着", "saveNamePrompt": "衣物名称：", "saved": "已将「{name}」保存到本机衣橱，云端进度请查看同步状态。", "imported": "已将 {count} 件衣物导入本机衣橱，云端进度请查看同步状态。", "nothingImported": "没有可导入的衣物。请检查导入内容是否为空。", "operationFailed": "操作未完成：{error}", "itemUnavailable": "这件衣物或标签已不可用，请重新选择后再试。", "deleteOutfitConfirm": "删除「{name}」？本机衣橱会删除它，并同步这次删除。", "previewOutfit": "预览「{name}」", "outfitActions": "「{name}」的操作", "moreActions": "更多操作", "cloudIncluded": "参与云同步", "localOnly": "仅保存在本机", "localFork": "保留的本机副本", "localForkHint": "另一台设备重新开启云同步时，这台设备修改过的版本被保留为本机副本。此副本不会自动上传，可手动开启云同步。", "cloudToggleTitle": "开启或关闭这件衣物的云同步，本机副本会保留。", "cloudStorage": "共享云端容量", "otherExtensions": "其他扩展", "remainingCapacity": "可用：{amount}", "quotaAria": "{source}：已用 {used}，上限 {limit}", "quotaObservedLogin": "最近一次登录从 BC 读取的占用", "quotaObservedCache": "BC 本机缓存估计，尚未核对", "quotaObservedUnavailable": "尚未读取到云端占用数据", "observedRemaining": "最近读取的可用空间：{amount}", "proposedUpload": "下次上传预计占用，尚未上传", "proposedRemaining": "预计上传后可用：{amount}", "sharedQuotaInfo": "共享云端容量说明", "sharedQuotaHint": "衣橱按 180 kB（180000 字节）控制全部扩展设置。上方显示最近读取的占用，展开可查看下次上传预计占用。VPW 包括衣物和设备标记。", "quotaWarning": "预计上传后接近容量上限。可将部分衣物设为仅保存在本机。", "quotaBlocked": "上传已暂停：预计更新超过 180 kB 的共享或单包限制。本机衣物仍可使用，请减少云同步衣物后重试。", "localSaved": "已保存到本机", "localUnsaved": "尚未保存到本机", "localStorageQuotaTitle": "浏览器拒绝了本次本机写入", "localStorageQuotaHelp": "这次修改或同步记录未确认保存。原因可能是此站点 localStorage 的独立配额或浏览器存储策略，不能据此判断磁盘空间；与 BC 云端 180 kB 限额无关。请先导出当前可读取的备份，再检查同站点数据并重试。不要直接清除整个站点数据。", "indexedDBSaveTitle": "衣柜数据库写入失败", "indexedDBSaveHelp": "这次衣柜修改未确认保存。仍可导出当前能读取的数据。请先导出备份，再重试本机保存。不要清除整个站点数据。", "localStorageUsage": "此站点 localStorage 已存数据估算：VPW {wardrobe}，其他数据 {other}，合计 {total}。", "localStorageUsageNote": "按 UTF-16 字符长度估算；不含被拒绝的写入，也不是实际配额或剩余空间。", "localStorageUsageUnavailable": "无法读取此站点的 localStorage 已存数据占用。", "localStorageCurrentIndex": "衣柜索引（所有账号）", "localStorageRecovery": "恢复档案", "localStorageOldHistory": "旧版历史", "localStorageLegacyWardrobe": "旧版衣柜", "localStorageOtherVpw": "其他 VPW 数据", "localStorageOtherApps": "其他站点数据", "showLocalStorageDetails": "查看详情", "hideLocalStorageDetails": "收起详情", "retryLocalSave": "重试本机保存", "retrySync": "重试上传", "exportLocalBackup": "导出本机备份", "deviceLimit": "云同步已登记 16 台安装环境。当前新设备仍可保存到本机并导出备份；已登记设备可继续同步。旧设备记录不会自动清除。", "exportRecovery": "导出迁移前备份", "conflict": { "review": "处理 {count} 处冲突", "title": "处理同步冲突", "back": "返回衣橱", "intro": "选择要保留的版本后，云端才能继续上传。你的修改仍保存在本机。", "quarantineIntro": "检测到云端缺少一次设备修改。同步衣物已暂时隐藏，上传暂停；请在原设备找回，或明确舍弃缺失修改。", "quarantined": "同步衣物暂时隐藏，不能预览或应用；仅本机衣物仍可使用。处理缺失修改前，保存、导入和开启云同步暂不可用。", "hiddenEmpty": "同步衣物已暂时隐藏，目前没有仅保存在本机的衣物。", "cloudEnablePaused": "请先处理缺失修改，再开启云同步。", "paused": "云端上传已暂停。处理冲突后可继续同步。", "itemTitle": "{name} · {field}", "unnamed": "项目", "changed": "已修改", "deleted": "已删除", "partCount": "{count} 个部件", "tagCount": "{count} 个标签", "thisDevice": "本机版本", "cloud": "云端版本", "chooseExplanation": "两边分别修改了这项内容，请选择要保留的版本。", "deleteEditExplanation": "一台设备删除了这项内容，另一台设备修改了它。选择修改版会以新项目恢复。", "privacyExplanation": "一台设备将这件衣物设为仅保存在本机，另一台开启了云同步。请选择要保留的存储设置和衣物版本。", "keepLocal": "保留本机版本", "keepCloud": "保留云端版本", "keepDeletion": "保留删除结果", "restoreAsNewOutfit": "作为新衣物恢复", "restoreAsNewTag": "作为新标签恢复", "missingTitle": "发现未合入的修改", "missingExplanation": "一台设备报告过修改，但云端衣橱里没有修改内容。可在原设备重新打开衣橱以找回，或明确舍弃这次修改。", "waitForDevice": "等待原设备", "discardMissing": "舍弃缺失修改", "discardConfirm": "确定不再等待这次缺失的修改？云端无法还原其内容；如果原设备仍保存它，可从那里找回。", "resolveFailed": "冲突未能处理。本机修改仍已保存，请重试。", "fields": { "name": "名称", "data": "衣物内容", "tagIds": "标签", "cloudSync": "云同步", "enabled": "云同步", "$record": "删除与修改", "sequence": "修改记录", "record": "项目", "deleted": "删除" } }, "sync": { "idle": "云同步就绪", "pending": "本机已保存", "submitted": "已提交（默认成功）", "verified": "已与云端核对", "offline": "离线，等待重试", "quota": "容量超限，上传暂停", "error": "同步需要处理", "conflict": "存在冲突，上传暂停" }, "selected": "已选择", "browseLibrary": "浏览衣橱", "findTag": "搜索标签…", "storageFilter": "云同步范围", "filters": "筛选", "storageDetails": "容量明细", "showResults": "查看 {count} 件衣物" };
       const fileItem = { "open": "打开", "rename": "重命名", "delete": "删除", "apply": "应用到角色", "sendToStudio": "发送到 Studio", "cancel": "取消", "promptNewName": "新名字", "confirmDelete": "确认删除该项目吗？", "elementDefaultName": "元素", "sendError": "发送到 Studio 失败", "oldData": "旧数据", "newData": "新数据", "setOld": "设置为旧数据", "setNew": "设置为新数据", "convertNew": "转换为新数据", "undoConversion": "撤销转换", "exportBCX": "导出为 BCX", "cloudOn": "云同步开", "cloudOff": "云同步关", "cloudToggleFileTitle": "切换此文件是否云同步", "cloudToggleFolderTitle": "切换此文件夹及其子项是否云同步" };
       const fileManager = { "title": "衣橱", "newFolderTitle": "新建文件夹", "restoreTitle": "恢复", "refreshThumbnails": "刷新缩略图", "closePanel": "关闭面板", "promptNewFolderName": "新建文件夹名", "goUp": "返回上一级", "parentFolder": "上一级", "dropToParentTitle": "拖到这里移到上一级文件夹", "searchPlaceholderCurrent": "在当前文件夹搜索...", "searchPlaceholderAll": "搜索所有文件夹...", "searchAria": "搜索文件", "clearSearch": "清除搜索", "switchToGlobalSearch": "切换到全局搜索", "switchToCurrentSearch": "切换到当前文件夹", "emptyTip": "没有匹配的文件/文件夹", "scopeCurrent": "当前目录", "scopeAll": "全局", "sortBy": "排序方式", "sortToggle": "排序", "sortToggleAria": "切换排序方式", "viewMode": "视图模式", "viewCard": "卡牌", "viewList": "列表", "sortRecent": "最近修改", "sortName": "名称", "sortType": "类型", "cloudUsageTitle": "云端占用", "cloudUsageAria": "云端容量占用", "cloudUsageOk": "容量正常", "cloudUsageWarn": "容量接近上限", "cloudUsageOver": "超出 180KB 上限", "filterAll": "全部", "filterFolder": "文件夹", "filterOutfit": "套装", "filterCharacter": "角色快照" };
@@ -36938,7 +36979,7 @@ ${lightForced}`;
       const history = { "title": "历史记录", "clear": "清空", "clearTitle": "清空所有历史记录", "clearConfirmMessage": "确定要清空所有历史记录吗？此操作无法撤销。", "currentState": "当前状态", "timelineSubtitle": "浏览并跳转到任意编辑状态", "undoCount": "可撤销", "redoCount": "可重做", "undoAction": "撤销", "redoAction": "重做", "totalStates": "总数", "emptyState": "暂无历史记录。您的更改将在此处跟踪。", "justNow": "刚刚", "minutesAgo": "{count} 分钟前", "hoursAgo": "{count} 小时前", "undoItem": "之前的状态", "redoItem": "未来的状态", "pastTag": "过去", "futureTag": "未来", "currentTag": "当前", "scrollHint": "横向滚动可查看更多状态", "jumpLatest": "跳至最新", "hasFutureState": "存在可重做状态", "stateChange": "状态变更", "initialState": "初始状态", "actionTypeLabels": { "part": { "updateMetadata": "更新部件元数据", "updateProperty": "更新部件属性", "applyLayerDeltas": "应用部件图层改动" }, "layer": { "batchApplyLayerDeltas": "批量应用图层改动" }, "batch": { "updateOpacity": "批量更新不透明度", "updateOffset": "批量更新偏移", "updateColor": "批量更新颜色", "updatePriority": "批量更新优先级" }, "palette": { "applyColor": "应用颜色", "applyTag": "应用调色标签", "applyTagOffset": "应用标签偏移", "resetTagOffset": "重置标签偏移", "updateTag": "更新调色标签", "createTagAndReplace": "创建标签并替换", "renameTagReferences": "重命名标签引用", "deleteTag": "删除调色标签", "clear": "清空调色板", "savedColor": { "add": "添加收藏颜色", "update": "更新收藏颜色", "delete": "删除收藏颜色", "clear": "清空收藏颜色" } }, "stack": { "add": "新增堆栈", "remove": "删除堆栈", "move": "移动堆栈", "clear": "清空堆栈", "rename": "重命名堆栈" }, "asset": { "apply": "应用资源" } }, "actionScopeLabels": { "part": "部件", "layer": "图层", "batch": "批量", "palette": "调色", "stack": "堆栈", "asset": "资源" }, "operationContentLabels": { "color": "颜色", "opacity": "透明度", "shift": "位移", "order": "顺序", "layer": "图层", "property": "属性", "tag": "标签", "general": "编辑" } };
       const groupNames = { "Item": "道具", "Cosplay": "Cosplay", "Hair": "头发", "Headwear": "头饰", "Face": "面部", "Markings": "痕迹/纹身", "ClothUpper": "上身服装", "ClothLower": "下身服装", "Hands": "手部", "Feet": "足部", "Accessories": "配饰", "HiddenBody": "隐藏身体部件", "Appearance": "外观" };
       const cloudflareSync = { "title": "同步方式", "enable": "使用 Cloudflare 同步", "description": "开启后，Cloudflare 成为衣橱的主要同步源；BC 不再上传衣橱内容。关闭后改用 BC，云端副本不会自动删除。", "allDevicesHint": "请在每台设备开启 Cloudflare；仍使用 BC 同步的旧设备会形成分叉。", "bcLegacyChanged": "无法确认旧 BC 衣柜的数据没有变化，自动清理已暂停。请先导出备份，并检查所有设备的同步方式与衣柜内容；核对后再逐台开启 Cloudflare。不要直接删除旧数据。", "bcLegacyChangedShort": "旧 BC 数据尚未核对；自动清理已暂停。", "notConfigured": "此版本尚未配置 Cloudflare 服务地址。完成部署并更新脚本后才能开启；目前继续使用 BC 同步。", "serviceUnavailable": "当前版本未配置 Cloudflare 服务地址。衣橱仍保存在本机，Cloudflare 同步暂停；BC 不会自动接管。更新脚本后重试，或关闭此开关改用 BC。", "serviceNotReady": "服务未配置", "bcCleanupPending": "BC 旧衣柜副本仍占空间。Cloudflare 保存成功后会提交清理；BC 不回执，需在后续登录核对。", "bcCleanupPendingShort": "BC 旧副本待清理，暂时仍占 BC 空间。", "bcCleanupUnknown": "尚未核对 BC 旧衣柜副本。若已提交清理，将在下次登录核对结果。", "bcCleanupUnknownShort": "BC 旧副本状态待登录核对。", "bcCleanupVerified": "已在 BC 登录回读中核对：旧衣柜副本不存在。", "syncing": "正在同步到 Cloudflare…", "syncingShort": "同步中", "pending": "本机修改等待同步到 Cloudflare", "pendingShort": "待同步", "needsAttention": "Cloudflare 同步需要处理", "needsAttentionShort": "需处理", "syncedShort": "上次成功", "lastSynced": "最近同步：{time}", "waiting": "等待首次同步", "syncNow": "立即同步", "estimatedSize": "预计云端数据", "sizeAria": "Cloudflare 预计上传 {used}，上限 {limit}", "sizeHint": "按 UTF-8 JSON 估算下一次同步；仅本机衣物不计入。", "sizeOver": "预计已超上限，上传可能被拒绝。本机副本仍保留，请减少同步内容。", "changeFailed": "未能切换同步方式。请检查网络或服务配置后重试。", "syncFailed": "未能完成 Cloudflare 同步。请检查网络后重试。", "errorTooLarge": "云衣柜超过 8 MB 上限。请减少参与同步的内容后重试；本机副本仍保留。", "errorCapacityReached": "此免费服务已达到衣柜数量或今日创建额度。请稍后重试，或检查 Cloudflare 服务容量；本机副本仍保留。", "errorWriteLimit": "这把密钥今天已达到服务设置的写入上限（500 次）。本机修改仍保留，请在 UTC 次日重试。", "errorProvisioningUnavailable": "服务暂不能创建新云衣柜。请在 Cloudflare 部署中配置创建密钥后重试；本机副本仍保留。", "keyStorage": "恢复密钥已提交到 BC 扩展设置（默认成功，无回执）。建议另存一份；持有密钥的人可以访问云衣橱。", "keyNotSaved": "恢复密钥尚未提交到 BC。请立即复制并妥善保管。", "keyMissing": "此设备找不到恢复密钥。请先关闭 Cloudflare 同步，再导入原来的密钥。", "showKey": "显示恢复密钥", "recoveryKey": "恢复密钥", "copyKey": "复制密钥", "downloadKey": "下载恢复密钥", "keyDownloadFailed": "未能下载恢复密钥。请显示密钥并手动复制。", "hideKey": "隐藏密钥", "keyCopied": "已复制密钥。请保存在安全位置。", "copyManually": "浏览器未允许自动复制。请选中上方密钥手动复制。", "keepKeySafe": "请将密钥保存在安全位置。不要分享给他人。", "keyUnavailable": "无法读取恢复密钥。请重试；不要清除本站数据。", "restoreKey": "已有恢复密钥？", "changeKey": "切换云衣柜", "restoreHint": "导入会在本机保存密钥并尝试提交到 BC。重新开启同步后，本机衣橱会与这把密钥对应的云衣柜合并；旧密钥仍可访问旧云衣柜，不会被撤销。", "restore": "导入密钥", "restoreFailed": "未能导入密钥。请检查输入后重试。", "openDashboard": "打开云端数据页", "dashboardHint": "数据页只在打开时要求输入恢复密钥；密钥不会放进链接，也不会由网页保存。" };
-      const fileManagerPanel = { "ariaLabel": "衣橱面板", "title": "随身衣橱", "saveBackup": "保存备份", "importBackup": "备份导入", "saveCharacter": "保存当前穿着", "importBCX": "从 BCX 导入", "importPlayerWardrobe": "导入玩家衣柜", "settings": "设置", "toggleFilters": "微调部位", "lightMode": "浅色模式", "darkMode": "深色模式", "themedMode": "Themed 模式", "toggleTheme": "切换主题", "tabAriaLabel": "工作台标签", "tabWardrobe": "衣橱", "tabHistory": "历史", "tabStudio": "Studio", "tabSettings": "设置", "themeSettings": "主题设置", "halfOffsetsLabel": "旧衣偏移兼容", "halfOffsetsDescription": "按旧衣是否使用缩放调整预览和穿戴的平移，包括已转存的原生平移。穿戴新版服装时可关闭。", "forceSelfApplyTitle": "换装选项", "forceSelfApplyLabel": "允许对自己强制换装", "forceSelfApplyDescription": "开启后，仅在目标是自己时显示红色按钮，尝试越过 BC 换装设置。游戏仍可能拒绝更改。此设置只保存在本机。", "forceSelfApplySaveFailed": "未能保存此设置。请检查浏览器存储后重试。", "themedNotAvailable": "未检测到 Themed BC，使用默认浅色主题", "themedModeDesc": "Themed 模式使用 Themed BC 的颜色配置，需要安装并启用 Themed BC 插件。" };
+      const fileManagerPanel = { "language": "语言", "ariaLabel": "衣橱面板", "title": "随身衣橱", "saveBackup": "保存备份", "importBackup": "备份导入", "saveCharacter": "保存当前穿着", "importBCX": "从 BCX 导入", "importPlayerWardrobe": "导入玩家衣柜", "settings": "设置", "toggleFilters": "微调部位", "lightMode": "浅色模式", "darkMode": "深色模式", "themedMode": "Themed 模式", "toggleTheme": "切换主题", "tabAriaLabel": "工作台标签", "tabWardrobe": "衣橱", "tabHistory": "历史", "tabStudio": "Studio", "tabSettings": "设置", "themeSettings": "主题设置", "halfOffsetsLabel": "旧衣偏移兼容", "halfOffsetsDescription": "按旧衣是否使用缩放调整预览和穿戴的平移，包括已转存的原生平移。穿戴新版服装时可关闭。", "forceSelfApplyTitle": "换装选项", "forceSelfApplyLabel": "允许对自己强制换装", "forceSelfApplyDescription": "开启后，仅在目标是自己时显示红色按钮，尝试越过 BC 换装设置。游戏仍可能拒绝更改。此设置只保存在本机。", "forceSelfApplySaveFailed": "未能保存此设置。请检查浏览器存储后重试。", "themedNotAvailable": "未检测到 Themed BC，使用默认浅色主题", "themedModeDesc": "Themed 模式使用 Themed BC 的颜色配置，需要安装并启用 Themed BC 插件。" };
       const historyViewer = { "title": "历史记录", "toggleToHistory": "查看历史", "toggleToFileManager": "查看衣橱", "clearAll": "清空全部", "clearAllConfirm": "清空当前历史记录？旧版归档副本仍可通过“导出历史”保存。此操作无法撤销。", "deleteRecord": "删除", "deleteConfirm": "确定要删除此历史记录吗？", "delete": "删除", "searchPlaceholder": "搜索历史记录...", "clearSearch": "清除", "timeFilter": "时间筛选", "filterAll": "全部", "filterToday": "今天", "filterWeek": "近7天", "loadRecord": "载入此记录", "apply": "应用", "cancel": "取消", "loadToPreview": "加载到预览", "recordedAt": "记录于", "emptyState": "暂无历史记录。您的装扮更改将自动记录在此。", "recordCount": "{count} 条记录", "saveFailedTitle": "历史记录未能保存", "saveFailedHelp": "刷新后可能丢失本次更改。请检查本站的存储权限，然后重试。", "retrySave": "重试保存", "copiesDifferTitle": "旧版历史副本仍占本机空间", "copiesDifferHelp": "浏览器暂未能归档它。请重试，或先导出包含两份记录的历史备份。", "retryArchive": "重试归档", "copyArchivedTitle": "旧版历史副本已保留", "copyArchivedHelp": "两份记录已存入浏览器数据库。可导出历史备份，另存到浏览器外。", "exportHistory": "导出历史", "exportPartial": "历史已导出，但未能读取归档副本。请保留本站数据，稍后重试。", "exportFailed": "无法导出历史，请重试。", "attentionRequired": "历史记录存储需要处理", "archivedReminder": "有旧版历史副本可导出" };
       const sidePreview = { "ariaLabel": "角色预览", "hint": "确认目标角色和预览效果后，再应用。", "targetCharacter": "目标角色", "noTargetCharacter": "无可用角色", "renderFailed": "预览加载失败，请重试。", "retry": "重新加载预览", "loading": "正在加载预览" };
       const stackDetail = { "ariaLabel": "Stack 详细信息面板", "title": "详细信息", "name": "名称", "group": "分组", "color": "颜色", "property": "属性", "overridePriority": "覆盖优先级", "opacity": "不透明度", "typeRecord": "类型记录", "offset": "偏移", "craft": "Craft", "craftSummary": "Craft（摘要）", "download": "下载", "downloadTitle": "下载整个 element", "copy": "复制", "copyTitle": "复制整个 element JSON", "placeholder": "请选择一个 stack 项查看详细信息", "unnamed": "（未命名）" };
@@ -37013,6 +37054,13 @@ ${lightForced}`;
           suffix: "}"
         }
       });
+      function setLocale(locale) {
+        instance.changeLanguage(locale);
+        try {
+          localStorage.setItem(LOCALE_STORAGE_KEY, locale);
+        } catch {
+        }
+      }
       const i18n = instance;
       ({
         global: {
@@ -39606,6 +39654,7 @@ ${lightForced}`;
               clothes: t("outfitEditor.edit"),
               copy: t("outfitEditor.copy"),
               save: t("outfitEditor.save"),
+              exit: t("outfitEditor.exit"),
               retry: t("outfitEditor.retryReturn"),
               returnFailed: t("outfitEditor.returnFailed")
             } });
@@ -40431,6 +40480,15 @@ ${lightForced}`;
           }
         };
         return /* @__PURE__ */ jsxRuntimeExports.jsxs(Stack, { gap: "lg", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            NativeSelect,
+            {
+              label: t("fileManagerPanel.language"),
+              value: i18n2.language,
+              data: [{ value: "zh", label: "简体中文" }, { value: "en", label: "English" }],
+              onChange: (event) => setLocale(event.currentTarget.value === "zh" ? "zh" : "en")
+            }
+          ),
           /* @__PURE__ */ jsxRuntimeExports.jsxs(Box, { children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { fw: 600, mb: "sm", children: t("fileManagerPanel.themeSettings") }),
             /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { children: [
