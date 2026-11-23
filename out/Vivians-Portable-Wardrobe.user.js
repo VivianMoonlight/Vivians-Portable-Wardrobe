@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vivians Portable Wardrobe
 // @namespace    http://tampermonkey.net/
-// @version      0.10.1-react.30
+// @version      0.10.1-react.31
 // @author       VIVianMoonlight
 // @description  Portable Wardrobe for Bondage Club (React + Mantine, Shadow DOM isolated)
 // @downloadURL  https://cdn.jsdelivr.net/gh/VivianMoonlight/Vivians-Portable-Wardrobe@wardrobe-react/out/Vivians-Portable-Wardrobe.user.js
@@ -32,7 +32,7 @@
     return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
   };
   var require_main_001 = __commonJS({
-    "main-CGpp18qf.js"(exports) {
+    "main-D8sWffZY.js"(exports) {
       function _mergeNamespaces(n, m) {
         for (var i = 0; i < m.length; i++) {
           const e = m[i];
@@ -9285,7 +9285,7 @@
       instance.hasLoadedNamespace;
       instance.loadNamespaces;
       instance.loadLanguages;
-      const version = "0.10.1-react.30";
+      const version = "0.10.1-react.31";
       var _unsafeWindow = /* @__PURE__ */ (() => typeof unsafeWindow != "undefined" ? unsafeWindow : void 0)();
       const hostWindow = typeof _unsafeWindow !== "undefined" ? _unsafeWindow : window;
       const doc = hostWindow.document;
@@ -9738,119 +9738,78 @@ One of mods you are using is using an old version of SDK. It will work for now b
       function cleanUpItemColorLayerNamesLoad() {
         hostWindow.ItemColorFireExit(false);
       }
-      const compatibilityKey = "vpw.halveLegacyOffsets";
-      function readOffsetSetting(host, key) {
-        try {
-          return host.localStorage.getItem(key) === "true";
-        } catch {
-          return false;
-        }
-      }
       function outfitRenderData(outfit) {
         return outfit?.offsetFormat === "new" ? outfit.data.map((part) => ({ ...part, vpwSkipOffsetConversion: true })) : outfit?.data;
       }
       const roundOffset = (value) => Math.sign(value) * Math.round(Math.abs(value));
-      const isScaled = (value) => Number.isFinite(value) && value !== 1;
-      function prepareOutfitOffsets(data, host, character, convert = false) {
+      function prepareOutfitOffsets(data, host, character, onProblem) {
         if (!Array.isArray(data)) return data;
-        const enabled = convert || readOffsetSetting(host, compatibilityKey);
-        return data.map((original) => {
-          if (original?.vpwSkipOffsetConversion) {
-            const { vpwSkipOffsetConversion, ...part2 } = original;
-            return part2;
+        return data.map((part) => {
+          if (part?.vpwSkipOffsetConversion) {
+            const { vpwSkipOffsetConversion, ...original } = part;
+            return original;
           }
-          const { vpwNativeOffsets, ...part } = original ?? {};
-          const bundle = prepareItem(vpwNativeOffsets === void 0 ? original : part, host, character);
-          const prop = bundle?.Property;
-          if (convert && prop?.LayerOverrides?.some((layer) => layer?.DrawingLeft || layer?.DrawingTop)) {
-            throw new Error(bundle.Group + "/" + bundle.Name);
-          }
-          if (!enabled || !prop) return bundle;
-          let transforms = prop;
-          if (["LayerScaleX", "LayerScaleY", "LayerTranslationX", "LayerTranslationY"].some((key) => typeof prop[key] === "string")) {
-            try {
-              transforms = host.ServerBundledItemToAppearanceItem(
-                character.AssetFamily,
-                JSON.parse(JSON.stringify(bundle)),
-                { C: character }
-              )?.Property;
-            } catch (error) {
-              if (convert) throw error;
-              return bundle;
-            }
-            if (!transforms) {
-              if (convert) throw new Error(bundle.Group + "/" + bundle.Name);
-              return bundle;
-            }
-          }
-          const scaled = [
-            transforms.ScaleX,
-            transforms.ScaleY,
-            ...Object.values(transforms.LayerScaleX ?? {}),
-            ...Object.values(transforms.LayerScaleY ?? {})
-          ].some(isScaled);
-          const factor = scaled ? 1 : 0.5;
-          if (factor === 1) return bundle;
-          const next = { ...prop };
-          for (const axis of ["X", "Y"]) {
-            const global = "Translation" + axis;
-            const layer = "LayerTranslation" + axis;
-            if (Number.isFinite(prop[global])) next[global] = roundOffset(prop[global] * factor);
-            if (prop[layer] != null && transforms[layer] && typeof transforms[layer] === "object") {
-              next[layer] = Object.fromEntries(Object.entries(transforms[layer]).map(([name, value]) => [name, Number.isFinite(value) ? roundOffset(value * factor) : value]));
-            }
-          }
-          return { ...bundle, Property: next };
+          const result = prepareItem(part, host, character, onProblem);
+          return result;
         });
       }
-      function prepareItem(bundle, host, character) {
+      function hasLegacyCoordinates(prop) {
+        if (prop?.LayerOverrides != null && !Array.isArray(prop.LayerOverrides)) return true;
+        return prop?.DrawingLeft != null || prop?.DrawingTop != null || Array.isArray(prop?.LayerOverrides) && prop.LayerOverrides.some((slot) => slot?.DrawingLeft != null || slot?.DrawingTop != null);
+      }
+      function prepareSavedOutfit(data, host, character, format) {
+        if (format === "new") return { data, offsetFormat: "new" };
+        const problems = [];
+        const converted = prepareOutfitOffsets(data, host, character, (part, detail) => problems.push(part.Group + "/" + part.Name + " — " + detail));
+        if (problems.length) host.alert((host.TranslationLanguage === "CN" ? "无法换算位移，已保留原记录：" : "Original offsets retained: ") + problems.join(", "));
+        return { data: converted, offsetFormat: converted.some((part) => hasLegacyCoordinates(part?.Property)) ? "old" : "new" };
+      }
+      function prepareItem(bundle, host, character, onProblem) {
         const prop = bundle?.Property;
         const overrides = prop?.LayerOverrides;
-        if (!Array.isArray(overrides) || !overrides.length) return bundle;
+        if (!hasLegacyCoordinates(prop)) return bundle;
         const axes = [["DrawingLeft", "X"], ["DrawingTop", "Y"]];
-        if (overrides.some((layer) => !layer || Object.keys(layer).some(
+        if (overrides != null && !Array.isArray(overrides)) return bundle;
+        if (axes.some(([, axis]) => prop["Translation" + axis] != null || prop["LayerTranslation" + axis] != null)) return bundle;
+        if (overrides?.some((layer) => !layer || Object.keys(layer).some(
           (key) => key !== "DrawingLeft" && key !== "DrawingTop"
         ))) return bundle;
         try {
+          const version2 = host.GameVersion ?? (typeof GameVersion !== "undefined" ? GameVersion : null);
+          const glVersion = host.GLVersion ?? (typeof GLVersion !== "undefined" ? GLVersion : null);
+          const canvas = host.GLDrawCanvas ?? (typeof GLDrawCanvas !== "undefined" ? GLDrawCanvas : null);
+          if (!/^R134(?:$|[^0-9])/.test(version2) || !glVersion) return bundle;
+          const factor = glVersion === "No WebGL" ? 1 : canvas?.GL && !canvas.GL.isContextLost() ? 2 : null;
+          if (!factor) return bundle;
           const copy2 = JSON.parse(JSON.stringify(bundle));
           delete copy2.Property.LayerOverrides;
-          const item = host.ServerBundledItemToAppearanceItem(character.AssetFamily, copy2, { C: character });
+          for (const [field2] of axes) delete copy2.Property[field2];
+          const item = host.ServerBundledItemToAppearanceItem((character ?? host.Player).AssetFamily, copy2, { C: character });
           const layers = item?.Asset.Layer;
-          if (layers?.length !== overrides.length) return bundle;
+          if (!layers?.length || overrides && layers.length !== overrides.length) return bundle;
           const next = { ...prop };
           delete next.LayerOverrides;
           for (const [field2, axis] of axes) {
-            const globalKey = "Translation" + axis;
-            const layerKey = "LayerTranslation" + axis;
-            if (prop[field2] != null || prop[globalKey] != null || prop[layerKey] != null) continue;
-            const origins = host.PropertyLayerOrigin.getOriginal(item, field2);
-            const shifts = [];
-            for (const [index2, override] of overrides.entries()) {
-              const coord = override[field2];
-              if (coord == null) {
-                shifts.push(0);
-                continue;
+            const absolute = prop[field2];
+            if (absolute != null && (typeof absolute !== "object" || Array.isArray(absolute) || Object.keys(absolute).some((name) => !layers.some((layer) => (layer.Name ?? "") === name)))) return bundle;
+            const shifts = /* @__PURE__ */ Object.create(null);
+            for (const [i, layer] of layers.entries()) {
+              const name = layer.Name ?? "";
+              const slot = overrides?.[i]?.[field2];
+              if (slot != null && (absolute != null || Object.keys(slot).length !== 1 || !Number.isFinite(slot[""]))) return bundle;
+              const coordinate = slot?.[""] ?? absolute?.[name];
+              if (coordinate === void 0) continue;
+              const origin = host.PropertyLayerOrigin.getOriginal(item, field2)[name] ?? host.PropertyLayerOrigin.resolveLayer(layer, field2, item.Property);
+              if (!Number.isFinite(coordinate) || !Number.isFinite(origin?.[""]) || Object.keys(origin).length !== 1 || layers.filter((other) => (other.Name ?? "") === name).length !== 1) return bundle;
+              const shift2 = roundOffset((coordinate - origin[""]) / factor);
+              if (Math.abs(shift2) > 500) {
+                onProblem?.(bundle, field2 + "[" + name + "] = " + coordinate + " → " + shift2 + " (±500)");
+                return bundle;
               }
-              const layer = layers[index2];
-              const origin = origins[layer.Name ?? ""] ?? host.PropertyLayerOrigin.resolveLayer(layer, field2, item.Property);
-              const pose = character.DrawPose?.find((pose2) => origin?.[pose2] != null) ?? "";
-              const drawOrigin = origin?.[pose];
-              if (Object.keys(coord).length !== 1 || !Number.isFinite(coord[""]) || !Number.isFinite(drawOrigin)) return bundle;
-              const offset2 = coord[""] - drawOrigin;
-              shifts.push(roundOffset(offset2));
+              if (shift2) shifts[name] = shift2;
             }
-            if (shifts.every((value) => value === shifts[0])) {
-              if (shifts[0]) next[globalKey] = shifts[0];
-            } else {
-              const named = {};
-              for (const [i, value] of shifts.entries()) {
-                if (!value) continue;
-                const name = layers[i].Name;
-                if (!name || layers.filter((layer) => layer.Name === name).length !== 1) return bundle;
-                named[name] = value;
-              }
-              next[layerKey] = named;
-            }
+            delete next[field2];
+            if (Object.keys(shifts).length) next["LayerTranslation" + axis] = shifts;
           }
           return { ...bundle, Property: next };
         } catch {
@@ -37306,8 +37265,7 @@ ${lightForced}`;
             const id = await fs.addOutfit({
               name: typeof parsed.name === "string" && parsed.name.trim() ? parsed.name.trim() : defaultFilename("imported"),
               type: typeof parsed.type === "string" ? parsed.type : "outfit",
-              data: parsed.data,
-              offsetFormat: parsed.offsetFormat === "new" ? "new" : "old",
+              ...prepareSavedOutfit(parsed.data, hostWindow, fs.character, parsed.offsetFormat),
               tagIds: fs.selectedTagId && fs.selectedTagId !== "untagged" ? [fs.selectedTagId] : [],
               cloudSync: typeof parsed.cloudSync === "boolean" ? parsed.cloudSync : void 0
             });
@@ -37408,7 +37366,7 @@ ${lightForced}`;
               const id = await fs.addOutfit({
                 name: name.trim(),
                 type: "character",
-                data: fs.characterItem,
+                ...prepareSavedOutfit(fs.characterItem, hostWindow, fs.character),
                 tagIds: fs.selectedTagId && fs.selectedTagId !== "untagged" ? [fs.selectedTagId] : []
               });
               if (!id) {
@@ -37624,31 +37582,6 @@ ${lightForced}`;
         const localForkHint = t("library.localForkHint");
         useFsSelector(() => item.__thumbRefresh);
         const [menu, setMenu] = reactExports.useState(null);
-        const isNew = item.offsetFormat === "new";
-        const [undo, setUndo] = reactExports.useState(null);
-        const canUndo = undo !== null && undo.rev === JSON.stringify(item.rev);
-        const changeFormat = async (action) => {
-          setMenu(null);
-          try {
-            const fs = getFs();
-            if (action === "undo") {
-              if (!undo || !canUndo) return;
-              await fs.updateOutfitIfUnchanged(item.id, item.rev, { data: undo.data, offsetFormat: "old" });
-            } else if (action === "convert") {
-              if (isNew) return;
-              const data = prepareOutfitOffsets(item.data, hostWindow, fs.character ?? hostWindow.Player, true);
-              await fs.updateOutfitIfUnchanged(item.id, item.rev, { data, offsetFormat: "new" });
-              const saved = getFs().outfits.find((outfit) => outfit.id === item.id);
-              if (saved?.offsetFormat === "new") setUndo({ rev: JSON.stringify(saved.rev), data: item.data });
-              return;
-            } else {
-              await fs.updateOutfitIfUnchanged(item.id, item.rev, { offsetFormat: isNew ? "old" : "new" });
-            }
-            setUndo(null);
-          } catch (error) {
-            await reportError2(error);
-          }
-        };
         const closeMenu = () => setMenu(null);
         const reportError2 = (error) => dialog2.alert(t("library.operationFailed", {
           error: error instanceof Error ? error.message : String(error)
@@ -37690,7 +37623,8 @@ ${lightForced}`;
         const exportBcx = async () => {
           closeMenu();
           try {
-            ExternalAdapter.exportOutfitAsBCX(item.name, item.data, item.offsetFormat);
+            const saved = prepareSavedOutfit(item.data, hostWindow, getFs().character, item.offsetFormat);
+            ExternalAdapter.exportOutfitAsBCX(item.name, saved.data, saved.offsetFormat);
             await dialog2.alert(t("wardrobeIO.bcxCopied"));
           } catch (error) {
             await reportError2(error);
@@ -37732,7 +37666,6 @@ ${lightForced}`;
                         isPreviewLocked && /* @__PURE__ */ jsxRuntimeExports.jsx(Badge, { size: "sm", variant: "filled", color: "teal", className: "vpw-outfit-selected-badge", children: t("library.selected", { defaultValue: "Selected" }) })
                       ] }),
                       /* @__PURE__ */ jsxRuntimeExports.jsxs(Box, { className: "vpw-outfit-caption", children: [
-                        /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", children: t(isNew ? "fileItem.newData" : "fileItem.oldData") }),
                         /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { gap: 6, wrap: "nowrap", align: "start", children: [
                           /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "sm", fw: 600, className: "vpw-outfit-name", children: item.name }),
                           isList && isPreviewLocked && /* @__PURE__ */ jsxRuntimeExports.jsx(Badge, { size: "xs", variant: "light", color: "teal", style: { flexShrink: 0 }, children: t("library.selected", { defaultValue: "已选择" }) })
@@ -37791,9 +37724,6 @@ ${lightForced}`;
               x: menu.x,
               y: menu.y,
               onClose: closeMenu,
-              isNew,
-              canUndo,
-              onFormat: (action) => void changeFormat(action),
               onEdit: () => {
                 closeMenu();
                 onEditOutfit(item);
@@ -37816,9 +37746,6 @@ ${lightForced}`;
           { key: "tags", label: t("library.editTags"), action: props.onEditTags },
           { key: "rename", label: t("fileItem.rename"), action: props.onRename },
           { key: "export", label: t("fileItem.exportBCX"), action: props.onExport },
-          { key: "format", label: t(props.isNew ? "fileItem.setOld" : "fileItem.setNew"), action: () => props.onFormat("set") },
-          { key: "convert", label: t("fileItem.convertNew"), disabled: props.isNew, action: () => props.onFormat("convert") },
-          { key: "undo", label: t("fileItem.undoConversion"), disabled: !props.canUndo, action: () => props.onFormat("undo") },
           { key: "delete", label: t("fileItem.delete"), action: props.onDelete, color: "red" },
           { key: "cancel", label: t("fileItem.cancel"), action: props.onClose, color: "gray" }
         ];
@@ -37857,7 +37784,6 @@ ${lightForced}`;
                 Button,
                 {
                   role: "menuitem",
-                  disabled: item.disabled,
                   variant: "subtle",
                   color: item.color,
                   size: "sm",
@@ -39456,6 +39382,7 @@ ${lightForced}`;
           tagIds: [...outfit.tagIds],
           cloudSync: outfit.cloudSync,
           rev: [outfit.rev[0], outfit.rev[1]],
+          offsetFormat: outfit.offsetFormat,
           data: createOutfitDraft(outfit.data)
         };
       }
@@ -39742,7 +39669,7 @@ ${lightForced}`;
           setSaving(true);
           setError("");
           try {
-            await getFs().updateOutfitIfUnchanged(source.id, source.rev, { data: draft });
+            await getFs().updateOutfitIfUnchanged(source.id, source.rev, prepareSavedOutfit(draft, hostWindow, getFs().character, source.offsetFormat));
             onClose();
           } catch (reason) {
             const code = reason?.code;
@@ -39768,7 +39695,7 @@ ${lightForced}`;
             await getFs().addOutfit({
               name,
               type: source.type,
-              data: draft,
+              ...prepareSavedOutfit(draft, hostWindow, getFs().character, source.offsetFormat),
               tagIds: source.tagIds,
               cloudSync: source.cloudSync
             });
@@ -40388,7 +40315,6 @@ ${lightForced}`;
         const cloudflareErrorKey = cloudflareSyncErrorKey(cloudflare.errorCode);
         const activeTab = useWbSelector((wb) => wb.activeTab);
         useWbSelector((wb) => wb.forceSelfApplyRevision);
-        const [halfOffsets, setHalfOffsets] = reactExports.useState(() => readOffsetSetting(hostWindow, compatibilityKey));
         const [cloudflareBusy, setCloudflareBusy] = reactExports.useState(false);
         const [recoveryKey, setRecoveryKey] = reactExports.useState("");
         const [showRestore, setShowRestore] = reactExports.useState(false);
@@ -40403,17 +40329,6 @@ ${lightForced}`;
         reactExports.useEffect(() => {
           if (activeTab !== "settings") setRecoveryKey("");
         }, [activeTab]);
-        const updateOffsets = (enabled) => {
-          try {
-            hostWindow.localStorage.setItem(compatibilityKey, String(enabled));
-            setHalfOffsets(enabled);
-            const fs = getFs();
-            fs.renderer.removeCanvas(fs.previewItem);
-            fs.refreshThumbnails();
-          } catch {
-            void dialog2.alert(t("fileManagerPanel.forceSelfApplySaveFailed"));
-          }
-        };
         const onForceSelfApplyChange = async (enabled) => {
           if (!getWb().setForceSelfApplyEnabled(enabled)) {
             await dialog2.alert(t("fileManagerPanel.forceSelfApplySaveFailed"));
@@ -40667,16 +40582,6 @@ ${lightForced}`;
           ] }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs(Box, { children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { fw: 600, mb: "sm", children: t("fileManagerPanel.forceSelfApplyTitle") }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              Switch,
-              {
-                mb: "sm",
-                checked: halfOffsets,
-                label: t("fileManagerPanel.halfOffsetsLabel"),
-                description: t("fileManagerPanel.halfOffsetsDescription"),
-                onChange: (event) => updateOffsets(event.currentTarget.checked)
-              }
-            ),
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               Switch,
               {
