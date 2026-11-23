@@ -276,7 +276,7 @@ function setupRestraints(configure = () => {}) {
   }
   configure(host)
   const pending = context.editor.open({ bundle: context.source, restraints: {
-    clothes: 'clothes', copy: 'copy', save: 'save', retry: 'retry', returnFailed: 'failed',
+    clothes: 'clothes', copy: 'copy', save: 'save', exit: 'exit', retry: 'retry', returnFailed: 'failed',
   } })
   return { ...context, pending, buttons, scratch: host.CurrentCharacter,
     failReturnTo(screen) { failNext = screen } }
@@ -377,7 +377,7 @@ test('equipping a plain item keeps the target and canvas clothing entry availabl
   assert.equal(scratch.FocusGroup.Name, 'ItemNeck')
   host.DialogDraw()
   assert.deepEqual(drawn, [scratch])
-  assert.deepEqual(labels, ['clothes', 'copy', 'save'])
+  assert.deepEqual(labels, ['clothes', 'copy', 'save', 'exit'])
   host.DialogClick()
   assert.equal(host.CurrentScreen, 'Appearance')
   host.CharacterAppearanceReady(scratch)
@@ -385,5 +385,14 @@ test('equipping a plain item keeps the target and canvas clothing entry availabl
   assert.equal(host.CurrentCharacter, scratch)
   await c.buttons.get('save')()
   assert.deepEqual((await c.pending).bundle.find(i => i.Group === 'ItemNeck').Property, collar.Property)
+  c.editor.dispose()
+})
+
+test('exit closes the restraint editor without returning a bundle to save', async () => {
+  const c = setupRestraints()
+  await new Promise(resolve => setImmediate(resolve))
+  c.buttons.get('exit')()
+  assert.deepEqual(await c.pending, { status: 'cancelled' })
+  assert.equal(c.deleted.length, 1)
   c.editor.dispose()
 })

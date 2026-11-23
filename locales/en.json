@@ -1,5 +1,6 @@
 {
   "outfitEditor": {
+    "exit": "Exit",
     "edit": "Edit",
     "copy": "Save as",
     "save": "Save",
@@ -660,6 +661,7 @@
     "dashboardHint": "The data page asks for your recovery key when opened. The key is not included in the link or saved by the page."
   },
   "fileManagerPanel": {
+    "language": "Language",
     "ariaLabel": "Wardrobe panel",
     "title": "Portable wardrobe",
     "saveBackup": "Save backup",

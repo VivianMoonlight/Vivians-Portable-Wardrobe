@@ -1,5 +1,6 @@
 {
   "outfitEditor": {
+    "exit": "退出",
     "edit": "编辑",
     "copy": "另存",
     "save": "保存",
@@ -661,6 +662,7 @@
     "dashboardHint": "数据页只在打开时要求输入恢复密钥；密钥不会放进链接，也不会由网页保存。"
   },
   "fileManagerPanel": {
+    "language": "语言",
     "ariaLabel": "衣橱面板",
     "title": "随身衣橱",
     "saveBackup": "保存备份",

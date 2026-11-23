@@ -285,7 +285,7 @@ function Editor({ outfitId, onClose, mobile }: { outfitId: string; onClose: () =
     try {
       const result = await openNativeWardrobeEditor({ bundle: draft, signal: controller.signal, restraints: {
         clothes: t('outfitEditor.edit'), copy: t('outfitEditor.copy'), save: t('outfitEditor.save'),
-        retry: t('outfitEditor.retryReturn'),
+        exit: t('outfitEditor.exit'), retry: t('outfitEditor.retryReturn'),
         returnFailed: t('outfitEditor.returnFailed'),
       } })
       if (controller.signal.aborted) return

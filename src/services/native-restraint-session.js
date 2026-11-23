@@ -131,6 +131,7 @@ export function createRestraintSession(host, scratch, origin, labels, complete, 
     [labels.clothes, clothes],
     [labels.copy, () => finish('copy')],
     [labels.save, () => finish('saved')],
+    [labels.exit, () => finish('cancelled')],
   ]
   for (const [label, action] of actions) button(label, action)
   const retryButton = button(labels.retry, () => {
