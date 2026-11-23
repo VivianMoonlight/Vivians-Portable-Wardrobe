@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vivians Portable Wardrobe
 // @namespace    http://tampermonkey.net/
-// @version      0.10.1-react.35
+// @version      0.10.1-react.36
 // @author       VIVianMoonlight
 // @description  Portable Wardrobe for Bondage Club (React + Mantine, Shadow DOM isolated)
 // @downloadURL  https://cdn.jsdelivr.net/gh/VivianMoonlight/Vivians-Portable-Wardrobe@wardrobe-react/out/Vivians-Portable-Wardrobe.user.js
@@ -32,7 +32,7 @@
     return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
   };
   var require_main_001 = __commonJS({
-    "main-D306-Poe.js"(exports) {
+    "main-KE8YLGh8.js"(exports) {
       function _mergeNamespaces(n, m) {
         for (var i = 0; i < m.length; i++) {
           const e = m[i];
@@ -9285,7 +9285,7 @@
       instance.hasLoadedNamespace;
       instance.loadNamespaces;
       instance.loadLanguages;
-      const version = "0.10.1-react.35";
+      const version = "0.10.1-react.36";
       var _unsafeWindow = /* @__PURE__ */ (() => typeof unsafeWindow != "undefined" ? unsafeWindow : void 0)();
       const hostWindow = typeof _unsafeWindow !== "undefined" ? _unsafeWindow : window;
       const doc = hostWindow.document;
@@ -40440,35 +40440,37 @@ ${lightForced}`;
           }
         };
         return /* @__PURE__ */ jsxRuntimeExports.jsxs(Stack, { gap: "lg", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs(Box, { children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { fw: 600, mb: "xs", children: t("fileManagerPanel.language") }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(Group, { gap: "xs", role: "group", "aria-label": t("fileManagerPanel.language"), children: [{ value: "zh", label: "简体中文", flag: "🇨🇳" }, { value: "en", label: "English", flag: "🇬🇧" }].map(({ value, label, flag }) => /* @__PURE__ */ jsxRuntimeExports.jsx(
-              Button,
-              {
-                variant: i18n2.language === value ? "filled" : "default",
-                "aria-pressed": i18n2.language === value,
-                "aria-label": label,
-                title: label,
-                onClick: () => setLocale(value),
-                children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { "aria-hidden": "true", children: flag })
-              },
-              value
-            )) })
-          ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs(Box, { children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { fw: 600, mb: "sm", children: t("fileManagerPanel.themeSettings") }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsxs(Button, { variant: !theme.isDark ? "filled" : "default", onClick: () => theme.setColorScheme("light"), children: [
-                "☀ ",
-                t("fileManagerPanel.lightMode")
-              ] }),
-              /* @__PURE__ */ jsxRuntimeExports.jsxs(Button, { variant: theme.isDark ? "filled" : "default", onClick: () => theme.setColorScheme("dark"), children: [
-                "☾ ",
-                t("fileManagerPanel.darkMode")
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(Paper, { withBorder: true, radius: "md", p: "md", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { justify: "space-between", gap: "xs", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { fw: 600, children: t("fileManagerPanel.language") }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Group, { gap: "xs", role: "group", "aria-label": t("fileManagerPanel.language"), children: [{ value: "zh", label: "简体中文", flag: "🇨🇳" }, { value: "en", label: "English", flag: "🇬🇧" }].map(({ value, label, flag }) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+                Button,
+                {
+                  variant: i18n2.language === value ? "filled" : "default",
+                  "aria-pressed": i18n2.language === value,
+                  "aria-label": label,
+                  title: label,
+                  onClick: () => setLocale(value),
+                  children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { "aria-hidden": "true", children: flag })
+                },
+                value
+              )) })
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { mt: "sm", pt: "sm", justify: "space-between", gap: "xs", style: { borderTop: "1px solid var(--mantine-color-default-border)" }, children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { fw: 600, children: t("fileManagerPanel.themeSettings") }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs(Group, { gap: "xs", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs(Button, { "aria-pressed": !theme.isDark, variant: !theme.isDark ? "filled" : "default", onClick: () => theme.setColorScheme("light"), children: [
+                  "☀ ",
+                  t("fileManagerPanel.lightMode")
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs(Button, { "aria-pressed": theme.isDark, variant: theme.isDark ? "filled" : "default", onClick: () => theme.setColorScheme("dark"), children: [
+                  "☾ ",
+                  t("fileManagerPanel.darkMode")
+                ] })
               ] })
             ] })
           ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs(Box, { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(Paper, { withBorder: true, radius: "md", p: "md", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { fw: 600, mb: "sm", children: t("cloudflareSync.title") }),
             /* @__PURE__ */ jsxRuntimeExports.jsxs(Stack, { gap: "xs", children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -40506,7 +40508,6 @@ ${lightForced}`;
               cloudflare.enabled && cloudflare.bcLegacyChanged && /* @__PURE__ */ jsxRuntimeExports.jsx(Alert, { color: "orange", children: t("cloudflareSync.bcLegacyChanged") }),
               cloudflare.enabled && !cloudflare.bcLegacyChanged && cloudflare.bcLegacyRetained === true && /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "orange", children: t("cloudflareSync.bcCleanupPending") }),
               cloudflare.enabled && !cloudflare.bcLegacyChanged && cloudflare.bcLegacyRetained == null && /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "dimmed", children: t("cloudflareSync.bcCleanupUnknown") }),
-              cloudflare.enabled && !cloudflare.bcLegacyChanged && cloudflare.bcLegacyRetained === false && /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "dimmed", children: t("cloudflareSync.bcCleanupVerified") }),
               cloudflare.enabled && !cloudflare.keyAvailable && /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: "orange", children: t("cloudflareSync.keyMissing") }),
               cloudflare.keyAvailable && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { size: "xs", c: cloudflare.keySavedToBC ? "dimmed" : "orange", children: t(cloudflare.keySavedToBC ? "cloudflareSync.keyStorage" : "cloudflareSync.keyNotSaved") }),
@@ -40619,21 +40620,18 @@ ${lightForced}`;
               ] })
             ] })
           ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs(Box, { children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx(Text, { fw: 600, mb: "sm", children: t("fileManagerPanel.forceSelfApplyTitle") }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              Switch,
-              {
-                color: "red",
-                checked: isForceSelfApplyEnabled(),
-                onChange: (event) => {
-                  void onForceSelfApplyChange(event.currentTarget.checked);
-                },
-                label: t("fileManagerPanel.forceSelfApplyLabel"),
-                description: t("fileManagerPanel.forceSelfApplyDescription")
-              }
-            )
-          ] })
+          /* @__PURE__ */ jsxRuntimeExports.jsx(Paper, { withBorder: true, radius: "md", p: "md", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+            Switch,
+            {
+              color: "red",
+              checked: isForceSelfApplyEnabled(),
+              onChange: (event) => {
+                void onForceSelfApplyChange(event.currentTarget.checked);
+              },
+              label: t("fileManagerPanel.forceSelfApplyLabel"),
+              description: t("fileManagerPanel.forceSelfApplyDescription")
+            }
+          ) })
         ] });
       }
       function MobileWardrobeShell({ onClose }) {
